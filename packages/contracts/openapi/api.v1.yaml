@@ -1,0 +1,79 @@
+openapi: 3.1.0
+info:
+  title: NexusKB API
+  version: 0.2.0
+paths:
+  /v1/documents:
+    post:
+      summary: Upload a document and enqueue ingestion
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file: { type: string, format: binary }
+      responses:
+        '202':
+          description: Queued
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/UploadAccepted' }
+  /v1/documents/{documentId}:
+    parameters:
+      - $ref: '#/components/parameters/DocumentId'
+    get:
+      summary: Get a tenant-scoped document
+      responses:
+        '200': { description: Document metadata }
+        '404': { $ref: '#/components/responses/NotFound' }
+    delete:
+      summary: Idempotently delete a tenant-scoped document
+      responses:
+        '200': { description: Deleted or already absent }
+  /v1/ingestion-jobs/{jobId}:
+    get:
+      summary: Get a tenant-scoped ingestion job
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200': { description: Ingestion job }
+        '404': { $ref: '#/components/responses/NotFound' }
+components:
+  parameters:
+    DocumentId:
+      name: documentId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+  schemas:
+    UploadAccepted:
+      type: object
+      required: [documentId, jobId, status, traceId]
+      properties:
+        documentId: { type: string, format: uuid }
+        jobId: { type: string, format: uuid }
+        status: { const: queued }
+        traceId: { type: string, format: uuid }
+    ApiError:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message, traceId]
+          properties:
+            code: { type: string }
+            message: { type: string }
+            traceId: { type: string, format: uuid }
+  responses:
+    NotFound:
+      description: Resource does not exist in the authenticated tenant
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ApiError' }

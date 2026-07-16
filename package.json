@@ -11,6 +11,7 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "lint": "pnpm -r --if-present lint && node scripts/check-secrets.mjs",
+    "postinstall": "pnpm --filter @nexus-kb/api db:generate",
     "test": "pnpm -r --if-present test",
     "typecheck": "pnpm -r --if-present typecheck"
   },
@@ -21,5 +22,13 @@
     "prettier": "^3.7.0",
     "typescript": "^5.9.0",
     "typescript-eslint": "^8.48.0"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "@prisma/client",
+      "@prisma/engines",
+      "esbuild",
+      "prisma"
+    ]
   }
 }

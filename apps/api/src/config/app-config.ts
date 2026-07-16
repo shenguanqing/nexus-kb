@@ -13,6 +13,16 @@ const environmentSchema = z.object({
   PARSER_REQUEST_TIMEOUT_MS: z.coerce.number().int().min(100).max(300_000).default(30_000),
   RAW_DOCS_PATH: z.string().min(1),
   CHROMA_URL: z.url(),
+  AUTH_REQUIRED: z
+    .enum(['true', 'false'])
+    .default('false')
+    .transform((value) => value === 'true'),
+  DEV_TENANT_ID: z.string().min(1).default('local-dev'),
+  DEV_USER_ID: z.string().min(1).default('local-user'),
+  DEV_DEPARTMENT: z.string().min(1).default('general'),
+  DEV_SENSITIVITY: z.enum(['public', 'internal', 'confidential']).default('internal'),
+  MAX_UPLOAD_BYTES: z.coerce.number().int().min(1).max(1_073_741_824).default(52_428_800),
+  INGESTION_CONCURRENCY: z.coerce.number().int().min(1).max(32).default(2),
 });
 
 export type Environment = z.infer<typeof environmentSchema>;

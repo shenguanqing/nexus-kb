@@ -12,7 +12,11 @@ export default tseslint.config(
       globals: globals.node,
       parserOptions: {
         projectService: {
-          allowDefaultProject: ['apps/*/test/*.ts', 'packages/*/test/*.ts'],
+          allowDefaultProject: [
+            'apps/*/test/*.ts',
+            'apps/*/test/integration/*.ts',
+            'packages/*/test/*.ts',
+          ],
         },
         tsconfigRootDir: import.meta.dirname,
       },

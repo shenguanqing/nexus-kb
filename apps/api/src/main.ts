@@ -3,6 +3,7 @@ import type { IncomingMessage } from 'node:http';
 import { NestFactory } from '@nestjs/core';
 import { FastifyAdapter, type NestFastifyApplication } from '@nestjs/platform-fastify';
 import type { FastifyInstance } from 'fastify';
+import multipart from '@fastify/multipart';
 import 'reflect-metadata';
 
 import { AppModule } from './app.module';
@@ -13,7 +14,9 @@ async function bootstrap(): Promise<void> {
   const adapter = new FastifyAdapter({
     genReqId: (request: IncomingMessage) => {
       const supplied = request.headers['x-trace-id'];
-      return typeof supplied === 'string' && supplied.length <= 128 ? supplied : randomUUID();
+      return typeof supplied === 'string' && /^[0-9a-f]{8}-[0-9a-f-]{27}$/i.test(supplied)
+        ? supplied
+        : randomUUID();
     },
     logger: {
       level: process.env.LOG_LEVEL ?? 'info',
@@ -24,6 +27,10 @@ async function bootstrap(): Promise<void> {
     bufferLogs: true,
   });
   const config = app.get(AppConfig);
+  await app.register(multipart, {
+    preservePath: true,
+    limits: { fileSize: config.values.MAX_UPLOAD_BYTES, files: 1, fields: 10, parts: 11 },
+  });
   app.useGlobalFilters(new ApiErrorFilter());
   const fastify: FastifyInstance = app.getHttpAdapter().getInstance();
   fastify.addHook('onRequest', (request, reply, done) => {

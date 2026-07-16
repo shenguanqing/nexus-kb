@@ -1,0 +1,90 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Sensitivity {
+  public
+  internal
+  confidential
+}
+
+enum DocumentStatus {
+  uploaded
+  processing
+  active
+  failed
+  deleted
+}
+
+enum IngestionStatus {
+  queued
+  parsing
+  completed
+  failed
+  deleted
+}
+
+model Document {
+  id            String           @id @db.Uuid
+  tenantId      String
+  sourceName    String
+  storageKey    String           @unique
+  mimeType      String
+  contentSha256 String
+  department    String
+  sensitivity   Sensitivity
+  ownerId       String
+  activeVersion Int?
+  status        DocumentStatus   @default(uploaded)
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+  deletedAt     DateTime?
+  versions      DocumentVersion[]
+  jobs          IngestionJob[]
+
+  @@index([tenantId, status])
+  @@index([tenantId, createdAt])
+}
+
+model DocumentVersion {
+  id            String   @id @db.Uuid
+  tenantId      String
+  documentId    String   @db.Uuid
+  version       Int
+  parser        String?
+  parserVersion String?
+  parsedElements Json?
+  warnings      Json?
+  createdAt     DateTime @default(now())
+  document      Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@unique([documentId, version])
+  @@index([tenantId, documentId])
+}
+
+model IngestionJob {
+  id            String          @id @db.Uuid
+  tenantId      String
+  documentId    String          @db.Uuid
+  version       Int
+  status        IngestionStatus @default(queued)
+  step          String          @default("queued")
+  attempts      Int             @default(0)
+  traceId       String          @db.Uuid
+  parserVersion String?
+  warnings      Json?
+  errorCode     String?
+  startedAt     DateTime?
+  completedAt   DateTime?
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+  document      Document        @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, status])
+  @@index([tenantId, documentId])
+}

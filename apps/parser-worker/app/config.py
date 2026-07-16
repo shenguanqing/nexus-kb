@@ -15,4 +15,13 @@ class Settings(BaseSettings):
         le=1_073_741_824,
         validation_alias="MAX_PARSE_BYTES",
     )
-
+    max_elements: int = Field(default=100_000, ge=1, le=100_000, validation_alias="MAX_ELEMENTS")
+    max_spreadsheet_rows: int = Field(
+        default=100_000, ge=1, le=1_000_000, validation_alias="MAX_SPREADSHEET_ROWS"
+    )
+    max_archive_entries: int = Field(
+        default=10_000, ge=1, le=100_000, validation_alias="MAX_ARCHIVE_ENTRIES"
+    )
+    max_archive_uncompressed_bytes: int = Field(
+        default=524_288_000, ge=1, validation_alias="MAX_ARCHIVE_UNCOMPRESSED_BYTES"
+    )

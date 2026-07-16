@@ -1,8 +1,8 @@
 # 知枢 NexusKB
 
-知枢 NexusKB 是企业级知识库项目。本仓库当前完成阶段 1：NestJS/Fastify 主服务、FastAPI Parser Worker、共享解析契约，以及 PostgreSQL、Redis、Chroma 的本地 Compose 拓扑与健康检查。
+知枢 NexusKB 是企业级知识库项目。本仓库当前完成阶段 2：在阶段 1 基础设施上实现了安全流式上传、PostgreSQL 文档模型、BullMQ 异步入库，以及 TXT、Markdown、DOCX、XLSX 解析闭环。
 
-完整 RAG、文档上传、认证 ACL、Provider 和前端不在本阶段范围，进度以 [`TASK.md`](./TASK.md) 为准。
+完整 RAG、OIDC/SSO、模型 Provider 和前端仍在后续阶段，进度以 [`TASK.md`](./TASK.md) 为准。
 
 ## 环境要求
 
@@ -17,6 +17,7 @@ pnpm install --frozen-lockfile
 pnpm lint
 pnpm typecheck
 pnpm test
+pnpm --filter @nexus-kb/api test:integration
 pnpm build
 ```
 
@@ -64,9 +65,22 @@ docker compose down
 ## 内部解析契约
 
 - `POST /internal/v1/parse` 只在 Worker 内网提供，并要求 `X-Internal-Token`。
-- Worker 当前只实现 UTF-8 TXT/Markdown 的最小解析闭环；复杂解析器属于后续阶段。
+- Worker 支持 UTF-8 TXT/Markdown、DOCX 和 XLSX；Markdown/DOCX 保留标题路径，XLSX 保留 sheet、表头和行号。
 - OpenAPI 契约位于 `packages/contracts/openapi/parser-worker.v1.yaml`。
 - Worker 会拒绝共享根目录外路径、`..`、符号链接、超限和空文件。
+
+## 文档 API
+
+开发模式下身份来自服务端 `DEV_*` 配置，上传表单中的 `tenantId`、role、department 等字段不会成为可信身份。生产环境必须在后续 OIDC 阶段启用 `AUTH_REQUIRED=true` 并接入认证实现。
+
+```bash
+curl -F 'file=@policy.md;type=text/markdown' http://127.0.0.1:3000/v1/documents
+curl http://127.0.0.1:3000/v1/documents/<documentId>
+curl http://127.0.0.1:3000/v1/ingestion-jobs/<jobId>
+curl -X DELETE http://127.0.0.1:3000/v1/documents/<documentId>
+```
+
+公共 API 契约位于 `packages/contracts/openapi/api.v1.yaml`。API 启动时自动执行不可变 Prisma migration；任务在 Redis 中只携带 ID 与 UUID 文件引用，不携带正文。
 
 ## 安全说明
 

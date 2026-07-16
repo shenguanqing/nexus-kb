@@ -6,15 +6,24 @@ from uuid import UUID, uuid4
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request, Response, status
 
+from app.archive import validate_office_archive
 from app.config import Settings
+from app.parsers.docx import parse_docx
 from app.parsers.text import parse_text
+from app.parsers.xlsx import parse_xlsx
 from app.schemas import ParseRequest, ParseResponse
 from app.security import validate_storage_path
 
 LOGGER = logging.getLogger("nexus_kb.parser_worker")
-SUPPORTED_TEXT_TYPES = {
+SUPPORTED_TYPES = {
     ".txt": {"text/plain"},
     ".md": {"text/markdown", "text/plain"},
+    ".docx": {
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    },
+    ".xlsx": {
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    },
 }
 
 
@@ -67,21 +76,66 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             resolved_settings.max_parse_bytes,
         )
         suffix = Path(path).suffix.lower()
-        if payload.mime_type not in SUPPORTED_TEXT_TYPES.get(suffix, set()):
+        if payload.mime_type not in SUPPORTED_TYPES.get(suffix, set()):
             raise HTTPException(
                 status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
-                detail="当前解析存根不支持此文件类型或 MIME",
+                detail="不支持此文件类型或 MIME",
             )
-        elements = parse_text(path)
+        try:
+            if suffix in {".txt", ".md"}:
+                elements = parse_text(path)
+                parser = "markdown" if suffix == ".md" else "text"
+            elif suffix == ".docx":
+                validate_office_archive(
+                    path,
+                    resolved_settings.max_archive_entries,
+                    resolved_settings.max_archive_uncompressed_bytes,
+                )
+                elements = parse_docx(path, resolved_settings.max_elements)
+                parser = "python-docx"
+            else:
+                validate_office_archive(
+                    path,
+                    resolved_settings.max_archive_entries,
+                    resolved_settings.max_archive_uncompressed_bytes,
+                )
+                elements = parse_xlsx(
+                    path,
+                    resolved_settings.max_spreadsheet_rows,
+                    resolved_settings.max_elements,
+                )
+                parser = "openpyxl"
+        except ValueError as error:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(error)
+            ) from error
+        except Exception as error:
+            LOGGER.warning(
+                "document parser rejected input",
+                extra={
+                    "traceId": request.headers.get("x-trace-id"),
+                    "jobId": str(payload.job_id),
+                    "errorType": type(error).__name__,
+                },
+            )
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="文档解析失败",
+            ) from None
+        if not elements:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="解析结果为空",
+            )
         LOGGER.info(
             "document parsed",
             extra={
                 "traceId": request.headers.get("x-trace-id"),
                 "jobId": str(payload.job_id),
                 "documentId": str(payload.document_id),
-                "parser": "text",
+                "parser": parser,
             },
         )
-        return ParseResponse(parser="text", parser_version="1.0.0", elements=elements)
+        return ParseResponse(parser=parser, parser_version="1.1.0", elements=elements)
 
     return api

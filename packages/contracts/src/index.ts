@@ -6,3 +6,4 @@ export {
   type ParseRequest,
   type ParseResponse,
 } from './parse';
+export { ingestionPayloadSchema, type IngestionPayload } from './ingestion';
