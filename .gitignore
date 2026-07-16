@@ -1,0 +1,74 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build
+dist/
+build/
+.vite/
+.output/
+*.tsbuildinfo
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+!.env.*.example
+*.pem
+*.key
+
+# Logs
+logs/
+*.log
+
+# Tests
+coverage/
+.pytest_cache/
+playwright-report/
+test-results/
+blob-report/
+
+# IDE
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.mypy_cache/
+.ruff_cache/
+htmlcov/
+.coverage
+
+# Runtime data
+data/**
+uploads/**
+!data/**/.gitkeep
+!uploads/.gitkeep
+
+# Local databases
+*.db
+*.sqlite
+*.sqlite3
+
+# Temporary files
+tmp/
+temp/
+.cache/
+*.tmp
+
+# Local tool state
+.codex/
+
+# Keep dependency lock files in Git:
+# pnpm-lock.yaml
+# package-lock.json
+# uv.lock
+# poetry.lock
