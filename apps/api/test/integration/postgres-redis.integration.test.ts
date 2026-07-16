@@ -12,13 +12,14 @@ describe('PostgreSQL and Redis integration', () => {
   const tenantA = `tenant-a-${randomUUID()}`;
   const tenantB = `tenant-b-${randomUUID()}`;
   const documentId = randomUUID();
+  const policyDocumentId = randomUUID();
 
   beforeAll(async () => {
     await prisma.$connect();
   });
 
   afterAll(async () => {
-    await prisma.document.deleteMany({ where: { id: documentId } });
+    await prisma.document.deleteMany({ where: { id: { in: [documentId, policyDocumentId] } } });
     await queue.obliterate({ force: true });
     await queue.close();
     await prisma.$disconnect();
@@ -59,5 +60,79 @@ describe('PostgreSQL and Redis integration', () => {
     expect(stored?.data).toEqual(payload);
     expect(JSON.stringify(stored?.data)).not.toContain('content');
     expect(JSON.stringify(stored?.data)).not.toContain('tenantId');
+  });
+
+  it('stores tenant-scoped chunks and a bodyless cloud policy event', async () => {
+    const ingestionJobId = randomUUID();
+    const chunkId = 'a'.repeat(64);
+    await prisma.document.create({
+      data: {
+        id: policyDocumentId,
+        tenantId: tenantA,
+        sourceName: 'policy-fixture.md',
+        storageKey: `${policyDocumentId}.md`,
+        mimeType: 'text/markdown',
+        contentSha256: '1'.repeat(64),
+        department: 'finance',
+        sensitivity: 'confidential',
+        ownerId: 'integration-user',
+        versions: {
+          create: {
+            id: randomUUID(),
+            tenantId: tenantA,
+            version: 1,
+            chunkCount: 1,
+            redactionPolicyVersion: 'v1',
+            cloudPolicyDecision: 'blocked',
+          },
+        },
+        jobs: {
+          create: {
+            id: ingestionJobId,
+            tenantId: tenantA,
+            version: 1,
+            traceId: randomUUID(),
+            status: 'policy_blocked',
+            step: 'policy_blocked',
+          },
+        },
+        chunks: {
+          create: {
+            id: chunkId,
+            tenantId: tenantA,
+            documentVersion: 1,
+            ordinal: 0,
+            originalText: '测试邮箱 demo@example.com',
+            redactedText: '测试邮箱 [REDACTED:EMAIL]',
+            tokenCount: 4,
+            sectionPath: ['策略'],
+            elementTypes: ['paragraph'],
+            redactionPolicyVersion: 'v1',
+            redactionSummary: { EMAIL: 1 },
+          },
+        },
+      },
+    });
+    const event = await prisma.cloudPolicyEvent.create({
+      data: {
+        id: randomUUID(),
+        tenantId: tenantA,
+        documentId: policyDocumentId,
+        documentVersion: 1,
+        ingestionJobId,
+        decision: 'blocked',
+        reasonCode: 'CONFIDENTIAL_CLOUD_EGRESS_DENIED',
+        sensitivity: 'confidential',
+        redactionPolicyVersion: 'v1',
+      },
+    });
+
+    await expect(
+      prisma.knowledgeChunk.findFirst({
+        where: { id: chunkId, tenantId: tenantB },
+      }),
+    ).resolves.toBeNull();
+    expect(Object.keys(event)).not.toContain('text');
+    expect(JSON.stringify(event)).not.toContain('demo@example.com');
   });
 });

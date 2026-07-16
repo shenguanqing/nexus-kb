@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: NexusKB API
-  version: 0.2.0
+  version: 0.3.0
 paths:
   /v1/documents:
     post:
@@ -71,6 +71,12 @@ components:
             code: { type: string }
             message: { type: string }
             traceId: { type: string, format: uuid }
+    DocumentStatus:
+      type: string
+      enum: [uploaded, processing, prepared, active, policy_blocked, failed, deleted]
+    IngestionStatus:
+      type: string
+      enum: [queued, parsing, chunking, policy_check, policy_blocked, completed, failed, deleted]
   responses:
     NotFound:
       description: Resource does not exist in the authenticated tenant

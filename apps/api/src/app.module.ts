@@ -9,6 +9,9 @@ import { HealthController } from './health/health.controller';
 import { HealthService } from './health/health.service';
 import { ParserClient } from './parser/parser-client';
 import { IngestionQueue } from './ingestion/ingestion.queue';
+import { ChunkingService } from './ingestion/chunking';
+import { CloudPolicyService } from './ingestion/cloud-policy';
+import { RedactionService } from './ingestion/redaction';
 
 @Module({
   controllers: [HealthController, DocumentsController],
@@ -18,6 +21,9 @@ import { IngestionQueue } from './ingestion/ingestion.queue';
     ParserClient,
     PrismaService,
     IdentityService,
+    ChunkingService,
+    RedactionService,
+    CloudPolicyService,
     IngestionQueue,
     DocumentsService,
   ],

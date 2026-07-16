@@ -167,7 +167,16 @@ export class DocumentsService {
       }),
       this.prisma.documentVersion.updateMany({
         where: { documentId: document.id, tenantId: identity.tenantId },
-        data: { parsedElements: Prisma.DbNull, warnings: Prisma.DbNull },
+        data: {
+          parsedElements: Prisma.DbNull,
+          warnings: Prisma.DbNull,
+          chunkCount: 0,
+          redactionPolicyVersion: null,
+          cloudPolicyDecision: null,
+        },
+      }),
+      this.prisma.knowledgeChunk.deleteMany({
+        where: { documentId: document.id, tenantId: identity.tenantId },
       }),
     ]);
     await unlink(join(this.config.values.RAW_DOCS_PATH, document.storageKey)).catch(

@@ -1,6 +1,6 @@
 # 知枢 NexusKB
 
-知枢 NexusKB 是企业级知识库项目。本仓库当前完成阶段 2：在阶段 1 基础设施上实现了安全流式上传、PostgreSQL 文档模型、BullMQ 异步入库，以及 TXT、Markdown、DOCX、XLSX 解析闭环。
+知枢 NexusKB 是企业级知识库项目。本仓库当前完成阶段 3：在上传与解析闭环上增加了结构感知分块、基础 PII/业务规则脱敏，以及 confidential 默认零云端调用的策略门禁。
 
 完整 RAG、OIDC/SSO、模型 Provider 和前端仍在后续阶段，进度以 [`TASK.md`](./TASK.md) 为准。
 
@@ -81,6 +81,16 @@ curl -X DELETE http://127.0.0.1:3000/v1/documents/<documentId>
 ```
 
 公共 API 契约位于 `packages/contracts/openapi/api.v1.yaml`。API 启动时自动执行不可变 Prisma migration；任务在 Redis 中只携带 ID 与 UUID 文件引用，不携带正文。
+
+## 本地预处理与出网策略
+
+- TypeScript 主服务按标题路径、页码、工作表和表格结构分块，超长元素按配置的 token 单元切分并保留 overlap。
+- `chunkId` 由文档 ID、版本、元素路径和规范化正文稳定生成；相邻 chunk 保存前后关系。
+- 原文与脱敏文本分别保存在 PostgreSQL；当前内置手机号、身份证、银行卡和邮箱规则，可通过 `BUSINESS_REDACTION_RULES_JSON` 增加受控业务正则。
+- `confidential` 默认在任何 Provider 调用前阻止出网。策略事件只保存资源 ID、决策、原因、敏感度和策略版本，不保存正文。
+- 允许出网的文档完成本地预处理后状态为 `prepared`，等待下一阶段 Embedding 与 Chroma 入库；被阻止的文档状态为 `policy_blocked`。
+
+`CHUNK_MAX_TOKENS`、`CHUNK_OVERLAP_TOKENS`、`REDACTION_POLICY_VERSION` 或关键脱敏规则变化会改变索引语义；进入向量阶段后必须创建新 collection 并重建，不能覆盖旧索引。
 
 ## 安全说明
 
