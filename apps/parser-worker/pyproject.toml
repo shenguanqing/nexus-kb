@@ -5,6 +5,7 @@ requires-python = ">=3.11,<3.12"
 
 [tool.pytest.ini_options]
 addopts = "-q"
+pythonpath = ["."]
 testpaths = ["tests"]
 
 [tool.ruff]
@@ -19,4 +20,3 @@ ignore = ["S101"]
 python_version = "3.11"
 strict = true
 plugins = ["pydantic.mypy"]
-

@@ -40,11 +40,13 @@ describe('parser contract', () => {
       }),
     ).toThrow();
     const element = { text: 'x', elementType: 'paragraph' };
+    const oversizedElements: Array<{ text: string; elementType: string }> = [];
+    for (let index = 0; index < 100_001; index += 1) oversizedElements.push(element);
     expect(() =>
       parseResponseSchema.parse({
         parser: 'text',
         parserVersion: '1.1.0',
-        elements: Array.from({ length: 100_001 }, () => element),
+        elements: oversizedElements,
       }),
     ).toThrow();
   });
