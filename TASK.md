@@ -1,115 +1,115 @@
 # 当前开发任务
 
 > 项目：知枢 NexusKB
-> 当前阶段：阶段 4——独立 Embedding Provider
+> 当前阶段：阶段 5——Chroma VectorStore 与索引激活
 > 状态：已完成（2026-07-16）
 
 ---
 
 ## 1. 上一阶段交付记录
 
-阶段 3“分块、脱敏与出网策略”已于 2026-07-16 完成：
+阶段 4“独立 Embedding Provider”已于 2026-07-16 完成：
 
-- TypeScript 主服务按标题路径、页码、工作表和表格结构生成稳定 chunk。
-- 原文与脱敏文本分开保存，内置手机号、身份证、银行卡和邮箱规则。
-- confidential 默认在任何 Provider 调用前失败关闭。
-- 允许的文档进入 `prepared`，策略阻止的文档进入 `policy_blocked`。
+- 定义独立 `EmbeddingProvider`、factory、统一错误和无正文遥测。
+- 实现 Alibaba `text-embedding-v4` 适配器。
+- confidential 在 Provider 方法执行前再次失败关闭。
+- 配置指纹覆盖 Provider、模型、维度、task mode、分块和脱敏版本。
 
 ---
 
 ## 2. 当前目标
 
-建立与业务编排解耦的 Embedding Provider 层，并实现首个经官方文档核对的平台适配器：
+实现可替换的 Chroma VectorStore，并把允许出网的入库链路推进到安全激活：
 
 ```text
-脱敏文本 / 查询
-→ CloudPolicyService
-→ EmbeddingService
-→ EmbeddingProviderFactory
-→ Alibaba text-embedding-v4
-→ 数量、顺序、维度校验
-→ 返回向量与无正文调用遥测
+prepared chunks
+→ Embedding
+→ 数量/维度校验
+→ Chroma stable-ID upsert
+→ 写入结果验证
+→ PostgreSQL 保存指纹与 collection
+→ DocumentVersion / Document 原子激活
 ```
-
-本阶段不把向量写入 Chroma，不激活文档版本，也不实现查询 API。
 
 ---
 
 ## 3. 本轮任务
 
-### 3.1 Provider 抽象
+### 3.1 VectorStore 抽象
 
-- [x] 定义 `EmbeddingProvider`。
-- [x] 严格区分 `embedDocuments` 与 `embedQuery`。
-- [x] Provider 暴露 id、model、dimensions、region 和 taskMode。
-- [x] 实现集中式 `EmbeddingProviderFactory`。
-- [x] 未配置 Provider 时失败关闭，不构造虚假本地向量。
-- [x] DeepSeek 不在 Embedding Provider 可选项中。
+- [x] 定义 `VectorStore`、VectorChunk、VectorQueryInput 和 RetrievedVectorChunk。
+- [x] 业务编排不直接依赖 Chroma SDK。
+- [x] 定义统一 VectorStore 错误和安全 API 映射。
+- [x] 使用官方 `chromadb` TypeScript 客户端。
 
-### 3.2 Alibaba 适配器
+### 3.2 Collection 与配置指纹
 
-- [x] 使用 Node 原生 fetch 调用 OpenAI 兼容 `/embeddings`。
-- [x] 首个模型固定为经官方文档核对的 `text-embedding-v4`。
-- [x] 支持官方列出的 64、128、256、512、768、1024、1536、2048 维度。
-- [x] 单批最多 10 条，并按配置进行有限批处理。
-- [x] 传递 `dimensions` 和 `encoding_format=float`。
-- [x] 按响应 index 恢复顺序。
-- [x] 验证返回数量、索引连续性、模型和向量维度。
+- [x] Chroma Server 固定升级到 1.5.9，客户端固定为 3.5.0。
+- [x] collection 名称包含 Provider、模型、维度、schema version 和指纹摘要。
+- [x] collection metadata 保存完整 Embedding 配置指纹语义。
+- [x] 使用 cosine 距离。
+- [x] `getOrCreateCollection` 后重新读取并验证 metadata 与 HNSW space。
+- [x] 指纹或距离配置不一致时 readiness 失败关闭。
+- [x] 默认无 Embedding Provider 时只检查 Chroma 连通性，不创建 collection。
 
-### 3.3 配置、错误与稳定性
+### 3.3 向量数据操作
 
-- [x] 默认 `EMBEDDING_PROVIDER=none`，本地基础设施不依赖付费 Key。
-- [x] 选择 Alibaba 时强制校验 Key、HTTPS base URL、model、region 和维度。
-- [x] 定义 Authentication、RateLimit、Timeout、InvalidRequest、Unavailable 和 InvalidResponse。
-- [x] 429、超时、连接错误和部分 5xx 指数退避并加入 jitter。
-- [x] 400、401、403、404、422 不重试。
-- [x] Embedding 失败不自动切换其他供应商。
-- [x] Provider 错误映射为稳定 API code 和安全中文消息。
+- [x] 使用稳定 chunkId upsert。
+- [x] 批量 upsert 后按 ID 读取确认全部写入。
+- [x] 写入前再次验证向量数量、维度和有限数值。
+- [x] Chroma document 只保存脱敏文本。
+- [x] metadata 只保存标量 tenant、来源、部门、敏感度和 owner 信息。
+- [x] 查询强制 tenant + ACL filter。
+- [x] 实现按 tenantId + documentId 删除。
 
-### 3.4 策略、指纹和遥测
+### 3.4 入库状态机与激活
 
-- [x] confidential 在实际 Provider 方法执行前再次失败关闭。
-- [x] 配置指纹包含 Provider、模型、维度、task mode、分块参数和脱敏版本。
-- [x] 记录 Provider、模型、区域、request ID、耗时、尝试次数和 token usage。
-- [x] 遥测不记录 Key、输入正文或向量内容。
-- [x] 付费冒烟测试通过显式环境开关启用，普通测试默认跳过。
+- [x] 状态机增加 embedding 和 indexing。
+- [x] IngestionProcessor 从 BullMQ adapter 中拆分，业务流程可独立测试。
+- [x] PostgreSQL 保存 embeddingFingerprint、vectorCollection 和 indexedAt。
+- [x] Embedding 或 Chroma 失败时文档不得 active。
+- [x] Chroma upsert 验证成功后才原子设置 activeVersion。
+- [x] retry 使用稳定 ID 覆盖部分写入，不产生重复向量。
+- [x] 删除文档先删除向量，再清理数据库正文和原文件。
 
 ---
 
 ## 4. 完成条件
 
-- [x] 文档批量返回向量数与输入数一致。
-- [x] 文档和查询向量都严格符合配置维度。
-- [x] 相同配置生成相同指纹，关键语义变化生成不同指纹。
-- [x] 429 可以重试，400/401/403 不重试。
-- [x] confidential Provider mock 调用次数为 0。
-- [x] 默认配置无需任何模型 Key 即可启动。
+- [x] 重复 upsert 不增加向量数量。
+- [x] tenant A 查询无法返回 tenant B 向量。
+- [x] 删除文档后对应向量消失。
+- [x] 错误 fingerprint 或非 cosine collection 阻止 readiness。
+- [x] confidential 不调用 Embedding 或 Chroma。
+- [x] 向量写入失败不激活文档版本。
 - [x] TypeScript lint、typecheck、单元测试、build 和 format check 通过。
-- [x] README、`.env.example` 和相关设计/运维文档同步。
+- [x] PostgreSQL/Redis/Chroma 集成测试通过。
+- [x] Compose 服务保持 healthy，现有 volumes 保留。
 
 ---
 
 ## 5. 实现说明与边界
 
-- 官方文档核对日期为 2026-07-16。`text-embedding-v4` 当前单次最多 10 条、每条最多 8192
-  tokens，默认推荐 1024 维；模型限制变化时应先更新配置和契约测试。
-- Alibaba 当前使用 symmetric task mode，文档和查询调用保持独立方法但使用相同向量空间。
-- Provider 遥测记录 token usage，不在代码中硬编码可能变化的价格；成本换算留到可观测性阶段。
-- 文本哈希向量缓存和 ingestion 批次 checkpoint 需要与 Chroma 写入及任务状态一起设计，本阶段不提前实现。
-- 付费冒烟测试已提供但未默认执行；普通 CI 只使用 mock，不需要真实 Key。
+- 当前使用跨 tenant 共享 collection，并以服务端构造的 metadata filter 强制 tenant 隔离；未来如按
+  tenant 拆 collection，仍必须保留 tenant metadata 和过滤测试。
+- 当前 ACL filter 已具备 tenant、公开内容、部门、敏感度和 owner 规则骨架；身份仍来自开发身份，
+  完整 JWT/OIDC 与 capability 在下一阶段实现。
+- 默认 `EMBEDDING_PROVIDER=none` 时文档保持 `prepared`，不会生成虚假向量。
+- 真实付费 Embedding 仍只通过显式冒烟开关启用；Chroma 集成测试使用合成向量，不产生模型费用。
+- 当前只维护一个配置对应的 active collection；跨配置重建、灰度切换和旧 collection 回收属于后续
+  索引迁移阶段。
 
 ---
 
 ## 6. 下一阶段入口
 
-下一阶段进入 Chroma VectorStore：
+下一阶段进入认证与 ACL：
 
-1. 定义 `VectorStore` 接口并实现 Chroma TypeScript adapter。
-2. 使用当前 Embedding 配置指纹创建独立 collection。
-3. collection metadata 保存 Provider、模型、维度、task mode、分块和脱敏版本。
-4. 服务 ready 前校验 collection 指纹，任何不兼容必须失败关闭。
-5. 使用稳定 chunkId upsert，并在向量写入前再次校验数量与维度。
-6. 实现 tenant + ACL 过滤接口骨架以及按 tenant/document 删除。
-7. Chroma 完成写入并验证后，才把 DocumentVersion 原子切换为 active。
+1. 仅 development 且 `AUTH_REQUIRED=false` 时允许固定开发身份。
+2. 定义 JWT/OIDC guard 与可替换 token verifier。
+3. Identity 增加 roles、allowedSensitivities 和 capability。
+4. 文档、任务、向量查询和删除统一使用服务端身份构造 tenant/ACL 条件。
+5. 覆盖 tenant、部门、敏感度、owner、管理员仍受 tenant 限制和客户端伪造身份字段。
+6. 为 Rerank、LLM 和引用返回预留相同的二次授权 policy。
 
-认证、完整 ACL、查询编排、Rerank 和 LLM 仍按后续阶段实施。
+查询 API、Rerank 和 LLM 仍按后续阶段实施。

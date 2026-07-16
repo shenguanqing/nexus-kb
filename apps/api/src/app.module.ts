@@ -12,9 +12,11 @@ import { IngestionQueue } from './ingestion/ingestion.queue';
 import { ChunkingService } from './ingestion/chunking';
 import { CloudPolicyService } from './ingestion/cloud-policy';
 import { RedactionService } from './ingestion/redaction';
+import { IngestionProcessor } from './ingestion/ingestion.processor';
 import { EmbeddingProviderFactory } from './providers/embedding/embedding-provider.factory';
 import { EmbeddingService } from './providers/embedding/embedding.service';
 import { EmbeddingTelemetry } from './providers/embedding/embedding-telemetry';
+import { ChromaVectorStore } from './vector-store/chroma-vector-store';
 
 @Module({
   controllers: [HealthController, DocumentsController],
@@ -30,6 +32,8 @@ import { EmbeddingTelemetry } from './providers/embedding/embedding-telemetry';
     EmbeddingTelemetry,
     EmbeddingProviderFactory,
     EmbeddingService,
+    ChromaVectorStore,
+    IngestionProcessor,
     IngestionQueue,
     DocumentsService,
   ],

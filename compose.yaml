@@ -107,7 +107,7 @@ services:
       - backend
 
   chroma:
-    image: chromadb/chroma:1.0.20
+    image: chromadb/chroma:1.5.9
     restart: unless-stopped
     volumes:
       - chroma_data:/data

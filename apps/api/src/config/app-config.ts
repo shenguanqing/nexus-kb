@@ -90,6 +90,17 @@ const environmentSchema = z
     EMBEDDING_RETRY_BASE_DELAY_MS: z.coerce.number().int().min(1).max(10_000).default(500),
     DASHSCOPE_API_KEY: z.string().trim().default(''),
     ALIBABA_BASE_URL: z.string().trim().default(''),
+    VECTOR_STORE_PROVIDER: z.enum(['chroma']).default('chroma'),
+    CHROMA_TENANT: z.string().trim().min(1).max(128).default('default_tenant'),
+    CHROMA_DATABASE: z.string().trim().min(1).max(128).default('default_database'),
+    CHROMA_COLLECTION_PREFIX: z
+      .string()
+      .trim()
+      .regex(/^[a-z][a-z0-9_-]{1,31}$/)
+      .default('nexuskb'),
+    CHROMA_SCHEMA_VERSION: z.coerce.number().int().min(1).max(9999).default(1),
+    CHROMA_UPSERT_BATCH_SIZE: z.coerce.number().int().min(1).max(1000).default(100),
+    CHROMA_QUERY_MAX_TOP_K: z.coerce.number().int().min(1).max(1000).default(100),
   })
   .superRefine((environment, context) => {
     if (environment.EMBEDDING_PROVIDER !== 'alibaba') return;

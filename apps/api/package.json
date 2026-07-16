@@ -9,7 +9,7 @@
     "dev": "tsx watch src/main.ts",
     "lint": "eslint src test",
     "start": "node dist/main.js",
-    "test": "pnpm --filter @nexus-kb/contracts build && vitest run --exclude test/integration/**",
+    "test": "pnpm --filter @nexus-kb/contracts build && vitest run --exclude 'test/integration/**'",
     "test:integration": "pnpm --filter @nexus-kb/contracts build && vitest run test/integration",
     "test:provider:smoke": "vitest run test/alibaba-embedding.smoke.test.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
@@ -22,6 +22,7 @@
     "@nexus-kb/contracts": "workspace:*",
     "@prisma/client": "^6.19.3",
     "bullmq": "^5.80.5",
+    "chromadb": "3.5.0",
     "fastify": "^5.6.0",
     "file-type": "^21.3.4",
     "reflect-metadata": "^0.2.2",

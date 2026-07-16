@@ -28,6 +28,8 @@ enum IngestionStatus {
   parsing
   chunking
   policy_check
+  embedding
+  indexing
   policy_blocked
   completed
   failed
@@ -75,6 +77,9 @@ model DocumentVersion {
   chunkCount             Int                  @default(0)
   redactionPolicyVersion String?
   cloudPolicyDecision    CloudPolicyDecision?
+  embeddingFingerprint   String?              @db.Char(64)
+  vectorCollection       String?
+  indexedAt              DateTime?
   createdAt              DateTime             @default(now())
   document               Document             @relation(fields: [documentId], references: [id], onDelete: Cascade)
 
@@ -83,23 +88,25 @@ model DocumentVersion {
 }
 
 model IngestionJob {
-  id            String             @id @db.Uuid
-  tenantId      String
-  documentId    String             @db.Uuid
-  version       Int
-  status        IngestionStatus    @default(queued)
-  step          String             @default("queued")
-  attempts      Int                @default(0)
-  traceId       String             @db.Uuid
-  parserVersion String?
-  warnings      Json?
-  errorCode     String?
-  startedAt     DateTime?
-  completedAt   DateTime?
-  createdAt     DateTime           @default(now())
-  updatedAt     DateTime           @updatedAt
-  document      Document           @relation(fields: [documentId], references: [id], onDelete: Cascade)
-  policyEvents  CloudPolicyEvent[]
+  id                   String             @id @db.Uuid
+  tenantId             String
+  documentId           String             @db.Uuid
+  version              Int
+  status               IngestionStatus    @default(queued)
+  step                 String             @default("queued")
+  attempts             Int                @default(0)
+  traceId              String             @db.Uuid
+  parserVersion        String?
+  embeddingFingerprint String?            @db.Char(64)
+  vectorCollection     String?
+  warnings             Json?
+  errorCode            String?
+  startedAt            DateTime?
+  completedAt          DateTime?
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+  document             Document           @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  policyEvents         CloudPolicyEvent[]
 
   @@index([tenantId, status])
   @@index([tenantId, documentId])

@@ -76,7 +76,19 @@ components:
       enum: [uploaded, processing, prepared, active, policy_blocked, failed, deleted]
     IngestionStatus:
       type: string
-      enum: [queued, parsing, chunking, policy_check, policy_blocked, completed, failed, deleted]
+      enum:
+        [
+          queued,
+          parsing,
+          chunking,
+          policy_check,
+          embedding,
+          indexing,
+          policy_blocked,
+          completed,
+          failed,
+          deleted,
+        ]
   responses:
     NotFound:
       description: Resource does not exist in the authenticated tenant

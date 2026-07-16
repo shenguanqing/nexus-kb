@@ -3,12 +3,17 @@ import { access, constants } from 'node:fs/promises';
 import { connect } from 'node:net';
 
 import { AppConfig } from '../config/app-config';
+import { ChromaVectorStore } from '../vector-store/chroma-vector-store';
+import { VectorStoreError } from '../vector-store/vector-store-error';
 
 type CheckResult = { status: 'up' | 'down'; reason?: string };
 
 @Injectable()
 export class HealthService {
-  constructor(private readonly config: AppConfig) {}
+  constructor(
+    private readonly config: AppConfig,
+    private readonly vectorStore: ChromaVectorStore,
+  ) {}
 
   async readiness(): Promise<{
     status: 'ready' | 'not_ready';
@@ -17,10 +22,7 @@ export class HealthService {
     const entries = await Promise.all([
       this.checkTcp('postgres', this.config.values.DATABASE_URL),
       this.checkTcp('redis', this.config.values.REDIS_URL),
-      this.checkHttp(
-        'chroma',
-        new URL('/api/v2/heartbeat', this.config.values.CHROMA_URL).toString(),
-      ),
+      this.checkVectorStore(),
       this.checkHttp(
         'parserWorker',
         new URL('/health/ready', this.config.values.PARSER_WORKER_URL).toString(),
@@ -32,6 +34,24 @@ export class HealthService {
       status: entries.every(([, value]) => value.status === 'up') ? 'ready' : 'not_ready',
       checks,
     };
+  }
+
+  private async checkVectorStore(): Promise<[string, CheckResult]> {
+    try {
+      await this.vectorStore.healthCheck();
+      return ['chroma', { status: 'up' }];
+    } catch (error) {
+      return [
+        'chroma',
+        {
+          status: 'down',
+          reason:
+            error instanceof VectorStoreError && error.kind === 'configuration_mismatch'
+              ? 'configuration_mismatch'
+              : 'unavailable',
+        },
+      ];
+    }
   }
 
   private async checkDirectory(name: string, path: string): Promise<[string, CheckResult]> {

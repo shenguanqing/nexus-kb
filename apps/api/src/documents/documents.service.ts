@@ -13,6 +13,7 @@ import { ApiException } from '../common/api-exception';
 import { AppConfig } from '../config/app-config';
 import { PrismaService } from '../database/prisma.service';
 import { IngestionQueue } from '../ingestion/ingestion.queue';
+import { ChromaVectorStore } from '../vector-store/chroma-vector-store';
 import { validateUploadedFile } from './file-validation';
 
 @Injectable()
@@ -21,6 +22,7 @@ export class DocumentsService {
     private readonly config: AppConfig,
     private readonly prisma: PrismaService,
     private readonly queue: IngestionQueue,
+    private readonly vectorStore: ChromaVectorStore,
   ) {}
 
   async upload(file: MultipartFile, identity: Identity, traceId: string): Promise<object> {
@@ -138,6 +140,8 @@ export class DocumentsService {
         attempts: true,
         traceId: true,
         parserVersion: true,
+        embeddingFingerprint: true,
+        vectorCollection: true,
         warnings: true,
         errorCode: true,
         startedAt: true,
@@ -156,6 +160,7 @@ export class DocumentsService {
       select: { id: true, storageKey: true, status: true },
     });
     if (!document || document.status === 'deleted') return { documentId: id, deleted: true };
+    await this.vectorStore.deleteDocument(identity.tenantId, document.id);
     await this.prisma.$transaction([
       this.prisma.document.update({
         where: { id: document.id },
@@ -173,6 +178,9 @@ export class DocumentsService {
           chunkCount: 0,
           redactionPolicyVersion: null,
           cloudPolicyDecision: null,
+          embeddingFingerprint: null,
+          vectorCollection: null,
+          indexedAt: null,
         },
       }),
       this.prisma.knowledgeChunk.deleteMany({

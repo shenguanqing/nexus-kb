@@ -2,7 +2,7 @@
 
 知枢 NexusKB 是企业级知识库项目。本仓库当前完成阶段 3：在上传与解析闭环上增加了结构感知分块、基础 PII/业务规则脱敏，以及 confidential 默认零云端调用的策略门禁。
 
-Chroma 向量写入、完整 RAG、OIDC/SSO、LLM Provider 和前端仍在后续阶段，进度以 [`TASK.md`](./TASK.md) 为准。
+完整 ACL、查询编排、LLM Provider、OIDC/SSO 和前端仍在后续阶段，进度以 [`TASK.md`](./TASK.md) 为准。
 
 ## 环境要求
 
@@ -108,6 +108,21 @@ curl -X DELETE http://127.0.0.1:3000/v1/documents/<documentId>
 ```bash
 RUN_PAID_PROVIDER_TESTS=true pnpm --filter @nexus-kb/api test:provider:smoke
 ```
+
+## Chroma VectorStore
+
+- 使用官方 `chromadb` TypeScript 客户端 3.5.0，并将 Chroma Server 固定为 1.5.9。
+- collection 使用 cosine 距离，并保存完整 Embedding 配置指纹；指纹或距离配置不兼容时 readiness 失败。
+- collection 名称包含 Provider、模型、维度、schema version 和指纹摘要，不同向量空间不会混写。
+- 使用稳定 chunkId 执行 upsert，重复入库不会增加重复向量。
+- Chroma 只保存脱敏文本和标量来源/权限 metadata，不保存原始正文。
+- 查询接口要求服务端构造 tenant、部门、敏感度和 owner ACL filter，不接受客户端原始 where。
+- 删除文档时先按 tenantId + documentId 删除向量，再清理 PostgreSQL chunk 和原文件。
+- 文档仅在 Embedding、Chroma upsert 和写入校验全部成功后原子切换为 `active`。
+- 默认 `EMBEDDING_PROVIDER=none` 时仅检查 Chroma 连通性，不创建 collection，也不调用付费模型。
+
+真实 Chroma 集成测试随 `test:integration` 在 Compose API 容器内运行，覆盖重复 upsert、tenant 过滤、
+按文档删除和错误指纹失败关闭。
 
 ## 安全说明
 

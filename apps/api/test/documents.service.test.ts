@@ -5,6 +5,7 @@ import { DocumentsService } from '../src/documents/documents.service';
 import type { AppConfig } from '../src/config/app-config';
 import type { PrismaService } from '../src/database/prisma.service';
 import type { IngestionQueue } from '../src/ingestion/ingestion.queue';
+import type { ChromaVectorStore } from '../src/vector-store/chroma-vector-store';
 
 const identity: Identity = {
   tenantId: 'tenant-a',
@@ -20,6 +21,7 @@ describe('DocumentsService tenant isolation', () => {
       {} as AppConfig,
       { document: { findFirst } } as unknown as PrismaService,
       {} as IngestionQueue,
+      { deleteDocument: () => Promise.resolve() } as ChromaVectorStore,
     );
 
     await expect(
@@ -37,6 +39,7 @@ describe('DocumentsService tenant isolation', () => {
       {} as AppConfig,
       { ingestionJob: { findFirst } } as unknown as PrismaService,
       {} as IngestionQueue,
+      { deleteDocument: () => Promise.resolve() } as ChromaVectorStore,
     );
 
     await expect(
@@ -46,5 +49,31 @@ describe('DocumentsService tenant isolation', () => {
     });
     const [query] = findFirst.mock.calls[0] as unknown as [{ where: { tenantId: string } }];
     expect(query.where.tenantId).toBe('tenant-a');
+  });
+
+  it('does not mark a document deleted when vector deletion fails', async () => {
+    const transaction = vi.fn();
+    const deleteDocument = vi.fn().mockRejectedValue(new Error('chroma unavailable'));
+    const service = new DocumentsService(
+      { values: { RAW_DOCS_PATH: '/data/raw-docs' } } as unknown as AppConfig,
+      {
+        document: {
+          findFirst: vi.fn().mockResolvedValue({
+            id: '6769af9a-a4d0-4dc2-a97d-942584a9c826',
+            storageKey: '6769af9a-a4d0-4dc2-a97d-942584a9c826.md',
+            status: 'active',
+          }),
+        },
+        $transaction: transaction,
+      } as unknown as PrismaService,
+      {} as IngestionQueue,
+      { deleteDocument } as unknown as ChromaVectorStore,
+    );
+
+    await expect(
+      service.deleteDocument('6769af9a-a4d0-4dc2-a97d-942584a9c826', identity),
+    ).rejects.toThrow('chroma unavailable');
+    expect(deleteDocument).toHaveBeenCalledWith('tenant-a', '6769af9a-a4d0-4dc2-a97d-942584a9c826');
+    expect(transaction).not.toHaveBeenCalled();
   });
 });

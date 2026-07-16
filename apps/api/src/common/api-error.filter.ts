@@ -4,6 +4,7 @@ import type { FastifyReply, FastifyRequest } from 'fastify';
 
 import { ApiException } from './api-exception';
 import { ProviderError } from '../providers/embedding/provider-error';
+import { VectorStoreError } from '../vector-store/vector-store-error';
 
 @Catch()
 export class ApiErrorFilter implements ExceptionFilter {
@@ -23,29 +24,37 @@ export class ApiErrorFilter implements ExceptionFilter {
         ? exception.getStatus()
         : exception instanceof ProviderError
           ? this.providerStatus(exception)
-          : externalStatus && externalStatus >= 400 && externalStatus < 500
-            ? externalStatus
-            : HttpStatus.INTERNAL_SERVER_ERROR;
+          : exception instanceof VectorStoreError
+            ? this.vectorStoreStatus(exception)
+            : externalStatus && externalStatus >= 400 && externalStatus < 500
+              ? externalStatus
+              : HttpStatus.INTERNAL_SERVER_ERROR;
     const code =
       exception instanceof ApiException
         ? exception.code
         : exception instanceof ProviderError
           ? exception.code
-          : this.isUploadLimitError(exception)
-            ? 'FILE_TOO_LARGE'
-            : status >= 500
-              ? 'INTERNAL_ERROR'
-              : 'REQUEST_FAILED';
+          : exception instanceof VectorStoreError
+            ? exception.code
+            : this.isUploadLimitError(exception)
+              ? 'FILE_TOO_LARGE'
+              : status >= 500
+                ? 'INTERNAL_ERROR'
+                : 'REQUEST_FAILED';
     const message =
       status >= 500
         ? exception instanceof ProviderError
           ? exception.safeMessage
-          : '服务暂时不可用，请稍后重试'
+          : exception instanceof VectorStoreError
+            ? exception.safeMessage
+            : '服务暂时不可用，请稍后重试'
         : this.isUploadLimitError(exception)
           ? '文件超过大小限制'
           : exception instanceof ProviderError
             ? exception.safeMessage
-            : this.getSafeMessage(exception);
+            : exception instanceof VectorStoreError
+              ? exception.safeMessage
+              : this.getSafeMessage(exception);
 
     if (status >= 500) request.log.error({ err: exception, traceId: request.id }, 'request failed');
     void response.status(status).send({
@@ -81,6 +90,12 @@ export class ApiErrorFilter implements ExceptionFilter {
     if (error.kind === 'invalid_request' || error.kind === 'invalid_response') {
       return HttpStatus.BAD_GATEWAY;
     }
+    return HttpStatus.SERVICE_UNAVAILABLE;
+  }
+
+  private vectorStoreStatus(error: VectorStoreError): number {
+    if (error.kind === 'invalid_input') return HttpStatus.BAD_REQUEST;
+    if (error.kind === 'invalid_response') return HttpStatus.BAD_GATEWAY;
     return HttpStatus.SERVICE_UNAVAILABLE;
   }
 }
