@@ -12,6 +12,9 @@ import { IngestionQueue } from './ingestion/ingestion.queue';
 import { ChunkingService } from './ingestion/chunking';
 import { CloudPolicyService } from './ingestion/cloud-policy';
 import { RedactionService } from './ingestion/redaction';
+import { EmbeddingProviderFactory } from './providers/embedding/embedding-provider.factory';
+import { EmbeddingService } from './providers/embedding/embedding.service';
+import { EmbeddingTelemetry } from './providers/embedding/embedding-telemetry';
 
 @Module({
   controllers: [HealthController, DocumentsController],
@@ -24,6 +27,9 @@ import { RedactionService } from './ingestion/redaction';
     ChunkingService,
     RedactionService,
     CloudPolicyService,
+    EmbeddingTelemetry,
+    EmbeddingProviderFactory,
+    EmbeddingService,
     IngestionQueue,
     DocumentsService,
   ],

@@ -11,6 +11,7 @@
     "start": "node dist/main.js",
     "test": "pnpm --filter @nexus-kb/contracts build && vitest run --exclude test/integration/**",
     "test:integration": "pnpm --filter @nexus-kb/contracts build && vitest run test/integration",
+    "test:provider:smoke": "vitest run test/alibaba-embedding.smoke.test.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
