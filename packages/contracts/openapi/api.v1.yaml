@@ -1,7 +1,9 @@
 openapi: 3.1.0
 info:
   title: NexusKB API
-  version: 0.3.0
+  version: 0.4.0
+security:
+  - bearerAuth: []
 paths:
   /v1/documents:
     post:
@@ -26,6 +28,8 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ApiError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
   /v1/documents/{documentId}:
     parameters:
       - $ref: '#/components/parameters/DocumentId'
@@ -33,11 +37,15 @@ paths:
       summary: Get a tenant-scoped document
       responses:
         '200': { description: Document metadata }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
     delete:
       summary: Idempotently delete a tenant-scoped document
       responses:
         '200': { description: Deleted or already absent }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
   /v1/ingestion-jobs/{jobId}:
     get:
       summary: Get a tenant-scoped ingestion job
@@ -48,6 +56,8 @@ paths:
           schema: { type: string, format: uuid }
       responses:
         '200': { description: Ingestion job }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
   /v1/ingestion-jobs/failed:
     get:
@@ -64,7 +74,14 @@ paths:
                   jobs:
                     type: array
                     items: { $ref: '#/components/schemas/IngestionJobSummary' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
 components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
   parameters:
     DocumentId:
       name: documentId
@@ -129,6 +146,16 @@ components:
         completedAt: { type: [string, 'null'], format: date-time }
         updatedAt: { type: string, format: date-time }
   responses:
+    Unauthorized:
+      description: Missing, invalid or expired bearer token
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ApiError' }
+    Forbidden:
+      description: Authenticated identity lacks the required capability
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ApiError' }
     NotFound:
       description: Resource does not exist in the authenticated tenant
       content:

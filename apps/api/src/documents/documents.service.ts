@@ -8,6 +8,7 @@ import { Injectable } from '@nestjs/common';
 import type { MultipartFile } from '@fastify/multipart';
 import { Prisma } from '@prisma/client';
 
+import { AclPolicy } from '../auth/acl-policy';
 import type { Identity } from '../auth/identity';
 import { ApiException } from '../common/api-exception';
 import { OperationalLogger } from '../common/operational-logger';
@@ -25,9 +26,11 @@ export class DocumentsService {
     private readonly queue: IngestionQueue,
     private readonly vectorStore: ChromaVectorStore,
     private readonly logger: OperationalLogger,
+    private readonly acl: AclPolicy,
   ) {}
 
   async upload(file: MultipartFile, identity: Identity, traceId: string): Promise<object> {
+    this.acl.assertCapability(identity, 'documents:write');
     const sourceName = file.filename.normalize('NFC');
     if (!sourceName || sourceName !== basename(sourceName) || sourceName.includes('\0')) {
       throw new ApiException('INVALID_FILENAME', '文件名不合法', 400);
@@ -68,7 +71,7 @@ export class DocumentsService {
             identity.tenantId,
             contentSha256,
             identity.department,
-            identity.sensitivity,
+            identity.defaultSensitivity,
             identity.userId,
           ].join('\0'),
         )
@@ -78,7 +81,7 @@ export class DocumentsService {
           tenantId: identity.tenantId,
           contentSha256,
           department: identity.department,
-          sensitivity: identity.sensitivity,
+          sensitivity: identity.defaultSensitivity,
           ownerId: identity.userId,
           status: { not: 'deleted' },
         },
@@ -101,7 +104,7 @@ export class DocumentsService {
               contentSha256,
               deduplicationKey,
               department: identity.department,
-              sensitivity: identity.sensitivity,
+              sensitivity: identity.defaultSensitivity,
               ownerId: identity.userId,
               versions: {
                 create: { id: randomUUID(), tenantId: identity.tenantId, version: 1 },
@@ -153,8 +156,13 @@ export class DocumentsService {
   }
 
   async getDocument(id: string, identity: Identity): Promise<object> {
+    this.acl.assertCapability(identity, 'documents:read');
     const document = await this.prisma.document.findFirst({
-      where: { id, tenantId: identity.tenantId, status: { notIn: ['deleting', 'deleted'] } },
+      where: {
+        id,
+        ...this.acl.documentWhere(identity),
+        status: { notIn: ['deleting', 'deleted'] },
+      },
       select: {
         id: true,
         sourceName: true,
@@ -174,8 +182,14 @@ export class DocumentsService {
   }
 
   async getJob(id: string, identity: Identity): Promise<object> {
+    this.acl.assertCapability(identity, 'documents:read');
     const job = await this.prisma.ingestionJob.findFirst({
-      where: { id, tenantId: identity.tenantId, status: { not: 'deleted' } },
+      where: {
+        id,
+        tenantId: identity.tenantId,
+        status: { not: 'deleted' },
+        document: this.acl.documentWhere(identity),
+      },
       select: {
         id: true,
         documentId: true,
@@ -203,8 +217,13 @@ export class DocumentsService {
   }
 
   async getFailedJobs(identity: Identity): Promise<object> {
+    this.acl.assertCapability(identity, 'documents:read');
     const jobs = await this.prisma.ingestionJob.findMany({
-      where: { tenantId: identity.tenantId, status: 'failed' },
+      where: {
+        tenantId: identity.tenantId,
+        status: 'failed',
+        document: this.acl.documentWhere(identity),
+      },
       orderBy: { updatedAt: 'desc' },
       take: 50,
       select: {
@@ -228,8 +247,9 @@ export class DocumentsService {
   }
 
   async deleteDocument(id: string, identity: Identity): Promise<object> {
+    this.acl.assertCapability(identity, 'documents:delete');
     const document = await this.prisma.document.findFirst({
-      where: { id, tenantId: identity.tenantId },
+      where: { id, ...this.acl.documentWhere(identity) },
       select: { id: true, storageKey: true, status: true },
     });
     if (!document) return { documentId: id, deleted: true };

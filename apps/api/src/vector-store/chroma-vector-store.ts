@@ -250,6 +250,14 @@ export class ChromaVectorStore implements VectorStore {
       throw new VectorStoreError('invalid_input');
     }
     const branches: Where[] = [];
+    if (filter.tenantWideAccess) {
+      return {
+        $and: [
+          { tenantId: filter.tenantId },
+          { sensitivity: { $in: filter.allowedSensitivities } },
+        ],
+      };
+    }
     if (filter.allowedSensitivities.includes('public')) {
       branches.push({ sensitivity: 'public' });
     }

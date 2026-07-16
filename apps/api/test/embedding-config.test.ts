@@ -31,7 +31,18 @@ describe('embedding configuration', () => {
       AUTH_REQUIRED: false,
       DEV_TENANT_ID: 'test-tenant',
     });
-    expect(parseEnvironment({ ...baseEnvironment, NODE_ENV: 'production' })).toMatchObject({
+    expect(() => parseEnvironment({ ...baseEnvironment, NODE_ENV: 'production' })).toThrow(
+      'Invalid application configuration: OIDC_ISSUER, OIDC_AUDIENCE, OIDC_JWKS_URI',
+    );
+    expect(
+      parseEnvironment({
+        ...baseEnvironment,
+        NODE_ENV: 'production',
+        OIDC_ISSUER: 'https://identity.example.test',
+        OIDC_AUDIENCE: 'nexus-kb',
+        OIDC_JWKS_URI: 'https://identity.example.test/.well-known/jwks.json',
+      }),
+    ).toMatchObject({
       NODE_ENV: 'production',
       API_HOST: '0.0.0.0',
       AUTH_REQUIRED: true,

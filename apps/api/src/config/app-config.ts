@@ -48,6 +48,10 @@ const cloudEgressRuleSchema = z
   })
   .strict();
 
+const sensitivitySchema = z.enum(['public', 'internal', 'confidential']);
+const capabilitySchema = z.enum(['documents:read', 'documents:write', 'documents:delete']);
+const jwtAlgorithmSchema = z.enum(['RS256', 'RS384', 'RS512', 'ES256', 'ES384', 'ES512']);
+
 function jsonEnvironmentValue<T extends z.ZodType>(schema: T, fallback: string) {
   return z
     .string()
@@ -84,7 +88,25 @@ const environmentSchema = z
     DEV_TENANT_ID: z.string().min(1).default('local-dev'),
     DEV_USER_ID: z.string().min(1).default('local-user'),
     DEV_DEPARTMENT: z.string().min(1).default('general'),
-    DEV_SENSITIVITY: z.enum(['public', 'internal', 'confidential']).default('internal'),
+    DEV_SENSITIVITY: sensitivitySchema.default('internal'),
+    DEV_ROLES_JSON: jsonEnvironmentValue(z.array(z.string().min(1).max(64)).max(32), '[]'),
+    DEV_ALLOWED_SENSITIVITIES_JSON: jsonEnvironmentValue(
+      z.array(sensitivitySchema).min(1).max(3),
+      '["public","internal","confidential"]',
+    ),
+    DEV_CAPABILITIES_JSON: jsonEnvironmentValue(
+      z.array(capabilitySchema).min(1).max(16),
+      '["documents:read","documents:write","documents:delete"]',
+    ),
+    OIDC_ISSUER: z.string().trim().max(512).default(''),
+    OIDC_AUDIENCE: z.string().trim().max(256).default(''),
+    OIDC_JWKS_URI: z.string().trim().max(2048).default(''),
+    OIDC_ALLOWED_ALGORITHMS_JSON: jsonEnvironmentValue(
+      z.array(jwtAlgorithmSchema).min(1).max(6),
+      '["RS256"]',
+    ),
+    OIDC_CLOCK_TOLERANCE_SECONDS: z.coerce.number().int().min(0).max(300).default(5),
+    OIDC_JWKS_TIMEOUT_MS: z.coerce.number().int().min(100).max(30_000).default(5000),
     MAX_UPLOAD_BYTES: z.coerce.number().int().min(1).max(1_073_741_824).default(52_428_800),
     INGESTION_CONCURRENCY: z.coerce.number().int().min(1).max(32).default(2),
     INGESTION_MAX_ATTEMPTS: z.coerce.number().int().min(1).max(20).default(3),
@@ -132,6 +154,38 @@ const environmentSchema = z
     CHROMA_QUERY_MAX_TOP_K: z.coerce.number().int().min(1).max(1000).default(100),
   })
   .superRefine((environment, context) => {
+    if (!environment.DEV_ALLOWED_SENSITIVITIES_JSON.includes(environment.DEV_SENSITIVITY)) {
+      context.addIssue({
+        code: 'custom',
+        path: ['DEV_SENSITIVITY'],
+        message: 'must be included in DEV_ALLOWED_SENSITIVITIES_JSON',
+      });
+    }
+    if (environment.AUTH_REQUIRED) {
+      const requiredFields = [
+        ['OIDC_ISSUER', environment.OIDC_ISSUER],
+        ['OIDC_AUDIENCE', environment.OIDC_AUDIENCE],
+        ['OIDC_JWKS_URI', environment.OIDC_JWKS_URI],
+      ] as const;
+      for (const [field, value] of requiredFields) {
+        if (!value) context.addIssue({ code: 'custom', path: [field], message: 'is required' });
+      }
+      if (environment.OIDC_JWKS_URI) {
+        try {
+          const url = new URL(environment.OIDC_JWKS_URI);
+          if (url.username || url.password) throw new Error('credentials in URL');
+          if (environment.NODE_ENV === 'production' && url.protocol !== 'https:') {
+            throw new Error('not https');
+          }
+        } catch {
+          context.addIssue({
+            code: 'custom',
+            path: ['OIDC_JWKS_URI'],
+            message: 'must be a valid URL and use HTTPS in production',
+          });
+        }
+      }
+    }
     if (environment.EMBEDDING_PROVIDER !== 'alibaba') return;
     const requiredFields = [
       ['EMBEDDING_MODEL', environment.EMBEDDING_MODEL],
@@ -202,6 +256,9 @@ export function safeConfigurationSummary(environment: Environment): Record<strin
     apiPort: environment.API_PORT,
     logLevel: environment.LOG_LEVEL,
     authRequired: environment.AUTH_REQUIRED,
+    oidcIssuer: environment.OIDC_ISSUER || null,
+    oidcAudience: environment.OIDC_AUDIENCE || null,
+    oidcJwksEndpoint: environment.OIDC_JWKS_URI ? safeEndpoint(environment.OIDC_JWKS_URI) : null,
     databaseConfigured: Boolean(environment.DATABASE_URL),
     redisConfigured: Boolean(environment.REDIS_URL),
     parserWorkerEndpoint: safeEndpoint(environment.PARSER_WORKER_URL),

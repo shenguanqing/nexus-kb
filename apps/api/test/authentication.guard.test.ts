@@ -1,0 +1,120 @@
+import type { ExecutionContext } from '@nestjs/common';
+import type { Reflector } from '@nestjs/core';
+import { describe, expect, it, vi } from 'vitest';
+
+import { AuthenticationGuard } from '../src/auth/authentication.guard';
+import type { AuthenticatedRequest, Identity } from '../src/auth/identity';
+import type { TokenVerifier } from '../src/auth/token-verifier';
+import type { AppConfig } from '../src/config/app-config';
+
+const verifiedIdentity: Identity = {
+  tenantId: 'verified-tenant',
+  userId: 'verified-user',
+  department: 'finance',
+  roles: [],
+  allowedSensitivities: ['public', 'internal'],
+  capabilities: ['documents:read'],
+  defaultSensitivity: 'internal',
+};
+
+function executionContext(request: AuthenticatedRequest): ExecutionContext {
+  return {
+    getHandler: () => function handler() {},
+    getClass: () => class Controller {},
+    switchToHttp: () => ({
+      getRequest: () => request,
+    }),
+  } as unknown as ExecutionContext;
+}
+
+function config(values: Partial<AppConfig['values']>): AppConfig {
+  return {
+    values: {
+      NODE_ENV: 'test',
+      AUTH_REQUIRED: false,
+      DEV_TENANT_ID: 'test-tenant',
+      DEV_USER_ID: 'test-user',
+      DEV_DEPARTMENT: 'test-department',
+      DEV_ROLES_JSON: [],
+      DEV_ALLOWED_SENSITIVITIES_JSON: ['public', 'internal'],
+      DEV_CAPABILITIES_JSON: ['documents:read'],
+      DEV_SENSITIVITY: 'internal',
+      ...values,
+    },
+  } as unknown as AppConfig;
+}
+
+describe('AuthenticationGuard', () => {
+  it('uses fixed identity only in development or test when authentication is disabled', async () => {
+    const request = { headers: {} } as AuthenticatedRequest;
+    const verify = vi.fn();
+    const verifier = { verify } as unknown as TokenVerifier;
+    const reflector = { getAllAndOverride: () => false } as unknown as Reflector;
+
+    await expect(
+      new AuthenticationGuard(config({}), reflector, verifier).canActivate(
+        executionContext(request),
+      ),
+    ).resolves.toBe(true);
+    expect(request.identity).toMatchObject({
+      tenantId: 'test-tenant',
+      userId: 'test-user',
+      department: 'test-department',
+    });
+    expect(verify).not.toHaveBeenCalled();
+  });
+
+  it('never falls back to development identity when authentication is required', async () => {
+    const request = { headers: {} } as AuthenticatedRequest;
+    const verifier = { verify: vi.fn() } as unknown as TokenVerifier;
+    const reflector = { getAllAndOverride: () => false } as unknown as Reflector;
+
+    await expect(
+      new AuthenticationGuard(config({ AUTH_REQUIRED: true }), reflector, verifier).canActivate(
+        executionContext(request),
+      ),
+    ).rejects.toMatchObject({
+      code: 'AUTHENTICATION_REQUIRED',
+      status: 401,
+    });
+    expect(request.identity).toBeUndefined();
+  });
+
+  it('uses only the verified token identity and ignores spoofed request fields', async () => {
+    const request = {
+      headers: {
+        authorization: 'Bearer signed.token.value',
+        'x-tenant-id': 'spoofed-tenant',
+        'x-role': 'platform_admin',
+      },
+      body: {
+        tenantId: 'spoofed-tenant',
+        department: 'executive',
+        roles: ['platform_admin'],
+      },
+    } as unknown as AuthenticatedRequest;
+    const verify = vi.fn().mockResolvedValue(verifiedIdentity);
+    const reflector = { getAllAndOverride: () => false } as unknown as Reflector;
+
+    await expect(
+      new AuthenticationGuard(config({ AUTH_REQUIRED: true }), reflector, { verify }).canActivate(
+        executionContext(request),
+      ),
+    ).resolves.toBe(true);
+    expect(verify).toHaveBeenCalledWith('signed.token.value');
+    expect(request.identity).toEqual(verifiedIdentity);
+  });
+
+  it('allows explicitly public routes without parsing credentials', async () => {
+    const request = { headers: {} } as AuthenticatedRequest;
+    const verify = vi.fn();
+    const reflector = { getAllAndOverride: () => true } as unknown as Reflector;
+
+    await expect(
+      new AuthenticationGuard(config({ AUTH_REQUIRED: true }), reflector, {
+        verify,
+      }).canActivate(executionContext(request)),
+    ).resolves.toBe(true);
+    expect(verify).not.toHaveBeenCalled();
+  });
+});

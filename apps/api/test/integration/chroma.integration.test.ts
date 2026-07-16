@@ -103,6 +103,7 @@ describe('Chroma VectorStore integration', () => {
         departments: ['finance'],
         allowedSensitivities: ['internal'],
         userId: 'user-tenant-a',
+        tenantWideAccess: false,
       },
     });
     expect(results).toHaveLength(1);

@@ -1,8 +1,10 @@
 import { Controller, Get, HttpCode, Res } from '@nestjs/common';
 import type { FastifyReply } from 'fastify';
 
+import { Public } from '../auth/public.decorator';
 import { HealthService } from './health.service';
 
+@Public()
 @Controller('health')
 export class HealthController {
   constructor(private readonly health: HealthService) {}

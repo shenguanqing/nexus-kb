@@ -1,8 +1,12 @@
 import { Module } from '@nestjs/common';
+import { APP_GUARD } from '@nestjs/core';
 
 import { AppConfig } from './config/app-config';
 import { OperationalLogger } from './common/operational-logger';
-import { IdentityService } from './auth/identity';
+import { AclPolicy } from './auth/acl-policy';
+import { AuthenticationGuard } from './auth/authentication.guard';
+import { OidcJwtTokenVerifier } from './auth/oidc-jwt-token.verifier';
+import { TOKEN_VERIFIER } from './auth/token-verifier';
 import { PrismaService } from './database/prisma.service';
 import { DocumentsController } from './documents/documents.controller';
 import { DocumentsService } from './documents/documents.service';
@@ -27,7 +31,10 @@ import { ChromaVectorStore } from './vector-store/chroma-vector-store';
     HealthService,
     ParserClient,
     PrismaService,
-    IdentityService,
+    AclPolicy,
+    OidcJwtTokenVerifier,
+    { provide: TOKEN_VERIFIER, useExisting: OidcJwtTokenVerifier },
+    { provide: APP_GUARD, useClass: AuthenticationGuard },
     ChunkingService,
     RedactionService,
     CloudPolicyService,

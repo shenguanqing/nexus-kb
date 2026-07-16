@@ -5,6 +5,7 @@ import { Readable } from 'node:stream';
 import type { MultipartFile } from '@fastify/multipart';
 import { describe, expect, it, vi } from 'vitest';
 
+import { AclPolicy } from '../src/auth/acl-policy';
 import type { Identity } from '../src/auth/identity';
 import type { OperationalLogger } from '../src/common/operational-logger';
 import { DocumentsService } from '../src/documents/documents.service';
@@ -17,9 +18,13 @@ const identity: Identity = {
   tenantId: 'tenant-a',
   userId: 'user-a',
   department: 'finance',
-  sensitivity: 'internal',
+  roles: [],
+  allowedSensitivities: ['public', 'internal'],
+  capabilities: ['documents:read', 'documents:write', 'documents:delete'],
+  defaultSensitivity: 'internal',
 };
 const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() } as unknown as OperationalLogger;
+const acl = new AclPolicy();
 
 describe('DocumentsService tenant isolation', () => {
   it('always scopes document reads to the authenticated tenant', async () => {
@@ -30,6 +35,7 @@ describe('DocumentsService tenant isolation', () => {
       {} as IngestionQueue,
       { deleteDocument: () => Promise.resolve() } as ChromaVectorStore,
       logger,
+      acl,
     );
 
     await expect(
@@ -37,8 +43,14 @@ describe('DocumentsService tenant isolation', () => {
     ).rejects.toMatchObject({
       code: 'DOCUMENT_NOT_FOUND',
     });
-    const [query] = findFirst.mock.calls[0] as unknown as [{ where: { tenantId: string } }];
+    const [query] = findFirst.mock.calls[0] as unknown as [
+      { where: { tenantId: string; sensitivity: unknown; OR: unknown } },
+    ];
     expect(query.where.tenantId).toBe('tenant-a');
+    expect(query.where.sensitivity).toEqual({ in: ['public', 'internal'] });
+    expect(query.where.OR).toEqual(
+      expect.arrayContaining([{ department: 'finance' }, { ownerId: 'user-a' }]),
+    );
   });
 
   it('always scopes ingestion job reads to the authenticated tenant', async () => {
@@ -49,6 +61,7 @@ describe('DocumentsService tenant isolation', () => {
       {} as IngestionQueue,
       { deleteDocument: () => Promise.resolve() } as ChromaVectorStore,
       logger,
+      acl,
     );
 
     await expect(
@@ -56,8 +69,11 @@ describe('DocumentsService tenant isolation', () => {
     ).rejects.toMatchObject({
       code: 'INGESTION_JOB_NOT_FOUND',
     });
-    const [query] = findFirst.mock.calls[0] as unknown as [{ where: { tenantId: string } }];
+    const [query] = findFirst.mock.calls[0] as unknown as [
+      { where: { tenantId: string; document: { tenantId: string } } },
+    ];
     expect(query.where.tenantId).toBe('tenant-a');
+    expect(query.where.document.tenantId).toBe('tenant-a');
   });
 
   it('keeps a deleting tombstone when vector deletion fails', async () => {
@@ -82,6 +98,7 @@ describe('DocumentsService tenant isolation', () => {
       {} as IngestionQueue,
       { deleteDocument } as unknown as ChromaVectorStore,
       logger,
+      acl,
     );
 
     await expect(
@@ -105,15 +122,24 @@ describe('DocumentsService tenant isolation', () => {
       {} as IngestionQueue,
       {} as ChromaVectorStore,
       logger,
+      acl,
     );
 
     await expect(service.getFailedJobs(identity)).resolves.toEqual({ jobs: [] });
-    expect(findMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: { tenantId: 'tenant-a', status: 'failed' },
-        take: 50,
-      }),
-    );
+    const [query] = findMany.mock.calls[0] as unknown as [
+      {
+        where: {
+          tenantId: string;
+          status: string;
+          document: { tenantId: string };
+        };
+        take: number;
+      },
+    ];
+    expect(query.where.tenantId).toBe('tenant-a');
+    expect(query.where.status).toBe('failed');
+    expect(query.where.document.tenantId).toBe('tenant-a');
+    expect(query.take).toBe(50);
   });
 
   it('rejects duplicate content in the same ACL scope without leaving a file', async () => {
@@ -143,6 +169,7 @@ describe('DocumentsService tenant isolation', () => {
       { enqueue } as unknown as IngestionQueue,
       {} as ChromaVectorStore,
       logger,
+      acl,
     );
 
     try {
@@ -157,5 +184,26 @@ describe('DocumentsService tenant isolation', () => {
     } finally {
       await rm(directory, { recursive: true, force: true });
     }
+  });
+
+  it('rejects operations when the signed identity lacks the required capability', async () => {
+    const service = new DocumentsService(
+      {} as AppConfig,
+      {} as PrismaService,
+      {} as IngestionQueue,
+      {} as ChromaVectorStore,
+      logger,
+      acl,
+    );
+
+    await expect(
+      service.getDocument('6769af9a-a4d0-4dc2-a97d-942584a9c826', {
+        ...identity,
+        capabilities: [],
+      }),
+    ).rejects.toMatchObject({
+      code: 'CAPABILITY_REQUIRED',
+      status: 403,
+    });
   });
 });

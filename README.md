@@ -72,7 +72,10 @@ docker compose down
 
 ## 文档 API
 
-开发模式下身份来自服务端 `DEV_*` 配置，上传表单中的 `tenantId`、role、department 等字段不会成为可信身份。生产环境必须在后续 OIDC 阶段启用 `AUTH_REQUIRED=true` 并接入认证实现。
+仅在 development/test 且 `AUTH_REQUIRED=false` 时，身份来自服务端 `DEV_*` 配置。启用认证后，API
+只接受 `Authorization: Bearer <JWT>`，通过 OIDC JWKS 校验签名、issuer、audience、算法和时间声明，
+再校验 tenant、department、roles、allowedSensitivities、capabilities 等业务 claims。请求体或自定义
+header 中的 tenant、role、department 不会成为可信身份。
 
 ```bash
 curl -F 'file=@policy.md;type=text/markdown' http://127.0.0.1:3000/v1/documents
@@ -83,6 +86,18 @@ curl -X DELETE http://127.0.0.1:3000/v1/documents/<documentId>
 ```
 
 公共 API 契约位于 `packages/contracts/openapi/api.v1.yaml`。API 启动时自动执行不可变 Prisma migration；任务在 Redis 中只携带 ID 与 UUID 文件引用，不携带正文。
+
+## 认证与 ACL
+
+- production 强制 `AUTH_REQUIRED=true`，并要求配置 `OIDC_ISSUER`、`OIDC_AUDIENCE` 和 HTTPS
+  `OIDC_JWKS_URI`。
+- JWT 仅允许配置的 RSA/ECDSA 非对称算法；未知密钥、错误 issuer/audience、过期 token 或不完整 claims
+  均返回 401，不回退开发身份。
+- 文档 API 使用 `documents:read`、`documents:write`、`documents:delete` capabilities。
+- 所有资源查询首先强制 tenant；普通用户只能访问允许敏感度内的 public、同部门或本人文档。
+- `platform_admin`/`document_admin` 可跨部门管理当前 tenant 内允许敏感度的文档，但不能跨 tenant。
+- 入库任务继承关联文档 ACL；VectorStore filter 只能由服务端 Identity 构造。
+- 健康检查是显式 public route，不会暴露身份或业务数据。
 
 相同 tenant、内容哈希、department、sensitivity 和 owner 的重复上传返回
 `DOCUMENT_DUPLICATE`（HTTP 409）。数据库只为新写入生成稳定去重键，兼容升级前已经存在的历史重复记录；

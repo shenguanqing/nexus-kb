@@ -173,11 +173,27 @@ describe('ChromaVectorStore', () => {
           departments: ['finance'],
           allowedSensitivities: ['public', 'internal'],
           userId: 'user-a',
+          tenantWideAccess: false,
         },
       }),
     ).resolves.toMatchObject([{ id: 'chunk-a', distance: 0.1 }]);
     expect(ports.query.mock.calls[0]?.[0].where).toMatchObject({
       $and: [{ tenantId: 'tenant-a' }, expect.any(Object)],
+    });
+
+    await store.query({
+      vector: [1, 0, 0],
+      topK: 5,
+      filter: {
+        tenantId: 'tenant-a',
+        departments: ['finance'],
+        allowedSensitivities: ['public', 'internal'],
+        userId: 'admin-a',
+        tenantWideAccess: true,
+      },
+    });
+    expect(ports.query.mock.calls[1]?.[0].where).toEqual({
+      $and: [{ tenantId: 'tenant-a' }, { sensitivity: { $in: ['public', 'internal'] } }],
     });
 
     await store.deleteDocument('tenant-a', '6769af9a-a4d0-4dc2-a97d-942584a9c826');

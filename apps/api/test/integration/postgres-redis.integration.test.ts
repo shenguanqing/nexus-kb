@@ -4,6 +4,8 @@ import { Queue } from 'bullmq';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { ingestionPayloadSchema } from '@nexus-kb/contracts';
+import { AclPolicy } from '../../src/auth/acl-policy';
+import type { Identity } from '../../src/auth/identity';
 
 describe('PostgreSQL and Redis integration', () => {
   const prisma = new PrismaClient();
@@ -16,6 +18,7 @@ describe('PostgreSQL and Redis integration', () => {
   const dedupDocumentId = randomUUID();
   const crossTenantDocumentId = randomUUID();
   const replacementDocumentId = randomUUID();
+  const aclDocumentId = randomUUID();
 
   beforeAll(async () => {
     await prisma.$connect();
@@ -31,6 +34,7 @@ describe('PostgreSQL and Redis integration', () => {
             dedupDocumentId,
             crossTenantDocumentId,
             replacementDocumentId,
+            aclDocumentId,
           ],
         },
       },
@@ -61,6 +65,71 @@ describe('PostgreSQL and Redis integration', () => {
     await expect(
       prisma.document.findFirst({ where: { id: documentId, tenantId: tenantA } }),
     ).resolves.toMatchObject({ id: documentId });
+  });
+
+  it('enforces department, sensitivity, owner and tenant-admin document ACL in PostgreSQL', async () => {
+    const policy = new AclPolicy();
+    const identity = (overrides: Partial<Identity>): Identity => ({
+      tenantId: tenantA,
+      userId: 'user-a',
+      department: 'legal',
+      roles: [],
+      allowedSensitivities: ['public', 'internal'],
+      capabilities: ['documents:read'],
+      defaultSensitivity: 'internal',
+      ...overrides,
+    });
+    await prisma.document.create({
+      data: {
+        id: aclDocumentId,
+        tenantId: tenantA,
+        sourceName: 'finance-internal.txt',
+        storageKey: `${aclDocumentId}.txt`,
+        mimeType: 'text/plain',
+        contentSha256: '9'.repeat(64),
+        department: 'finance',
+        sensitivity: 'internal',
+        ownerId: 'owner-a',
+      },
+    });
+
+    await expect(
+      prisma.document.findFirst({
+        where: { id: aclDocumentId, ...policy.documentWhere(identity({})) },
+      }),
+    ).resolves.toBeNull();
+    await expect(
+      prisma.document.findFirst({
+        where: {
+          id: aclDocumentId,
+          ...policy.documentWhere(identity({ department: 'finance' })),
+        },
+      }),
+    ).resolves.toMatchObject({ id: aclDocumentId });
+    await expect(
+      prisma.document.findFirst({
+        where: {
+          id: aclDocumentId,
+          ...policy.documentWhere(identity({ userId: 'owner-a' })),
+        },
+      }),
+    ).resolves.toMatchObject({ id: aclDocumentId });
+    await expect(
+      prisma.document.findFirst({
+        where: {
+          id: aclDocumentId,
+          ...policy.documentWhere(identity({ roles: ['platform_admin'] })),
+        },
+      }),
+    ).resolves.toMatchObject({ id: aclDocumentId });
+    await expect(
+      prisma.document.findFirst({
+        where: {
+          id: aclDocumentId,
+          ...policy.documentWhere(identity({ tenantId: tenantB, roles: ['platform_admin'] })),
+        },
+      }),
+    ).resolves.toBeNull();
   });
 
   it('stores only validated IDs and a file reference in Redis', async () => {

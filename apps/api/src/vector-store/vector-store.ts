@@ -23,6 +23,7 @@ export interface VectorAclFilter {
   departments: string[];
   allowedSensitivities: VectorSensitivity[];
   userId: string;
+  tenantWideAccess: boolean;
 }
 
 export interface VectorQueryInput {
