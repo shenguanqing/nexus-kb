@@ -1,6 +1,7 @@
 from pathlib import Path
 from uuid import uuid4
 
+import ezdxf
 from docx import Document
 from fastapi.testclient import TestClient
 from openpyxl import Workbook
@@ -108,6 +109,87 @@ def test_xlsx_preserves_sheet_and_header(tmp_path: Path) -> None:
     assert response.json()["parser"] == "openpyxl"
     assert response.json()["elements"][1]["sheet"] == "付款"
     assert response.json()["elements"][1]["metadata"]["headers"] == ["项目", "周期"]
+
+
+def test_dxf_extracts_summary_text_block_attributes_and_dimensions(tmp_path: Path) -> None:
+    path = tmp_path / "drawing.dxf"
+    drawing = ezdxf.new("R2010")
+    drawing.layers.add("ANNOTATION")
+    drawing.layers.add("DIMENSIONS")
+    block = drawing.blocks.new("TITLE_BLOCK")
+    block.add_attdef("PROJECT", (0, 0), text="未填写", dxfattribs={"layer": "ANNOTATION"})
+    insert = drawing.modelspace().add_blockref("TITLE_BLOCK", (0, 0))
+    insert.add_auto_attribs({"PROJECT": "NexusKB CAD"})
+    drawing.modelspace().add_mtext(
+        "Payment term: 30 days", dxfattribs={"layer": "ANNOTATION"}
+    )
+    dimension = drawing.modelspace().add_linear_dim(
+        base=(0, 3),
+        p1=(0, 0),
+        p2=(12.5, 0),
+        dxfattribs={"layer": "DIMENSIONS"},
+    )
+    dimension.render()
+    drawing.saveas(path)
+    client = make_client(tmp_path)
+    body = payload(path)
+    body["mimeType"] = "image/vnd.dxf"
+
+    response = client.post(
+        "/internal/v1/parse", headers={"x-internal-token": TOKEN}, json=body
+    )
+
+    assert response.status_code == 200
+    parsed = response.json()
+    assert parsed["parser"] == "ezdxf"
+    assert parsed["parserVersion"] == ezdxf.__version__
+    assert parsed["elements"][0]["elementType"] == "cad_summary"
+    assert "ANNOTATION" in parsed["elements"][0]["metadata"]["layers"]
+    assert any(element["text"] == "NexusKB CAD" for element in parsed["elements"])
+    assert any(element["text"] == "Payment term: 30 days" for element in parsed["elements"])
+    assert any(element["elementType"] == "cad_dimension" for element in parsed["elements"])
+
+
+def test_dxf_rejects_entity_limit(tmp_path: Path) -> None:
+    path = tmp_path / "large.dxf"
+    drawing = ezdxf.new("R2010")
+    drawing.modelspace().add_text("one")
+    drawing.modelspace().add_text("two")
+    drawing.saveas(path)
+    client = TestClient(
+        create_app(
+            Settings(
+                PARSER_INTERNAL_TOKEN=TOKEN,
+                RAW_DOCS_PATH=tmp_path,
+                MAX_CAD_ENTITIES=1,
+            )
+        )
+    )
+    body = payload(path)
+    body["mimeType"] = "application/dxf"
+
+    response = client.post(
+        "/internal/v1/parse", headers={"x-internal-token": TOKEN}, json=body
+    )
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == "CAD 实体数量超过限制"
+
+
+def test_dxf_rejects_corrupted_content_without_leaking_path(tmp_path: Path) -> None:
+    path = tmp_path / "corrupted.dxf"
+    path.write_bytes(b"0\nSECTION\n2\nENTITIES\nnot-valid-dxf")
+    client = make_client(tmp_path)
+    body = payload(path)
+    body["mimeType"] = "image/vnd.dxf"
+
+    response = client.post(
+        "/internal/v1/parse", headers={"x-internal-token": TOKEN}, json=body
+    )
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == "DXF 文件损坏或格式不受支持"
+    assert str(tmp_path) not in response.text
 
 
 def test_parse_rejects_path_outside_root_and_symlink(tmp_path: Path) -> None:

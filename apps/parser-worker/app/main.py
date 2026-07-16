@@ -9,6 +9,7 @@ from fastapi import Depends, FastAPI, Header, HTTPException, Request, Response, 
 from app.archive import validate_office_archive
 from app.config import Settings
 from app.parsers.docx import parse_docx
+from app.parsers.dxf import parse_dxf
 from app.parsers.text import parse_text
 from app.parsers.xlsx import parse_xlsx
 from app.schemas import ParseRequest, ParseResponse
@@ -23,6 +24,12 @@ SUPPORTED_TYPES = {
     },
     ".xlsx": {
         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    },
+    ".dxf": {
+        "image/vnd.dxf",
+        "application/dxf",
+        "application/x-dxf",
+        "drawing/x-dxf",
     },
 }
 
@@ -82,6 +89,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 detail="不支持此文件类型或 MIME",
             )
         try:
+            warnings: list[str] = []
+            parser_version = "1.1.0"
             if suffix in {".txt", ".md"}:
                 elements = parse_text(path)
                 parser = "markdown" if suffix == ".md" else "text"
@@ -93,7 +102,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 )
                 elements = parse_docx(path, resolved_settings.max_elements)
                 parser = "python-docx"
-            else:
+            elif suffix == ".xlsx":
                 validate_office_archive(
                     path,
                     resolved_settings.max_archive_entries,
@@ -105,6 +114,17 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                     resolved_settings.max_elements,
                 )
                 parser = "openpyxl"
+            else:
+                result = parse_dxf(
+                    path,
+                    resolved_settings.max_cad_entities,
+                    resolved_settings.max_elements,
+                    resolved_settings.max_cad_insert_depth,
+                )
+                elements = result.elements
+                warnings = result.warnings
+                parser = "ezdxf"
+                parser_version = result.parser_version
         except ValueError as error:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(error)
@@ -136,6 +156,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 "parser": parser,
             },
         )
-        return ParseResponse(parser=parser, parser_version="1.1.0", elements=elements)
+        return ParseResponse(
+            parser=parser,
+            parser_version=parser_version,
+            elements=elements,
+            warnings=warnings,
+        )
 
     return api

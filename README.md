@@ -66,9 +66,10 @@ docker compose down
 ## 内部解析契约
 
 - `POST /internal/v1/parse` 只在 Worker 内网提供，并要求 `X-Internal-Token`。
-- Worker 支持 UTF-8 TXT/Markdown、DOCX 和 XLSX；Markdown/DOCX 保留标题路径，XLSX 保留 sheet、表头和行号。
+- Worker 支持 UTF-8 TXT/Markdown、DOCX、XLSX 和 DXF；DXF 使用 ezdxf 提取图纸摘要、布局、图层、文字、块属性和尺寸，并保留 CAD entity metadata。
 - OpenAPI 契约位于 `packages/contracts/openapi/parser-worker.v1.yaml`。
 - Worker 会拒绝共享根目录外路径、`..`、符号链接、超限和空文件。
+- DWG 不直接进入 Worker；先在隔离工作站使用已批准的 ODA File Converter 转为 DXF，人工抽查图层、文字、外部参照和单位后，再上传转换产物。
 
 ## 文档 API
 

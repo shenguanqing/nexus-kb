@@ -19,6 +19,12 @@ class Settings(BaseSettings):
     max_spreadsheet_rows: int = Field(
         default=100_000, ge=1, le=1_000_000, validation_alias="MAX_SPREADSHEET_ROWS"
     )
+    max_cad_entities: int = Field(
+        default=200_000, ge=1, le=2_000_000, validation_alias="MAX_CAD_ENTITIES"
+    )
+    max_cad_insert_depth: int = Field(
+        default=8, ge=1, le=32, validation_alias="MAX_CAD_INSERT_DEPTH"
+    )
     max_archive_entries: int = Field(
         default=10_000, ge=1, le=100_000, validation_alias="MAX_ARCHIVE_ENTRIES"
     )

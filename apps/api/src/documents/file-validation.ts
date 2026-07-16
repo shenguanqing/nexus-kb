@@ -20,6 +20,16 @@ const types = {
     canonicalMime: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
     acceptedMimes: new Set(['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet']),
   },
+  '.dxf': {
+    canonicalMime: 'image/vnd.dxf',
+    acceptedMimes: new Set([
+      'image/vnd.dxf',
+      'application/dxf',
+      'application/x-dxf',
+      'application/octet-stream',
+      'drawing/x-dxf',
+    ]),
+  },
 } as const;
 
 export async function validateUploadedFile(
@@ -47,6 +57,8 @@ export async function validateUploadedFile(
     } finally {
       await handle.close();
     }
+  } else if (extension === '.dxf') {
+    await validateDxfSignature(path);
   } else {
     const detected = await fileTypeFromFile(path);
     if (detected?.ext !== extension.slice(1) || detected.mime !== expected.canonicalMime) {
@@ -54,4 +66,37 @@ export async function validateUploadedFile(
     }
   }
   return { extension, mimeType: expected.canonicalMime };
+}
+
+async function validateDxfSignature(path: string): Promise<void> {
+  const handle = await open(path, 'r');
+  try {
+    const sample = Buffer.alloc(65_536);
+    const { bytesRead } = await handle.read(sample, 0, sample.length, 0);
+    const bytes = sample.subarray(0, bytesRead);
+    const binaryHeader = Buffer.from('AutoCAD Binary DXF\r\n\x1a\0', 'latin1');
+    if (bytes.subarray(0, binaryHeader.length).equals(binaryHeader)) return;
+
+    const lines = bytes
+      .toString('latin1')
+      .replaceAll('\r\n', '\n')
+      .replaceAll('\r', '\n')
+      .split('\n')
+      .map((line) => line.trim());
+    for (let index = 0; index + 3 < lines.length; index += 2) {
+      if (
+        lines[index] === '0' &&
+        lines[index + 1]?.toUpperCase() === 'SECTION' &&
+        lines[index + 2] === '2' &&
+        ['HEADER', 'CLASSES', 'TABLES', 'BLOCKS', 'ENTITIES'].includes(
+          lines[index + 3]?.toUpperCase() ?? '',
+        )
+      ) {
+        return;
+      }
+    }
+  } finally {
+    await handle.close();
+  }
+  throw new ApiException('FILE_SIGNATURE_MISMATCH', '文件签名与扩展名不匹配', 415);
 }
