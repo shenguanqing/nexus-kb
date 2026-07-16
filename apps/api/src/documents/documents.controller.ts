@@ -27,6 +27,11 @@ export class DocumentsController {
     return this.documents.getDocument(documentId, this.identities.current());
   }
 
+  @Get('ingestion-jobs/failed')
+  getFailedJobs(): Promise<object> {
+    return this.documents.getFailedJobs(this.identities.current());
+  }
+
   @Get('ingestion-jobs/:jobId')
   getJob(@Param('jobId', new ParseUUIDPipe({ version: '4' })) jobId: string): Promise<object> {
     return this.documents.getJob(jobId, this.identities.current());

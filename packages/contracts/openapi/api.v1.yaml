@@ -21,6 +21,11 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/UploadAccepted' }
+        '409':
+          description: Content already exists in the same tenant and ACL scope
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiError' }
   /v1/documents/{documentId}:
     parameters:
       - $ref: '#/components/parameters/DocumentId'
@@ -44,6 +49,21 @@ paths:
       responses:
         '200': { description: Ingestion job }
         '404': { $ref: '#/components/responses/NotFound' }
+  /v1/ingestion-jobs/failed:
+    get:
+      summary: List recent failed ingestion jobs in the authenticated tenant
+      responses:
+        '200':
+          description: Up to 50 failed jobs ordered by most recent update
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [jobs]
+                properties:
+                  jobs:
+                    type: array
+                    items: { $ref: '#/components/schemas/IngestionJobSummary' }
 components:
   parameters:
     DocumentId:
@@ -73,7 +93,7 @@ components:
             traceId: { type: string, format: uuid }
     DocumentStatus:
       type: string
-      enum: [uploaded, processing, prepared, active, policy_blocked, failed, deleted]
+      enum: [uploaded, processing, prepared, active, policy_blocked, failed, deleting, deleted]
     IngestionStatus:
       type: string
       enum:
@@ -89,6 +109,25 @@ components:
           failed,
           deleted,
         ]
+    IngestionJobSummary:
+      type: object
+      required:
+        [id, documentId, version, status, step, checkpoint, attempts, traceId, retryable, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        documentId: { type: string, format: uuid }
+        version: { type: integer, minimum: 1 }
+        status: { $ref: '#/components/schemas/IngestionStatus' }
+        step: { type: string }
+        checkpoint: { type: string }
+        attempts: { type: integer, minimum: 0 }
+        traceId: { type: string, format: uuid }
+        errorCode: { type: [string, 'null'] }
+        errorCategory: { type: [string, 'null'] }
+        retryable: { type: boolean }
+        startedAt: { type: [string, 'null'], format: date-time }
+        completedAt: { type: [string, 'null'], format: date-time }
+        updatedAt: { type: string, format: date-time }
   responses:
     NotFound:
       description: Resource does not exist in the authenticated tenant

@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { AppConfig } from '../src/config/app-config';
 import { ParserClient } from '../src/parser/parser-client';
+import type { ParserError } from '../src/parser/parser-error';
 
 const id = 'd26720b3-1f78-40df-868d-8ca8510dca26';
 
@@ -58,6 +59,48 @@ describe('ParserClient contract validation', () => {
         { jobId: id, documentId: id, storagePath: '/data/raw-docs/a.txt', mimeType: 'text/plain' },
         id,
       ),
-    ).rejects.toThrow();
+    ).rejects.toMatchObject({ code: 'PARSER_INVALID_RESPONSE', retryable: false });
+  });
+
+  it('classifies temporary Worker failures as retryable', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(null, { status: 503 })));
+    const config = {
+      values: {
+        PARSER_WORKER_URL: 'http://parser-worker:8000',
+        PARSER_INTERNAL_TOKEN: 'internal-test-token',
+        PARSER_REQUEST_TIMEOUT_MS: 1_000,
+      },
+    } as AppConfig;
+
+    await expect(
+      new ParserClient(config).parse(
+        { jobId: id, documentId: id, storagePath: '/data/raw-docs/a.txt', mimeType: 'text/plain' },
+        id,
+      ),
+    ).rejects.toMatchObject({
+      code: 'PARSER_UNAVAILABLE',
+      retryable: true,
+    } satisfies Partial<ParserError>);
+  });
+
+  it('does not retry Worker authentication failures', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(null, { status: 401 })));
+    const config = {
+      values: {
+        PARSER_WORKER_URL: 'http://parser-worker:8000',
+        PARSER_INTERNAL_TOKEN: 'internal-test-token',
+        PARSER_REQUEST_TIMEOUT_MS: 1_000,
+      },
+    } as AppConfig;
+
+    await expect(
+      new ParserClient(config).parse(
+        { jobId: id, documentId: id, storagePath: '/data/raw-docs/a.txt', mimeType: 'text/plain' },
+        id,
+      ),
+    ).rejects.toMatchObject({
+      code: 'PARSER_AUTHENTICATION_FAILED',
+      retryable: false,
+    } satisfies Partial<ParserError>);
   });
 });

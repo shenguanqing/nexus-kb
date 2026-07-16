@@ -4,17 +4,18 @@ import type { Prisma } from '@prisma/client';
 import { ingestionPayloadSchema } from '@nexus-kb/contracts';
 import type { IngestionPayload } from '@nexus-kb/contracts';
 
+import { OperationalLogger } from '../common/operational-logger';
 import { AppConfig } from '../config/app-config';
 import { PrismaService } from '../database/prisma.service';
 import { ParserClient } from '../parser/parser-client';
 import { EmbeddingProviderFactory } from '../providers/embedding/embedding-provider.factory';
 import { EmbeddingService } from '../providers/embedding/embedding.service';
-import { ProviderError } from '../providers/embedding/provider-error';
 import { ChromaVectorStore } from '../vector-store/chroma-vector-store';
 import type { VectorChunk } from '../vector-store/vector-store';
 import { VectorStoreError } from '../vector-store/vector-store-error';
 import { ChunkingService } from './chunking';
 import { CloudPolicyService } from './cloud-policy';
+import { classifyIngestionError } from './ingestion-error';
 import { RedactionService } from './redaction';
 
 type IngestionRecord = Prisma.IngestionJobGetPayload<{ include: { document: true } }>;
@@ -31,6 +32,7 @@ export class IngestionProcessor {
     private readonly embeddingFactory: EmbeddingProviderFactory,
     private readonly embedding: EmbeddingService,
     private readonly vectorStore: ChromaVectorStore,
+    private readonly logger: OperationalLogger,
   ) {}
 
   async process(payload: IngestionPayload): Promise<void> {
@@ -39,24 +41,62 @@ export class IngestionProcessor {
       where: { id: payload.ingestionJobId },
       include: { document: true },
     });
-    if (!record || record.status === 'deleted' || record.document.status === 'deleted') return;
+    if (
+      !record ||
+      ['completed', 'policy_blocked', 'deleted'].includes(record.status) ||
+      ['deleting', 'deleted'].includes(record.document.status)
+    ) {
+      if (record) {
+        this.logger.info('ingestion_duplicate_delivery_skipped', {
+          traceId: record.traceId,
+          tenantId: record.tenantId,
+          jobId: record.id,
+          documentId: record.documentId,
+          status: record.status,
+          checkpoint: record.checkpoint,
+        });
+      }
+      return;
+    }
+    const resumeFromLocalPreparation = record.checkpoint === 'local_prepared';
     const [jobUpdate] = await this.prisma.$transaction([
       this.prisma.ingestionJob.updateMany({
         where: { id: record.id, status: { not: 'deleted' } },
         data: {
-          status: 'parsing',
-          step: 'parsing',
+          status: resumeFromLocalPreparation ? 'embedding' : 'parsing',
+          step: resumeFromLocalPreparation ? 'embedding' : 'parsing',
           attempts: { increment: 1 },
-          startedAt: new Date(),
+          startedAt: record.startedAt ?? new Date(),
+          completedAt: null,
+          errorCode: null,
+          errorCategory: null,
+          retryable: false,
         },
       }),
       this.prisma.document.updateMany({
-        where: { id: record.documentId, status: { not: 'deleted' } },
+        where: { id: record.documentId, status: { notIn: ['deleting', 'deleted'] } },
         data: { status: 'processing' },
       }),
     ]);
     if (jobUpdate.count === 0) return;
+    this.logger.info('ingestion_started', {
+      traceId: record.traceId,
+      tenantId: record.tenantId,
+      jobId: record.id,
+      documentId: record.documentId,
+      status: resumeFromLocalPreparation ? 'resuming' : 'processing',
+      checkpoint: record.checkpoint,
+      attempts: record.attempts + 1,
+    });
     try {
+      const vectorStoreInfo = this.vectorStore.info();
+      if (resumeFromLocalPreparation) {
+        if (!vectorStoreInfo.enabled) throw new VectorStoreError('not_configured');
+        const preparedChunks = await this.loadPreparedChunks(record);
+        await this.indexPreparedChunks(record, preparedChunks, vectorStoreInfo);
+        return;
+      }
+
       const result = await this.parser.parse(
         {
           jobId: record.id,
@@ -80,7 +120,6 @@ export class IngestionProcessor {
         where: { id: record.id, status: { not: 'deleted' } },
         data: { status: 'policy_check', step: 'policy_check' },
       });
-      const vectorStoreInfo = this.vectorStore.info();
       const provider = vectorStoreInfo.enabled ? this.embeddingFactory.getProvider() : null;
       const policy = this.cloudPolicy.evaluate({
         sensitivity: record.document.sensitivity,
@@ -89,7 +128,7 @@ export class IngestionProcessor {
       });
       const isBlocked = policy.decision === 'blocked';
       const shouldIndex = !isBlocked && vectorStoreInfo.enabled;
-      await this.persistLocalPreparation({
+      const persisted = await this.persistLocalPreparation({
         record,
         result,
         redactedChunks,
@@ -98,17 +137,10 @@ export class IngestionProcessor {
         shouldIndex,
         vectorStoreInfo,
       });
+      if (!persisted) return;
       if (!shouldIndex) return;
 
-      const vectors = await this.embedding.embedDocuments(
-        redactedChunks.map((chunk) => chunk.redaction.text),
-        { sensitivity: record.document.sensitivity },
-      );
-      await this.prisma.ingestionJob.updateMany({
-        where: { id: record.id, status: { not: 'deleted' } },
-        data: { status: 'indexing', step: 'indexing' },
-      });
-      const vectorChunks: VectorChunk[] = redactedChunks.map((chunk) => ({
+      const preparedChunks: VectorChunk[] = redactedChunks.map((chunk) => ({
         id: chunk.id,
         tenantId: record.tenantId,
         documentId: record.documentId,
@@ -125,16 +157,9 @@ export class IngestionProcessor {
         previousChunkId: chunk.previousChunkId,
         nextChunkId: chunk.nextChunkId,
       }));
-      await this.vectorStore.upsert(vectorChunks, vectors);
-      await this.activateVersion(
-        record.id,
-        record.documentId,
-        record.version,
-        vectorStoreInfo.fingerprint,
-        vectorStoreInfo.collectionName,
-      );
+      await this.indexPreparedChunks(record, preparedChunks, vectorStoreInfo);
     } catch (error) {
-      await this.markFailed(record.id, record.documentId, error);
+      await this.markFailed(record, error);
       throw error;
     }
   }
@@ -151,18 +176,23 @@ export class IngestionProcessor {
     isBlocked: boolean;
     shouldIndex: boolean;
     vectorStoreInfo: ReturnType<ChromaVectorStore['info']>;
-  }): Promise<void> {
+  }): Promise<boolean> {
     const { record, result, redactedChunks, policy, isBlocked, shouldIndex, vectorStoreInfo } =
       input;
-    await this.prisma.$transaction([
-      this.prisma.knowledgeChunk.deleteMany({
+    const persisted = await this.prisma.$transaction(async (tx) => {
+      const lockedDocument = await tx.document.updateMany({
+        where: { id: record.documentId, status: { notIn: ['deleting', 'deleted'] } },
+        data: { status: 'processing' },
+      });
+      if (lockedDocument.count === 0) return false;
+      await tx.knowledgeChunk.deleteMany({
         where: {
           tenantId: record.tenantId,
           documentId: record.documentId,
           documentVersion: record.version,
         },
-      }),
-      this.prisma.knowledgeChunk.createMany({
+      });
+      await tx.knowledgeChunk.createMany({
         data: redactedChunks.map((chunk) => ({
           id: chunk.id,
           tenantId: record.tenantId,
@@ -181,12 +211,12 @@ export class IngestionProcessor {
           redactionPolicyVersion: chunk.redaction.policyVersion,
           redactionSummary: chunk.redaction.summary,
         })),
-      }),
-      this.prisma.documentVersion.updateMany({
+      });
+      await tx.documentVersion.updateMany({
         where: {
           documentId: record.documentId,
           version: record.version,
-          document: { status: { not: 'deleted' } },
+          document: { status: { notIn: ['deleting', 'deleted'] } },
         },
         data: {
           parser: result.parser,
@@ -197,9 +227,10 @@ export class IngestionProcessor {
           redactionPolicyVersion: this.config.values.REDACTION_POLICY_VERSION,
           cloudPolicyDecision: policy.decision,
         },
-      }),
-      this.prisma.cloudPolicyEvent.create({
-        data: {
+      });
+      await tx.cloudPolicyEvent.upsert({
+        where: { ingestionJobId: record.id },
+        create: {
           id: randomUUID(),
           tenantId: record.tenantId,
           documentId: record.documentId,
@@ -212,28 +243,142 @@ export class IngestionProcessor {
           region: policy.region,
           redactionPolicyVersion: this.config.values.REDACTION_POLICY_VERSION,
         },
-      }),
-      this.prisma.ingestionJob.updateMany({
+        update: {
+          decision: policy.decision,
+          reasonCode: policy.reasonCode,
+          sensitivity: record.document.sensitivity,
+          providerId: policy.providerId,
+          region: policy.region,
+          redactionPolicyVersion: this.config.values.REDACTION_POLICY_VERSION,
+        },
+      });
+      await tx.ingestionJob.updateMany({
         where: { id: record.id, status: { not: 'deleted' } },
         data: {
           status: isBlocked ? 'policy_blocked' : shouldIndex ? 'embedding' : 'completed',
           step: isBlocked ? 'policy_blocked' : shouldIndex ? 'embedding' : 'prepared',
+          checkpoint: isBlocked ? 'policy_blocked' : shouldIndex ? 'local_prepared' : 'prepared',
           parserVersion: result.parserVersion,
           warnings: result.warnings,
           completedAt: shouldIndex ? null : new Date(),
           errorCode: isBlocked ? policy.reasonCode : null,
+          errorCategory: isBlocked ? 'policy' : null,
+          retryable: false,
           embeddingFingerprint: vectorStoreInfo.fingerprint,
           vectorCollection: vectorStoreInfo.collectionName,
         },
-      }),
-      this.prisma.document.updateMany({
-        where: { id: record.documentId, status: { not: 'deleted' } },
+      });
+      await tx.document.updateMany({
+        where: { id: record.documentId, status: { notIn: ['deleting', 'deleted'] } },
         data: {
           status: isBlocked ? 'policy_blocked' : shouldIndex ? 'processing' : 'prepared',
           activeVersion: null,
         },
-      }),
-    ]);
+      });
+      return true;
+    });
+    if (!persisted) {
+      this.logger.info('ingestion_persistence_skipped_deleted_document', {
+        traceId: record.traceId,
+        tenantId: record.tenantId,
+        jobId: record.id,
+        documentId: record.documentId,
+        status: 'deleted',
+        checkpoint: record.checkpoint,
+      });
+      return false;
+    }
+    this.logger.info('ingestion_local_preparation_persisted', {
+      traceId: record.traceId,
+      tenantId: record.tenantId,
+      jobId: record.id,
+      documentId: record.documentId,
+      provider: policy.providerId ?? undefined,
+      status: isBlocked ? 'policy_blocked' : shouldIndex ? 'embedding' : 'prepared',
+      checkpoint: isBlocked ? 'policy_blocked' : shouldIndex ? 'local_prepared' : 'prepared',
+    });
+    return true;
+  }
+
+  private async loadPreparedChunks(record: IngestionRecord): Promise<VectorChunk[]> {
+    const chunks = await this.prisma.knowledgeChunk.findMany({
+      where: {
+        tenantId: record.tenantId,
+        documentId: record.documentId,
+        documentVersion: record.version,
+      },
+      orderBy: { ordinal: 'asc' },
+    });
+    if (chunks.length === 0) throw new VectorStoreError('invalid_input');
+    return chunks.map((chunk) => ({
+      id: chunk.id,
+      tenantId: record.tenantId,
+      documentId: record.documentId,
+      documentVersion: record.version,
+      ordinal: chunk.ordinal,
+      redactedText: chunk.redactedText,
+      sourceName: record.document.sourceName,
+      page: chunk.page,
+      sheet: chunk.sheet,
+      sectionPath: this.stringArray(chunk.sectionPath),
+      department: record.document.department,
+      sensitivity: record.document.sensitivity,
+      ownerId: record.document.ownerId,
+      previousChunkId: chunk.previousChunkId,
+      nextChunkId: chunk.nextChunkId,
+    }));
+  }
+
+  private async indexPreparedChunks(
+    record: IngestionRecord,
+    chunks: VectorChunk[],
+    vectorStoreInfo: ReturnType<ChromaVectorStore['info']>,
+  ): Promise<void> {
+    const provider = this.embeddingFactory.getProvider();
+    const vectors = await this.embedding.embedDocuments(
+      chunks.map((chunk) => chunk.redactedText),
+      { sensitivity: record.document.sensitivity },
+    );
+    await this.prisma.ingestionJob.updateMany({
+      where: { id: record.id, status: { not: 'deleted' } },
+      data: { status: 'indexing', step: 'indexing' },
+    });
+    await this.vectorStore.upsert(chunks, vectors);
+    const activated = await this.activateVersion(
+      record.id,
+      record.documentId,
+      record.version,
+      vectorStoreInfo.fingerprint,
+      vectorStoreInfo.collectionName,
+    );
+    if (!activated) {
+      await this.vectorStore.deleteDocument(record.tenantId, record.documentId);
+      this.logger.info('ingestion_activation_skipped_deleted_document', {
+        traceId: record.traceId,
+        tenantId: record.tenantId,
+        jobId: record.id,
+        documentId: record.documentId,
+        provider: provider.id,
+        model: provider.model,
+        status: 'deleted',
+        checkpoint: record.checkpoint,
+      });
+      return;
+    }
+    this.logger.info('ingestion_completed', {
+      traceId: record.traceId,
+      tenantId: record.tenantId,
+      jobId: record.id,
+      documentId: record.documentId,
+      provider: provider.id,
+      model: provider.model,
+      status: 'completed',
+      checkpoint: 'completed',
+    });
+  }
+
+  private stringArray(value: Prisma.JsonValue): string[] {
+    return Array.isArray(value) && value.every((item) => typeof item === 'string') ? value : [];
   }
 
   private async activateVersion(
@@ -242,14 +387,14 @@ export class IngestionProcessor {
     version: number,
     fingerprint: string | null,
     collectionName: string | null,
-  ): Promise<void> {
+  ): Promise<boolean> {
     if (!fingerprint || !collectionName) throw new VectorStoreError('configuration_mismatch');
-    await this.prisma.$transaction([
+    const [, , documentUpdate] = await this.prisma.$transaction([
       this.prisma.documentVersion.updateMany({
         where: {
           documentId,
           version,
-          document: { status: { not: 'deleted' } },
+          document: { status: { notIn: ['deleting', 'deleted'] } },
         },
         data: {
           embeddingFingerprint: fingerprint,
@@ -262,37 +407,55 @@ export class IngestionProcessor {
         data: {
           status: 'completed',
           step: 'completed',
+          checkpoint: 'completed',
           completedAt: new Date(),
           errorCode: null,
+          errorCategory: null,
+          retryable: false,
         },
       }),
       this.prisma.document.updateMany({
-        where: { id: documentId, status: { not: 'deleted' } },
+        where: { id: documentId, status: { notIn: ['deleting', 'deleted'] } },
         data: { status: 'active', activeVersion: version },
       }),
     ]);
+    return documentUpdate.count > 0;
   }
 
-  private async markFailed(jobId: string, documentId: string, error: unknown): Promise<void> {
+  private async markFailed(record: IngestionRecord, error: unknown): Promise<void> {
+    const classified = classifyIngestionError(error);
     await this.prisma.$transaction([
       this.prisma.ingestionJob.updateMany({
-        where: { id: jobId, status: { not: 'deleted' } },
+        where: { id: record.id, status: { not: 'deleted' } },
         data: {
           status: 'failed',
           step: 'failed',
-          errorCode: this.errorCode(error),
+          errorCode: classified.code,
+          errorCategory: classified.category,
+          retryable: classified.retryable,
           completedAt: new Date(),
         },
       }),
       this.prisma.document.updateMany({
-        where: { id: documentId, status: { not: 'deleted' } },
+        where: { id: record.documentId, status: { notIn: ['deleting', 'deleted'] } },
         data: { status: 'failed' },
       }),
     ]);
-  }
-
-  private errorCode(error: unknown): string {
-    if (error instanceof ProviderError || error instanceof VectorStoreError) return error.code;
-    return 'INGESTION_FAILED';
+    const logContext = {
+      traceId: record.traceId,
+      tenantId: record.tenantId,
+      jobId: record.id,
+      documentId: record.documentId,
+      status: 'failed',
+      errorCode: classified.code,
+      errorCategory: classified.category,
+      checkpoint: record.checkpoint,
+      attempts: record.attempts + 1,
+    };
+    if (classified.retryable) {
+      this.logger.warn('ingestion_attempt_failed_retryable', logContext);
+    } else {
+      this.logger.error('ingestion_failed_terminal', logContext);
+    }
   }
 }

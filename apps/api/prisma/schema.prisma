@@ -20,6 +20,7 @@ enum DocumentStatus {
   active
   policy_blocked
   failed
+  deleting
   deleted
 }
 
@@ -48,6 +49,7 @@ model Document {
   storageKey    String             @unique
   mimeType      String
   contentSha256 String
+  deduplicationKey String?          @db.Char(64)
   department    String
   sensitivity   Sensitivity
   ownerId       String
@@ -63,6 +65,7 @@ model Document {
 
   @@index([tenantId, status])
   @@index([tenantId, createdAt])
+  @@index([tenantId, contentSha256, department, sensitivity, ownerId])
 }
 
 model DocumentVersion {
@@ -94,6 +97,7 @@ model IngestionJob {
   version              Int
   status               IngestionStatus    @default(queued)
   step                 String             @default("queued")
+  checkpoint           String             @default("queued")
   attempts             Int                @default(0)
   traceId              String             @db.Uuid
   parserVersion        String?
@@ -101,6 +105,8 @@ model IngestionJob {
   vectorCollection     String?
   warnings             Json?
   errorCode            String?
+  errorCategory        String?
+  retryable            Boolean            @default(false)
   startedAt            DateTime?
   completedAt          DateTime?
   createdAt            DateTime           @default(now())
@@ -152,6 +158,7 @@ model CloudPolicyEvent {
   document               Document            @relation(fields: [documentId], references: [id], onDelete: Cascade)
   ingestionJob           IngestionJob        @relation(fields: [ingestionJobId], references: [id], onDelete: Cascade)
 
+  @@unique([ingestionJobId])
   @@index([tenantId, documentId, createdAt])
   @@index([tenantId, decision, createdAt])
 }

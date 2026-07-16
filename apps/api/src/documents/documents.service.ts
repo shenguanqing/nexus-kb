@@ -10,6 +10,7 @@ import { Prisma } from '@prisma/client';
 
 import type { Identity } from '../auth/identity';
 import { ApiException } from '../common/api-exception';
+import { OperationalLogger } from '../common/operational-logger';
 import { AppConfig } from '../config/app-config';
 import { PrismaService } from '../database/prisma.service';
 import { IngestionQueue } from '../ingestion/ingestion.queue';
@@ -23,6 +24,7 @@ export class DocumentsService {
     private readonly prisma: PrismaService,
     private readonly queue: IngestionQueue,
     private readonly vectorStore: ChromaVectorStore,
+    private readonly logger: OperationalLogger,
   ) {}
 
   async upload(file: MultipartFile, identity: Identity, traceId: string): Promise<object> {
@@ -34,6 +36,8 @@ export class DocumentsService {
     const jobId = randomUUID();
     const temporaryKey = `.upload-${documentId}`;
     const temporaryPath = join(this.config.values.RAW_DOCS_PATH, temporaryKey);
+    let finalPath: string | undefined;
+    let documentCreated = false;
     const hash = createHash('sha256');
     let bytes = 0;
     const meter = new Transform({
@@ -57,35 +61,67 @@ export class DocumentsService {
       if (bytes === 0) throw new ApiException('EMPTY_FILE', '不接受空文件', 400);
       if (file.file.truncated) throw new ApiException('FILE_TOO_LARGE', '文件超过大小限制', 413);
       const validated = await validateUploadedFile(temporaryPath, sourceName, file.mimetype);
+      const contentSha256 = hash.digest('hex');
+      const deduplicationKey = createHash('sha256')
+        .update(
+          [
+            identity.tenantId,
+            contentSha256,
+            identity.department,
+            identity.sensitivity,
+            identity.userId,
+          ].join('\0'),
+        )
+        .digest('hex');
+      const duplicate = await this.prisma.document.findFirst({
+        where: {
+          tenantId: identity.tenantId,
+          contentSha256,
+          department: identity.department,
+          sensitivity: identity.sensitivity,
+          ownerId: identity.userId,
+          status: { not: 'deleted' },
+        },
+        select: { id: true },
+      });
+      if (duplicate) throw this.duplicateError();
       const storageKey = `${documentId}${validated.extension}`;
-      await rename(temporaryPath, join(this.config.values.RAW_DOCS_PATH, storageKey));
+      finalPath = join(this.config.values.RAW_DOCS_PATH, storageKey);
+      await rename(temporaryPath, finalPath);
 
-      await this.prisma.$transaction(async (tx) => {
-        await tx.document.create({
-          data: {
-            id: documentId,
-            tenantId: identity.tenantId,
-            sourceName,
-            storageKey,
-            mimeType: validated.mimeType,
-            contentSha256: hash.digest('hex'),
-            department: identity.department,
-            sensitivity: identity.sensitivity,
-            ownerId: identity.userId,
-            versions: {
-              create: { id: randomUUID(), tenantId: identity.tenantId, version: 1 },
-            },
-            jobs: {
-              create: {
-                id: jobId,
-                tenantId: identity.tenantId,
-                version: 1,
-                traceId,
+      try {
+        await this.prisma.$transaction(async (tx) => {
+          await tx.document.create({
+            data: {
+              id: documentId,
+              tenantId: identity.tenantId,
+              sourceName,
+              storageKey,
+              mimeType: validated.mimeType,
+              contentSha256,
+              deduplicationKey,
+              department: identity.department,
+              sensitivity: identity.sensitivity,
+              ownerId: identity.userId,
+              versions: {
+                create: { id: randomUUID(), tenantId: identity.tenantId, version: 1 },
+              },
+              jobs: {
+                create: {
+                  id: jobId,
+                  tenantId: identity.tenantId,
+                  version: 1,
+                  traceId,
+                },
               },
             },
-          },
+          });
         });
-      });
+        documentCreated = true;
+      } catch (error) {
+        if (this.isUniqueConflict(error)) throw this.duplicateError();
+        throw error;
+      }
       try {
         await this.queue.enqueue({ ingestionJobId: jobId, documentId, storageKey });
       } catch (error) {
@@ -100,16 +136,25 @@ export class DocumentsService {
         });
         throw error;
       }
+      this.logger.info('document_upload_queued', {
+        traceId,
+        tenantId: identity.tenantId,
+        userId: identity.userId,
+        jobId,
+        documentId,
+        status: 'queued',
+      });
       return { documentId, jobId, status: 'queued', traceId };
     } catch (error) {
       await unlink(temporaryPath).catch(() => undefined);
+      if (finalPath && !documentCreated) await unlink(finalPath).catch(() => undefined);
       throw error;
     }
   }
 
   async getDocument(id: string, identity: Identity): Promise<object> {
     const document = await this.prisma.document.findFirst({
-      where: { id, tenantId: identity.tenantId, status: { not: 'deleted' } },
+      where: { id, tenantId: identity.tenantId, status: { notIn: ['deleting', 'deleted'] } },
       select: {
         id: true,
         sourceName: true,
@@ -137,6 +182,7 @@ export class DocumentsService {
         version: true,
         status: true,
         step: true,
+        checkpoint: true,
         attempts: true,
         traceId: true,
         parserVersion: true,
@@ -144,6 +190,8 @@ export class DocumentsService {
         vectorCollection: true,
         warnings: true,
         errorCode: true,
+        errorCategory: true,
+        retryable: true,
         startedAt: true,
         completedAt: true,
         createdAt: true,
@@ -154,21 +202,54 @@ export class DocumentsService {
     return job;
   }
 
+  async getFailedJobs(identity: Identity): Promise<object> {
+    const jobs = await this.prisma.ingestionJob.findMany({
+      where: { tenantId: identity.tenantId, status: 'failed' },
+      orderBy: { updatedAt: 'desc' },
+      take: 50,
+      select: {
+        id: true,
+        documentId: true,
+        version: true,
+        status: true,
+        step: true,
+        checkpoint: true,
+        attempts: true,
+        traceId: true,
+        errorCode: true,
+        errorCategory: true,
+        retryable: true,
+        startedAt: true,
+        completedAt: true,
+        updatedAt: true,
+      },
+    });
+    return { jobs };
+  }
+
   async deleteDocument(id: string, identity: Identity): Promise<object> {
     const document = await this.prisma.document.findFirst({
       where: { id, tenantId: identity.tenantId },
       select: { id: true, storageKey: true, status: true },
     });
-    if (!document || document.status === 'deleted') return { documentId: id, deleted: true };
+    if (!document) return { documentId: id, deleted: true };
+    if (document.status !== 'deleting') {
+      await this.prisma.$transaction([
+        this.prisma.document.update({
+          where: { id: document.id },
+          data: { status: 'deleting', activeVersion: null },
+        }),
+        this.prisma.ingestionJob.updateMany({
+          where: { documentId: document.id, tenantId: identity.tenantId },
+          data: { status: 'deleted', step: 'deleted', completedAt: new Date() },
+        }),
+      ]);
+    }
     await this.vectorStore.deleteDocument(identity.tenantId, document.id);
     await this.prisma.$transaction([
       this.prisma.document.update({
         where: { id: document.id },
         data: { status: 'deleted', deletedAt: new Date(), activeVersion: null },
-      }),
-      this.prisma.ingestionJob.updateMany({
-        where: { documentId: document.id, tenantId: identity.tenantId },
-        data: { status: 'deleted', step: 'deleted', completedAt: new Date() },
       }),
       this.prisma.documentVersion.updateMany({
         where: { documentId: document.id, tenantId: identity.tenantId },
@@ -193,5 +274,16 @@ export class DocumentsService {
       },
     );
     return { documentId: id, deleted: true };
+  }
+
+  private duplicateError(): ApiException {
+    return new ApiException('DOCUMENT_DUPLICATE', '相同权限范围内已存在内容相同的文档', 409);
+  }
+
+  private isUniqueConflict(error: unknown): boolean {
+    return error instanceof Prisma.PrismaClientKnownRequestError ||
+      (typeof error === 'object' && error !== null && 'code' in error)
+      ? (error as { code?: unknown }).code === 'P2002'
+      : false;
   }
 }

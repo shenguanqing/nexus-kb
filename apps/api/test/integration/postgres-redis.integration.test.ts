@@ -13,13 +13,28 @@ describe('PostgreSQL and Redis integration', () => {
   const tenantB = `tenant-b-${randomUUID()}`;
   const documentId = randomUUID();
   const policyDocumentId = randomUUID();
+  const dedupDocumentId = randomUUID();
+  const crossTenantDocumentId = randomUUID();
+  const replacementDocumentId = randomUUID();
 
   beforeAll(async () => {
     await prisma.$connect();
   });
 
   afterAll(async () => {
-    await prisma.document.deleteMany({ where: { id: { in: [documentId, policyDocumentId] } } });
+    await prisma.document.deleteMany({
+      where: {
+        id: {
+          in: [
+            documentId,
+            policyDocumentId,
+            dedupDocumentId,
+            crossTenantDocumentId,
+            replacementDocumentId,
+          ],
+        },
+      },
+    });
     await queue.obliterate({ force: true });
     await queue.close();
     await prisma.$disconnect();
@@ -60,6 +75,69 @@ describe('PostgreSQL and Redis integration', () => {
     expect(stored?.data).toEqual(payload);
     expect(JSON.stringify(stored?.data)).not.toContain('content');
     expect(JSON.stringify(stored?.data)).not.toContain('tenantId');
+  });
+
+  it('enforces content and ACL deduplication while allowing tenant isolation and re-upload', async () => {
+    const contentSha256 = 'd'.repeat(64);
+    const tenantADeduplicationKey = 'e'.repeat(64);
+    const tenantBDeduplicationKey = 'f'.repeat(64);
+    const common = {
+      sourceName: 'duplicate.txt',
+      mimeType: 'text/plain',
+      contentSha256,
+      department: 'finance',
+      sensitivity: 'internal' as const,
+      ownerId: 'integration-user',
+    };
+    await prisma.document.create({
+      data: {
+        ...common,
+        id: dedupDocumentId,
+        tenantId: tenantA,
+        deduplicationKey: tenantADeduplicationKey,
+        storageKey: `${dedupDocumentId}.txt`,
+      },
+    });
+
+    await expect(
+      prisma.document.create({
+        data: {
+          ...common,
+          id: randomUUID(),
+          tenantId: tenantA,
+          deduplicationKey: tenantADeduplicationKey,
+          storageKey: `${randomUUID()}.txt`,
+        },
+      }),
+    ).rejects.toMatchObject({ code: 'P2002' });
+
+    await expect(
+      prisma.document.create({
+        data: {
+          ...common,
+          id: crossTenantDocumentId,
+          tenantId: tenantB,
+          deduplicationKey: tenantBDeduplicationKey,
+          storageKey: `${crossTenantDocumentId}.txt`,
+        },
+      }),
+    ).resolves.toMatchObject({ id: crossTenantDocumentId });
+
+    await prisma.document.update({
+      where: { id: dedupDocumentId },
+      data: { status: 'deleted', deletedAt: new Date() },
+    });
+    await expect(
+      prisma.document.create({
+        data: {
+          ...common,
+          id: replacementDocumentId,
+          tenantId: tenantA,
+          deduplicationKey: tenantADeduplicationKey,
+          storageKey: `${replacementDocumentId}.txt`,
+        },
+      }),
+    ).resolves.toMatchObject({ id: replacementDocumentId });
   });
 
   it('stores tenant-scoped chunks and a bodyless cloud policy event', async () => {

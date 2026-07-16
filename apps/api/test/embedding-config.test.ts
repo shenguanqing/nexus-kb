@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { parseEnvironment } from '../src/config/app-config';
+import { parseEnvironment, safeConfigurationSummary } from '../src/config/app-config';
 
 const baseEnvironment = {
   DATABASE_URL: 'postgresql://kb:kb@postgres:5432/kb',
@@ -16,6 +16,34 @@ describe('embedding configuration', () => {
     const environment = parseEnvironment(baseEnvironment);
     expect(environment.EMBEDDING_PROVIDER).toBe('none');
     expect(environment.DASHSCOPE_API_KEY).toBe('');
+  });
+
+  it('applies isolated defaults for development, test and production', () => {
+    expect(parseEnvironment({ ...baseEnvironment, NODE_ENV: 'development' })).toMatchObject({
+      NODE_ENV: 'development',
+      LOG_LEVEL: 'info',
+      AUTH_REQUIRED: false,
+      DEV_TENANT_ID: 'local-dev',
+    });
+    expect(parseEnvironment({ ...baseEnvironment, NODE_ENV: 'test' })).toMatchObject({
+      NODE_ENV: 'test',
+      LOG_LEVEL: 'silent',
+      AUTH_REQUIRED: false,
+      DEV_TENANT_ID: 'test-tenant',
+    });
+    expect(parseEnvironment({ ...baseEnvironment, NODE_ENV: 'production' })).toMatchObject({
+      NODE_ENV: 'production',
+      API_HOST: '0.0.0.0',
+      AUTH_REQUIRED: true,
+      DEV_TENANT_ID: 'disabled',
+    });
+    expect(() =>
+      parseEnvironment({
+        ...baseEnvironment,
+        NODE_ENV: 'production',
+        AUTH_REQUIRED: 'false',
+      }),
+    ).toThrow('Invalid application configuration: AUTH_REQUIRED');
   });
 
   it('requires provider credentials, region, model and HTTPS base URL when enabled', () => {
@@ -51,5 +79,26 @@ describe('embedding configuration', () => {
       EMBEDDING_DIMENSIONS: 1024,
       EMBEDDING_BATCH_SIZE: 10,
     });
+  });
+
+  it('builds a configuration summary without credentials or connection strings', () => {
+    const environment = parseEnvironment({
+      ...baseEnvironment,
+      DATABASE_URL: 'postgresql://secret-user:secret-password@postgres:5432/kb',
+      REDIS_URL: 'redis://:secret-password@redis:6379',
+      PARSER_INTERNAL_TOKEN: 'super-secret-internal-token',
+      EMBEDDING_PROVIDER: 'alibaba',
+      EMBEDDING_MODEL: 'text-embedding-v4',
+      EMBEDDING_REGION: 'cn-beijing',
+      DASHSCOPE_API_KEY: 'super-secret-provider-key',
+      ALIBABA_BASE_URL: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+    });
+    const serialized = JSON.stringify(safeConfigurationSummary(environment));
+
+    expect(serialized).not.toContain('secret-password');
+    expect(serialized).not.toContain('super-secret');
+    expect(serialized).not.toContain('DATABASE_URL');
+    expect(serialized).toContain('"embeddingKeyConfigured":true');
+    expect(serialized).toContain('https://dashscope.aliyuncs.com');
   });
 });

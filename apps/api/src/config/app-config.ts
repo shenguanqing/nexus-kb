@@ -1,6 +1,33 @@
 import { Injectable } from '@nestjs/common';
 import { z } from 'zod';
 
+const environmentProfiles = {
+  development: {
+    API_HOST: '127.0.0.1',
+    LOG_LEVEL: 'info',
+    AUTH_REQUIRED: 'false',
+    DEV_TENANT_ID: 'local-dev',
+    DEV_USER_ID: 'local-user',
+    DEV_DEPARTMENT: 'general',
+  },
+  test: {
+    API_HOST: '127.0.0.1',
+    LOG_LEVEL: 'silent',
+    AUTH_REQUIRED: 'false',
+    DEV_TENANT_ID: 'test-tenant',
+    DEV_USER_ID: 'test-user',
+    DEV_DEPARTMENT: 'test-department',
+  },
+  production: {
+    API_HOST: '0.0.0.0',
+    LOG_LEVEL: 'info',
+    AUTH_REQUIRED: 'true',
+    DEV_TENANT_ID: 'disabled',
+    DEV_USER_ID: 'disabled',
+    DEV_DEPARTMENT: 'disabled',
+  },
+} as const;
+
 const businessRedactionRuleSchema = z
   .object({
     name: z.string().regex(/^[A-Z][A-Z0-9_]{0,31}$/),
@@ -60,6 +87,8 @@ const environmentSchema = z
     DEV_SENSITIVITY: z.enum(['public', 'internal', 'confidential']).default('internal'),
     MAX_UPLOAD_BYTES: z.coerce.number().int().min(1).max(1_073_741_824).default(52_428_800),
     INGESTION_CONCURRENCY: z.coerce.number().int().min(1).max(32).default(2),
+    INGESTION_MAX_ATTEMPTS: z.coerce.number().int().min(1).max(20).default(3),
+    INGESTION_RETRY_BASE_DELAY_MS: z.coerce.number().int().min(100).max(60_000).default(1000),
     CHUNK_MAX_TOKENS: z.coerce.number().int().min(64).max(8192).default(600),
     CHUNK_OVERLAP_TOKENS: z.coerce.number().int().min(0).max(2048).default(80),
     REDACTION_POLICY_VERSION: z
@@ -137,7 +166,15 @@ const environmentSchema = z
 export type Environment = z.infer<typeof environmentSchema>;
 
 export function parseEnvironment(input: NodeJS.ProcessEnv): Environment {
-  const parsed = environmentSchema.safeParse(input);
+  const nodeEnvironment = z
+    .enum(['development', 'test', 'production'])
+    .catch('development')
+    .parse(input.NODE_ENV);
+  const parsed = environmentSchema.safeParse({
+    ...environmentProfiles[nodeEnvironment],
+    ...input,
+    NODE_ENV: nodeEnvironment,
+  });
   if (!parsed.success) {
     const fields = parsed.error.issues.map((issue) => issue.path.join('.')).join(', ');
     throw new Error(`Invalid application configuration: ${fields}`);
@@ -147,7 +184,39 @@ export function parseEnvironment(input: NodeJS.ProcessEnv): Environment {
       'Invalid application configuration: CHUNK_OVERLAP_TOKENS must be less than CHUNK_MAX_TOKENS',
     );
   }
+  if (parsed.data.NODE_ENV === 'production' && !parsed.data.AUTH_REQUIRED) {
+    throw new Error('Invalid application configuration: AUTH_REQUIRED');
+  }
   return parsed.data;
+}
+
+function safeEndpoint(value: string): string {
+  const url = new URL(value);
+  return `${url.protocol}//${url.host}`;
+}
+
+export function safeConfigurationSummary(environment: Environment): Record<string, unknown> {
+  return {
+    nodeEnv: environment.NODE_ENV,
+    apiHost: environment.API_HOST,
+    apiPort: environment.API_PORT,
+    logLevel: environment.LOG_LEVEL,
+    authRequired: environment.AUTH_REQUIRED,
+    databaseConfigured: Boolean(environment.DATABASE_URL),
+    redisConfigured: Boolean(environment.REDIS_URL),
+    parserWorkerEndpoint: safeEndpoint(environment.PARSER_WORKER_URL),
+    parserTokenConfigured: Boolean(environment.PARSER_INTERNAL_TOKEN),
+    vectorStoreProvider: environment.VECTOR_STORE_PROVIDER,
+    chromaEndpoint: safeEndpoint(environment.CHROMA_URL),
+    embeddingProvider: environment.EMBEDDING_PROVIDER,
+    embeddingModel: environment.EMBEDDING_MODEL || null,
+    embeddingDimensions: environment.EMBEDDING_DIMENSIONS,
+    embeddingRegion: environment.EMBEDDING_REGION || null,
+    embeddingKeyConfigured: Boolean(environment.DASHSCOPE_API_KEY),
+    embeddingEndpoint: environment.ALIBABA_BASE_URL
+      ? safeEndpoint(environment.ALIBABA_BASE_URL)
+      : null,
+  };
 }
 
 @Injectable()

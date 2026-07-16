@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { AppConfig } from '../src/config/app-config';
+import type { OperationalLogger } from '../src/common/operational-logger';
 import type { PrismaService } from '../src/database/prisma.service';
 import { ChunkingService } from '../src/ingestion/chunking';
 import { CloudPolicyService } from '../src/ingestion/cloud-policy';
@@ -44,6 +45,7 @@ function dependencies(sensitivity: 'internal' | 'confidential' = 'internal') {
     version: 1,
     status: 'queued',
     step: 'queued',
+    checkpoint: 'queued',
     attempts: 0,
     traceId: randomUUID(),
     parserVersion: null,
@@ -51,6 +53,8 @@ function dependencies(sensitivity: 'internal' | 'confidential' = 'internal') {
     vectorCollection: null,
     warnings: null,
     errorCode: null,
+    errorCategory: null,
+    retryable: false,
     startedAt: null,
     completedAt: null,
     createdAt: new Date(),
@@ -75,7 +79,29 @@ function dependencies(sensitivity: 'internal' | 'confidential' = 'internal') {
   const updateJob = vi.fn().mockResolvedValue({ count: 1 });
   const updateDocument = vi.fn().mockResolvedValue({ count: 1 });
   const updateVersion = vi.fn().mockResolvedValue({ count: 1 });
-  const prisma = {
+  const findPreparedChunks = vi.fn().mockResolvedValue([
+    {
+      id: 'a'.repeat(64),
+      tenantId: 'tenant-a',
+      documentId,
+      documentVersion: 1,
+      ordinal: 0,
+      originalText: '联系邮箱 demo@example.com',
+      redactedText: '联系邮箱 [REDACTED:EMAIL]',
+      tokenCount: 4,
+      page: 1,
+      sheet: null,
+      sectionPath: ['测试'],
+      elementTypes: ['paragraph'],
+      previousChunkId: null,
+      nextChunkId: null,
+      redactionPolicyVersion: 'v1',
+      redactionSummary: { EMAIL: 1 },
+      createdAt: new Date(),
+    },
+  ]);
+  const upsertPolicyEvent = vi.fn().mockResolvedValue({ id: randomUUID() });
+  const transactionClient = {
     ingestionJob: {
       findUnique: vi.fn().mockResolvedValue(record),
       updateMany: updateJob,
@@ -85,31 +111,39 @@ function dependencies(sensitivity: 'internal' | 'confidential' = 'internal') {
     knowledgeChunk: {
       deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
       createMany: vi.fn().mockResolvedValue({ count: 1 }),
+      findMany: findPreparedChunks,
     },
-    cloudPolicyEvent: { create: vi.fn().mockResolvedValue({ id: randomUUID() }) },
-    $transaction: vi.fn((operations: Array<Promise<unknown>>) => Promise.all(operations)),
+    cloudPolicyEvent: { upsert: upsertPolicyEvent },
+  };
+  const prisma = {
+    ...transactionClient,
+    $transaction: vi.fn(
+      (
+        input: Array<Promise<unknown>> | ((client: typeof transactionClient) => Promise<unknown>),
+      ) => (typeof input === 'function' ? input(transactionClient) : Promise.all(input)),
+    ),
   } as unknown as PrismaService;
-  const parser = {
-    parse: vi.fn().mockResolvedValue({
-      parser: 'markdown',
-      parserVersion: '1.1.0',
-      warnings: [],
-      elements: [
-        {
-          text: '联系邮箱 demo@example.com',
-          elementType: 'paragraph',
-          page: 1,
-          sheet: null,
-          sectionPath: ['测试'],
-          bbox: null,
-          metadata: {},
-        },
-      ],
-    }),
-  } as unknown as ParserClient;
+  const parse = vi.fn().mockResolvedValue({
+    parser: 'markdown',
+    parserVersion: '1.1.0',
+    warnings: [],
+    elements: [
+      {
+        text: '联系邮箱 demo@example.com',
+        elementType: 'paragraph',
+        page: 1,
+        sheet: null,
+        sectionPath: ['测试'],
+        bbox: null,
+        metadata: {},
+      },
+    ],
+  });
+  const parser = { parse } as unknown as ParserClient;
   const embedDocuments = vi.fn<EmbedDocumentsCall>().mockResolvedValue([[1, 0, 0]]);
   const embedding = { embedDocuments } as unknown as EmbeddingService;
   const upsert = vi.fn<VectorUpsertCall>().mockResolvedValue(undefined);
+  const deleteVectorDocument = vi.fn().mockResolvedValue(undefined);
   const vectorStore = {
     info: () => ({
       enabled: true,
@@ -117,6 +151,7 @@ function dependencies(sensitivity: 'internal' | 'confidential' = 'internal') {
       fingerprint: 'a'.repeat(64),
     }),
     upsert,
+    deleteDocument: deleteVectorDocument,
   } as unknown as ChromaVectorStore;
   const embeddingFactory = {
     getProvider: () => ({
@@ -135,6 +170,11 @@ function dependencies(sensitivity: 'internal' | 'confidential' = 'internal') {
     embeddingFactory,
     embedding,
     vectorStore,
+    {
+      info: vi.fn(),
+      warn: vi.fn(),
+      error: vi.fn(),
+    } as unknown as OperationalLogger,
   );
   return {
     processor,
@@ -143,9 +183,14 @@ function dependencies(sensitivity: 'internal' | 'confidential' = 'internal') {
     vectorStore,
     embedDocuments,
     upsert,
+    deleteVectorDocument,
     updateDocument,
     updateJob,
     updateVersion,
+    record,
+    parse,
+    findPreparedChunks,
+    upsertPolicyEvent,
   };
 }
 
@@ -199,6 +244,8 @@ describe('IngestionProcessor vector indexing', () => {
       status: 'failed',
       step: 'failed',
       errorCode: 'VECTOR_STORE_UNAVAILABLE',
+      errorCategory: 'vector_store',
+      retryable: true,
     });
   });
 
@@ -215,5 +262,63 @@ describe('IngestionProcessor vector indexing', () => {
       status: 'policy_blocked',
       activeVersion: null,
     });
+  });
+
+  it('resumes from locally prepared chunks without parsing or recreating policy events', async () => {
+    const deps = dependencies();
+    deps.record.status = 'failed';
+    deps.record.step = 'failed';
+    deps.record.checkpoint = 'local_prepared';
+
+    await deps.processor.process(deps.payload);
+
+    expect(deps.parse).not.toHaveBeenCalled();
+    expect(deps.findPreparedChunks).toHaveBeenCalledOnce();
+    expect(deps.upsertPolicyEvent).not.toHaveBeenCalled();
+    expect(deps.embedDocuments).toHaveBeenCalledWith(['联系邮箱 [REDACTED:EMAIL]'], {
+      sensitivity: 'internal',
+    });
+    expect(deps.upsert).toHaveBeenCalledOnce();
+  });
+
+  it('skips duplicate delivery after a job reached a terminal state', async () => {
+    const deps = dependencies();
+    deps.record.status = 'completed';
+    deps.record.step = 'completed';
+    deps.record.checkpoint = 'completed';
+
+    await deps.processor.process(deps.payload);
+
+    expect(deps.parse).not.toHaveBeenCalled();
+    expect(deps.embedDocuments).not.toHaveBeenCalled();
+    expect(deps.upsert).not.toHaveBeenCalled();
+    expect(deps.updateJob).not.toHaveBeenCalled();
+    expect(deps.upsertPolicyEvent).not.toHaveBeenCalled();
+  });
+
+  it('does not persist or index chunks when deletion wins the document lock', async () => {
+    const deps = dependencies();
+    deps.updateDocument.mockResolvedValueOnce({ count: 1 }).mockResolvedValueOnce({ count: 0 });
+
+    await deps.processor.process(deps.payload);
+
+    expect(deps.parse).toHaveBeenCalledOnce();
+    expect(deps.embedDocuments).not.toHaveBeenCalled();
+    expect(deps.upsert).not.toHaveBeenCalled();
+    expect(deps.upsertPolicyEvent).not.toHaveBeenCalled();
+  });
+
+  it('removes vectors when deletion wins after upsert but before activation', async () => {
+    const deps = dependencies();
+    deps.updateDocument
+      .mockResolvedValueOnce({ count: 1 })
+      .mockResolvedValueOnce({ count: 1 })
+      .mockResolvedValueOnce({ count: 1 })
+      .mockResolvedValueOnce({ count: 0 });
+
+    await deps.processor.process(deps.payload);
+
+    expect(deps.upsert).toHaveBeenCalledOnce();
+    expect(deps.deleteVectorDocument).toHaveBeenCalledWith('tenant-a', deps.record.documentId);
   });
 });

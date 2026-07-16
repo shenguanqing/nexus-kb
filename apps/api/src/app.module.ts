@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 
 import { AppConfig } from './config/app-config';
+import { OperationalLogger } from './common/operational-logger';
 import { IdentityService } from './auth/identity';
 import { PrismaService } from './database/prisma.service';
 import { DocumentsController } from './documents/documents.controller';
@@ -22,6 +23,7 @@ import { ChromaVectorStore } from './vector-store/chroma-vector-store';
   controllers: [HealthController, DocumentsController],
   providers: [
     AppConfig,
+    OperationalLogger,
     HealthService,
     ParserClient,
     PrismaService,

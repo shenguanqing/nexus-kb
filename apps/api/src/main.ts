@@ -8,7 +8,7 @@ import 'reflect-metadata';
 
 import { AppModule } from './app.module';
 import { ApiErrorFilter } from './common/api-error.filter';
-import { AppConfig } from './config/app-config';
+import { AppConfig, safeConfigurationSummary } from './config/app-config';
 
 async function bootstrap(): Promise<void> {
   const adapter = new FastifyAdapter({
@@ -33,6 +33,10 @@ async function bootstrap(): Promise<void> {
   });
   app.useGlobalFilters(new ApiErrorFilter());
   const fastify: FastifyInstance = app.getHttpAdapter().getInstance();
+  fastify.log.info(
+    { configuration: safeConfigurationSummary(config.values) },
+    'application configuration loaded',
+  );
   fastify.addHook('onRequest', (request, reply, done) => {
     void reply.header('x-trace-id', request.id);
     done();

@@ -1,6 +1,7 @@
 # 知枢 NexusKB
 
-知枢 NexusKB 是企业级知识库项目。本仓库当前完成阶段 3：在上传与解析闭环上增加了结构感知分块、基础 PII/业务规则脱敏，以及 confidential 默认零云端调用的策略门禁。
+知枢 NexusKB 是企业级知识库项目。当前已完成上传、解析、分块脱敏、Alibaba Embedding 抽象和
+Chroma 安全索引激活，正在收尾前序阶段的去重、checkpoint、分类重试和失败任务查询。
 
 完整 ACL、查询编排、LLM Provider、OIDC/SSO 和前端仍在后续阶段，进度以 [`TASK.md`](./TASK.md) 为准。
 
@@ -77,10 +78,15 @@ docker compose down
 curl -F 'file=@policy.md;type=text/markdown' http://127.0.0.1:3000/v1/documents
 curl http://127.0.0.1:3000/v1/documents/<documentId>
 curl http://127.0.0.1:3000/v1/ingestion-jobs/<jobId>
+curl http://127.0.0.1:3000/v1/ingestion-jobs/failed
 curl -X DELETE http://127.0.0.1:3000/v1/documents/<documentId>
 ```
 
 公共 API 契约位于 `packages/contracts/openapi/api.v1.yaml`。API 启动时自动执行不可变 Prisma migration；任务在 Redis 中只携带 ID 与 UUID 文件引用，不携带正文。
+
+相同 tenant、内容哈希、department、sensitivity 和 owner 的重复上传返回
+`DOCUMENT_DUPLICATE`（HTTP 409）。数据库只为新写入生成稳定去重键，兼容升级前已经存在的历史重复记录；
+文档软删除后允许重新上传。
 
 ## 本地预处理与出网策略
 
@@ -120,6 +126,16 @@ RUN_PAID_PROVIDER_TESTS=true pnpm --filter @nexus-kb/api test:provider:smoke
 - 删除文档时先按 tenantId + documentId 删除向量，再清理 PostgreSQL chunk 和原文件。
 - 文档仅在 Embedding、Chroma upsert 和写入校验全部成功后原子切换为 `active`。
 - 默认 `EMBEDDING_PROVIDER=none` 时仅检查 Chroma 连通性，不创建 collection，也不调用付费模型。
+
+## 入库可靠性
+
+- `IngestionJob` 持久化最近安全 checkpoint、错误类别、尝试次数和 `retryable`。
+- Parser、Embedding 和 VectorStore 临时错误按配置指数退避；认证、参数和配置不兼容错误立即终止。
+- 本地分块与脱敏完成后 checkpoint 为 `local_prepared`，后续重试跳过重复解析和策略事件创建。
+- completed、policy_blocked 和 deleted job 的重复投递直接短路。
+- `INGESTION_MAX_ATTEMPTS` 与 `INGESTION_RETRY_BASE_DELAY_MS` 控制队列重试。
+- 删除先进入 `deleting` 墓碑并停止任务，再删除向量和本地数据；如果索引任务在临界窗口完成 upsert，
+  激活失败路径会补偿删除向量。重复 DELETE 会继续未完成清理。
 
 真实 Chroma 集成测试随 `test:integration` 在 Compose API 容器内运行，覆盖重复 upsert、tenant 过滤、
 按文档删除和错误指纹失败关闭。
