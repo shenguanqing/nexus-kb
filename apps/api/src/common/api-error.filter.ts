@@ -5,6 +5,8 @@ import type { FastifyReply, FastifyRequest } from 'fastify';
 import { ApiException } from './api-exception';
 import { ProviderError } from '../providers/embedding/provider-error';
 import { VectorStoreError } from '../vector-store/vector-store-error';
+import { LlmProviderError } from '../providers/llm/llm-provider-error';
+import { RerankProviderError } from '../providers/rerank/rerank-provider-error';
 
 @Catch()
 export class ApiErrorFilter implements ExceptionFilter {
@@ -24,37 +26,53 @@ export class ApiErrorFilter implements ExceptionFilter {
         ? exception.getStatus()
         : exception instanceof ProviderError
           ? this.providerStatus(exception)
-          : exception instanceof VectorStoreError
-            ? this.vectorStoreStatus(exception)
-            : externalStatus && externalStatus >= 400 && externalStatus < 500
-              ? externalStatus
-              : HttpStatus.INTERNAL_SERVER_ERROR;
+          : exception instanceof LlmProviderError
+            ? this.modelProviderStatus(exception.kind)
+            : exception instanceof RerankProviderError
+              ? this.modelProviderStatus(exception.kind)
+              : exception instanceof VectorStoreError
+                ? this.vectorStoreStatus(exception)
+                : externalStatus && externalStatus >= 400 && externalStatus < 500
+                  ? externalStatus
+                  : HttpStatus.INTERNAL_SERVER_ERROR;
     const code =
       exception instanceof ApiException
         ? exception.code
         : exception instanceof ProviderError
           ? exception.code
-          : exception instanceof VectorStoreError
+          : exception instanceof LlmProviderError
             ? exception.code
-            : this.isUploadLimitError(exception)
-              ? 'FILE_TOO_LARGE'
-              : status >= 500
-                ? 'INTERNAL_ERROR'
-                : 'REQUEST_FAILED';
+            : exception instanceof RerankProviderError
+              ? exception.code
+              : exception instanceof VectorStoreError
+                ? exception.code
+                : this.isUploadLimitError(exception)
+                  ? 'FILE_TOO_LARGE'
+                  : status >= 500
+                    ? 'INTERNAL_ERROR'
+                    : 'REQUEST_FAILED';
     const message =
       status >= 500
         ? exception instanceof ProviderError
           ? exception.safeMessage
-          : exception instanceof VectorStoreError
+          : exception instanceof LlmProviderError
             ? exception.safeMessage
-            : '服务暂时不可用，请稍后重试'
+            : exception instanceof RerankProviderError
+              ? exception.safeMessage
+              : exception instanceof VectorStoreError
+                ? exception.safeMessage
+                : '服务暂时不可用，请稍后重试'
         : this.isUploadLimitError(exception)
           ? '文件超过大小限制'
           : exception instanceof ProviderError
             ? exception.safeMessage
-            : exception instanceof VectorStoreError
+            : exception instanceof LlmProviderError
               ? exception.safeMessage
-              : this.getSafeMessage(exception);
+              : exception instanceof RerankProviderError
+                ? exception.safeMessage
+                : exception instanceof VectorStoreError
+                  ? exception.safeMessage
+                  : this.getSafeMessage(exception);
 
     if (status >= 500) request.log.error({ err: exception, traceId: request.id }, 'request failed');
     void response.status(status).send({
@@ -96,6 +114,15 @@ export class ApiErrorFilter implements ExceptionFilter {
   private vectorStoreStatus(error: VectorStoreError): number {
     if (error.kind === 'invalid_input') return HttpStatus.BAD_REQUEST;
     if (error.kind === 'invalid_response') return HttpStatus.BAD_GATEWAY;
+    return HttpStatus.SERVICE_UNAVAILABLE;
+  }
+
+  private modelProviderStatus(kind: string): number {
+    if (kind === 'policy_denied') return HttpStatus.FORBIDDEN;
+    if (kind === 'timeout') return HttpStatus.GATEWAY_TIMEOUT;
+    if (kind === 'invalid_request' || kind === 'invalid_response') {
+      return HttpStatus.BAD_GATEWAY;
+    }
     return HttpStatus.SERVICE_UNAVAILABLE;
   }
 }

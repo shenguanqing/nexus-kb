@@ -22,6 +22,15 @@ import { EmbeddingProviderFactory } from './providers/embedding/embedding-provid
 import { EmbeddingService } from './providers/embedding/embedding.service';
 import { EmbeddingTelemetry } from './providers/embedding/embedding-telemetry';
 import { ChromaVectorStore } from './vector-store/chroma-vector-store';
+import { AnswerSourceValidator } from './knowledge/answer-source-validator';
+import { KnowledgeContextPolicy } from './knowledge/knowledge-context-policy';
+import { LlmProviderFactory } from './providers/llm/llm-provider.factory';
+import { LlmService } from './providers/llm/llm.service';
+import { LlmTelemetry } from './providers/llm/llm-telemetry';
+import { RerankProviderFactory } from './providers/rerank/rerank-provider.factory';
+import { RerankService } from './providers/rerank/rerank.service';
+import { RerankTelemetry } from './providers/rerank/rerank-telemetry';
+import { SourceAuthorizationService } from './knowledge/source-authorization.service';
 
 @Module({
   controllers: [HealthController, DocumentsController],
@@ -42,6 +51,15 @@ import { ChromaVectorStore } from './vector-store/chroma-vector-store';
     EmbeddingProviderFactory,
     EmbeddingService,
     ChromaVectorStore,
+    AnswerSourceValidator,
+    KnowledgeContextPolicy,
+    SourceAuthorizationService,
+    LlmTelemetry,
+    LlmProviderFactory,
+    LlmService,
+    RerankTelemetry,
+    RerankProviderFactory,
+    RerankService,
     IngestionProcessor,
     IngestionQueue,
     DocumentsService,

@@ -51,6 +51,7 @@ const cloudEgressRuleSchema = z
 const sensitivitySchema = z.enum(['public', 'internal', 'confidential']);
 const capabilitySchema = z.enum(['documents:read', 'documents:write', 'documents:delete']);
 const jwtAlgorithmSchema = z.enum(['RS256', 'RS384', 'RS512', 'ES256', 'ES384', 'ES512']);
+const llmProviderSchema = z.enum(['none', 'openai', 'google', 'deepseek', 'alibaba', 'custom']);
 
 function jsonEnvironmentValue<T extends z.ZodType>(schema: T, fallback: string) {
   return z
@@ -141,6 +142,34 @@ const environmentSchema = z
     EMBEDDING_RETRY_BASE_DELAY_MS: z.coerce.number().int().min(1).max(10_000).default(500),
     DASHSCOPE_API_KEY: z.string().trim().default(''),
     ALIBABA_BASE_URL: z.string().trim().default(''),
+    ALIBABA_REGION: z.string().trim().max(64).default('cn-beijing'),
+    LLM_PROVIDER: llmProviderSchema.default('none'),
+    LLM_MODEL: z.string().trim().max(128).default(''),
+    LLM_FALLBACK_PROVIDER: llmProviderSchema.default('none'),
+    LLM_FALLBACK_MODEL: z.string().trim().max(128).default(''),
+    LLM_TEMPERATURE: z.coerce.number().min(0).max(2).default(0.2),
+    LLM_MAX_OUTPUT_TOKENS: z.coerce.number().int().min(1).max(65_536).default(1200),
+    LLM_REQUEST_TIMEOUT_MS: z.coerce.number().int().min(100).max(300_000).default(90_000),
+    LLM_MAX_ATTEMPTS: z.coerce.number().int().min(1).max(6).default(3),
+    LLM_RETRY_BASE_DELAY_MS: z.coerce.number().int().min(1).max(10_000).default(500),
+    OPENAI_API_KEY: z.string().trim().default(''),
+    OPENAI_BASE_URL: z.string().trim().default('https://api.openai.com/v1'),
+    OPENAI_REGION: z.string().trim().max(64).default('global'),
+    GEMINI_API_KEY: z.string().trim().default(''),
+    GEMINI_BASE_URL: z.string().trim().default('https://generativelanguage.googleapis.com/v1beta'),
+    GEMINI_REGION: z.string().trim().max(64).default('global'),
+    DEEPSEEK_API_KEY: z.string().trim().default(''),
+    DEEPSEEK_BASE_URL: z.string().trim().default('https://api.deepseek.com'),
+    DEEPSEEK_REGION: z.string().trim().max(64).default('global'),
+    CUSTOM_API_KEY: z.string().trim().default(''),
+    CUSTOM_BASE_URL: z.string().trim().default(''),
+    CUSTOM_REGION: z.string().trim().max(64).default(''),
+    RERANK_PROVIDER: z.enum(['none', 'alibaba']).default('none'),
+    RERANK_MODEL: z.string().trim().max(128).default('qwen3-rerank'),
+    RERANK_BASE_URL: z.string().trim().default(''),
+    RERANK_REGION: z.string().trim().max(64).default('cn-beijing'),
+    RERANK_TOP_K: z.coerce.number().int().min(1).max(100).default(5),
+    RERANK_REQUEST_TIMEOUT_MS: z.coerce.number().int().min(100).max(300_000).default(60_000),
     VECTOR_STORE_PROVIDER: z.enum(['chroma']).default('chroma'),
     CHROMA_TENANT: z.string().trim().min(1).max(128).default('default_tenant'),
     CHROMA_DATABASE: z.string().trim().min(1).max(128).default('default_database'),
@@ -186,36 +215,139 @@ const environmentSchema = z
         }
       }
     }
-    if (environment.EMBEDDING_PROVIDER !== 'alibaba') return;
-    const requiredFields = [
-      ['EMBEDDING_MODEL', environment.EMBEDDING_MODEL],
-      ['EMBEDDING_REGION', environment.EMBEDDING_REGION],
-      ['DASHSCOPE_API_KEY', environment.DASHSCOPE_API_KEY],
-      ['ALIBABA_BASE_URL', environment.ALIBABA_BASE_URL],
+    if (environment.EMBEDDING_PROVIDER === 'alibaba') {
+      const requiredFields = [
+        ['EMBEDDING_MODEL', environment.EMBEDDING_MODEL],
+        ['EMBEDDING_REGION', environment.EMBEDDING_REGION],
+        ['DASHSCOPE_API_KEY', environment.DASHSCOPE_API_KEY],
+        ['ALIBABA_BASE_URL', environment.ALIBABA_BASE_URL],
+      ] as const;
+      for (const [field, value] of requiredFields) {
+        if (!value) context.addIssue({ code: 'custom', path: [field], message: 'is required' });
+      }
+      if (environment.EMBEDDING_MODEL && environment.EMBEDDING_MODEL !== 'text-embedding-v4') {
+        context.addIssue({
+          code: 'custom',
+          path: ['EMBEDDING_MODEL'],
+          message: 'must be text-embedding-v4 for the current Alibaba adapter',
+        });
+      }
+    }
+    const selectedLlmProviders = [
+      [environment.LLM_PROVIDER, environment.LLM_MODEL, 'LLM_MODEL'],
+      [environment.LLM_FALLBACK_PROVIDER, environment.LLM_FALLBACK_MODEL, 'LLM_FALLBACK_MODEL'],
     ] as const;
-    for (const [field, value] of requiredFields) {
-      if (!value) context.addIssue({ code: 'custom', path: [field], message: 'is required' });
+    for (const [provider, model, modelField] of selectedLlmProviders) {
+      if (provider === 'none') continue;
+      if (!model) context.addIssue({ code: 'custom', path: [modelField], message: 'is required' });
+      const credentials = llmCredentials(environment, provider);
+      if (!credentials.apiKey) {
+        context.addIssue({
+          code: 'custom',
+          path: [credentials.apiKeyField],
+          message: 'is required',
+        });
+      }
+      if (!credentials.baseUrl) {
+        context.addIssue({
+          code: 'custom',
+          path: [credentials.baseUrlField],
+          message: 'is required',
+        });
+      }
     }
-    if (environment.EMBEDDING_MODEL && environment.EMBEDDING_MODEL !== 'text-embedding-v4') {
-      context.addIssue({
-        code: 'custom',
-        path: ['EMBEDDING_MODEL'],
-        message: 'must be text-embedding-v4 for the current Alibaba adapter',
-      });
+    if (environment.RERANK_PROVIDER === 'alibaba') {
+      if (!environment.DASHSCOPE_API_KEY) {
+        context.addIssue({ code: 'custom', path: ['DASHSCOPE_API_KEY'], message: 'is required' });
+      }
+      if (!environment.RERANK_BASE_URL) {
+        context.addIssue({ code: 'custom', path: ['RERANK_BASE_URL'], message: 'is required' });
+      }
+      if (environment.RERANK_MODEL !== 'qwen3-rerank') {
+        context.addIssue({
+          code: 'custom',
+          path: ['RERANK_MODEL'],
+          message: 'must be qwen3-rerank for the current Alibaba adapter',
+        });
+      }
     }
-    if (environment.ALIBABA_BASE_URL) {
+    const endpointFields = [
+      ['ALIBABA_BASE_URL', environment.ALIBABA_BASE_URL],
+      ['OPENAI_BASE_URL', environment.OPENAI_BASE_URL],
+      ['GEMINI_BASE_URL', environment.GEMINI_BASE_URL],
+      ['DEEPSEEK_BASE_URL', environment.DEEPSEEK_BASE_URL],
+      ['CUSTOM_BASE_URL', environment.CUSTOM_BASE_URL],
+      ['RERANK_BASE_URL', environment.RERANK_BASE_URL],
+    ] as const;
+    for (const [field, value] of endpointFields) {
+      if (!value) continue;
       try {
-        const url = new URL(environment.ALIBABA_BASE_URL);
+        const url = new URL(value);
         if (url.protocol !== 'https:') throw new Error('not https');
       } catch {
         context.addIssue({
           code: 'custom',
-          path: ['ALIBABA_BASE_URL'],
+          path: [field],
           message: 'must be a valid HTTPS URL',
         });
       }
     }
   });
+
+function llmCredentials(
+  environment: {
+    OPENAI_API_KEY: string;
+    OPENAI_BASE_URL: string;
+    GEMINI_API_KEY: string;
+    GEMINI_BASE_URL: string;
+    DEEPSEEK_API_KEY: string;
+    DEEPSEEK_BASE_URL: string;
+    DASHSCOPE_API_KEY: string;
+    ALIBABA_BASE_URL: string;
+    CUSTOM_API_KEY: string;
+    CUSTOM_BASE_URL: string;
+  },
+  provider: Exclude<z.infer<typeof llmProviderSchema>, 'none'>,
+): { apiKey: string; apiKeyField: string; baseUrl: string; baseUrlField: string } {
+  if (provider === 'openai') {
+    return {
+      apiKey: environment.OPENAI_API_KEY,
+      apiKeyField: 'OPENAI_API_KEY',
+      baseUrl: environment.OPENAI_BASE_URL,
+      baseUrlField: 'OPENAI_BASE_URL',
+    };
+  }
+  if (provider === 'google') {
+    return {
+      apiKey: environment.GEMINI_API_KEY,
+      apiKeyField: 'GEMINI_API_KEY',
+      baseUrl: environment.GEMINI_BASE_URL,
+      baseUrlField: 'GEMINI_BASE_URL',
+    };
+  }
+  if (provider === 'deepseek') {
+    return {
+      apiKey: environment.DEEPSEEK_API_KEY,
+      apiKeyField: 'DEEPSEEK_API_KEY',
+      baseUrl: environment.DEEPSEEK_BASE_URL,
+      baseUrlField: 'DEEPSEEK_BASE_URL',
+    };
+  }
+  if (provider === 'alibaba') {
+    return {
+      apiKey: environment.DASHSCOPE_API_KEY,
+      apiKeyField: 'DASHSCOPE_API_KEY',
+      baseUrl: environment.ALIBABA_BASE_URL,
+      baseUrlField: 'ALIBABA_BASE_URL',
+    };
+  }
+  return {
+    apiKey: environment.CUSTOM_API_KEY,
+    apiKeyField: 'CUSTOM_API_KEY',
+    baseUrl: environment.CUSTOM_BASE_URL,
+    baseUrlField: 'CUSTOM_BASE_URL',
+  };
+}
 
 export type Environment = z.infer<typeof environmentSchema>;
 
@@ -273,6 +405,18 @@ export function safeConfigurationSummary(environment: Environment): Record<strin
     embeddingEndpoint: environment.ALIBABA_BASE_URL
       ? safeEndpoint(environment.ALIBABA_BASE_URL)
       : null,
+    llmProvider: environment.LLM_PROVIDER,
+    llmModel: environment.LLM_MODEL || null,
+    llmFallbackProvider: environment.LLM_FALLBACK_PROVIDER,
+    llmFallbackModel: environment.LLM_FALLBACK_MODEL || null,
+    llmKeyConfigured:
+      environment.LLM_PROVIDER === 'none'
+        ? false
+        : Boolean(llmCredentials(environment, environment.LLM_PROVIDER).apiKey),
+    rerankProvider: environment.RERANK_PROVIDER,
+    rerankModel: environment.RERANK_PROVIDER === 'none' ? null : environment.RERANK_MODEL,
+    rerankKeyConfigured:
+      environment.RERANK_PROVIDER === 'none' ? false : Boolean(environment.DASHSCOPE_API_KEY),
   };
 }
 

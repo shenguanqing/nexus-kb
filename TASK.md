@@ -1,82 +1,80 @@
 # 当前开发任务
 
 > 项目：知枢 NexusKB
-> 当前阶段：阶段 6——认证与 ACL
+> 当前阶段：阶段 7——LLM 与 Rerank Provider
 > 状态：已完成（2026-07-16）
 
 ---
 
 ## 1. 上一阶段交付记录
 
-阶段 5.5“前序阶段收尾与可靠性补强”已完成：
+阶段 6“认证与 ACL”已完成：
 
-- 配置 profile、脱敏摘要和 Pino 结构化日志。
-- tenant + 内容哈希 + ACL 去重。
-- 入库 checkpoint、错误分类、失败任务查询和断点恢复。
-- deleting 墓碑与向量补偿删除。
+- OIDC JWKS JWT 验证与服务端 Identity。
+- documents capability、tenant、department、sensitivity 和 owner ACL。
+- Chroma tenant + ACL 预过滤。
+- Rerank、LLM 和引用返回可复用的二次授权 policy。
 
 ---
 
 ## 2. 当前目标
 
 ```text
-Authorization Bearer token
-→ JWT 签名、issuer、audience、alg、时间声明验证
-→ 运行时 claims 校验
-→ 服务端 Identity
-→ capability 检查
-→ tenant + department + sensitivity + owner ACL
-→ VectorStore 安全过滤器
+ACL 过滤后的候选片段
+→ Rerank 前 ACL + 云端策略复查
+→ 可选 Alibaba qwen3-rerank
+→ 失败时降级为原向量排序
+→ LLM 前 ACL + 云端策略复查
+→ Primary LLM + 显式 fallback
+→ 来源编号校验
+→ active version + ACL 最终引用复查
 ```
 
 ---
 
 ## 3. 本轮任务
 
-### 3.1 身份与认证
+### 3.1 LLM Provider
 
-- [x] Identity 包含 userId、tenantId、department、roles、allowedSensitivities 和 capabilities。
-- [x] 仅 development/test 且 `AUTH_REQUIRED=false` 时允许固定开发身份。
-- [x] 定义可替换 `TokenVerifier`。
-- [x] 使用 OIDC JWKS 验证 JWT 签名、issuer、audience、算法、exp 和 nbf。
-- [x] 对签名验证后的业务 claims 做运行时校验。
-- [x] 使用全局 Nest Guard 将 Identity 写入 request。
-- [x] 健康检查显式标记为 public。
+- [x] 定义 `LlmProvider`、统一 usage、错误和遥测契约。
+- [x] 实现 OpenAI-compatible adapter，支持 OpenAI、DeepSeek、Alibaba 和 Custom。
+- [x] 实现 Google 原生 `generateContent` adapter。
+- [x] Provider factory 集中读取 Key、base URL、model 和 region。
+- [x] 429、超时和部分 5xx 指数退避；认证和参数错误不重试。
+- [x] 仅在显式配置时启用备用 Provider。
 
-### 3.2 文档 ACL
+### 3.2 提示与输出安全
 
-- [x] 上传要求 documents:write capability。
-- [x] 读取要求 documents:read capability。
-- [x] 删除要求 documents:delete capability。
-- [x] 所有查询首先强制 tenant。
-- [x] public 对 tenant 内允许读取者可见。
-- [x] internal/confidential 要求允许敏感度，并满足同部门、owner 或 tenant 管理员规则。
-- [x] 管理员仍不能跨 tenant。
-- [x] 入库任务查询继承关联文档 ACL。
+- [x] 系统提示限制为只基于资料回答。
+- [x] 将知识片段明确声明为不可信数据而非指令。
+- [x] 使用统一 `[来源N]` 格式。
+- [x] 拒绝不存在、越界或完全缺失的来源编号。
+- [x] Provider 遥测不记录问题、片段、回答或密钥。
 
-### 3.3 Vector ACL
+### 3.3 Rerank 与二次授权
 
-- [x] 从服务端 Identity 构造 VectorAclFilter。
-- [x] 普通用户只允许 public、同部门和 owner 分支。
-- [x] tenant 管理员可访问 tenant 内允许敏感度，但不能跨 tenant。
-- [x] 客户端不能提交原始 Chroma where 或可信身份字段。
-- [x] 为 Rerank、LLM 和引用返回提供可复用二次授权 policy。
+- [x] `RERANK_PROVIDER=none` 默认关闭。
+- [x] 定义 `RerankProvider` 并实现 Alibaba `qwen3-rerank`。
+- [x] Rerank 失败或策略拒绝时降级为原向量排序并记录事件。
+- [x] Rerank 和 LLM 前再次校验 tenant、department、sensitivity、owner 与云端策略。
+- [x] 引用返回前可按 PostgreSQL active version 和当前 ACL 最终复查。
 
 ---
 
 ## 4. 完成条件
 
-- [x] 缺失、格式错误、签名错误或 claims 不完整的 token 返回 401。
-- [x] `AUTH_REQUIRED=true` 时绝不回退开发身份。
-- [x] production 不能关闭认证。
-- [x] 客户端伪造 tenant、role、department、capability 无效。
-- [x] tenant 交叉访问全部失败关闭。
-- [x] 部门、敏感度和 owner 规则有成功与拒绝测试。
-- [x] tenant 管理员仍不能读取其他 tenant。
+- [x] 可配置 Alibaba Embedding + DeepSeek LLM。
+- [x] OpenAI、Google、DeepSeek、Alibaba 和 Custom LLM 均由统一 factory 构造。
+- [x] confidential 默认对 Rerank 和 LLM 保持零云端调用。
+- [x] LLM 临时故障只使用显式配置的备用 Provider。
+- [x] Rerank 关闭或故障时保留原向量排序。
+- [x] prompt injection 文本只能作为 source 数据进入提示。
+- [x] 来源编号和最终 active/ACL 引用复查有自动化测试。
 - [x] lint、typecheck、单元测试、集成测试、build 和 format check 通过。
 
 ---
 
 ## 5. 下一阶段入口
 
-完成后进入 LLM 与 Rerank Provider，再实现查询 API、来源验证和无答案拒答。
+完成后进入查询 API，实现查询输入校验、Query Embedding、ACL Top K、相邻块合并、
+相关度阈值、LLM 回答、审计和无答案拒答。
