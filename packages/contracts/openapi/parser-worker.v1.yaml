@@ -1,0 +1,87 @@
+openapi: 3.1.0
+info:
+  title: NexusKB Parser Worker Internal API
+  version: 1.0.0
+paths:
+  /internal/v1/parse:
+    post:
+      security:
+        - internalToken: []
+      parameters:
+        - in: header
+          name: X-Trace-Id
+          required: false
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ParseRequest'
+      responses:
+        '200':
+          description: Parsed document elements
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ParseResponse'
+        '401':
+          description: Missing or invalid internal token
+        '422':
+          description: Invalid request or unsafe file reference
+components:
+  securitySchemes:
+    internalToken:
+      type: apiKey
+      in: header
+      name: X-Internal-Token
+  schemas:
+    ParseRequest:
+      type: object
+      additionalProperties: false
+      required: [jobId, documentId, storagePath, mimeType]
+      properties:
+        jobId: { type: string, format: uuid }
+        documentId: { type: string, format: uuid }
+        storagePath: { type: string, minLength: 1, maxLength: 4096 }
+        mimeType: { type: string, minLength: 1, maxLength: 255 }
+    ParsedElement:
+      type: object
+      additionalProperties: false
+      required: [text, elementType]
+      properties:
+        text: { type: string, minLength: 1 }
+        elementType: { type: string, minLength: 1, maxLength: 64 }
+        page: { type: [integer, 'null'], minimum: 1, default: null }
+        sheet: { type: [string, 'null'], default: null }
+        sectionPath:
+          type: array
+          items: { type: string }
+          default: []
+        bbox:
+          oneOf:
+            - type: array
+              minItems: 4
+              maxItems: 4
+              items: { type: number }
+            - type: 'null'
+          default: null
+        metadata: { type: object, default: {} }
+    ParseResponse:
+      type: object
+      additionalProperties: false
+      required: [parser, parserVersion, elements]
+      properties:
+        parser: { type: string, minLength: 1 }
+        parserVersion: { type: string, minLength: 1 }
+        elements:
+          type: array
+          minItems: 1
+          maxItems: 100000
+          items: { $ref: '#/components/schemas/ParsedElement' }
+        warnings:
+          type: array
+          items: { type: string }
+          default: []

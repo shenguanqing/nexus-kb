@@ -1,0 +1,2 @@
+"""NexusKB parser worker."""
+

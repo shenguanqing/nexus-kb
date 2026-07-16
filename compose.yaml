@@ -1,0 +1,140 @@
+name: nexus-kb
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - '127.0.0.1:3000:3000'
+    volumes:
+      - raw_docs:/data/raw-docs
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      chroma:
+        condition: service_healthy
+      parser-worker:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - fetch('http://127.0.0.1:3000/health/live').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 10s
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - edge
+      - backend
+
+  parser-worker:
+    build:
+      context: .
+      dockerfile: apps/parser-worker/Dockerfile
+    restart: unless-stopped
+    environment:
+      PARSER_INTERNAL_TOKEN: ${PARSER_INTERNAL_TOKEN}
+      RAW_DOCS_PATH: /data/raw-docs
+      MAX_PARSE_BYTES: ${MAX_PARSE_BYTES:-52428800}
+    expose:
+      - '8000'
+    volumes:
+      - raw_docs:/data/raw-docs:ro
+    tmpfs:
+      - /tmp/parser:size=1g,mode=1700,uid=10002,gid=10002
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/live', timeout=3)
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 10s
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - backend
+
+  postgres:
+    image: postgres:17.6-bookworm
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-kb}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-kb}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}']
+      interval: 10s
+      timeout: 5s
+      retries: 6
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - backend
+
+  redis:
+    image: redis:8.2.1-bookworm
+    restart: unless-stopped
+    command: ['redis-server', '--appendonly', 'yes']
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 10s
+      timeout: 3s
+      retries: 6
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - backend
+
+  chroma:
+    image: chromadb/chroma:1.0.20
+    restart: unless-stopped
+    volumes:
+      - chroma_data:/data
+    environment:
+      IS_PERSISTENT: 'TRUE'
+      PERSIST_DIRECTORY: /data
+      ANONYMIZED_TELEMETRY: 'FALSE'
+    expose:
+      - '8000'
+    healthcheck:
+      test:
+        - CMD
+        - /bin/bash
+        - -c
+        - exec 3<>/dev/tcp/127.0.0.1/8000
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - backend
+
+networks:
+  edge: {}
+  backend:
+    internal: true
+
+volumes:
+  raw_docs: {}
+  postgres_data: {}
+  redis_data: {}
+  chroma_data: {}
