@@ -79,8 +79,12 @@ const environmentSchema = z
     REDIS_URL: z.url().refine((url) => url.startsWith('redis://'), 'must use redis'),
     PARSER_WORKER_URL: z.url(),
     PARSER_INTERNAL_TOKEN: z.string().min(16),
-    PARSER_REQUEST_TIMEOUT_MS: z.coerce.number().int().min(100).max(300_000).default(30_000),
+    PARSER_REQUEST_TIMEOUT_MS: z.coerce.number().int().min(100).max(900_000).default(240_000),
     RAW_DOCS_PATH: z.string().min(1),
+    DWG_CONVERSION_ENABLED: z
+      .enum(['true', 'false'])
+      .default('false')
+      .transform((value) => value === 'true'),
     CHROMA_URL: z.url(),
     AUTH_REQUIRED: z
       .enum(['true', 'false'])
@@ -395,6 +399,7 @@ export function safeConfigurationSummary(environment: Environment): Record<strin
     redisConfigured: Boolean(environment.REDIS_URL),
     parserWorkerEndpoint: safeEndpoint(environment.PARSER_WORKER_URL),
     parserTokenConfigured: Boolean(environment.PARSER_INTERNAL_TOKEN),
+    dwgConversionEnabled: environment.DWG_CONVERSION_ENABLED,
     vectorStoreProvider: environment.VECTOR_STORE_PROVIDER,
     chromaEndpoint: safeEndpoint(environment.CHROMA_URL),
     embeddingProvider: environment.EMBEDDING_PROVIDER,

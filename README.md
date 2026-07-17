@@ -10,6 +10,7 @@ Chroma 安全索引激活，正在收尾前序阶段的去重、checkpoint、分
 - Node.js 22 LTS 与 pnpm 10.27
 - Docker Desktop（含 Docker Compose）
 - Python 3.11（仅在宿主机直接测试 Parser Worker 时需要）
+- 解析 DWG 时需另行安装并授权 ODA File Converter；仓库和基础镜像不分发该第三方二进制
 
 ## 安装与检查
 
@@ -66,10 +67,12 @@ docker compose down
 ## 内部解析契约
 
 - `POST /internal/v1/parse` 只在 Worker 内网提供，并要求 `X-Internal-Token`。
-- Worker 支持 UTF-8 TXT/Markdown、DOCX、XLSX 和 DXF；DXF 使用 ezdxf 提取图纸摘要、布局、图层、文字、块属性和尺寸，并保留 CAD entity metadata。
+- Worker 支持 UTF-8 TXT/Markdown、DOCX、XLSX、DXF 和 DWG；DWG 在受控临时目录转成 DXF 后，使用 ezdxf 提取图纸摘要、布局、图层、文字、块属性和尺寸，并保留 CAD entity metadata。
 - OpenAPI 契约位于 `packages/contracts/openapi/parser-worker.v1.yaml`。
 - Worker 会拒绝共享根目录外路径、`..`、符号链接、超限和空文件。
-- DWG 不直接进入 Worker；先在隔离工作站使用已批准的 ODA File Converter 转为 DXF，人工抽查图层、文字、外部参照和单位后，再上传转换产物。
+- DWG 转换默认关闭。安装 ODA File Converter 后，将 `DWG_CONVERTER_EXECUTABLE` 配成其绝对路径、确认
+  `PARSER_TEMP_PATH` 可写，再设置 `DWG_CONVERSION_ENABLED=true`；此时 `/health/ready` 会把转换器纳入就绪检查。
+- ODA 可执行文件及其运行库必须通过组织批准的镜像或宿主机部署流程提供，不能把下载包、许可证或二进制提交到 Git。
 
 ## 文档 API
 

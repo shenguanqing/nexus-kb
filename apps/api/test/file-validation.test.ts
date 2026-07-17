@@ -65,4 +65,34 @@ describe('validateUploadedFile', () => {
       code: 'FILE_SIGNATURE_MISMATCH',
     } satisfies Partial<ApiException>);
   });
+
+  it('accepts a signed DWG only when conversion is enabled', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'nexus-upload-'));
+    directories.push(directory);
+    const path = join(directory, 'upload');
+    await writeFile(path, Buffer.concat([Buffer.from('AC1032', 'ascii'), Buffer.alloc(64)]));
+
+    await expect(
+      validateUploadedFile(path, 'drawing.dwg', 'application/octet-stream', true),
+    ).resolves.toEqual({
+      extension: '.dwg',
+      mimeType: 'image/vnd.dwg',
+    });
+    await expect(validateUploadedFile(path, 'drawing.dwg', 'image/vnd.dwg')).rejects.toMatchObject({
+      code: 'DWG_CONVERSION_DISABLED',
+    } satisfies Partial<ApiException>);
+  });
+
+  it('rejects a forged DWG signature', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'nexus-upload-'));
+    directories.push(directory);
+    const path = join(directory, 'upload');
+    await writeFile(path, 'NOTDWG', 'ascii');
+
+    await expect(
+      validateUploadedFile(path, 'drawing.dwg', 'image/vnd.dwg', true),
+    ).rejects.toMatchObject({
+      code: 'FILE_SIGNATURE_MISMATCH',
+    } satisfies Partial<ApiException>);
+  });
 });

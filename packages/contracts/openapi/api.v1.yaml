@@ -116,6 +116,7 @@ components:
       enum:
         [
           queued,
+          converting,
           parsing,
           chunking,
           policy_check,

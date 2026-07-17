@@ -195,6 +195,27 @@ function dependencies(sensitivity: 'internal' | 'confidential' = 'internal') {
 }
 
 describe('IngestionProcessor vector indexing', () => {
+  it('reports the converting stage before parsing DWG input', async () => {
+    const deps = dependencies();
+    deps.record.document.sourceName = 'drawing.dwg';
+    deps.record.document.storageKey = `${deps.record.documentId}.dwg`;
+    deps.record.document.mimeType = 'image/vnd.dwg';
+    deps.payload.storageKey = `${deps.record.documentId}.dwg`;
+
+    await deps.processor.process(deps.payload);
+
+    type UpdateInput = { data: Record<string, unknown> };
+    const jobUpdates = deps.updateJob.mock.calls as unknown as Array<[UpdateInput]>;
+    expect(jobUpdates[0]?.[0].data).toMatchObject({
+      status: 'converting',
+      step: 'converting',
+    });
+    expect(deps.parse).toHaveBeenCalledWith(
+      expect.objectContaining({ mimeType: 'image/vnd.dwg' }),
+      deps.record.traceId,
+    );
+  });
+
   it('activates a version only after embedding and stable vector upsert succeed', async () => {
     const deps = dependencies();
 

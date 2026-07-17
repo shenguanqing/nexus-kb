@@ -59,12 +59,14 @@ export class IngestionProcessor {
       return;
     }
     const resumeFromLocalPreparation = record.checkpoint === 'local_prepared';
+    const initialProcessingStatus =
+      record.document.mimeType === 'image/vnd.dwg' ? 'converting' : 'parsing';
     const [jobUpdate] = await this.prisma.$transaction([
       this.prisma.ingestionJob.updateMany({
         where: { id: record.id, status: { not: 'deleted' } },
         data: {
-          status: resumeFromLocalPreparation ? 'embedding' : 'parsing',
-          step: resumeFromLocalPreparation ? 'embedding' : 'parsing',
+          status: resumeFromLocalPreparation ? 'embedding' : initialProcessingStatus,
+          step: resumeFromLocalPreparation ? 'embedding' : initialProcessingStatus,
           attempts: { increment: 1 },
           startedAt: record.startedAt ?? new Date(),
           completedAt: null,

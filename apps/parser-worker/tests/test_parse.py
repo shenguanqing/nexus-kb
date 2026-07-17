@@ -1,3 +1,4 @@
+import sys
 from pathlib import Path
 from uuid import uuid4
 
@@ -10,6 +11,25 @@ from app.config import Settings
 from app.main import create_app
 
 TOKEN = "test-internal-token"  # noqa: S105 -- non-secret test fixture
+
+
+def make_fake_dwg_converter(path: Path) -> None:
+    path.write_text(
+        f"""#!{sys.executable}
+import sys
+from pathlib import Path
+
+import ezdxf
+
+output_dir = Path(sys.argv[2])
+source_name = Path(sys.argv[7])
+drawing = ezdxf.new("R2010")
+drawing.modelspace().add_mtext("Converted DWG annotation")
+drawing.saveas(output_dir / source_name.with_suffix(".dxf").name)
+""",
+        encoding="utf-8",
+    )
+    path.chmod(0o700)
 
 
 def make_client(root: Path, max_parse_bytes: int = 1_048_576) -> TestClient:
@@ -45,7 +65,7 @@ def test_parse_requires_internal_token_and_returns_contract(tmp_path: Path) -> N
         json=payload(document),
     )
 
-    assert response.status_code == 200
+    assert response.status_code == 200, response.text
     assert response.json()["elements"][0]["text"] == "付款周期为 30 天"
     assert response.json()["parserVersion"] == "1.1.0"
 
@@ -57,9 +77,7 @@ def test_markdown_preserves_heading_path(tmp_path: Path) -> None:
     body = payload(document)
     body["mimeType"] = "text/markdown"
 
-    response = client.post(
-        "/internal/v1/parse", headers={"x-internal-token": TOKEN}, json=body
-    )
+    response = client.post("/internal/v1/parse", headers={"x-internal-token": TOKEN}, json=body)
 
     assert response.status_code == 200
     assert response.json()["parser"] == "markdown"
@@ -79,9 +97,7 @@ def test_docx_preserves_heading_and_table(tmp_path: Path) -> None:
     body = payload(path)
     body["mimeType"] = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 
-    response = client.post(
-        "/internal/v1/parse", headers={"x-internal-token": TOKEN}, json=body
-    )
+    response = client.post("/internal/v1/parse", headers={"x-internal-token": TOKEN}, json=body)
 
     assert response.status_code == 200
     assert response.json()["parser"] == "python-docx"
@@ -101,9 +117,7 @@ def test_xlsx_preserves_sheet_and_header(tmp_path: Path) -> None:
     body = payload(path)
     body["mimeType"] = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
-    response = client.post(
-        "/internal/v1/parse", headers={"x-internal-token": TOKEN}, json=body
-    )
+    response = client.post("/internal/v1/parse", headers={"x-internal-token": TOKEN}, json=body)
 
     assert response.status_code == 200
     assert response.json()["parser"] == "openpyxl"
@@ -120,9 +134,7 @@ def test_dxf_extracts_summary_text_block_attributes_and_dimensions(tmp_path: Pat
     block.add_attdef("PROJECT", (0, 0), text="未填写", dxfattribs={"layer": "ANNOTATION"})
     insert = drawing.modelspace().add_blockref("TITLE_BLOCK", (0, 0))
     insert.add_auto_attribs({"PROJECT": "NexusKB CAD"})
-    drawing.modelspace().add_mtext(
-        "Payment term: 30 days", dxfattribs={"layer": "ANNOTATION"}
-    )
+    drawing.modelspace().add_mtext("Payment term: 30 days", dxfattribs={"layer": "ANNOTATION"})
     dimension = drawing.modelspace().add_linear_dim(
         base=(0, 3),
         p1=(0, 0),
@@ -135,9 +147,7 @@ def test_dxf_extracts_summary_text_block_attributes_and_dimensions(tmp_path: Pat
     body = payload(path)
     body["mimeType"] = "image/vnd.dxf"
 
-    response = client.post(
-        "/internal/v1/parse", headers={"x-internal-token": TOKEN}, json=body
-    )
+    response = client.post("/internal/v1/parse", headers={"x-internal-token": TOKEN}, json=body)
 
     assert response.status_code == 200
     parsed = response.json()
@@ -168,9 +178,7 @@ def test_dxf_rejects_entity_limit(tmp_path: Path) -> None:
     body = payload(path)
     body["mimeType"] = "application/dxf"
 
-    response = client.post(
-        "/internal/v1/parse", headers={"x-internal-token": TOKEN}, json=body
-    )
+    response = client.post("/internal/v1/parse", headers={"x-internal-token": TOKEN}, json=body)
 
     assert response.status_code == 422
     assert response.json()["detail"] == "CAD 实体数量超过限制"
@@ -183,13 +191,75 @@ def test_dxf_rejects_corrupted_content_without_leaking_path(tmp_path: Path) -> N
     body = payload(path)
     body["mimeType"] = "image/vnd.dxf"
 
-    response = client.post(
-        "/internal/v1/parse", headers={"x-internal-token": TOKEN}, json=body
-    )
+    response = client.post("/internal/v1/parse", headers={"x-internal-token": TOKEN}, json=body)
 
     assert response.status_code == 422
     assert response.json()["detail"] == "DXF 文件损坏或格式不受支持"
     assert str(tmp_path) not in response.text
+
+
+def test_dwg_is_converted_to_dxf_and_parsed(tmp_path: Path) -> None:
+    path = tmp_path / "drawing.dwg"
+    path.write_bytes(b"AC1032" + b"\0" * 64)
+    converter = tmp_path / "fake-oda-file-converter"
+    make_fake_dwg_converter(converter)
+    client = TestClient(
+        create_app(
+            Settings(
+                PARSER_INTERNAL_TOKEN=TOKEN,
+                RAW_DOCS_PATH=tmp_path,
+                DWG_CONVERSION_ENABLED=True,
+                DWG_CONVERTER_EXECUTABLE=converter,
+                DWG_CONVERTER_RELEASE="test",
+                PARSER_TEMP_PATH=tmp_path,
+            )
+        )
+    )
+    body = payload(path)
+    body["mimeType"] = "image/vnd.dwg"
+
+    response = client.post("/internal/v1/parse", headers={"x-internal-token": TOKEN}, json=body)
+
+    assert response.status_code == 200, response.text
+    parsed = response.json()
+    assert parsed["parser"] == "oda-file-converter+ezdxf"
+    assert parsed["parserVersion"].startswith("oda-test+ezdxf-")
+    assert "DWG_CONVERTED_TO_DXF" in parsed["warnings"]
+    assert "DWG_SOURCE_VERSION:AC1032" in parsed["warnings"]
+    assert any(element["text"] == "Converted DWG annotation" for element in parsed["elements"])
+
+
+def test_dwg_rejects_disabled_conversion_and_forged_signature(tmp_path: Path) -> None:
+    path = tmp_path / "drawing.dwg"
+    path.write_bytes(b"AC1032" + b"\0" * 64)
+    body = payload(path)
+    body["mimeType"] = "image/vnd.dwg"
+
+    disabled = make_client(tmp_path).post(
+        "/internal/v1/parse", headers={"x-internal-token": TOKEN}, json=body
+    )
+    assert disabled.status_code == 503
+    assert disabled.json()["detail"] == "DWG 格式转换未启用"
+
+    converter = tmp_path / "fake-oda-file-converter"
+    make_fake_dwg_converter(converter)
+    path.write_bytes(b"NOTDWG")
+    enabled_client = TestClient(
+        create_app(
+            Settings(
+                PARSER_INTERNAL_TOKEN=TOKEN,
+                RAW_DOCS_PATH=tmp_path,
+                DWG_CONVERSION_ENABLED=True,
+                DWG_CONVERTER_EXECUTABLE=converter,
+                PARSER_TEMP_PATH=tmp_path,
+            )
+        )
+    )
+    invalid = enabled_client.post(
+        "/internal/v1/parse", headers={"x-internal-token": TOKEN}, json=body
+    )
+    assert invalid.status_code == 422
+    assert invalid.json()["detail"] == "DWG 版本不受支持或文件签名无效"
 
 
 def test_parse_rejects_path_outside_root_and_symlink(tmp_path: Path) -> None:

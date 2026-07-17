@@ -31,6 +31,10 @@ paths:
           description: Missing or invalid internal token
         '422':
           description: Invalid request or unsafe file reference
+        '503':
+          description: Configured DWG converter is disabled or unavailable
+        '504':
+          description: DWG conversion timed out
 components:
   securitySchemes:
     internalToken:

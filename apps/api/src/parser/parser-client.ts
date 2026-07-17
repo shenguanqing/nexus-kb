@@ -54,7 +54,7 @@ export class ParserClient {
     if ([400, 404, 413, 415, 422].includes(status)) {
       return new ParserError('invalid_request', false);
     }
-    if (status === 408) return new ParserError('timeout', true);
+    if (status === 408 || status === 504) return new ParserError('timeout', true);
     if (status === 429 || status >= 500) return new ParserError('unavailable', true);
     return new ParserError('invalid_response', false);
   }

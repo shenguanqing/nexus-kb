@@ -9,6 +9,13 @@ from fastapi import Depends, FastAPI, Header, HTTPException, Request, Response, 
 from app.archive import validate_office_archive
 from app.config import Settings
 from app.parsers.docx import parse_docx
+from app.parsers.dwg import (
+    DwgConversionInvalidError,
+    DwgConversionTimeoutError,
+    DwgConversionUnavailableError,
+    converter_is_ready,
+    parse_dwg,
+)
 from app.parsers.dxf import parse_dxf
 from app.parsers.text import parse_text
 from app.parsers.xlsx import parse_xlsx
@@ -19,17 +26,19 @@ LOGGER = logging.getLogger("nexus_kb.parser_worker")
 SUPPORTED_TYPES = {
     ".txt": {"text/plain"},
     ".md": {"text/markdown", "text/plain"},
-    ".docx": {
-        "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-    },
-    ".xlsx": {
-        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-    },
+    ".docx": {"application/vnd.openxmlformats-officedocument.wordprocessingml.document"},
+    ".xlsx": {"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"},
     ".dxf": {
         "image/vnd.dxf",
         "application/dxf",
         "application/x-dxf",
         "drawing/x-dxf",
+    },
+    ".dwg": {
+        "image/vnd.dwg",
+        "application/acad",
+        "application/dwg",
+        "application/x-dwg",
     },
 }
 
@@ -63,12 +72,23 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @api.get("/health/ready")
     def ready(response: Response) -> dict[str, object]:
         root = resolved_settings.raw_docs_path
-        is_ready = root.exists() and root.is_dir()
+        raw_docs_ready = root.exists() and root.is_dir()
+        converter_ready = not resolved_settings.dwg_conversion_enabled or converter_is_ready(
+            resolved_settings.dwg_converter_executable,
+            resolved_settings.parser_temp_path,
+        )
+        converter_status = "disabled"
+        if resolved_settings.dwg_conversion_enabled:
+            converter_status = "up" if converter_ready else "down"
+        is_ready = raw_docs_ready and converter_ready
         if not is_ready:
             response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
         return {
             "status": "ready" if is_ready else "not_ready",
-            "checks": {"rawDocs": {"status": "up" if is_ready else "down"}},
+            "checks": {
+                "rawDocs": {"status": "up" if raw_docs_ready else "down"},
+                "dwgConverter": {"status": converter_status},
+            },
         }
 
     @api.post(
@@ -114,7 +134,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                     resolved_settings.max_elements,
                 )
                 parser = "openpyxl"
-            else:
+            elif suffix == ".dxf":
                 result = parse_dxf(
                     path,
                     resolved_settings.max_cad_entities,
@@ -125,6 +145,37 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 warnings = result.warnings
                 parser = "ezdxf"
                 parser_version = result.parser_version
+            else:
+                if not resolved_settings.dwg_conversion_enabled:
+                    raise DwgConversionUnavailableError("DWG 格式转换未启用")
+                result = parse_dwg(
+                    path,
+                    executable=resolved_settings.dwg_converter_executable,
+                    converter_release=resolved_settings.dwg_converter_release,
+                    output_version=resolved_settings.dwg_output_version,
+                    temp_root=resolved_settings.parser_temp_path,
+                    timeout_seconds=resolved_settings.dwg_conversion_timeout_seconds,
+                    max_converted_bytes=resolved_settings.max_dwg_converted_bytes,
+                    max_entities=resolved_settings.max_cad_entities,
+                    max_elements=resolved_settings.max_elements,
+                    max_insert_depth=resolved_settings.max_cad_insert_depth,
+                )
+                elements = result.elements
+                warnings = result.warnings
+                parser = "oda-file-converter+ezdxf"
+                parser_version = result.parser_version
+        except DwgConversionTimeoutError as error:
+            raise HTTPException(
+                status_code=status.HTTP_504_GATEWAY_TIMEOUT, detail=str(error)
+            ) from error
+        except DwgConversionUnavailableError as error:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(error)
+            ) from error
+        except DwgConversionInvalidError as error:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(error)
+            ) from error
         except ValueError as error:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(error)

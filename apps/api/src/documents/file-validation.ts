@@ -30,16 +30,30 @@ const types = {
       'drawing/x-dxf',
     ]),
   },
+  '.dwg': {
+    canonicalMime: 'image/vnd.dwg',
+    acceptedMimes: new Set([
+      'image/vnd.dwg',
+      'application/acad',
+      'application/dwg',
+      'application/x-dwg',
+      'application/octet-stream',
+    ]),
+  },
 } as const;
 
 export async function validateUploadedFile(
   path: string,
   sourceName: string,
   suppliedMime: string,
+  allowDwg = false,
 ): Promise<{ extension: string; mimeType: string }> {
   const extension = extname(sourceName).toLowerCase() as keyof typeof types;
   const expected = types[extension];
   if (!expected) throw new ApiException('FILE_TYPE_NOT_ALLOWED', '不支持此文件类型', 415);
+  if (extension === '.dwg' && !allowDwg) {
+    throw new ApiException('DWG_CONVERSION_DISABLED', 'DWG 格式转换未启用', 503);
+  }
   if (!(expected.acceptedMimes as ReadonlySet<string>).has(suppliedMime.toLowerCase())) {
     throw new ApiException('MIME_MISMATCH', '文件扩展名与 MIME 不匹配', 415);
   }
@@ -59,6 +73,8 @@ export async function validateUploadedFile(
     }
   } else if (extension === '.dxf') {
     await validateDxfSignature(path);
+  } else if (extension === '.dwg') {
+    await validateDwgSignature(path);
   } else {
     const detected = await fileTypeFromFile(path);
     if (detected?.ext !== extension.slice(1) || detected.mime !== expected.canonicalMime) {
@@ -66,6 +82,32 @@ export async function validateUploadedFile(
     }
   }
   return { extension, mimeType: expected.canonicalMime };
+}
+
+const supportedDwgVersions = new Set([
+  'AC1009',
+  'AC1012',
+  'AC1014',
+  'AC1015',
+  'AC1018',
+  'AC1021',
+  'AC1024',
+  'AC1027',
+  'AC1032',
+]);
+
+async function validateDwgSignature(path: string): Promise<void> {
+  const handle = await open(path, 'r');
+  try {
+    const signature = Buffer.alloc(6);
+    const { bytesRead } = await handle.read(signature, 0, signature.length, 0);
+    if (bytesRead === signature.length && supportedDwgVersions.has(signature.toString('ascii'))) {
+      return;
+    }
+  } finally {
+    await handle.close();
+  }
+  throw new ApiException('FILE_SIGNATURE_MISMATCH', '文件签名与扩展名不匹配', 415);
 }
 
 async function validateDxfSignature(path: string): Promise<void> {

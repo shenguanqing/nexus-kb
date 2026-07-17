@@ -66,6 +66,12 @@ describe('ingestion queue contract', () => {
         storageKey: '6769af9a-a4d0-4dc2-a97d-942584a9c826.dxf',
       }),
     ).toMatchObject({ storageKey: '6769af9a-a4d0-4dc2-a97d-942584a9c826.dxf' });
+    expect(
+      ingestionPayloadSchema.parse({
+        ...reference,
+        storageKey: '6769af9a-a4d0-4dc2-a97d-942584a9c826.dwg',
+      }),
+    ).toMatchObject({ storageKey: '6769af9a-a4d0-4dc2-a97d-942584a9c826.dwg' });
     expect(() => ingestionPayloadSchema.parse({ ...reference, content: 'secret' })).toThrow();
     expect(() => ingestionPayloadSchema.parse({ ...reference, tenantId: 'forged' })).toThrow();
   });

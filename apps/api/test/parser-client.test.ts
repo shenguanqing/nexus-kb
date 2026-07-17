@@ -83,6 +83,32 @@ describe('ParserClient contract validation', () => {
     } satisfies Partial<ParserError>);
   });
 
+  it('classifies a DWG conversion gateway timeout as retryable timeout', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(null, { status: 504 })));
+    const config = {
+      values: {
+        PARSER_WORKER_URL: 'http://parser-worker:8000',
+        PARSER_INTERNAL_TOKEN: 'internal-test-token',
+        PARSER_REQUEST_TIMEOUT_MS: 1_000,
+      },
+    } as AppConfig;
+
+    await expect(
+      new ParserClient(config).parse(
+        {
+          jobId: id,
+          documentId: id,
+          storagePath: '/data/raw-docs/a.dwg',
+          mimeType: 'image/vnd.dwg',
+        },
+        id,
+      ),
+    ).rejects.toMatchObject({
+      code: 'PARSER_TIMEOUT',
+      retryable: true,
+    } satisfies Partial<ParserError>);
+  });
+
   it('does not retry Worker authentication failures', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(null, { status: 401 })));
     const config = {

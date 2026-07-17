@@ -63,7 +63,12 @@ export class DocumentsService {
       );
       if (bytes === 0) throw new ApiException('EMPTY_FILE', '不接受空文件', 400);
       if (file.file.truncated) throw new ApiException('FILE_TOO_LARGE', '文件超过大小限制', 413);
-      const validated = await validateUploadedFile(temporaryPath, sourceName, file.mimetype);
+      const validated = await validateUploadedFile(
+        temporaryPath,
+        sourceName,
+        file.mimetype,
+        this.config.values.DWG_CONVERSION_ENABLED,
+      );
       const contentSha256 = hash.digest('hex');
       const deduplicationKey = createHash('sha256')
         .update(
