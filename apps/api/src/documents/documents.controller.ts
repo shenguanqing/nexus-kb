@@ -43,6 +43,15 @@ export class DocumentsController {
     @Param('documentId', new ParseUUIDPipe({ version: '4' })) documentId: string,
     @Req() request: FastifyRequest,
   ): Promise<object> {
-    return this.documents.deleteDocument(documentId, requestIdentity(request));
+    return this.documents.deleteDocument(documentId, requestIdentity(request), request.id);
+  }
+
+  @Post('documents/:documentId/reindex')
+  @HttpCode(202)
+  reindexDocument(
+    @Param('documentId', new ParseUUIDPipe({ version: '4' })) documentId: string,
+    @Req() request: FastifyRequest,
+  ): Promise<object> {
+    return this.documents.reindexDocument(documentId, requestIdentity(request), request.id);
   }
 }

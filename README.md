@@ -165,6 +165,28 @@ RUN_PAID_PROVIDER_TESTS=true pnpm --filter @nexus-kb/api test:provider:smoke
 - 删除先进入 `deleting` 墓碑并停止任务，再删除向量和本地数据；如果索引任务在临界窗口完成 upsert，
   激活失败路径会补偿删除向量。重复 DELETE 会继续未完成清理。
 
+## 版本、删除与索引迁移
+
+- `POST /v1/documents/:documentId/reindex` 为同一原文件创建递增版本；新版本失败、被策略阻止或尚未完成时，
+  旧 `activeVersion` 保持不变。
+- 删除会先进入 `deleting`，按版本和任务记录清理所有关联 Chroma collection，再删除原文件、chunk 和可识别
+  解析数据；任何一步失败都保留墓碑供重复 DELETE 补偿。
+- Provider、模型、维度、分块或脱敏指纹变化时，使用独立进程准备候选索引。准备阶段不启动普通队列 consumer，
+  不切换 active version：
+
+```bash
+INDEX_MIGRATION_ACTION=prepare pnpm --filter @nexus-kb/api index:migrate
+```
+
+- 完成质量评测、备份和切换窗口确认后，使用同一新配置原子激活全部候选版本：
+
+```bash
+INDEX_MIGRATION_ACTION=activate pnpm --filter @nexus-kb/api index:migrate
+```
+
+旧版本和旧 collection 不会自动删除。需要回滚时恢复旧 Embedding 配置并再次执行 `activate`；正式切换需与
+API 配置发布协调，避免 active version 与查询向量空间短暂不一致。
+
 真实 Chroma 集成测试随 `test:integration` 在 Compose API 容器内运行，覆盖重复 upsert、tenant 过滤、
 按文档删除和错误指纹失败关闭。
 

@@ -27,6 +27,58 @@ const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() } as unknown as Op
 const acl = new AclPolicy();
 
 describe('DocumentsService tenant isolation', () => {
+  it('queues a new version without changing the active document', async () => {
+    const enqueue = vi.fn().mockResolvedValue(undefined);
+    const createVersion = vi.fn().mockResolvedValue({});
+    const createJob = vi.fn().mockResolvedValue({});
+    const createAudit = vi.fn().mockResolvedValue({});
+    const service = new DocumentsService(
+      {} as AppConfig,
+      {
+        document: {
+          findFirst: vi.fn().mockResolvedValue({
+            id: '6769af9a-a4d0-4dc2-a97d-942584a9c826',
+            storageKey: '6769af9a-a4d0-4dc2-a97d-942584a9c826.md',
+            activeVersion: 1,
+            status: 'active',
+            versions: [{ version: 1 }],
+          }),
+        },
+        ingestionJob: { findFirst: vi.fn().mockResolvedValue(null), create: createJob },
+        documentVersion: { create: createVersion },
+        documentLifecycleAudit: { create: createAudit },
+        $transaction: (operations: Array<Promise<unknown>>) => Promise.all(operations),
+      } as unknown as PrismaService,
+      { enqueue } as unknown as IngestionQueue,
+      {} as ChromaVectorStore,
+      logger,
+      acl,
+    );
+
+    const result = await service.reindexDocument(
+      '6769af9a-a4d0-4dc2-a97d-942584a9c826',
+      identity,
+      'd26720b3-1f78-40df-868d-8ca8510dca26',
+    );
+
+    expect(result).toMatchObject({ documentVersion: 2, status: 'queued' });
+    const [versionInput] = createVersion.mock.calls[0] as unknown as [
+      { data: { version: number; status: string } },
+    ];
+    const [jobInput] = createJob.mock.calls[0] as unknown as [
+      { data: { version: number; kind: string } },
+    ];
+    expect(versionInput.data).toMatchObject({ version: 2, status: 'processing' });
+    expect(jobInput.data).toMatchObject({ version: 2, kind: 'reindex' });
+    expect(createAudit).toHaveBeenCalledOnce();
+    expect(enqueue).toHaveBeenCalledWith(
+      expect.objectContaining({
+        documentId: '6769af9a-a4d0-4dc2-a97d-942584a9c826',
+        storageKey: '6769af9a-a4d0-4dc2-a97d-942584a9c826.md',
+      }),
+    );
+  });
+
   it('always scopes document reads to the authenticated tenant', async () => {
     const findFirst = vi.fn().mockResolvedValue(null);
     const service = new DocumentsService(
@@ -89,6 +141,9 @@ describe('DocumentsService tenant isolation', () => {
             id: '6769af9a-a4d0-4dc2-a97d-942584a9c826',
             storageKey: '6769af9a-a4d0-4dc2-a97d-942584a9c826.md',
             status: 'active',
+            activeVersion: 1,
+            versions: [],
+            jobs: [],
           }),
           update: updateDocument,
         },

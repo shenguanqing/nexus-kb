@@ -43,6 +43,8 @@ function dependencies(sensitivity: 'internal' | 'confidential' = 'internal') {
     tenantId: 'tenant-a',
     documentId,
     version: 1,
+    kind: 'ingestion',
+    activateOnComplete: true,
     status: 'queued',
     step: 'queued',
     checkpoint: 'queued',
@@ -106,7 +108,10 @@ function dependencies(sensitivity: 'internal' | 'confidential' = 'internal') {
       findUnique: vi.fn().mockResolvedValue(record),
       updateMany: updateJob,
     },
-    document: { updateMany: updateDocument },
+    document: {
+      updateMany: updateDocument,
+      findFirst: vi.fn().mockResolvedValue({ id: documentId }),
+    },
     documentVersion: { updateMany: updateVersion },
     knowledgeChunk: {
       deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
@@ -114,6 +119,7 @@ function dependencies(sensitivity: 'internal' | 'confidential' = 'internal') {
       findMany: findPreparedChunks,
     },
     cloudPolicyEvent: { upsert: upsertPolicyEvent },
+    documentLifecycleAudit: { create: vi.fn().mockResolvedValue({ id: randomUUID() }) },
   };
   const prisma = {
     ...transactionClient,
@@ -144,6 +150,7 @@ function dependencies(sensitivity: 'internal' | 'confidential' = 'internal') {
   const embedding = { embedDocuments } as unknown as EmbeddingService;
   const upsert = vi.fn<VectorUpsertCall>().mockResolvedValue(undefined);
   const deleteVectorDocument = vi.fn().mockResolvedValue(undefined);
+  const deleteVectorDocumentVersion = vi.fn().mockResolvedValue(undefined);
   const vectorStore = {
     info: () => ({
       enabled: true,
@@ -152,6 +159,7 @@ function dependencies(sensitivity: 'internal' | 'confidential' = 'internal') {
     }),
     upsert,
     deleteDocument: deleteVectorDocument,
+    deleteDocumentVersion: deleteVectorDocumentVersion,
   } as unknown as ChromaVectorStore;
   const embeddingFactory = {
     getProvider: () => ({
@@ -184,6 +192,7 @@ function dependencies(sensitivity: 'internal' | 'confidential' = 'internal') {
     embedDocuments,
     upsert,
     deleteVectorDocument,
+    deleteVectorDocumentVersion,
     updateDocument,
     updateJob,
     updateVersion,
@@ -270,6 +279,41 @@ describe('IngestionProcessor vector indexing', () => {
     });
   });
 
+  it('keeps the previous active version queryable when reindexing fails', async () => {
+    const deps = dependencies();
+    deps.record.version = 2;
+    deps.record.kind = 'reindex';
+    deps.record.document.activeVersion = 1;
+    deps.record.document.status = 'active';
+    deps.upsert.mockRejectedValueOnce(new VectorStoreError('unavailable'));
+
+    await expect(deps.processor.process(deps.payload)).rejects.toMatchObject({
+      code: 'VECTOR_STORE_UNAVAILABLE',
+    });
+
+    type UpdateInput = { data: Record<string, unknown> };
+    const documentUpdates = deps.updateDocument.mock.calls as unknown as Array<[UpdateInput]>;
+    expect(documentUpdates.at(-1)?.[0].data).toEqual({ status: 'active' });
+    expect(documentUpdates.some(([input]) => input.data.activeVersion === null)).toBe(false);
+  });
+
+  it('keeps a migration candidate inactive after its vectors are verified', async () => {
+    const deps = dependencies();
+    deps.record.version = 2;
+    deps.record.kind = 'index_migration';
+    deps.record.activateOnComplete = false;
+    deps.record.document.activeVersion = 1;
+    deps.record.document.status = 'active';
+
+    await deps.processor.process(deps.payload);
+
+    type UpdateInput = { data: Record<string, unknown> };
+    const versionUpdates = deps.updateVersion.mock.calls as unknown as Array<[UpdateInput]>;
+    const documentUpdates = deps.updateDocument.mock.calls as unknown as Array<[UpdateInput]>;
+    expect(versionUpdates.some(([input]) => input.data.status === 'prepared')).toBe(true);
+    expect(documentUpdates.some(([input]) => input.data.activeVersion === 2)).toBe(false);
+  });
+
   it('keeps confidential documents out of embedding and Chroma', async () => {
     const deps = dependencies('confidential');
 
@@ -340,6 +384,10 @@ describe('IngestionProcessor vector indexing', () => {
     await deps.processor.process(deps.payload);
 
     expect(deps.upsert).toHaveBeenCalledOnce();
-    expect(deps.deleteVectorDocument).toHaveBeenCalledWith('tenant-a', deps.record.documentId);
+    expect(deps.deleteVectorDocumentVersion).toHaveBeenCalledWith(
+      'tenant-a',
+      deps.record.documentId,
+      deps.record.version,
+    );
   });
 });

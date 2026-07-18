@@ -113,7 +113,7 @@ describe('Chroma VectorStore integration', () => {
       metadata: { tenantId: 'tenant-a', documentId: documentA },
     });
 
-    await store.deleteDocument('tenant-a', documentA);
+    await store.deleteDocumentFromCollections('tenant-a', documentA, [collectionName]);
     await expect(collection.count()).resolves.toBe(1);
   });
 

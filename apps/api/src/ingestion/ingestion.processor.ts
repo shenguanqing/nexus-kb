@@ -77,7 +77,7 @@ export class IngestionProcessor {
       }),
       this.prisma.document.updateMany({
         where: { id: record.documentId, status: { notIn: ['deleting', 'deleted'] } },
-        data: { status: 'processing' },
+        data: record.document.activeVersion === null ? { status: 'processing' } : {},
       }),
     ]);
     if (jobUpdate.count === 0) return;
@@ -221,6 +221,7 @@ export class IngestionProcessor {
           document: { status: { notIn: ['deleting', 'deleted'] } },
         },
         data: {
+          status: isBlocked ? 'policy_blocked' : shouldIndex ? 'processing' : 'prepared',
           parser: result.parser,
           parserVersion: result.parserVersion,
           parsedElements: result.elements as unknown as Prisma.InputJsonValue,
@@ -272,10 +273,13 @@ export class IngestionProcessor {
       });
       await tx.document.updateMany({
         where: { id: record.documentId, status: { notIn: ['deleting', 'deleted'] } },
-        data: {
-          status: isBlocked ? 'policy_blocked' : shouldIndex ? 'processing' : 'prepared',
-          activeVersion: null,
-        },
+        data:
+          record.document.activeVersion === null
+            ? {
+                status: isBlocked ? 'policy_blocked' : shouldIndex ? 'processing' : 'prepared',
+                activeVersion: null,
+              }
+            : { status: 'active' },
       });
       return true;
     });
@@ -346,15 +350,31 @@ export class IngestionProcessor {
       data: { status: 'indexing', step: 'indexing' },
     });
     await this.vectorStore.upsert(chunks, vectors);
-    const activated = await this.activateVersion(
-      record.id,
-      record.documentId,
-      record.version,
-      vectorStoreInfo.fingerprint,
-      vectorStoreInfo.collectionName,
-    );
+    const activated = record.activateOnComplete
+      ? await this.activateVersion(
+          record.id,
+          record.tenantId,
+          record.traceId,
+          record.documentId,
+          record.version,
+          vectorStoreInfo.fingerprint,
+          vectorStoreInfo.collectionName,
+        )
+      : await this.finalizeCandidateVersion(
+          record.id,
+          record.tenantId,
+          record.traceId,
+          record.documentId,
+          record.version,
+          vectorStoreInfo.fingerprint,
+          vectorStoreInfo.collectionName,
+        );
     if (!activated) {
-      await this.vectorStore.deleteDocument(record.tenantId, record.documentId);
+      await this.vectorStore.deleteDocumentVersion(
+        record.tenantId,
+        record.documentId,
+        record.version,
+      );
       this.logger.info('ingestion_activation_skipped_deleted_document', {
         traceId: record.traceId,
         tenantId: record.tenantId,
@@ -385,26 +405,45 @@ export class IngestionProcessor {
 
   private async activateVersion(
     jobId: string,
+    tenantId: string,
+    traceId: string,
     documentId: string,
     version: number,
     fingerprint: string | null,
     collectionName: string | null,
   ): Promise<boolean> {
     if (!fingerprint || !collectionName) throw new VectorStoreError('configuration_mismatch');
-    const [, , documentUpdate] = await this.prisma.$transaction([
-      this.prisma.documentVersion.updateMany({
+    const activatedAt = new Date();
+    return this.prisma.$transaction(async (tx) => {
+      const documentUpdate = await tx.document.updateMany({
+        where: { id: documentId, status: { notIn: ['deleting', 'deleted'] } },
+        data: { status: 'active', activeVersion: version },
+      });
+      if (documentUpdate.count === 0) return false;
+      await tx.documentVersion.updateMany({
+        where: {
+          documentId,
+          status: 'active',
+          version: { not: version },
+        },
+        data: { status: 'superseded', supersededAt: activatedAt },
+      });
+      await tx.documentVersion.updateMany({
         where: {
           documentId,
           version,
           document: { status: { notIn: ['deleting', 'deleted'] } },
         },
         data: {
+          status: 'active',
           embeddingFingerprint: fingerprint,
           vectorCollection: collectionName,
-          indexedAt: new Date(),
+          indexedAt: activatedAt,
+          activatedAt,
+          supersededAt: null,
         },
-      }),
-      this.prisma.ingestionJob.updateMany({
+      });
+      await tx.ingestionJob.updateMany({
         where: { id: jobId, status: { not: 'deleted' } },
         data: {
           status: 'completed',
@@ -415,13 +454,80 @@ export class IngestionProcessor {
           errorCategory: null,
           retryable: false,
         },
-      }),
-      this.prisma.document.updateMany({
+      });
+      await tx.documentLifecycleAudit.create({
+        data: {
+          id: randomUUID(),
+          tenantId,
+          traceId,
+          documentId,
+          documentVersion: version,
+          ingestionJobId: jobId,
+          eventType: 'document_version_activated',
+          outcome: 'completed',
+          vectorCollection: collectionName,
+          embeddingFingerprint: fingerprint,
+        },
+      });
+      return true;
+    });
+  }
+
+  private async finalizeCandidateVersion(
+    jobId: string,
+    tenantId: string,
+    traceId: string,
+    documentId: string,
+    version: number,
+    fingerprint: string | null,
+    collectionName: string | null,
+  ): Promise<boolean> {
+    if (!fingerprint || !collectionName) throw new VectorStoreError('configuration_mismatch');
+    const indexedAt = new Date();
+    return this.prisma.$transaction(async (tx) => {
+      const document = await tx.document.findFirst({
         where: { id: documentId, status: { notIn: ['deleting', 'deleted'] } },
-        data: { status: 'active', activeVersion: version },
-      }),
-    ]);
-    return documentUpdate.count > 0;
+        select: { id: true },
+      });
+      if (!document) return false;
+      const versionUpdate = await tx.documentVersion.updateMany({
+        where: { documentId, version },
+        data: {
+          status: 'prepared',
+          embeddingFingerprint: fingerprint,
+          vectorCollection: collectionName,
+          indexedAt,
+        },
+      });
+      if (versionUpdate.count === 0) return false;
+      await tx.ingestionJob.updateMany({
+        where: { id: jobId, status: { not: 'deleted' } },
+        data: {
+          status: 'completed',
+          step: 'candidate_ready',
+          checkpoint: 'candidate_ready',
+          completedAt: indexedAt,
+          errorCode: null,
+          errorCategory: null,
+          retryable: false,
+        },
+      });
+      await tx.documentLifecycleAudit.create({
+        data: {
+          id: randomUUID(),
+          tenantId,
+          traceId,
+          documentId,
+          documentVersion: version,
+          ingestionJobId: jobId,
+          eventType: 'index_candidate_ready',
+          outcome: 'completed',
+          vectorCollection: collectionName,
+          embeddingFingerprint: fingerprint,
+        },
+      });
+      return true;
+    });
   }
 
   private async markFailed(record: IngestionRecord, error: unknown): Promise<void> {
@@ -440,7 +546,25 @@ export class IngestionProcessor {
       }),
       this.prisma.document.updateMany({
         where: { id: record.documentId, status: { notIn: ['deleting', 'deleted'] } },
+        data: { status: record.document.activeVersion === null ? 'failed' : 'active' },
+      }),
+      this.prisma.documentVersion.updateMany({
+        where: { documentId: record.documentId, version: record.version },
         data: { status: 'failed' },
+      }),
+      this.prisma.documentLifecycleAudit.create({
+        data: {
+          id: randomUUID(),
+          tenantId: record.tenantId,
+          traceId: record.traceId,
+          documentId: record.documentId,
+          documentVersion: record.version,
+          ingestionJobId: record.id,
+          eventType: 'document_version_failed',
+          outcome: classified.code,
+          vectorCollection: record.vectorCollection,
+          embeddingFingerprint: record.embeddingFingerprint,
+        },
       }),
     ]);
     const logContext = {

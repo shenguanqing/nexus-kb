@@ -180,6 +180,22 @@ export class DocumentsService {
         status: true,
         createdAt: true,
         updatedAt: true,
+        versions: {
+          orderBy: { version: 'desc' },
+          select: {
+            version: true,
+            status: true,
+            parser: true,
+            parserVersion: true,
+            chunkCount: true,
+            embeddingFingerprint: true,
+            vectorCollection: true,
+            indexedAt: true,
+            activatedAt: true,
+            supersededAt: true,
+            createdAt: true,
+          },
+        },
       },
     });
     if (!document) throw new ApiException('DOCUMENT_NOT_FOUND', '文档不存在', 404);
@@ -199,6 +215,7 @@ export class DocumentsService {
         id: true,
         documentId: true,
         version: true,
+        kind: true,
         status: true,
         step: true,
         checkpoint: true,
@@ -235,6 +252,7 @@ export class DocumentsService {
         id: true,
         documentId: true,
         version: true,
+        kind: true,
         status: true,
         step: true,
         checkpoint: true,
@@ -251,11 +269,145 @@ export class DocumentsService {
     return { jobs };
   }
 
-  async deleteDocument(id: string, identity: Identity): Promise<object> {
+  async reindexDocument(id: string, identity: Identity, traceId: string): Promise<object> {
+    this.acl.assertCapability(identity, 'documents:write');
+    const document = await this.prisma.document.findFirst({
+      where: {
+        id,
+        ...this.acl.documentWhere(identity),
+        status: { notIn: ['deleting', 'deleted'] },
+      },
+      select: {
+        id: true,
+        storageKey: true,
+        activeVersion: true,
+        status: true,
+        versions: { orderBy: { version: 'desc' }, take: 1, select: { version: true } },
+      },
+    });
+    if (!document) throw new ApiException('DOCUMENT_NOT_FOUND', '文档不存在', 404);
+    if (document.activeVersion === null || document.status !== 'active') {
+      throw new ApiException('DOCUMENT_NOT_ACTIVE', '只有已生效文档可以重新索引', 409);
+    }
+    const runningJob = await this.prisma.ingestionJob.findFirst({
+      where: {
+        tenantId: identity.tenantId,
+        documentId: document.id,
+        status: {
+          in: [
+            'queued',
+            'converting',
+            'parsing',
+            'chunking',
+            'policy_check',
+            'embedding',
+            'indexing',
+          ],
+        },
+      },
+      select: { id: true },
+    });
+    if (runningJob) {
+      throw new ApiException('DOCUMENT_REINDEX_IN_PROGRESS', '文档已有正在执行的入库任务', 409);
+    }
+    const nextVersion = (document.versions[0]?.version ?? document.activeVersion) + 1;
+    const jobId = randomUUID();
+    try {
+      await this.prisma.$transaction([
+        this.prisma.documentVersion.create({
+          data: {
+            id: randomUUID(),
+            tenantId: identity.tenantId,
+            documentId: document.id,
+            version: nextVersion,
+            status: 'processing',
+          },
+        }),
+        this.prisma.ingestionJob.create({
+          data: {
+            id: jobId,
+            tenantId: identity.tenantId,
+            documentId: document.id,
+            version: nextVersion,
+            kind: 'reindex',
+            traceId,
+          },
+        }),
+        this.prisma.documentLifecycleAudit.create({
+          data: {
+            id: randomUUID(),
+            tenantId: identity.tenantId,
+            userId: identity.userId,
+            traceId,
+            documentId: document.id,
+            documentVersion: nextVersion,
+            ingestionJobId: jobId,
+            eventType: 'document_reindex_requested',
+            outcome: 'queued',
+          },
+        }),
+      ]);
+    } catch (error) {
+      if (this.isUniqueConflict(error)) {
+        throw new ApiException('DOCUMENT_REINDEX_CONFLICT', '文档版本已发生变化，请重试', 409);
+      }
+      throw error;
+    }
+    try {
+      await this.queue.enqueue({
+        ingestionJobId: jobId,
+        documentId: document.id,
+        storageKey: document.storageKey,
+      });
+    } catch (error) {
+      await this.prisma.$transaction([
+        this.prisma.ingestionJob.update({
+          where: { id: jobId },
+          data: {
+            status: 'failed',
+            step: 'failed',
+            errorCode: 'QUEUE_UNAVAILABLE',
+            errorCategory: 'queue',
+            retryable: true,
+            completedAt: new Date(),
+          },
+        }),
+        this.prisma.documentVersion.update({
+          where: { documentId_version: { documentId: document.id, version: nextVersion } },
+          data: { status: 'failed' },
+        }),
+      ]);
+      throw error;
+    }
+    this.logger.info('document_reindex_queued', {
+      traceId,
+      tenantId: identity.tenantId,
+      userId: identity.userId,
+      jobId,
+      documentId: document.id,
+      status: 'queued',
+    });
+    return {
+      documentId: document.id,
+      documentVersion: nextVersion,
+      jobId,
+      status: 'queued',
+      traceId,
+    };
+  }
+
+  async deleteDocument(id: string, identity: Identity, traceId: string): Promise<object> {
     this.acl.assertCapability(identity, 'documents:delete');
     const document = await this.prisma.document.findFirst({
       where: { id, ...this.acl.documentWhere(identity) },
-      select: { id: true, storageKey: true, status: true },
+      select: {
+        id: true,
+        storageKey: true,
+        status: true,
+        activeVersion: true,
+        versions: { select: { vectorCollection: true } },
+        jobs: { select: { vectorCollection: true } },
+      },
     });
     if (!document) return { documentId: id, deleted: true };
     if (document.status !== 'deleting') {
@@ -270,7 +422,23 @@ export class DocumentsService {
         }),
       ]);
     }
-    await this.vectorStore.deleteDocument(identity.tenantId, document.id);
+    const vectorCollections = [...document.versions, ...document.jobs]
+      .map((record) => record.vectorCollection)
+      .filter((name): name is string => name !== null);
+    if (vectorCollections.length > 0) {
+      await this.vectorStore.deleteDocumentFromCollections(
+        identity.tenantId,
+        document.id,
+        vectorCollections,
+      );
+    } else {
+      await this.vectorStore.deleteDocument(identity.tenantId, document.id);
+    }
+    await unlink(join(this.config.values.RAW_DOCS_PATH, document.storageKey)).catch(
+      (error: unknown) => {
+        if (!(error instanceof Error && 'code' in error && error.code === 'ENOENT')) throw error;
+      },
+    );
     await this.prisma.$transaction([
       this.prisma.document.update({
         where: { id: document.id },
@@ -279,6 +447,7 @@ export class DocumentsService {
       this.prisma.documentVersion.updateMany({
         where: { documentId: document.id, tenantId: identity.tenantId },
         data: {
+          status: 'deleted',
           parsedElements: Prisma.DbNull,
           warnings: Prisma.DbNull,
           chunkCount: 0,
@@ -292,12 +461,19 @@ export class DocumentsService {
       this.prisma.knowledgeChunk.deleteMany({
         where: { documentId: document.id, tenantId: identity.tenantId },
       }),
+      this.prisma.documentLifecycleAudit.create({
+        data: {
+          id: randomUUID(),
+          tenantId: identity.tenantId,
+          userId: identity.userId,
+          traceId,
+          documentId: document.id,
+          documentVersion: document.activeVersion,
+          eventType: 'document_deleted',
+          outcome: 'completed',
+        },
+      }),
     ]);
-    await unlink(join(this.config.values.RAW_DOCS_PATH, document.storageKey)).catch(
-      (error: unknown) => {
-        if (!(error instanceof Error && 'code' in error && error.code === 'ENOENT')) throw error;
-      },
-    );
     return { documentId: id, deleted: true };
   }
 

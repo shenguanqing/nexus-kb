@@ -43,6 +43,16 @@ enum CloudPolicyDecision {
   blocked
 }
 
+enum DocumentVersionStatus {
+  processing
+  prepared
+  policy_blocked
+  active
+  superseded
+  failed
+  deleted
+}
+
 model Document {
   id               String             @id @db.Uuid
   tenantId         String
@@ -70,22 +80,25 @@ model Document {
 }
 
 model DocumentVersion {
-  id                     String               @id @db.Uuid
+  id                     String                @id @db.Uuid
   tenantId               String
-  documentId             String               @db.Uuid
+  documentId             String                @db.Uuid
   version                Int
+  status                 DocumentVersionStatus @default(processing)
   parser                 String?
   parserVersion          String?
   parsedElements         Json?
   warnings               Json?
-  chunkCount             Int                  @default(0)
+  chunkCount             Int                   @default(0)
   redactionPolicyVersion String?
   cloudPolicyDecision    CloudPolicyDecision?
-  embeddingFingerprint   String?              @db.Char(64)
+  embeddingFingerprint   String?               @db.Char(64)
   vectorCollection       String?
   indexedAt              DateTime?
-  createdAt              DateTime             @default(now())
-  document               Document             @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  activatedAt            DateTime?
+  supersededAt           DateTime?
+  createdAt              DateTime              @default(now())
+  document               Document              @relation(fields: [documentId], references: [id], onDelete: Cascade)
 
   @@unique([documentId, version])
   @@index([tenantId, documentId])
@@ -96,6 +109,8 @@ model IngestionJob {
   tenantId             String
   documentId           String             @db.Uuid
   version              Int
+  kind                 String             @default("ingestion")
+  activateOnComplete   Boolean            @default(true)
   status               IngestionStatus    @default(queued)
   step                 String             @default("queued")
   checkpoint           String             @default("queued")
@@ -117,6 +132,25 @@ model IngestionJob {
 
   @@index([tenantId, status])
   @@index([tenantId, documentId])
+}
+
+model DocumentLifecycleAudit {
+  id                   String   @id @db.Uuid
+  tenantId             String
+  userId               String?
+  traceId              String   @db.Uuid
+  documentId           String   @db.Uuid
+  documentVersion      Int?
+  ingestionJobId       String?  @db.Uuid
+  eventType            String
+  outcome              String
+  vectorCollection     String?
+  embeddingFingerprint String?  @db.Char(64)
+  createdAt            DateTime @default(now()) @db.Timestamptz(3)
+
+  @@index([tenantId, documentId, createdAt])
+  @@index([tenantId, eventType, createdAt])
+  @@index([traceId])
 }
 
 model KnowledgeChunk {

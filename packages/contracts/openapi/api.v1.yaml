@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: NexusKB API
-  version: 0.4.0
+  version: 0.5.0
 security:
   - bearerAuth: []
 paths:
@@ -72,6 +72,25 @@ paths:
         '200': { description: Deleted or already absent }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
+  /v1/documents/{documentId}/reindex:
+    parameters:
+      - $ref: '#/components/parameters/DocumentId'
+    post:
+      summary: Create and enqueue a new version while the active version remains queryable
+      responses:
+        '202':
+          description: Reindex queued
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ReindexAccepted' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: Document is not active or another ingestion job is running
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiError' }
   /v1/ingestion-jobs/{jobId}:
     get:
       summary: Get a tenant-scoped ingestion job
@@ -171,6 +190,16 @@ components:
         jobId: { type: string, format: uuid }
         status: { const: queued }
         traceId: { type: string, format: uuid }
+    ReindexAccepted:
+      type: object
+      additionalProperties: false
+      required: [documentId, documentVersion, jobId, status, traceId]
+      properties:
+        documentId: { type: string, format: uuid }
+        documentVersion: { type: integer, minimum: 2 }
+        jobId: { type: string, format: uuid }
+        status: { const: queued }
+        traceId: { type: string, format: uuid }
     ApiError:
       type: object
       required: [error]
@@ -204,11 +233,24 @@ components:
     IngestionJobSummary:
       type: object
       required:
-        [id, documentId, version, status, step, checkpoint, attempts, traceId, retryable, updatedAt]
+        [
+          id,
+          documentId,
+          version,
+          kind,
+          status,
+          step,
+          checkpoint,
+          attempts,
+          traceId,
+          retryable,
+          updatedAt,
+        ]
       properties:
         id: { type: string, format: uuid }
         documentId: { type: string, format: uuid }
         version: { type: integer, minimum: 1 }
+        kind: { type: string, enum: [ingestion, reindex, index_migration] }
         status: { $ref: '#/components/schemas/IngestionStatus' }
         step: { type: string }
         checkpoint: { type: string }

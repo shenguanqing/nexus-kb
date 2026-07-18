@@ -24,6 +24,7 @@ export class IngestionQueue implements OnModuleInit, OnModuleDestroy {
   }
 
   onModuleInit(): void {
+    if (this.config.values.INDEX_MIGRATION_ACTION !== 'none') return;
     this.worker = new Worker<IngestionPayload>(
       'ingestion',
       async (job) => {

@@ -12,11 +12,7 @@ export default tseslint.config(
       globals: globals.node,
       parserOptions: {
         projectService: {
-          allowDefaultProject: [
-            'apps/*/test/*.ts',
-            'apps/*/test/integration/*.ts',
-            'packages/*/test/*.ts',
-          ],
+          allowDefaultProject: ['packages/*/test/*.ts'],
           maximumDefaultProjectFileMatchCount_THIS_WILL_SLOW_DOWN_LINTING: 32,
         },
         tsconfigRootDir: import.meta.dirname,

@@ -18,6 +18,7 @@ import { ChunkingService } from './ingestion/chunking';
 import { CloudPolicyService } from './ingestion/cloud-policy';
 import { RedactionService } from './ingestion/redaction';
 import { IngestionProcessor } from './ingestion/ingestion.processor';
+import { IndexMigrationService } from './ingestion/index-migration.service';
 import { EmbeddingProviderFactory } from './providers/embedding/embedding-provider.factory';
 import { EmbeddingService } from './providers/embedding/embedding.service';
 import { EmbeddingTelemetry } from './providers/embedding/embedding-telemetry';
@@ -70,6 +71,7 @@ import { QueryRetrievalService } from './knowledge/query-retrieval.service';
     RerankProviderFactory,
     RerankService,
     IngestionProcessor,
+    IndexMigrationService,
     IngestionQueue,
     DocumentsService,
   ],

@@ -98,10 +98,12 @@ function chromaPorts(options: { metadataMismatch?: boolean } = {}) {
       : (input.metadata ?? {});
     return Promise.resolve(collection);
   });
+  const getCollection = vi.fn().mockResolvedValue(collection);
   return {
     client: {
       heartbeat: vi.fn().mockResolvedValue(1),
       version: vi.fn().mockResolvedValue('1.5.9'),
+      getCollection,
       getOrCreateCollection,
     },
     collection,
@@ -110,6 +112,7 @@ function chromaPorts(options: { metadataMismatch?: boolean } = {}) {
     query,
     deleteRecords,
     getOrCreateCollection,
+    getCollection,
   };
 }
 
@@ -198,6 +201,28 @@ describe('ChromaVectorStore', () => {
 
     await store.deleteDocument('tenant-a', '6769af9a-a4d0-4dc2-a97d-942584a9c826');
     expect(ports.deleteRecords).toHaveBeenCalledWith({
+      where: {
+        $and: [{ tenantId: 'tenant-a' }, { documentId: '6769af9a-a4d0-4dc2-a97d-942584a9c826' }],
+      },
+    });
+
+    await store.deleteDocumentVersion('tenant-a', '6769af9a-a4d0-4dc2-a97d-942584a9c826', 2);
+    expect(ports.deleteRecords).toHaveBeenLastCalledWith({
+      where: {
+        $and: [
+          { tenantId: 'tenant-a' },
+          { documentId: '6769af9a-a4d0-4dc2-a97d-942584a9c826' },
+          { documentVersion: 2 },
+        ],
+      },
+    });
+
+    await store.deleteDocumentFromCollections('tenant-a', '6769af9a-a4d0-4dc2-a97d-942584a9c826', [
+      'nexuskbtest_alibaba_old',
+      'nexuskbtest_alibaba_old',
+    ]);
+    expect(ports.getCollection).toHaveBeenCalledOnce();
+    expect(ports.deleteRecords).toHaveBeenLastCalledWith({
       where: {
         $and: [{ tenantId: 'tenant-a' }, { documentId: '6769af9a-a4d0-4dc2-a97d-942584a9c826' }],
       },

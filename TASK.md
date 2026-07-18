@@ -1,69 +1,81 @@
 # 当前开发任务
 
 > 项目：知枢 NexusKB
-> 当前阶段：阶段 11——查询 API
+> 当前阶段：阶段 12——删除、版本和重建索引
 > 状态：已完成（2026-07-18）
 
 ---
 
 ## 1. 背景
 
-文档入库、Embedding、Chroma 索引、OIDC/ACL、LLM 和可选 Rerank 基础件已经完成。本轮将这些能力
-串成安全、可观测且能明确拒答的知识查询闭环。
+阶段 11 已完成安全查询闭环。本轮补齐文档生命周期和索引迁移，确保删除覆盖原文件、所有 collection 和
+本地可识别数据；重新索引或更换 Embedding 配置失败时，旧 active version 与旧 collection 继续可用。
 
 ---
 
 ## 2. 当前目标
 
 ```text
-查询输入校验 + Redis 用户/tenant 限流
-→ Query Embedding
-→ Chroma ACL Top 20
-→ active version 复核 + 相邻 chunk 合并
-→ 相关度阈值
-→ 可选 Rerank
-→ LLM 回答与来源编号校验
-→ 引用最终鉴权 + 无正文审计
+单文档 reindex：创建候选版本 → 解析/脱敏/Embedding → stable upsert 回读
+→ PostgreSQL 原子激活 → 保留旧版本回滚
+
+全量索引迁移：新配置 prepare 全部候选 → 质量与完整性验证
+→ 单 transaction activate → 协调 API 配置切换
+
+删除：deleting 墓碑 → 停止任务 → 清理全部 collection
+→ 删除原文件与本地正文 → 保留无正文审计
 ```
 
 ---
 
 ## 3. 本轮任务
 
-### 3.1 API 与安全入口
+### 3.1 删除闭环
 
-- [x] 实现 `POST /v1/knowledge/query` 和版本化请求/响应契约。
-- [x] 问题执行 trim、Unicode NFC、长度和控制字符校验，不接受客户端身份或 where 字段。
-- [x] Redis 原子执行用户级和 tenant 级每分钟限流，Redis 故障时失败关闭。
+- [x] 删除前写入 `deleting` 墓碑并使相关入库任务终止。
+- [x] 根据版本和任务记录清理文档涉及的全部 Chroma collection。
+- [x] 删除原文件、KnowledgeChunk、解析元素、warning、指纹和 collection 标识。
+- [x] 任一步失败保留墓碑，重复 DELETE 可安全补偿。
+- [x] `DocumentLifecycleAudit` 保留删除事实，不保存文档正文。
 
-### 3.2 检索与回答
+### 3.2 版本和单文档 reindex
 
-- [x] 使用文档索引相同的 Embedding Provider、模型、维度和任务模式生成 Query Embedding。
-- [x] 仅通过 `AclPolicy.vectorFilter` 构造 tenant、部门、敏感度和 owner 过滤器。
-- [x] 校验 Chroma metadata，过滤距离阈值，并从 PostgreSQL 合并 active version 相邻 chunk。
-- [x] 可选 Rerank 失败降级为向量顺序，相关度不足时不调用 Rerank 或 LLM。
-- [x] LLM 前和回答返回前再次复核 ACL 与 active version，权限变化时丢弃回答。
-- [x] 校验 `[来源N]`，返回真实 document version、chunk IDs、traceId 和实际模型标识。
+- [x] 实现 `POST /v1/documents/:documentId/reindex` 与 OpenAPI 契约。
+- [x] 创建递增 DocumentVersion 和 `kind=reindex` 的独立任务。
+- [x] 候选失败、策略阻止或删除竞态不影响旧 active version。
+- [x] 向量写入与回读确认完成后，在一个 transaction 中激活新版本并 supersede 旧版本。
+- [x] 文档详情返回版本状态、解析器、chunk 数、指纹、collection 和激活时间。
 
-### 3.3 审计与契约
+### 3.3 全量索引迁移
 
-- [x] 新增 `QueryAudit` migration，仅保存身份范围、问题长度、结果、Provider/model、chunk IDs 和耗时。
-- [x] 问题、回答和片段正文不写入 QueryAudit 或普通业务日志。
-- [x] OpenAPI、环境变量、技术设计、开发规范、运维和前端无答案交互同步更新。
+- [x] `INDEX_MIGRATION_ACTION=prepare` 使用新配置构建不自动激活的候选版本。
+- [x] 迁移进程禁用普通 BullMQ consumer，避免旧配置 consumer 消费候选任务。
+- [x] `activate` 前验证 collection 指纹/cosine 配置和所有 active 文档候选完整性。
+- [x] 用单一 PostgreSQL transaction 原子切换全部 active version；并发变化整体回滚。
+- [x] 保留旧版本和旧 collection，通过恢复旧配置并再次 activate 回滚。
 
 ---
 
 ## 4. 完成条件
 
-- [x] 有足够相关资料时返回带合法来源的回答。
-- [x] 相关度不足时返回 `noAnswer=true`，且 LLM 调用次数为 0。
-- [x] 删除、失效、跨 tenant 或请求期间失去权限的文档不会作为来源返回。
-- [x] 用户/tenant 限流和 Redis 故障均失败关闭。
+- [x] 单文档 reindex 失败时旧版本仍可查询。
+- [x] 全量 prepare 失败时不修改任何 active version。
+- [x] 候选不完整或切换时有并发变化则拒绝激活并整体回滚。
+- [x] 删除完成后原文件、本地正文和所有已知 collection 向量均不可识别恢复。
+- [x] 生命周期审计不包含原文、问题或回答。
 - [x] lint、typecheck、单元测试、build、format check 和 secret scan 通过。
 
 ---
 
-## 5. 下一阶段入口
+## 5. 文档冲突处理
 
-继续阶段 12 会话与缓存，实现会话/消息数据模型、会话列表与详情、删除/归档、摘要和权限收紧后的缓存失效；
-回答与来源仍必须复用阶段 11 的最终授权链路。
+上一版 `TASK.md` 曾把阶段 12 写为“会话与缓存”，但 `docs/05-开发任务清单.md` 的正式阶段 12 是
+“删除、版本和重建索引”，且 `docs/01-项目实施规格.md` 将彻底删除、版本原子激活和 reindex 列为核心范围。
+本轮按仓库规定的文档优先级执行正式阶段 12；会话与消息历史留到后续前端 F2/对应后端契约阶段。
+
+---
+
+## 6. 下一阶段入口
+
+继续阶段 13 可观测性和审计，实现 `/metrics`、HTTP/Provider/队列/解析/检索指标、结构化审计查询与告警说明；
+指标不得使用 userId、documentId 或 traceId 等高基数 label，也不得记录问题、回答或文档正文。

@@ -16,6 +16,8 @@ export interface OperationalLogContext {
   errorCategory?: string;
   checkpoint?: string;
   attempts?: number;
+  documentCount?: number;
+  reusedCount?: number;
 }
 
 @Injectable()

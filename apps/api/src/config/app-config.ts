@@ -116,6 +116,7 @@ const environmentSchema = z
     INGESTION_CONCURRENCY: z.coerce.number().int().min(1).max(32).default(2),
     INGESTION_MAX_ATTEMPTS: z.coerce.number().int().min(1).max(20).default(3),
     INGESTION_RETRY_BASE_DELAY_MS: z.coerce.number().int().min(100).max(60_000).default(1000),
+    INDEX_MIGRATION_ACTION: z.enum(['none', 'prepare', 'activate']).default('none'),
     CHUNK_MAX_TOKENS: z.coerce.number().int().min(64).max(8192).default(600),
     CHUNK_OVERLAP_TOKENS: z.coerce.number().int().min(0).max(2048).default(80),
     REDACTION_POLICY_VERSION: z

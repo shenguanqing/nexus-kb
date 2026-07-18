@@ -1,5 +1,5 @@
 import { Inject, Injectable, Optional } from '@nestjs/common';
-import { ChromaClient } from 'chromadb';
+import { ChromaClient, ChromaNotFoundError } from 'chromadb';
 import type { Collection, Metadata, Where } from 'chromadb';
 
 import { AppConfig } from '../config/app-config';
@@ -19,7 +19,10 @@ type ChromaCollection = Pick<
   'configuration' | 'delete' | 'get' | 'metadata' | 'query' | 'upsert'
 >;
 
-type ChromaClientPort = Pick<ChromaClient, 'getOrCreateCollection' | 'heartbeat' | 'version'>;
+type ChromaClientPort = Pick<
+  ChromaClient,
+  'getCollection' | 'getOrCreateCollection' | 'heartbeat' | 'version'
+>;
 
 export const CHROMA_CLIENT = Symbol('CHROMA_CLIENT');
 
@@ -152,6 +155,46 @@ export class ChromaVectorStore implements VectorStore {
     try {
       await collection.delete({
         where: { $and: [{ tenantId }, { documentId }] },
+      });
+    } catch (error) {
+      throw new VectorStoreError('unavailable', { cause: error });
+    }
+  }
+
+  async deleteDocumentFromCollections(
+    tenantId: string,
+    documentId: string,
+    collectionNames: string[],
+  ): Promise<void> {
+    const names = [...new Set(collectionNames)];
+    if (names.some((name) => !/^[a-z0-9][a-z0-9_-]{1,127}$/.test(name))) {
+      throw new VectorStoreError('invalid_input');
+    }
+    try {
+      for (const name of names) {
+        try {
+          const collection = await this.client.getCollection({ name });
+          await collection.delete({ where: { $and: [{ tenantId }, { documentId }] } });
+        } catch (error) {
+          if (!(error instanceof ChromaNotFoundError)) throw error;
+        }
+      }
+    } catch (error) {
+      if (error instanceof VectorStoreError) throw error;
+      throw new VectorStoreError('unavailable', { cause: error });
+    }
+  }
+
+  async deleteDocumentVersion(
+    tenantId: string,
+    documentId: string,
+    documentVersion: number,
+  ): Promise<void> {
+    if (!this.isEnabled()) return;
+    const collection = await this.ensureCollection();
+    try {
+      await collection.delete({
+        where: { $and: [{ tenantId }, { documentId }, { documentVersion }] },
       });
     } catch (error) {
       throw new VectorStoreError('unavailable', { cause: error });

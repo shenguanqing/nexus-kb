@@ -50,5 +50,15 @@ export interface VectorStore {
   upsert(chunks: VectorChunk[], vectors: number[][]): Promise<void>;
   query(input: VectorQueryInput): Promise<RetrievedVectorChunk[]>;
   deleteDocument(tenantId: string, documentId: string): Promise<void>;
+  deleteDocumentFromCollections(
+    tenantId: string,
+    documentId: string,
+    collectionNames: string[],
+  ): Promise<void>;
+  deleteDocumentVersion(
+    tenantId: string,
+    documentId: string,
+    documentVersion: number,
+  ): Promise<void>;
   healthCheck(): Promise<void>;
 }
