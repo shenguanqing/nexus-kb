@@ -31,7 +31,15 @@ const identitySchema = z
       .min(1)
       .max(3),
     capabilities: z
-      .array(z.enum(['documents:read', 'documents:write', 'documents:delete', 'audit:read']))
+      .array(
+        z.enum([
+          'documents:read',
+          'documents:write',
+          'documents:delete',
+          'audit:read',
+          'system:read',
+        ]),
+      )
       .min(1)
       .max(16),
     defaultSensitivity: z.enum(['public', 'internal', 'confidential']),

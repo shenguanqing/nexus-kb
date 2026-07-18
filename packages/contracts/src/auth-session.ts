@@ -5,6 +5,7 @@ export const capabilitySchema = z.enum([
   'documents:write',
   'documents:delete',
   'audit:read',
+  'system:read',
 ]);
 
 export const sensitivitySchema = z.enum(['public', 'internal', 'confidential']);

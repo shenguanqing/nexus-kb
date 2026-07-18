@@ -11,6 +11,7 @@ export const CAPABILITIES = [
   'documents:write',
   'documents:delete',
   'audit:read',
+  'system:read',
 ] as const;
 export type Capability = (typeof CAPABILITIES)[number];
 

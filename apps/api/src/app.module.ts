@@ -42,6 +42,8 @@ import { AuditController } from './audit/audit.controller';
 import { AuditService } from './audit/audit.service';
 import { MetricsController } from './observability/metrics.controller';
 import { MetricsService } from './observability/metrics.service';
+import { SystemController } from './system/system.controller';
+import { SystemService } from './system/system.service';
 
 @Module({
   controllers: [
@@ -51,6 +53,7 @@ import { MetricsService } from './observability/metrics.service';
     DocumentsController,
     KnowledgeController,
     AuditController,
+    SystemController,
   ],
   providers: [
     AppConfig,
@@ -88,6 +91,7 @@ import { MetricsService } from './observability/metrics.service';
     IngestionQueue,
     DocumentsService,
     AuditService,
+    SystemService,
   ],
 })
 export class AppModule {}

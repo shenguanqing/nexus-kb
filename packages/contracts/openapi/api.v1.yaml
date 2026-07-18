@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: NexusKB API
-  version: 0.7.0
+  version: 0.8.0
 security:
   - bearerAuth: []
 paths:
@@ -49,6 +49,28 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ApiError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /v1/system/providers:
+    get:
+      summary: Return sanitized model Provider configuration summaries
+      responses:
+        '200':
+          description: Provider identifiers, models, endpoint hosts, credential flags and index fingerprint
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProviderStatusResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /v1/system/status:
+    get:
+      summary: Return sanitized dependency, ingestion queue and storage status
+      responses:
+        '200':
+          description: Current system status without internal addresses or stack traces
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SystemStatusResponse' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
   /v1/knowledge/query:
@@ -303,8 +325,82 @@ components:
               type: array
               items:
                 type: string
-                enum: [documents:read, documents:write, documents:delete, audit:read]
+                enum: [documents:read, documents:write, documents:delete, audit:read, system:read]
             defaultSensitivity: { type: string, enum: [public, internal, confidential] }
+    ProviderStatus:
+      type: object
+      additionalProperties: false
+      required:
+        [
+          kind,
+          provider,
+          model,
+          configurationStatus,
+          endpointHost,
+          region,
+          dimensions,
+          credentialConfigured,
+          fingerprint,
+        ]
+      properties:
+        kind: { type: string, enum: [embedding, llm, llm_fallback, rerank] }
+        provider: { type: [string, 'null'] }
+        model: { type: [string, 'null'] }
+        configurationStatus: { type: string, enum: [configured, disabled] }
+        endpointHost: { type: [string, 'null'] }
+        region: { type: [string, 'null'] }
+        dimensions: { type: [integer, 'null'], minimum: 1 }
+        credentialConfigured: { type: boolean }
+        fingerprint: { type: [string, 'null'], pattern: '^[0-9a-f]{64}$' }
+    ProviderStatusResponse:
+      type: object
+      additionalProperties: false
+      required: [providers, syntheticCheck]
+      properties:
+        providers:
+          type: array
+          items: { $ref: '#/components/schemas/ProviderStatus' }
+        syntheticCheck:
+          type: object
+          additionalProperties: false
+          required: [status, checkedAt]
+          properties:
+            status: { const: not_configured }
+            checkedAt: { type: 'null' }
+    SystemComponent:
+      type: object
+      additionalProperties: false
+      required: [id, status, reason]
+      properties:
+        id:
+          type: string
+          enum: [api, postgres, redis, chroma, parserWorker, rawDocs]
+        status: { type: string, enum: [up, down] }
+        reason:
+          type: [string, 'null']
+          enum: [unavailable, unhealthy, configuration_mismatch, null]
+    SystemStatusResponse:
+      type: object
+      additionalProperties: false
+      required: [status, checkedAt, components, ingestionQueue, rawDocsDiskUsageRatio]
+      properties:
+        status: { type: string, enum: [ready, degraded] }
+        checkedAt: { type: string, format: date-time }
+        components:
+          type: array
+          items: { $ref: '#/components/schemas/SystemComponent' }
+        ingestionQueue:
+          type: object
+          additionalProperties: false
+          required: [status, waiting, active, delayed, failed, oldestWaitSeconds]
+          properties:
+            status: { type: string, enum: [up, down] }
+            waiting: { type: [integer, 'null'], minimum: 0 }
+            active: { type: [integer, 'null'], minimum: 0 }
+            delayed: { type: [integer, 'null'], minimum: 0 }
+            failed: { type: [integer, 'null'], minimum: 0 }
+            oldestWaitSeconds: { type: [number, 'null'], minimum: 0 }
+        rawDocsDiskUsageRatio: { type: [number, 'null'], minimum: 0, maximum: 1 }
     AuditEventType:
       type: string
       enum: [query, document_lifecycle, cloud_policy]

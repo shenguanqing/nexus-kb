@@ -57,6 +57,18 @@ export {
   type AuditQueryResponse,
 } from './audit';
 export {
+  providerConfigurationStatusSchema,
+  providerKindSchema,
+  providerStatusResponseSchema,
+  providerStatusSchema,
+  systemComponentIdSchema,
+  systemStatusResponseSchema,
+  type ProviderStatus,
+  type ProviderStatusResponse,
+  type SystemComponentId,
+  type SystemStatusResponse,
+} from './system';
+export {
   knowledgeQueryRequestSchema,
   knowledgeQueryResponseSchema,
   knowledgeSourceSchema,

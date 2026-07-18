@@ -46,6 +46,16 @@ export const router = createRouter({
           component: () => import('@/views/AuditView.vue'),
           meta: { title: '审计中心', capabilities: ['audit:read'] },
         },
+        {
+          path: 'settings/providers',
+          component: () => import('@/views/ProviderSettingsView.vue'),
+          meta: { title: '模型 Provider', capabilities: ['system:read'] },
+        },
+        {
+          path: 'system/status',
+          component: () => import('@/views/SystemStatusView.vue'),
+          meta: { title: '系统状态', capabilities: ['system:read'] },
+        },
       ],
     },
     {
