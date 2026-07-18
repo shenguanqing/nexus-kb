@@ -44,25 +44,25 @@ enum CloudPolicyDecision {
 }
 
 model Document {
-  id            String             @id @db.Uuid
-  tenantId      String
-  sourceName    String
-  storageKey    String             @unique
-  mimeType      String
-  contentSha256 String
-  deduplicationKey String?          @db.Char(64)
-  department    String
-  sensitivity   Sensitivity
-  ownerId       String
-  activeVersion Int?
-  status        DocumentStatus     @default(uploaded)
-  createdAt     DateTime           @default(now())
-  updatedAt     DateTime           @updatedAt
-  deletedAt     DateTime?
-  versions      DocumentVersion[]
-  jobs          IngestionJob[]
-  chunks        KnowledgeChunk[]
-  policyEvents  CloudPolicyEvent[]
+  id               String             @id @db.Uuid
+  tenantId         String
+  sourceName       String
+  storageKey       String             @unique
+  mimeType         String
+  contentSha256    String
+  deduplicationKey String?            @db.Char(64)
+  department       String
+  sensitivity      Sensitivity
+  ownerId          String
+  activeVersion    Int?
+  status           DocumentStatus     @default(uploaded)
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+  deletedAt        DateTime?
+  versions         DocumentVersion[]
+  jobs             IngestionJob[]
+  chunks           KnowledgeChunk[]
+  policyEvents     CloudPolicyEvent[]
 
   @@index([tenantId, status])
   @@index([tenantId, createdAt])
@@ -162,4 +162,29 @@ model CloudPolicyEvent {
   @@unique([ingestionJobId])
   @@index([tenantId, documentId, createdAt])
   @@index([tenantId, decision, createdAt])
+}
+
+model QueryAudit {
+  id                String   @id @db.Uuid
+  traceId           String   @unique @db.Uuid
+  tenantId          String
+  userId            String
+  queryLength       Int
+  outcome           String
+  resultCount       Int      @default(0)
+  sourceChunkIds    Json
+  embeddingProvider String?
+  embeddingModel    String?
+  rerankProvider    String?
+  rerankModel       String?
+  rerankDegraded    Boolean  @default(false)
+  llmProvider       String?
+  llmModel          String?
+  fallbackUsed      Boolean  @default(false)
+  errorCode         String?
+  durationMs        Int
+  createdAt         DateTime @default(now()) @db.Timestamptz(3)
+
+  @@index([tenantId, createdAt])
+  @@index([tenantId, userId, createdAt])
 }

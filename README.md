@@ -3,7 +3,8 @@
 知枢 NexusKB 是企业级知识库项目。当前已完成上传、解析、分块脱敏、Alibaba Embedding 抽象和
 Chroma 安全索引激活，正在收尾前序阶段的去重、checkpoint、分类重试和失败任务查询。
 
-完整 ACL、查询编排、LLM Provider、OIDC/SSO 和前端仍在后续阶段，进度以 [`TASK.md`](./TASK.md) 为准。
+查询 API、ACL 检索编排、LLM/Rerank Provider 和 OIDC/SSO 后端基础链路已经完成；会话、前端与评测仍在
+后续阶段，进度以 [`TASK.md`](./TASK.md) 为准。
 
 ## 环境要求
 
@@ -145,6 +146,14 @@ RUN_PAID_PROVIDER_TESTS=true pnpm --filter @nexus-kb/api test:provider:smoke
 - 删除文档时先按 tenantId + documentId 删除向量，再清理 PostgreSQL chunk 和原文件。
 - 文档仅在 Embedding、Chroma upsert 和写入校验全部成功后原子切换为 `active`。
 - 默认 `EMBEDDING_PROVIDER=none` 时仅检查 Chroma 连通性，不创建 collection，也不调用付费模型。
+
+## 查询 API
+
+- `POST /v1/knowledge/query` 依次执行输入校验、Redis 双层限流、Query Embedding、Chroma ACL Top K、
+  active version 复核、相邻 chunk 合并、阈值拒答、可选 Rerank、LLM 和引用最终复核。
+- 相关度不足不会调用 LLM；权限在生成期间发生变化时丢弃回答并返回安全的无答案响应。
+- `QueryAudit` 只记录 traceId、身份范围、问题长度、Provider/model、chunk IDs、结果与耗时，不记录问题、
+  回答或片段正文。
 
 ## 入库可靠性
 

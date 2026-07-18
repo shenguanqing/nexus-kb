@@ -5,6 +5,32 @@ info:
 security:
   - bearerAuth: []
 paths:
+  /v1/knowledge/query:
+    post:
+      summary: Answer a knowledge question with tenant-scoped sources
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/KnowledgeQueryRequest' }
+      responses:
+        '200':
+          description: Grounded answer or explicit no-answer response
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/KnowledgeQueryResponse' }
+        '400':
+          description: Invalid question
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '429':
+          description: User or tenant query rate limit exceeded
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiError' }
   /v1/documents:
     post:
       summary: Upload a document and enqueue ingestion
@@ -89,6 +115,54 @@ components:
       required: true
       schema: { type: string, format: uuid }
   schemas:
+    KnowledgeQueryRequest:
+      type: object
+      additionalProperties: false
+      required: [question]
+      properties:
+        question: { type: string, minLength: 2, maxLength: 2000 }
+    KnowledgeSource:
+      type: object
+      additionalProperties: false
+      required: [index, documentId, documentVersion, chunkIds, sourceName, page, sheet, sectionPath]
+      properties:
+        index: { type: integer, minimum: 1 }
+        documentId: { type: string, format: uuid }
+        documentVersion: { type: integer, minimum: 1 }
+        chunkIds:
+          type: array
+          minItems: 1
+          items: { type: string, pattern: '^[0-9a-f]{64}$' }
+        sourceName: { type: string }
+        page: { type: [integer, 'null'], minimum: 1 }
+        sheet: { type: [string, 'null'] }
+        sectionPath:
+          type: array
+          items: { type: string }
+    KnowledgeQueryResponse:
+      type: object
+      additionalProperties: false
+      required: [answer, noAnswer, reason, traceId, sources, model, rerankDegraded]
+      properties:
+        answer: { type: string, minLength: 1 }
+        noAnswer: { type: boolean }
+        reason:
+          { type: [string, 'null'], enum: [insufficient_relevance, authorization_changed, null] }
+        traceId: { type: string, format: uuid }
+        sources:
+          type: array
+          items: { $ref: '#/components/schemas/KnowledgeSource' }
+        model:
+          oneOf:
+            - type: object
+              additionalProperties: false
+              required: [provider, model, fallbackUsed]
+              properties:
+                provider: { type: string }
+                model: { type: string }
+                fallbackUsed: { type: boolean }
+            - type: 'null'
+        rerankDegraded: { type: boolean }
     UploadAccepted:
       type: object
       required: [documentId, jobId, status, traceId]

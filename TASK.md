@@ -1,68 +1,69 @@
 # 当前开发任务
 
 > 项目：知枢 NexusKB
-> 当前阶段：阶段 4 补强——CAD 文件解析
-> 状态：已完成（2026-07-17）
+> 当前阶段：阶段 11——查询 API
+> 状态：已完成（2026-07-18）
 
 ---
 
 ## 1. 背景
 
-阶段 4 原有 TXT/Markdown、DOCX 和 XLSX 解析已经完成，但企业工程知识库关键的 CAD 仍缺少 DXF
-解析与 DWG 转换边界。本轮在不改变 Worker 架构职责的前提下补齐 CAD 入库链路。
+文档入库、Embedding、Chroma 索引、OIDC/ACL、LLM 和可选 Rerank 基础件已经完成。本轮将这些能力
+串成安全、可观测且能明确拒答的知识查询闭环。
 
 ---
 
 ## 2. 当前目标
 
 ```text
-DWG / DXF 上传安全校验
-→ 异步 Parser Worker
-→ DWG 在私有临时目录转换为 DXF
-→ ezdxf 正常读取 / 严格 recover
-→ 图纸摘要 + 文字 + 块属性 + 尺寸
-→ TypeScript 分块、脱敏与后续索引
+查询输入校验 + Redis 用户/tenant 限流
+→ Query Embedding
+→ Chroma ACL Top 20
+→ active version 复核 + 相邻 chunk 合并
+→ 相关度阈值
+→ 可选 Rerank
+→ LLM 回答与来源编号校验
+→ 引用最终鉴权 + 无正文审计
 ```
 
 ---
 
 ## 3. 本轮任务
 
-### 3.1 DXF 上传与契约
+### 3.1 API 与安全入口
 
-- [x] API 上传白名单、MIME 和 DXF signature 校验支持 `.dxf`。
-- [x] ingestion storageKey 契约允许 UUID `.dxf`。
-- [x] Worker MIME 路由支持 DXF 和 DWG。
+- [x] 实现 `POST /v1/knowledge/query` 和版本化请求/响应契约。
+- [x] 问题执行 trim、Unicode NFC、长度和控制字符校验，不接受客户端身份或 where 字段。
+- [x] Redis 原子执行用户级和 tenant 级每分钟限流，Redis 故障时失败关闭。
 
-### 3.2 DXF 结构化解析
+### 3.2 检索与回答
 
-- [x] 固定 `ezdxf 1.4.4`。
-- [x] 提取 DXF 版本、单位、布局、图层与实体统计摘要。
-- [x] 提取 TEXT、MTEXT、ATTRIB、ATTDEF 和 DIMENSION。
-- [x] 递归提取嵌套块内容，并限制实体数、递归深度和输出元素数。
-- [x] 对可恢复 ASCII 结构错误使用 strict recover，并返回安全 warning。
+- [x] 使用文档索引相同的 Embedding Provider、模型、维度和任务模式生成 Query Embedding。
+- [x] 仅通过 `AclPolicy.vectorFilter` 构造 tenant、部门、敏感度和 owner 过滤器。
+- [x] 校验 Chroma metadata，过滤距离阈值，并从 PostgreSQL 合并 active version 相邻 chunk。
+- [x] 可选 Rerank 失败降级为向量顺序，相关度不足时不调用 Rerank 或 LLM。
+- [x] LLM 前和回答返回前再次复核 ACL 与 active version，权限变化时丢弃回答。
+- [x] 校验 `[来源N]`，返回真实 document version、chunk IDs、traceId 和实际模型标识。
 
-### 3.3 DWG 自动转换
+### 3.3 审计与契约
 
-- [x] API 校验 DWG MIME 与 `AC10xx` signature，storageKey 契约允许 UUID `.dwg`。
-- [x] Worker 使用服务端固定绝对路径调用 ODA File Converter，不接受用户命令或路径。
-- [x] 转换在任务私有临时目录完成，限制超时、输出大小并在结束时清理 DXF。
-- [x] 转换产物复用 ezdxf 解析器，并返回转换器/解析器版本和安全 warning。
-- [x] 入库任务增加 `converting` 状态，前端使用不确定进度条展示真实转换阶段。
+- [x] 新增 `QueryAudit` migration，仅保存身份范围、问题长度、结果、Provider/model、chunk IDs 和耗时。
+- [x] 问题、回答和片段正文不写入 QueryAudit 或普通业务日志。
+- [x] OpenAPI、环境变量、技术设计、开发规范、运维和前端无答案交互同步更新。
 
 ---
 
 ## 4. 完成条件
 
-- [x] 合法 DXF 可从 API 上传并进入现有异步解析链路。
-- [x] 伪造 DXF、损坏 DXF、路径逃逸和资源超限失败关闭。
-- [x] CAD 输出保留布局、图层、entity type、handle、块路径等来源 metadata。
-- [x] DWG 可直接上传；转换器路径、参数、临时目录和资源限制均由服务端控制。
-- [x] lint、typecheck、单元测试、build 和 format check 通过。
+- [x] 有足够相关资料时返回带合法来源的回答。
+- [x] 相关度不足时返回 `noAnswer=true`，且 LLM 调用次数为 0。
+- [x] 删除、失效、跨 tenant 或请求期间失去权限的文档不会作为来源返回。
+- [x] 用户/tenant 限流和 Redis 故障均失败关闭。
+- [x] lint、typecheck、单元测试、build、format check 和 secret scan 通过。
 
 ---
 
 ## 5. 下一阶段入口
 
-CAD 补强完成后继续进入查询 API，实现查询输入校验、Query Embedding、ACL Top K、相邻块合并、
-相关度阈值、LLM 回答、审计和无答案拒答。
+继续阶段 12 会话与缓存，实现会话/消息数据模型、会话列表与详情、删除/归档、摘要和权限收紧后的缓存失效；
+回答与来源仍必须复用阶段 11 的最终授权链路。

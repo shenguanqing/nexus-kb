@@ -174,6 +174,13 @@ const environmentSchema = z
     RERANK_REGION: z.string().trim().max(64).default('cn-beijing'),
     RERANK_TOP_K: z.coerce.number().int().min(1).max(100).default(5),
     RERANK_REQUEST_TIMEOUT_MS: z.coerce.number().int().min(100).max(300_000).default(60_000),
+    QUERY_RECALL_TOP_K: z.coerce.number().int().min(1).max(100).default(20),
+    QUERY_MAX_DISTANCE: z.coerce.number().min(0).max(2).default(0.45),
+    QUERY_NEIGHBOR_WINDOW: z.coerce.number().int().min(0).max(3).default(1),
+    QUERY_MAX_MERGED_CONTEXT_CHARS: z.coerce.number().int().min(1000).max(100_000).default(20_000),
+    QUERY_MAX_RERANK_INPUT_CHARS: z.coerce.number().int().min(1000).max(1_000_000).default(120_000),
+    QUERY_USER_RATE_LIMIT_PER_MINUTE: z.coerce.number().int().min(1).max(1000).default(20),
+    QUERY_TENANT_RATE_LIMIT_PER_MINUTE: z.coerce.number().int().min(1).max(100_000).default(200),
     VECTOR_STORE_PROVIDER: z.enum(['chroma']).default('chroma'),
     CHROMA_TENANT: z.string().trim().min(1).max(128).default('default_tenant'),
     CHROMA_DATABASE: z.string().trim().min(1).max(128).default('default_database'),
@@ -372,6 +379,19 @@ export function parseEnvironment(input: NodeJS.ProcessEnv): Environment {
   if (parsed.data.CHUNK_OVERLAP_TOKENS >= parsed.data.CHUNK_MAX_TOKENS) {
     throw new Error(
       'Invalid application configuration: CHUNK_OVERLAP_TOKENS must be less than CHUNK_MAX_TOKENS',
+    );
+  }
+  if (
+    parsed.data.RERANK_TOP_K > parsed.data.QUERY_RECALL_TOP_K ||
+    parsed.data.QUERY_RECALL_TOP_K > parsed.data.CHROMA_QUERY_MAX_TOP_K
+  ) {
+    throw new Error(
+      'Invalid application configuration: RERANK_TOP_K <= QUERY_RECALL_TOP_K <= CHROMA_QUERY_MAX_TOP_K',
+    );
+  }
+  if (parsed.data.QUERY_MAX_MERGED_CONTEXT_CHARS > parsed.data.QUERY_MAX_RERANK_INPUT_CHARS) {
+    throw new Error(
+      'Invalid application configuration: QUERY_MAX_MERGED_CONTEXT_CHARS <= QUERY_MAX_RERANK_INPUT_CHARS',
     );
   }
   if (parsed.data.NODE_ENV === 'production' && !parsed.data.AUTH_REQUIRED) {

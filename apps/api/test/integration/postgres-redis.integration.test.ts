@@ -6,6 +6,8 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { ingestionPayloadSchema } from '@nexus-kb/contracts';
 import { AclPolicy } from '../../src/auth/acl-policy';
 import type { Identity } from '../../src/auth/identity';
+import type { AppConfig } from '../../src/config/app-config';
+import { QueryRateLimiter } from '../../src/knowledge/query-rate-limiter';
 
 describe('PostgreSQL and Redis integration', () => {
   const prisma = new PrismaClient();
@@ -25,6 +27,7 @@ describe('PostgreSQL and Redis integration', () => {
   });
 
   afterAll(async () => {
+    await prisma.queryAudit.deleteMany({ where: { tenantId: { in: [tenantA, tenantB] } } });
     await prisma.document.deleteMany({
       where: {
         id: {
@@ -144,6 +147,33 @@ describe('PostgreSQL and Redis integration', () => {
     expect(stored?.data).toEqual(payload);
     expect(JSON.stringify(stored?.data)).not.toContain('content');
     expect(JSON.stringify(stored?.data)).not.toContain('tenantId');
+  });
+
+  it('atomically enforces user and tenant query limits in Redis', async () => {
+    const limiter = new QueryRateLimiter({
+      values: {
+        REDIS_URL: process.env.REDIS_URL,
+        QUERY_USER_RATE_LIMIT_PER_MINUTE: 1,
+        QUERY_TENANT_RATE_LIMIT_PER_MINUTE: 10,
+      },
+    } as AppConfig);
+    const rateIdentity: Identity = {
+      tenantId: `rate-tenant-${randomUUID()}`,
+      userId: `rate-user-${randomUUID()}`,
+      department: 'finance',
+      roles: [],
+      allowedSensitivities: ['internal'],
+      capabilities: ['documents:read'],
+      defaultSensitivity: 'internal',
+    };
+    try {
+      await expect(limiter.assertAllowed(rateIdentity)).resolves.toBeUndefined();
+      await expect(limiter.assertAllowed(rateIdentity)).rejects.toMatchObject({
+        code: 'QUERY_RATE_LIMITED',
+      });
+    } finally {
+      limiter.onModuleDestroy();
+    }
   });
 
   it('enforces content and ACL deduplication while allowing tenant isolation and re-upload', async () => {
@@ -281,5 +311,29 @@ describe('PostgreSQL and Redis integration', () => {
     ).resolves.toBeNull();
     expect(Object.keys(event)).not.toContain('text');
     expect(JSON.stringify(event)).not.toContain('demo@example.com');
+  });
+
+  it('stores a bodyless query audit with source identifiers', async () => {
+    const audit = await prisma.queryAudit.create({
+      data: {
+        id: randomUUID(),
+        traceId: randomUUID(),
+        tenantId: tenantA,
+        userId: 'integration-user',
+        queryLength: 8,
+        outcome: 'answered',
+        resultCount: 1,
+        sourceChunkIds: ['a'.repeat(64)],
+        embeddingProvider: 'alibaba',
+        embeddingModel: 'text-embedding-v4',
+        llmProvider: 'deepseek',
+        llmModel: 'deepseek-chat',
+        durationMs: 120,
+      },
+    });
+
+    expect(audit.sourceChunkIds).toEqual(['a'.repeat(64)]);
+    expect(Object.keys(audit)).not.toContain('question');
+    expect(Object.keys(audit)).not.toContain('answer');
   });
 });

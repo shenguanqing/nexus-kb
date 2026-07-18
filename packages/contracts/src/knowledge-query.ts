@@ -1,0 +1,67 @@
+import { z } from 'zod';
+
+function containsForbiddenControlCharacter(value: string): boolean {
+  return [...value].some((character) => {
+    const codePoint = character.codePointAt(0) ?? 0;
+    return (codePoint < 32 && ![9, 10, 13].includes(codePoint)) || codePoint === 127;
+  });
+}
+
+export const knowledgeQueryRequestSchema = z
+  .object({
+    question: z
+      .string()
+      .trim()
+      .min(2)
+      .max(2000)
+      .refine((value) => !containsForbiddenControlCharacter(value), 'contains control characters')
+      .transform((value) => value.normalize('NFC')),
+  })
+  .strict();
+
+export const knowledgeSourceSchema = z
+  .object({
+    index: z.number().int().positive(),
+    documentId: z.uuid(),
+    documentVersion: z.number().int().positive(),
+    chunkIds: z.array(z.string().regex(/^[0-9a-f]{64}$/)).min(1),
+    sourceName: z.string().min(1),
+    page: z.number().int().positive().nullable(),
+    sheet: z.string().nullable(),
+    sectionPath: z.array(z.string()),
+  })
+  .strict();
+
+export const knowledgeQueryResponseSchema = z
+  .object({
+    answer: z.string().min(1),
+    noAnswer: z.boolean(),
+    reason: z.enum(['insufficient_relevance', 'authorization_changed']).nullable(),
+    traceId: z.uuid(),
+    sources: z.array(knowledgeSourceSchema),
+    model: z
+      .object({
+        provider: z.string().min(1),
+        model: z.string().min(1),
+        fallbackUsed: z.boolean(),
+      })
+      .strict()
+      .nullable(),
+    rerankDegraded: z.boolean(),
+  })
+  .strict()
+  .superRefine((response, context) => {
+    const invalidNoAnswer =
+      response.noAnswer &&
+      (response.reason === null || response.sources.length > 0 || response.model !== null);
+    const invalidAnswer =
+      !response.noAnswer &&
+      (response.reason !== null || response.sources.length === 0 || response.model === null);
+    if (invalidNoAnswer || invalidAnswer) {
+      context.addIssue({ code: 'custom', message: 'answer state is inconsistent' });
+    }
+  });
+
+export type KnowledgeQueryRequest = z.infer<typeof knowledgeQueryRequestSchema>;
+export type KnowledgeQueryResponse = z.infer<typeof knowledgeQueryResponseSchema>;
+export type KnowledgeSource = z.infer<typeof knowledgeSourceSchema>;

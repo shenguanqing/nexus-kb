@@ -38,6 +38,17 @@ export class KnowledgeContextPolicy {
     stage: KnowledgeContextStage,
     provider?: { id: string; region: string },
   ): boolean {
+    if (
+      stage !== 'citation' &&
+      (!provider ||
+        this.cloudPolicy.evaluate({
+          sensitivity: identity.defaultSensitivity,
+          providerId: provider.id,
+          region: provider.region,
+        }).decision !== 'allowed')
+    ) {
+      return false;
+    }
     return (
       chunks.length > 0 && chunks.every((chunk) => this.canUse(identity, chunk, stage, provider))
     );

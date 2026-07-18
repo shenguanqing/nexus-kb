@@ -31,9 +31,14 @@ import { RerankProviderFactory } from './providers/rerank/rerank-provider.factor
 import { RerankService } from './providers/rerank/rerank.service';
 import { RerankTelemetry } from './providers/rerank/rerank-telemetry';
 import { SourceAuthorizationService } from './knowledge/source-authorization.service';
+import { KnowledgeController } from './knowledge/knowledge.controller';
+import { KnowledgeQueryService } from './knowledge/knowledge-query.service';
+import { QueryAuditService } from './knowledge/query-audit.service';
+import { QueryRateLimiter } from './knowledge/query-rate-limiter';
+import { QueryRetrievalService } from './knowledge/query-retrieval.service';
 
 @Module({
-  controllers: [HealthController, DocumentsController],
+  controllers: [HealthController, DocumentsController, KnowledgeController],
   providers: [
     AppConfig,
     OperationalLogger,
@@ -54,6 +59,10 @@ import { SourceAuthorizationService } from './knowledge/source-authorization.ser
     AnswerSourceValidator,
     KnowledgeContextPolicy,
     SourceAuthorizationService,
+    QueryRateLimiter,
+    QueryRetrievalService,
+    QueryAuditService,
+    KnowledgeQueryService,
     LlmTelemetry,
     LlmProviderFactory,
     LlmService,

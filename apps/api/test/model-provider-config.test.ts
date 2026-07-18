@@ -18,7 +18,27 @@ describe('model provider configuration', () => {
       LLM_PROVIDER: 'none',
       LLM_FALLBACK_PROVIDER: 'none',
       RERANK_PROVIDER: 'none',
+      QUERY_RECALL_TOP_K: 20,
+      RERANK_TOP_K: 5,
+      QUERY_MAX_DISTANCE: 0.45,
     });
+  });
+
+  it('rejects inconsistent query retrieval budgets', () => {
+    expect(() =>
+      parseEnvironment({
+        ...baseEnvironment,
+        QUERY_RECALL_TOP_K: '4',
+        RERANK_TOP_K: '5',
+      }),
+    ).toThrow('RERANK_TOP_K <= QUERY_RECALL_TOP_K <= CHROMA_QUERY_MAX_TOP_K');
+    expect(() =>
+      parseEnvironment({
+        ...baseEnvironment,
+        QUERY_MAX_MERGED_CONTEXT_CHARS: '20000',
+        QUERY_MAX_RERANK_INPUT_CHARS: '10000',
+      }),
+    ).toThrow('QUERY_MAX_MERGED_CONTEXT_CHARS <= QUERY_MAX_RERANK_INPUT_CHARS');
   });
 
   it('requires the selected LLM model, key and HTTPS endpoint', () => {

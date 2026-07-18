@@ -69,4 +69,25 @@ describe('KnowledgeContextPolicy', () => {
     ).toBe(false);
     expect(instance.canUse(identity, confidential, 'citation')).toBe(true);
   });
+
+  it('also applies cloud policy to the question sensitivity before Rerank or LLM', () => {
+    const confidentialQuestionIdentity = {
+      ...identity,
+      defaultSensitivity: 'confidential' as const,
+    };
+    const publicChunk = chunk({ sensitivity: 'public' });
+
+    expect(
+      policy().allAllowed(confidentialQuestionIdentity, [publicChunk], 'rerank', {
+        id: 'alibaba',
+        region: 'cn-beijing',
+      }),
+    ).toBe(false);
+    expect(
+      policy().allAllowed(confidentialQuestionIdentity, [publicChunk], 'llm', {
+        id: 'deepseek',
+        region: 'global',
+      }),
+    ).toBe(false);
+  });
 });

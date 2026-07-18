@@ -5,6 +5,8 @@ export interface RetrievedChunkMetadata {
   documentId: string;
   documentVersion: number;
   chunkId: string;
+  chunkIds?: string[];
+  ordinal?: number;
   sourceName: string;
   department: string;
   sensitivity: Sensitivity;
