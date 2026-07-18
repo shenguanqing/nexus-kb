@@ -39,6 +39,22 @@ a {
 .app-shell.is-collapsed {
   grid-template-columns: 68px 1fr;
 }
+.app-shell.is-collapsed .app-sidebar {
+  padding-inline: 6px;
+}
+.app-shell.is-collapsed .app-sidebar nav a {
+  justify-content: center;
+  gap: 0;
+  padding-inline: 0;
+}
+.app-shell.is-collapsed .app-sidebar nav b,
+.app-shell.is-collapsed .collapse-button span {
+  display: none;
+}
+.app-shell.is-collapsed .collapse-button {
+  justify-content: center;
+  padding-inline: 0;
+}
 .app-header {
   grid-column: 1 / -1;
   display: flex;
@@ -185,6 +201,94 @@ a {
 .page-heading h1 {
   margin: 0 0 24px;
   font-size: 24px;
+}
+.documents-page {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 20px;
+  background: var(--kb-color-surface);
+  border: 1px solid var(--kb-color-border);
+  border-radius: var(--kb-radius-md);
+}
+.documents-toolbar,
+.document-filters,
+.document-error,
+.upload-form dl div {
+  display: flex;
+  align-items: center;
+}
+.documents-toolbar {
+  justify-content: space-between;
+  margin-bottom: 18px;
+}
+.documents-toolbar p {
+  margin: 0;
+  color: var(--kb-color-text-secondary);
+}
+.document-filters {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) repeat(3, 150px) auto auto;
+  gap: 10px;
+  margin-bottom: 18px;
+}
+.document-link {
+  color: var(--kb-color-primary);
+  font-weight: 600;
+}
+.document-error {
+  min-height: 180px;
+  flex-direction: column;
+  justify-content: center;
+  gap: 10px;
+  color: var(--kb-color-text-secondary);
+}
+.document-error strong {
+  color: var(--kb-color-danger);
+}
+.document-pagination {
+  justify-content: flex-end;
+  margin-top: 18px;
+}
+.upload-form label {
+  display: grid;
+  gap: 8px;
+  font-weight: 600;
+}
+.upload-form input[type='file'] {
+  padding: 18px;
+  border: 1px dashed var(--kb-color-border);
+  border-radius: var(--kb-radius-sm);
+  background: var(--kb-color-canvas);
+}
+.upload-form p,
+.upload-form dd {
+  color: var(--kb-color-text-secondary);
+}
+.upload-form dl {
+  margin: 18px 0;
+}
+.upload-form dl div {
+  padding: 8px 0;
+  border-bottom: 1px solid var(--kb-color-border);
+}
+.upload-form dt {
+  width: 90px;
+  font-weight: 600;
+}
+.upload-form dd {
+  margin: 0;
+}
+.upload-warning {
+  padding: 10px 12px;
+  color: var(--kb-color-warning) !important;
+  background: #fff8e8;
+  border-radius: var(--kb-radius-sm);
+}
+.upload-options-state {
+  min-height: 180px;
+  display: grid;
+  place-items: center;
+  color: var(--kb-color-text-secondary);
 }
 .ask-page {
   height: calc(100vh - 112px);
@@ -621,6 +725,9 @@ a {
   .example-grid {
     grid-template-columns: 1fr;
   }
+  .document-filters {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
   .ask-page {
     min-height: 560px;
   }
@@ -694,6 +801,12 @@ a {
     max-width: 90%;
   }
   .source-list {
+    grid-template-columns: 1fr;
+  }
+  .documents-page {
+    padding: 14px;
+  }
+  .document-filters {
     grid-template-columns: 1fr;
   }
 }

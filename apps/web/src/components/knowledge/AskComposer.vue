@@ -18,6 +18,12 @@ function onKeydown(event: KeyboardEvent): void {
   }
 }
 
+function focus(): void {
+  textarea.value?.focus();
+}
+
+defineExpose({ focus });
+
 watch(
   () => props.isSubmitting,
   (value, previous) => {

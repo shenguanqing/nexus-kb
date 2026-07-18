@@ -5,6 +5,11 @@ import { basename, join } from 'node:path';
 import { Transform } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { Injectable } from '@nestjs/common';
+import type {
+  DocumentListRequest,
+  DocumentListResponse,
+  DocumentUploadOptions,
+} from '@nexus-kb/contracts';
 import type { MultipartFile } from '@fastify/multipart';
 import { Prisma } from '@prisma/client';
 
@@ -28,6 +33,96 @@ export class DocumentsService {
     private readonly logger: OperationalLogger,
     private readonly acl: AclPolicy,
   ) {}
+
+  async listDocuments(
+    request: DocumentListRequest,
+    identity: Identity,
+  ): Promise<DocumentListResponse> {
+    this.acl.assertCapability(identity, 'documents:read');
+    const where: Prisma.DocumentWhereInput = {
+      ...this.acl.documentWhere(identity),
+      status: request.status ?? { notIn: ['deleting', 'deleted'] },
+      ...(request.department ? { department: request.department } : {}),
+      ...(request.sensitivity ? { sensitivity: request.sensitivity } : {}),
+      AND: [
+        ...(request.search
+          ? [{ sourceName: { contains: request.search, mode: 'insensitive' as const } }]
+          : []),
+        ...(request.format
+          ? [{ sourceName: { endsWith: `.${request.format}`, mode: 'insensitive' as const } }]
+          : []),
+      ],
+    };
+    const [rows, total] = await this.prisma.$transaction([
+      this.prisma.document.findMany({
+        where,
+        orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
+        skip: (request.page - 1) * request.pageSize,
+        take: request.pageSize,
+        select: {
+          id: true,
+          sourceName: true,
+          mimeType: true,
+          department: true,
+          sensitivity: true,
+          ownerId: true,
+          activeVersion: true,
+          status: true,
+          createdAt: true,
+          updatedAt: true,
+          jobs: {
+            orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
+            take: 1,
+            select: {
+              id: true,
+              status: true,
+              step: true,
+              attempts: true,
+              retryable: true,
+              errorCode: true,
+              updatedAt: true,
+            },
+          },
+        },
+      }),
+      this.prisma.document.count({ where }),
+    ]);
+    return {
+      items: rows.map(({ jobs, createdAt, updatedAt, ...document }) => {
+        const latestJob = jobs[0];
+        return {
+          ...document,
+          createdAt: createdAt.toISOString(),
+          updatedAt: updatedAt.toISOString(),
+          latestJob: latestJob
+            ? { ...latestJob, updatedAt: latestJob.updatedAt.toISOString() }
+            : null,
+        };
+      }),
+      page: request.page,
+      pageSize: request.pageSize,
+      total,
+    };
+  }
+
+  getUploadOptions(identity: Identity): DocumentUploadOptions {
+    this.acl.assertCapability(identity, 'documents:write');
+    return {
+      maxUploadBytes: this.config.values.MAX_UPLOAD_BYTES,
+      acceptedExtensions: [
+        'txt',
+        'md',
+        'docx',
+        'xlsx',
+        'dxf',
+        ...(this.config.values.DWG_CONVERSION_ENABLED ? (['dwg'] as const) : []),
+      ],
+      department: identity.department,
+      allowedSensitivities: identity.allowedSensitivities,
+      defaultSensitivity: identity.defaultSensitivity,
+      dwgConversionEnabled: this.config.values.DWG_CONVERSION_ENABLED,
+    };
+  }
 
   async upload(file: MultipartFile, identity: Identity, traceId: string): Promise<object> {
     this.acl.assertCapability(identity, 'documents:write');

@@ -1,4 +1,16 @@
-import { Controller, Delete, Get, HttpCode, Param, ParseUUIDPipe, Post, Req } from '@nestjs/common';
+import {
+  Controller,
+  Delete,
+  Get,
+  HttpCode,
+  Param,
+  ParseUUIDPipe,
+  Post,
+  Query,
+  Req,
+} from '@nestjs/common';
+import { documentListRequestSchema } from '@nexus-kb/contracts';
+import type { DocumentListResponse, DocumentUploadOptions } from '@nexus-kb/contracts';
 import type { FastifyRequest } from 'fastify';
 
 import { requestIdentity } from '../auth/identity';
@@ -8,6 +20,20 @@ import { DocumentsService } from './documents.service';
 @Controller('v1')
 export class DocumentsController {
   constructor(private readonly documents: DocumentsService) {}
+
+  @Get('documents')
+  list(@Query() query: unknown, @Req() request: FastifyRequest): Promise<DocumentListResponse> {
+    const parsed = documentListRequestSchema.safeParse(query);
+    if (!parsed.success) {
+      throw new ApiException('DOCUMENT_LIST_QUERY_INVALID', '文档列表查询参数不合法', 400);
+    }
+    return this.documents.listDocuments(parsed.data, requestIdentity(request));
+  }
+
+  @Get('documents/upload-options')
+  uploadOptions(@Req() request: FastifyRequest): DocumentUploadOptions {
+    return this.documents.getUploadOptions(requestIdentity(request));
+  }
 
   @Post('documents')
   @HttpCode(202)

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { KnowledgeQueryResponse, KnowledgeSource } from '@nexus-kb/contracts';
-import { ref } from 'vue';
+import { nextTick, ref } from 'vue';
 import { queryKnowledge } from '@/api/knowledge';
 import { ApiError } from '@/api/client';
 import AskComposer from '@/components/knowledge/AskComposer.vue';
@@ -14,6 +14,7 @@ const error = ref<ApiError | null>(null);
 const isSubmitting = ref(false);
 const selectedSource = ref<KnowledgeSource | null>(null);
 const isSourceOpen = ref(false);
+const composer = ref<InstanceType<typeof AskComposer> | null>(null);
 const examples = [
   '报销需要准备哪些材料？',
   '项目验收后的付款周期是多久？',
@@ -42,6 +43,17 @@ function openSource(source: KnowledgeSource): void {
   selectedSource.value = source;
   isSourceOpen.value = true;
 }
+
+async function startNewChat(): Promise<void> {
+  question.value = '';
+  submittedQuestion.value = null;
+  response.value = null;
+  error.value = null;
+  selectedSource.value = null;
+  isSourceOpen.value = false;
+  await nextTick();
+  composer.value?.focus();
+}
 </script>
 
 <template>
@@ -51,17 +63,7 @@ function openSource(source: KnowledgeSource): void {
         <span class="eyebrow">企业知识助手</span>
         <h1>从可信资料中找到答案</h1>
       </div>
-      <button
-        type="button"
-        class="new-chat"
-        @click="
-          response = null;
-          submittedQuestion = null;
-          error = null;
-        "
-      >
-        ＋ 新建问答
-      </button>
+      <button type="button" class="new-chat" @click="startNewChat">＋ 新建问答</button>
     </header>
     <div class="conversation" :class="{ empty: !submittedQuestion && !isSubmitting }">
       <div v-if="!submittedQuestion && !isSubmitting" class="welcome-state">
@@ -99,7 +101,7 @@ function openSource(source: KnowledgeSource): void {
       </div>
       <AssistantAnswer v-if="response" :response="response" @select-source="openSource" />
     </div>
-    <AskComposer v-model="question" :is-submitting="isSubmitting" @submit="submit" />
+    <AskComposer ref="composer" v-model="question" :is-submitting="isSubmitting" @submit="submit" />
     <p class="composer-caption">
       知枢可能出错，请通过来源核验重要信息。问题与回答不会保存到浏览器持久化存储。
     </p>

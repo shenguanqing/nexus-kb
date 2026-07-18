@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: NexusKB API
-  version: 0.6.0
+  version: 0.7.0
 security:
   - bearerAuth: []
 paths:
@@ -78,6 +78,29 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/ApiError' }
   /v1/documents:
+    get:
+      summary: List ACL-visible documents with server-side filtering and pagination
+      parameters:
+        - { name: search, in: query, schema: { type: string, maxLength: 200 } }
+        - { name: department, in: query, schema: { type: string, maxLength: 128 } }
+        - { name: sensitivity, in: query, schema: { $ref: '#/components/schemas/Sensitivity' } }
+        - { name: status, in: query, schema: { $ref: '#/components/schemas/DocumentStatus' } }
+        - { name: format, in: query, schema: { $ref: '#/components/schemas/DocumentFormat' } }
+        - { name: page, in: query, schema: { type: integer, minimum: 1, default: 1 } }
+        - {
+            name: pageSize,
+            in: query,
+            schema: { type: integer, minimum: 1, maximum: 100, default: 20 },
+          }
+      responses:
+        '200':
+          description: ACL-filtered document page
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DocumentListResponse' }
+        '400': { description: Invalid list query }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
     post:
       summary: Upload a document and enqueue ingestion
       requestBody:
@@ -100,6 +123,17 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ApiError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /v1/documents/upload-options:
+    get:
+      summary: Return server-owned upload limits and identity-scoped metadata options
+      responses:
+        '200':
+          description: Upload options for the authenticated identity
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DocumentUploadOptions' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
   /v1/documents/{documentId}:
@@ -180,6 +214,9 @@ components:
       required: true
       schema: { type: string, format: uuid }
   schemas:
+    Sensitivity:
+      type: string
+      enum: [public, internal, confidential]
     AuthSession:
       type: object
       additionalProperties: false
@@ -346,6 +383,84 @@ components:
     DocumentStatus:
       type: string
       enum: [uploaded, processing, prepared, active, policy_blocked, failed, deleting, deleted]
+    DocumentFormat:
+      type: string
+      enum: [txt, md, docx, xlsx, dxf, dwg]
+    DocumentListItem:
+      type: object
+      additionalProperties: false
+      required:
+        [
+          id,
+          sourceName,
+          mimeType,
+          department,
+          sensitivity,
+          ownerId,
+          activeVersion,
+          status,
+          latestJob,
+          createdAt,
+          updatedAt,
+        ]
+      properties:
+        id: { type: string, format: uuid }
+        sourceName: { type: string }
+        mimeType: { type: string }
+        department: { type: string }
+        sensitivity: { $ref: '#/components/schemas/Sensitivity' }
+        ownerId: { type: string }
+        activeVersion: { type: [integer, 'null'], minimum: 1 }
+        status: { $ref: '#/components/schemas/DocumentStatus' }
+        latestJob:
+          oneOf:
+            - { $ref: '#/components/schemas/LatestIngestionJob' }
+            - { type: 'null' }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    LatestIngestionJob:
+      type: object
+      additionalProperties: false
+      required: [id, status, step, attempts, retryable, errorCode, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        status: { $ref: '#/components/schemas/IngestionStatus' }
+        step: { type: string }
+        attempts: { type: integer, minimum: 0 }
+        retryable: { type: boolean }
+        errorCode: { type: [string, 'null'] }
+        updatedAt: { type: string, format: date-time }
+    DocumentListResponse:
+      type: object
+      additionalProperties: false
+      required: [items, page, pageSize, total]
+      properties:
+        items:
+          { type: array, maxItems: 100, items: { $ref: '#/components/schemas/DocumentListItem' } }
+        page: { type: integer, minimum: 1 }
+        pageSize: { type: integer, minimum: 1, maximum: 100 }
+        total: { type: integer, minimum: 0 }
+    DocumentUploadOptions:
+      type: object
+      additionalProperties: false
+      required:
+        [
+          maxUploadBytes,
+          acceptedExtensions,
+          department,
+          allowedSensitivities,
+          defaultSensitivity,
+          dwgConversionEnabled,
+        ]
+      properties:
+        maxUploadBytes: { type: integer, minimum: 1 }
+        acceptedExtensions:
+          { type: array, minItems: 1, items: { $ref: '#/components/schemas/DocumentFormat' } }
+        department: { type: string }
+        allowedSensitivities:
+          { type: array, minItems: 1, items: { $ref: '#/components/schemas/Sensitivity' } }
+        defaultSensitivity: { $ref: '#/components/schemas/Sensitivity' }
+        dwgConversionEnabled: { type: boolean }
     IngestionStatus:
       type: string
       enum:

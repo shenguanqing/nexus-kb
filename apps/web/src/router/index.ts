@@ -28,8 +28,13 @@ export const router = createRouter({
         },
         {
           path: 'documents',
-          component: () => import('@/views/ComingSoonView.vue'),
+          component: () => import('@/views/DocumentsView.vue'),
           meta: { title: '文档管理', capabilities: ['documents:read'] },
+        },
+        {
+          path: 'documents/:id',
+          component: () => import('@/views/ComingSoonView.vue'),
+          meta: { title: '文档详情', capabilities: ['documents:read'] },
         },
         {
           path: 'audit',

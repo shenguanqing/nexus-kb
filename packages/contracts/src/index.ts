@@ -51,3 +51,17 @@ export {
   type KnowledgeQueryResponse,
   type KnowledgeSource,
 } from './knowledge-query';
+export {
+  documentFormatSchema,
+  documentListItemSchema,
+  documentListRequestSchema,
+  documentListResponseSchema,
+  documentStatusSchema,
+  documentUploadAcceptedSchema,
+  documentUploadOptionsSchema,
+  type DocumentListItem,
+  type DocumentListRequest,
+  type DocumentListResponse,
+  type DocumentUploadOptions,
+  type DocumentUploadAccepted,
+} from './documents';

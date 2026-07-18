@@ -27,6 +27,86 @@ const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() } as unknown as Op
 const acl = new AclPolicy();
 
 describe('DocumentsService tenant isolation', () => {
+  it('lists only ACL-visible documents with server-side pagination and filters', async () => {
+    const findMany = vi.fn().mockResolvedValue([
+      {
+        id: '6769af9a-a4d0-4dc2-a97d-942584a9c826',
+        sourceName: '制度.md',
+        mimeType: 'text/markdown',
+        department: 'finance',
+        sensitivity: 'internal',
+        ownerId: 'user-a',
+        activeVersion: 1,
+        status: 'active',
+        createdAt: new Date('2026-07-18T06:00:00.000Z'),
+        updatedAt: new Date('2026-07-18T07:00:00.000Z'),
+        jobs: [],
+      },
+    ]);
+    const count = vi.fn().mockResolvedValue(21);
+    const service = new DocumentsService(
+      {} as AppConfig,
+      {
+        document: { findMany, count },
+        $transaction: (operations: Array<Promise<unknown>>) => Promise.all(operations),
+      } as unknown as PrismaService,
+      {} as IngestionQueue,
+      {} as ChromaVectorStore,
+      logger,
+      acl,
+    );
+
+    const result = await service.listDocuments(
+      {
+        search: '制度',
+        format: 'md',
+        sensitivity: 'internal',
+        page: 2,
+        pageSize: 20,
+      },
+      identity,
+    );
+
+    expect(result).toMatchObject({ page: 2, pageSize: 20, total: 21 });
+    expect(result.items[0]?.updatedAt).toBe('2026-07-18T07:00:00.000Z');
+    const [query] = findMany.mock.calls[0] as unknown as [
+      {
+        where: { tenantId: string; sensitivity: unknown; OR: unknown; AND: unknown[] };
+        skip: number;
+        take: number;
+      },
+    ];
+    expect(query.where.tenantId).toBe('tenant-a');
+    expect(query.where.OR).toEqual(
+      expect.arrayContaining([{ department: 'finance' }, { ownerId: 'user-a' }]),
+    );
+    expect(query.where.AND).toHaveLength(2);
+    expect(query.skip).toBe(20);
+    expect(query.take).toBe(20);
+  });
+
+  it('returns upload options from server configuration and signed identity', () => {
+    const service = new DocumentsService(
+      {
+        values: { MAX_UPLOAD_BYTES: 4096, DWG_CONVERSION_ENABLED: false },
+      } as unknown as AppConfig,
+      {} as PrismaService,
+      {} as IngestionQueue,
+      {} as ChromaVectorStore,
+      logger,
+      acl,
+    );
+
+    expect(service.getUploadOptions(identity)).toEqual({
+      maxUploadBytes: 4096,
+      acceptedExtensions: ['txt', 'md', 'docx', 'xlsx', 'dxf'],
+      department: 'finance',
+      allowedSensitivities: ['public', 'internal'],
+      defaultSensitivity: 'internal',
+      dwgConversionEnabled: false,
+    });
+  });
+
   it('queues a new version without changing the active document', async () => {
     const enqueue = vi.fn().mockResolvedValue(undefined);
     const createVersion = vi.fn().mockResolvedValue({});
