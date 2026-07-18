@@ -5,6 +5,7 @@ import Redis from 'ioredis';
 import type { Identity } from '../auth/identity';
 import { ApiException } from '../common/api-exception';
 import { AppConfig } from '../config/app-config';
+import { MetricsService } from '../observability/metrics.service';
 
 export const QUERY_REDIS_CLIENT = Symbol('QUERY_REDIS_CLIENT');
 
@@ -28,6 +29,7 @@ export class QueryRateLimiter implements OnModuleDestroy {
   constructor(
     private readonly config: AppConfig,
     @Optional() @Inject(QUERY_REDIS_CLIENT) client?: RedisPort,
+    @Optional() private readonly metrics?: MetricsService,
   ) {
     this.client =
       client ??
@@ -55,6 +57,7 @@ export class QueryRateLimiter implements OnModuleDestroy {
       );
       if (!Array.isArray(result) || result.length !== 2) throw new Error('invalid rate result');
       if (Number(result[0]) !== 1) {
+        this.metrics?.observeRateLimit('user_or_tenant');
         throw new ApiException('QUERY_RATE_LIMITED', '查询过于频繁，请稍后重试', 429);
       }
     } catch (error) {

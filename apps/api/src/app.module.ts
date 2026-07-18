@@ -37,11 +37,22 @@ import { KnowledgeQueryService } from './knowledge/knowledge-query.service';
 import { QueryAuditService } from './knowledge/query-audit.service';
 import { QueryRateLimiter } from './knowledge/query-rate-limiter';
 import { QueryRetrievalService } from './knowledge/query-retrieval.service';
+import { AuditController } from './audit/audit.controller';
+import { AuditService } from './audit/audit.service';
+import { MetricsController } from './observability/metrics.controller';
+import { MetricsService } from './observability/metrics.service';
 
 @Module({
-  controllers: [HealthController, DocumentsController, KnowledgeController],
+  controllers: [
+    HealthController,
+    MetricsController,
+    DocumentsController,
+    KnowledgeController,
+    AuditController,
+  ],
   providers: [
     AppConfig,
+    MetricsService,
     OperationalLogger,
     HealthService,
     ParserClient,
@@ -74,6 +85,7 @@ import { QueryRetrievalService } from './knowledge/query-retrieval.service';
     IndexMigrationService,
     IngestionQueue,
     DocumentsService,
+    AuditService,
   ],
 })
 export class AppModule {}

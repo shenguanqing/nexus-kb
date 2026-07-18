@@ -9,6 +9,7 @@ import 'reflect-metadata';
 import { AppModule } from './app.module';
 import { ApiErrorFilter } from './common/api-error.filter';
 import { AppConfig, safeConfigurationSummary } from './config/app-config';
+import { MetricsService } from './observability/metrics.service';
 
 async function bootstrap(): Promise<void> {
   const adapter = new FastifyAdapter({
@@ -27,6 +28,7 @@ async function bootstrap(): Promise<void> {
     bufferLogs: true,
   });
   const config = app.get(AppConfig);
+  const metrics = app.get(MetricsService);
   await app.register(multipart, {
     preservePath: true,
     limits: { fileSize: config.values.MAX_UPLOAD_BYTES, files: 1, fields: 10, parts: 11 },
@@ -39,6 +41,15 @@ async function bootstrap(): Promise<void> {
   );
   fastify.addHook('onRequest', (request, reply, done) => {
     void reply.header('x-trace-id', request.id);
+    done();
+  });
+  fastify.addHook('onResponse', (request, reply, done) => {
+    metrics.observeHttp(
+      request.method,
+      request.routeOptions.url || 'unmatched',
+      reply.statusCode,
+      reply.elapsedTime,
+    );
     done();
   });
   app.enableShutdownHooks();

@@ -8,6 +8,16 @@ export {
 } from './parse';
 export { ingestionPayloadSchema, type IngestionPayload } from './ingestion';
 export {
+  auditEventSchema,
+  auditEventTypeSchema,
+  auditQueryRequestSchema,
+  auditQueryResponseSchema,
+  type AuditEvent,
+  type AuditEventType,
+  type AuditQueryRequest,
+  type AuditQueryResponse,
+} from './audit';
+export {
   knowledgeQueryRequestSchema,
   knowledgeQueryResponseSchema,
   knowledgeSourceSchema,

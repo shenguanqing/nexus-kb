@@ -6,7 +6,12 @@ import type { AppConfig } from '../config/app-config';
 export const SENSITIVITIES = ['public', 'internal', 'confidential'] as const;
 export type Sensitivity = (typeof SENSITIVITIES)[number];
 
-export const CAPABILITIES = ['documents:read', 'documents:write', 'documents:delete'] as const;
+export const CAPABILITIES = [
+  'documents:read',
+  'documents:write',
+  'documents:delete',
+  'audit:read',
+] as const;
 export type Capability = (typeof CAPABILITIES)[number];
 
 export interface Identity {

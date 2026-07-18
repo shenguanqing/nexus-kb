@@ -5,6 +5,7 @@ import { Queue, UnrecoverableError, Worker } from 'bullmq';
 
 import { OperationalLogger } from '../common/operational-logger';
 import { AppConfig } from '../config/app-config';
+import { MetricsService } from '../observability/metrics.service';
 import { classifyIngestionError } from './ingestion-error';
 import { IngestionProcessor } from './ingestion.processor';
 
@@ -17,6 +18,7 @@ export class IngestionQueue implements OnModuleInit, OnModuleDestroy {
     private readonly config: AppConfig,
     private readonly processor: IngestionProcessor,
     private readonly logger: OperationalLogger,
+    private readonly metrics: MetricsService,
   ) {
     this.queue = new Queue<IngestionPayload>('ingestion', {
       connection: { url: config.values.REDIS_URL },
@@ -28,9 +30,12 @@ export class IngestionQueue implements OnModuleInit, OnModuleDestroy {
     this.worker = new Worker<IngestionPayload>(
       'ingestion',
       async (job) => {
+        const startedAt = Date.now();
         try {
           await this.processor.process(job.data);
+          this.metrics.observeIngestion('completed', Date.now() - startedAt);
         } catch (error) {
+          this.metrics.observeIngestion('failed', Date.now() - startedAt);
           const classified = classifyIngestionError(error);
           if (!classified.retryable) {
             throw new UnrecoverableError(classified.code);
@@ -68,6 +73,20 @@ export class IngestionQueue implements OnModuleInit, OnModuleDestroy {
       removeOnComplete: 1000,
       removeOnFail: false,
     });
+  }
+
+  async metricsSnapshot(): Promise<{
+    counts: Record<string, number>;
+    oldestWaitSeconds: number;
+  }> {
+    const counts = await this.queue.getJobCounts('waiting', 'active', 'delayed', 'failed');
+    const oldestJobs = await this.queue.getJobs(['waiting', 'delayed'], 0, 0, true);
+    const oldestTimestamp = oldestJobs[0]?.timestamp;
+    return {
+      counts,
+      oldestWaitSeconds:
+        oldestTimestamp === undefined ? 0 : Math.max(0, (Date.now() - oldestTimestamp) / 1000),
+    };
   }
 
   async onModuleDestroy(): Promise<void> {

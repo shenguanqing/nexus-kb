@@ -48,8 +48,25 @@ const cloudEgressRuleSchema = z
   })
   .strict();
 
+const modelPricingSchema = z
+  .record(
+    z.string().regex(/^[a-z0-9_-]{1,64}:[^\s:]{1,128}$/i),
+    z
+      .object({
+        input: z.number().nonnegative().max(1_000_000),
+        output: z.number().nonnegative().max(1_000_000),
+      })
+      .strict(),
+  )
+  .refine((value) => Object.keys(value).length <= 100, 'must contain at most 100 model prices');
+
 const sensitivitySchema = z.enum(['public', 'internal', 'confidential']);
-const capabilitySchema = z.enum(['documents:read', 'documents:write', 'documents:delete']);
+const capabilitySchema = z.enum([
+  'documents:read',
+  'documents:write',
+  'documents:delete',
+  'audit:read',
+]);
 const jwtAlgorithmSchema = z.enum(['RS256', 'RS384', 'RS512', 'ES256', 'ES384', 'ES512']);
 const llmProviderSchema = z.enum(['none', 'openai', 'google', 'deepseek', 'alibaba', 'custom']);
 
@@ -101,7 +118,7 @@ const environmentSchema = z
     ),
     DEV_CAPABILITIES_JSON: jsonEnvironmentValue(
       z.array(capabilitySchema).min(1).max(16),
-      '["documents:read","documents:write","documents:delete"]',
+      '["documents:read","documents:write","documents:delete","audit:read"]',
     ),
     OIDC_ISSUER: z.string().trim().max(512).default(''),
     OIDC_AUDIENCE: z.string().trim().max(256).default(''),
@@ -175,6 +192,7 @@ const environmentSchema = z
     RERANK_REGION: z.string().trim().max(64).default('cn-beijing'),
     RERANK_TOP_K: z.coerce.number().int().min(1).max(100).default(5),
     RERANK_REQUEST_TIMEOUT_MS: z.coerce.number().int().min(100).max(300_000).default(60_000),
+    MODEL_PRICING_USD_PER_MILLION_TOKENS_JSON: jsonEnvironmentValue(modelPricingSchema, '{}'),
     QUERY_RECALL_TOP_K: z.coerce.number().int().min(1).max(100).default(20),
     QUERY_MAX_DISTANCE: z.coerce.number().min(0).max(2).default(0.45),
     QUERY_NEIGHBOR_WINDOW: z.coerce.number().int().min(0).max(3).default(1),

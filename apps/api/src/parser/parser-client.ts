@@ -1,15 +1,20 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
 import { parseRequestSchema, parseResponseSchema } from '@nexus-kb/contracts';
 import type { ParseRequest, ParseResponse } from '@nexus-kb/contracts';
 
 import { AppConfig } from '../config/app-config';
+import { MetricsService } from '../observability/metrics.service';
 import { ParserError } from './parser-error';
 
 @Injectable()
 export class ParserClient {
-  constructor(private readonly config: AppConfig) {}
+  constructor(
+    private readonly config: AppConfig,
+    @Optional() private readonly metrics?: MetricsService,
+  ) {}
 
   async parse(request: ParseRequest, traceId: string): Promise<ParseResponse> {
+    const startedAt = Date.now();
     const validatedRequest = parseRequestSchema.parse(request);
     const controller = new AbortController();
     const timeout = setTimeout(
@@ -40,10 +45,20 @@ export class ParserClient {
       }
       if (!response.ok) throw this.statusError(response.status);
       try {
-        return parseResponseSchema.parse(await response.json());
+        const result = parseResponseSchema.parse(await response.json());
+        this.metrics?.observeParser('success', Date.now() - startedAt);
+        this.metrics?.addParserWarnings(result.warnings);
+        return result;
       } catch (error) {
         throw new ParserError('invalid_response', false, { cause: error });
       }
+    } catch (error) {
+      const normalized =
+        error instanceof ParserError
+          ? error
+          : new ParserError('unavailable', true, { cause: error });
+      this.metrics?.observeParser('error', Date.now() - startedAt, normalized.kind);
+      throw normalized;
     } finally {
       clearTimeout(timeout);
     }

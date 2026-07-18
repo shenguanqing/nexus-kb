@@ -5,6 +5,42 @@ info:
 security:
   - bearerAuth: []
 paths:
+  /metrics:
+    get:
+      security: []
+      summary: Export Prometheus metrics without business identifiers or content
+      responses:
+        '200':
+          description: Prometheus text exposition
+          content:
+            text/plain:
+              schema: { type: string }
+  /v1/audit/events:
+    get:
+      summary: List recent structured audit events in the authenticated tenant
+      parameters:
+        - name: type
+          in: query
+          schema: { $ref: '#/components/schemas/AuditEventType' }
+        - name: before
+          in: query
+          schema: { type: string, format: date-time }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
+      responses:
+        '200':
+          description: Bodyless tenant-scoped audit events
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AuditQueryResponse' }
+        '400':
+          description: Invalid audit query
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
   /v1/knowledge/query:
     post:
       summary: Answer a knowledge question with tenant-scoped sources
@@ -134,6 +170,55 @@ components:
       required: true
       schema: { type: string, format: uuid }
   schemas:
+    AuditEventType:
+      type: string
+      enum: [query, document_lifecycle, cloud_policy]
+    AuditEvent:
+      type: object
+      additionalProperties: false
+      required:
+        [
+          id,
+          type,
+          event,
+          outcome,
+          traceId,
+          actorUserId,
+          documentId,
+          ingestionJobId,
+          attributes,
+          createdAt,
+        ]
+      properties:
+        id: { type: string, format: uuid }
+        type: { $ref: '#/components/schemas/AuditEventType' }
+        event: { type: string, maxLength: 128 }
+        outcome: { type: string, maxLength: 128 }
+        traceId: { type: [string, 'null'], format: uuid }
+        actorUserId: { type: [string, 'null'] }
+        documentId: { type: [string, 'null'], format: uuid }
+        ingestionJobId: { type: [string, 'null'], format: uuid }
+        attributes:
+          type: object
+          additionalProperties:
+            oneOf:
+              - { type: string }
+              - { type: number }
+              - { type: boolean }
+              - { type: 'null' }
+              - type: array
+                items: { type: string }
+        createdAt: { type: string, format: date-time }
+    AuditQueryResponse:
+      type: object
+      additionalProperties: false
+      required: [events, nextBefore]
+      properties:
+        events:
+          type: array
+          maxItems: 100
+          items: { $ref: '#/components/schemas/AuditEvent' }
+        nextBefore: { type: [string, 'null'], format: date-time }
     KnowledgeQueryRequest:
       type: object
       additionalProperties: false

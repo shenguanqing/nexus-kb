@@ -21,7 +21,24 @@ describe('model provider configuration', () => {
       QUERY_RECALL_TOP_K: 20,
       RERANK_TOP_K: 5,
       QUERY_MAX_DISTANCE: 0.45,
+      MODEL_PRICING_USD_PER_MILLION_TOKENS_JSON: {},
     });
+  });
+
+  it('validates explicit per-model pricing without requiring guessed defaults', () => {
+    expect(
+      parseEnvironment({
+        ...baseEnvironment,
+        MODEL_PRICING_USD_PER_MILLION_TOKENS_JSON:
+          '{"deepseek:model-a":{"input":1.25,"output":2.5}}',
+      }).MODEL_PRICING_USD_PER_MILLION_TOKENS_JSON,
+    ).toEqual({ 'deepseek:model-a': { input: 1.25, output: 2.5 } });
+    expect(() =>
+      parseEnvironment({
+        ...baseEnvironment,
+        MODEL_PRICING_USD_PER_MILLION_TOKENS_JSON: '{"deepseek:model-a":{"input":-1,"output":2.5}}',
+      }),
+    ).toThrow('Invalid application configuration: MODEL_PRICING_USD_PER_MILLION_TOKENS_JSON');
   });
 
   it('rejects inconsistent query retrieval budgets', () => {

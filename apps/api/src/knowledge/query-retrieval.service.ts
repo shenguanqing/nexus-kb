@@ -1,10 +1,11 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
 import { z } from 'zod';
 
 import { AclPolicy } from '../auth/acl-policy';
 import type { Identity } from '../auth/identity';
 import { AppConfig } from '../config/app-config';
 import { PrismaService } from '../database/prisma.service';
+import { MetricsService } from '../observability/metrics.service';
 import { ChromaVectorStore } from '../vector-store/chroma-vector-store';
 import { VectorStoreError } from '../vector-store/vector-store-error';
 import type { RetrievedVectorChunk } from '../vector-store/vector-store';
@@ -34,6 +35,7 @@ export class QueryRetrievalService {
     private readonly prisma: PrismaService,
     private readonly acl: AclPolicy,
     private readonly sourceAuthorization: SourceAuthorizationService,
+    @Optional() private readonly metrics?: MetricsService,
   ) {}
 
   async retrieve(identity: Identity, vector: number[]): Promise<RetrievedChunk[]> {
@@ -50,8 +52,13 @@ export class QueryRetrievalService {
     const relevant = authorized.filter(
       (chunk) => chunk.distance <= this.config.values.QUERY_MAX_DISTANCE,
     );
-    if (relevant.length === 0) return [];
-    return this.expandNeighbors(identity, relevant);
+    if (relevant.length === 0) {
+      this.metrics?.observeRetrieval(0);
+      return [];
+    }
+    const expanded = await this.expandNeighbors(identity, relevant);
+    this.metrics?.observeRetrieval(expanded.length);
+    return expanded;
   }
 
   private mapVectorChunk(chunk: RetrievedVectorChunk): RetrievedChunk {

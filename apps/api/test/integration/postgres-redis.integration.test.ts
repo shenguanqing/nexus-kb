@@ -6,7 +6,9 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { ingestionPayloadSchema } from '@nexus-kb/contracts';
 import { AclPolicy } from '../../src/auth/acl-policy';
 import type { Identity } from '../../src/auth/identity';
+import { AuditService } from '../../src/audit/audit.service';
 import type { AppConfig } from '../../src/config/app-config';
+import type { PrismaService } from '../../src/database/prisma.service';
 import { QueryRateLimiter } from '../../src/knowledge/query-rate-limiter';
 
 describe('PostgreSQL and Redis integration', () => {
@@ -335,5 +337,40 @@ describe('PostgreSQL and Redis integration', () => {
     expect(audit.sourceChunkIds).toEqual(['a'.repeat(64)]);
     expect(Object.keys(audit)).not.toContain('question');
     expect(Object.keys(audit)).not.toContain('answer');
+  });
+
+  it('queries audit events with capability and tenant isolation', async () => {
+    await prisma.queryAudit.create({
+      data: {
+        id: randomUUID(),
+        traceId: randomUUID(),
+        tenantId: tenantB,
+        userId: 'cross-tenant-user',
+        queryLength: 99,
+        outcome: 'failed',
+        sourceChunkIds: [],
+        durationMs: 1,
+      },
+    });
+    const service = new AuditService(prisma as unknown as PrismaService, new AclPolicy());
+    const auditIdentity: Identity = {
+      tenantId: tenantA,
+      userId: 'auditor-a',
+      department: 'audit',
+      roles: ['platform_admin'],
+      allowedSensitivities: ['public', 'internal', 'confidential'],
+      capabilities: ['audit:read'],
+      defaultSensitivity: 'internal',
+    };
+
+    const result = await service.query({ type: 'query', limit: 100 }, auditIdentity);
+    expect(result.events.length).toBeGreaterThan(0);
+    expect(result.events.some((event) => event.actorUserId === 'cross-tenant-user')).toBe(false);
+    await expect(
+      service.query(
+        { type: 'query', limit: 10 },
+        { ...auditIdentity, capabilities: ['documents:read'] },
+      ),
+    ).rejects.toMatchObject({ code: 'CAPABILITY_REQUIRED' });
   });
 });

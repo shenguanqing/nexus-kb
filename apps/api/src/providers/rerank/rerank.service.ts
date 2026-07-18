@@ -1,9 +1,10 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
 
 import type { Identity } from '../../auth/identity';
 import { KnowledgeContextPolicy } from '../../knowledge/knowledge-context-policy';
 import type { RetrievedChunk } from '../../knowledge/retrieved-chunk';
 import { OperationalLogger } from '../../common/operational-logger';
+import { MetricsService } from '../../observability/metrics.service';
 import { RerankProviderFactory } from './rerank-provider.factory';
 
 @Injectable()
@@ -12,6 +13,7 @@ export class RerankService {
     private readonly factory: RerankProviderFactory,
     private readonly contextPolicy: KnowledgeContextPolicy,
     private readonly logger: OperationalLogger,
+    @Optional() private readonly metrics?: MetricsService,
   ) {}
 
   async rerank(input: {
@@ -63,5 +65,6 @@ export class RerankService {
       model,
       status,
     });
+    this.metrics?.observeRerankDegradation(status === 'policy_denied' ? status : 'provider_error');
   }
 }
