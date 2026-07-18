@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  authSessionSchema,
   ingestionPayloadSchema,
   knowledgeQueryRequestSchema,
   knowledgeQueryResponseSchema,
@@ -9,6 +10,26 @@ import {
 } from '../src';
 
 const id = 'd26720b3-1f78-40df-868d-8ca8510dca26';
+
+describe('auth session contract', () => {
+  it('accepts a server identity summary and rejects unknown trusted fields', () => {
+    const session = {
+      authenticated: true,
+      mode: 'development',
+      identity: {
+        tenantId: 'tenant-a',
+        userId: 'user-a',
+        department: 'finance',
+        roles: ['document_admin'],
+        allowedSensitivities: ['public', 'internal'],
+        capabilities: ['documents:read'],
+        defaultSensitivity: 'internal',
+      },
+    };
+    expect(authSessionSchema.parse(session)).toMatchObject({ authenticated: true });
+    expect(() => authSessionSchema.parse({ ...session, token: 'untrusted' })).toThrow();
+  });
+});
 
 describe('parser contract', () => {
   it('accepts the version one response shape', () => {

@@ -1,10 +1,20 @@
 openapi: 3.1.0
 info:
   title: NexusKB API
-  version: 0.5.0
+  version: 0.6.0
 security:
   - bearerAuth: []
 paths:
+  /v1/auth/session:
+    get:
+      summary: Return the authenticated server-side identity summary
+      responses:
+        '200':
+          description: Authenticated identity and capabilities
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AuthSession' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
   /metrics:
     get:
       security: []
@@ -170,6 +180,43 @@ components:
       required: true
       schema: { type: string, format: uuid }
   schemas:
+    AuthSession:
+      type: object
+      additionalProperties: false
+      required: [authenticated, mode, identity]
+      properties:
+        authenticated: { const: true }
+        mode: { type: string, enum: [development, oidc] }
+        identity:
+          type: object
+          additionalProperties: false
+          required:
+            [
+              tenantId,
+              userId,
+              department,
+              roles,
+              allowedSensitivities,
+              capabilities,
+              defaultSensitivity,
+            ]
+          properties:
+            tenantId: { type: string }
+            userId: { type: string }
+            department: { type: string }
+            roles:
+              type: array
+              items: { type: string }
+            allowedSensitivities:
+              type: array
+              minItems: 1
+              items: { type: string, enum: [public, internal, confidential] }
+            capabilities:
+              type: array
+              items:
+                type: string
+                enum: [documents:read, documents:write, documents:delete, audit:read]
+            defaultSensitivity: { type: string, enum: [public, internal, confidential] }
     AuditEventType:
       type: string
       enum: [query, document_lifecycle, cloud_policy]

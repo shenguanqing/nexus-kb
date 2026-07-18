@@ -8,6 +8,14 @@ export {
 } from './parse';
 export { ingestionPayloadSchema, type IngestionPayload } from './ingestion';
 export {
+  authSessionSchema,
+  capabilitySchema,
+  sensitivitySchema,
+  type AuthSession,
+  type Capability,
+  type Sensitivity,
+} from './auth-session';
+export {
   qualityCaseKindSchema,
   qualityDecisionPolicySchema,
   qualityEvaluationCaseSchema,

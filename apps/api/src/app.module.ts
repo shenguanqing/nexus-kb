@@ -5,6 +5,7 @@ import { AppConfig } from './config/app-config';
 import { OperationalLogger } from './common/operational-logger';
 import { AclPolicy } from './auth/acl-policy';
 import { AuthenticationGuard } from './auth/authentication.guard';
+import { AuthController } from './auth/auth.controller';
 import { OidcJwtTokenVerifier } from './auth/oidc-jwt-token.verifier';
 import { TOKEN_VERIFIER } from './auth/token-verifier';
 import { PrismaService } from './database/prisma.service';
@@ -46,6 +47,7 @@ import { MetricsService } from './observability/metrics.service';
   controllers: [
     HealthController,
     MetricsController,
+    AuthController,
     DocumentsController,
     KnowledgeController,
     AuditController,

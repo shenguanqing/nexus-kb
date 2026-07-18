@@ -1,10 +1,10 @@
 # 知枢 NexusKB
 
-知枢 NexusKB 是企业级知识库项目。当前已完成上传、解析、分块脱敏、Alibaba Embedding 抽象和
-Chroma 安全索引激活，正在收尾前序阶段的去重、checkpoint、分类重试和失败任务查询。
+知枢 NexusKB 是企业级知识库项目。当前后端 RAG、安全索引、审计和质量评测框架已完成，正在实施
+Vue 3 企业知识问答与管理前端。
 
-查询 API、ACL 检索编排、LLM/Rerank Provider、OIDC/SSO 和质量评测框架已经完成；真实评测运行、会话与
-前端仍在后续阶段，进度以 [`TASK.md`](./TASK.md) 为准。
+前端 F1 基础工程和 F2 知识问答核心切片已完成；阶段 14 的真实评测运行等待业务方批准的数据，进度以
+[`TASK.md`](./TASK.md) 为准。
 
 ## 环境要求
 
@@ -22,6 +22,12 @@ pnpm typecheck
 pnpm test
 pnpm --filter @nexus-kb/api test:integration
 pnpm build
+```
+
+前端本地开发（API 运行在 `127.0.0.1:3000`）：
+
+```bash
+pnpm --filter @nexus-kb/web dev
 ```
 
 Parser Worker 本机验证：
@@ -87,6 +93,7 @@ curl -F 'file=@policy.md;type=text/markdown' http://127.0.0.1:3000/v1/documents
 curl http://127.0.0.1:3000/v1/documents/<documentId>
 curl http://127.0.0.1:3000/v1/ingestion-jobs/<jobId>
 curl http://127.0.0.1:3000/v1/ingestion-jobs/failed
+curl http://127.0.0.1:3000/v1/auth/session
 curl -X DELETE http://127.0.0.1:3000/v1/documents/<documentId>
 curl http://127.0.0.1:3000/metrics
 curl 'http://127.0.0.1:3000/v1/audit/events?limit=50'
