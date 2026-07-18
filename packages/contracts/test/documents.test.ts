@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  documentDetailSchema,
   documentListRequestSchema,
   documentListResponseSchema,
   documentUploadOptionsSchema,
@@ -49,5 +50,38 @@ describe('document contracts', () => {
         dwgConversionEnabled: false,
       }).acceptedExtensions,
     ).toEqual(['txt', 'md']);
+  });
+
+  it('validates document detail without parsed content or storage paths', () => {
+    const timestamp = '2026-07-18T06:00:00.000Z';
+    expect(
+      documentDetailSchema.parse({
+        id: '6769af9a-a4d0-4dc2-a97d-942584a9c826',
+        sourceName: '制度.md',
+        mimeType: 'text/markdown',
+        department: 'finance',
+        sensitivity: 'internal',
+        ownerId: 'user-a',
+        activeVersion: 1,
+        status: 'active',
+        versions: [
+          {
+            version: 1,
+            status: 'active',
+            parser: 'markdown',
+            parserVersion: '1.0',
+            warnings: [],
+            chunkCount: 3,
+            embeddingFingerprint: 'a'.repeat(64),
+            indexedAt: timestamp,
+            activatedAt: timestamp,
+            supersededAt: null,
+            createdAt: timestamp,
+          },
+        ],
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      }).versions[0]?.chunkCount,
+    ).toBe(3);
   });
 });

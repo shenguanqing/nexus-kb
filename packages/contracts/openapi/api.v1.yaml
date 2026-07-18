@@ -142,14 +142,22 @@ paths:
     get:
       summary: Get a tenant-scoped document
       responses:
-        '200': { description: Document metadata }
+        '200':
+          description: Document metadata and version history
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DocumentDetail' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
     delete:
       summary: Idempotently delete a tenant-scoped document
       responses:
-        '200': { description: Deleted or already absent }
+        '200':
+          description: Deleted or already absent
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DocumentDeleteResponse' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
   /v1/documents/{documentId}/reindex:
@@ -171,6 +179,27 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ApiError' }
+  /v1/ingestion-jobs:
+    get:
+      summary: List ACL-visible ingestion jobs with server-side pagination
+      parameters:
+        - { name: documentId, in: query, schema: { type: string, format: uuid } }
+        - { name: status, in: query, schema: { $ref: '#/components/schemas/IngestionStatus' } }
+        - { name: page, in: query, schema: { type: integer, minimum: 1, default: 1 } }
+        - {
+            name: pageSize,
+            in: query,
+            schema: { type: integer, minimum: 1, maximum: 100, default: 20 },
+          }
+      responses:
+        '200':
+          description: ACL-filtered ingestion job page
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/IngestionJobListResponse' }
+        '400': { description: Invalid ingestion job query }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
   /v1/ingestion-jobs/{jobId}:
     get:
       summary: Get a tenant-scoped ingestion job
@@ -180,10 +209,32 @@ paths:
           required: true
           schema: { type: string, format: uuid }
       responses:
-        '200': { description: Ingestion job }
+        '200':
+          description: Ingestion job
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/IngestionJob' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
+  /v1/ingestion-jobs/{jobId}/retry:
+    post:
+      summary: Requeue an ACL-visible retryable failed ingestion job
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '202':
+          description: Retry queued
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/IngestionRetryAccepted' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { description: Job is not failed or retryable }
   /v1/ingestion-jobs/failed:
     get:
       summary: List recent failed ingestion jobs in the authenticated tenant
@@ -461,6 +512,75 @@ components:
           { type: array, minItems: 1, items: { $ref: '#/components/schemas/Sensitivity' } }
         defaultSensitivity: { $ref: '#/components/schemas/Sensitivity' }
         dwgConversionEnabled: { type: boolean }
+    DocumentVersion:
+      type: object
+      additionalProperties: false
+      required:
+        [
+          version,
+          status,
+          parser,
+          parserVersion,
+          warnings,
+          chunkCount,
+          embeddingFingerprint,
+          indexedAt,
+          activatedAt,
+          supersededAt,
+          createdAt,
+        ]
+      properties:
+        version: { type: integer, minimum: 1 }
+        status:
+          {
+            type: string,
+            enum: [processing, prepared, policy_blocked, active, superseded, failed, deleted],
+          }
+        parser: { type: [string, 'null'] }
+        parserVersion: { type: [string, 'null'] }
+        warnings: { type: array, items: { type: string } }
+        chunkCount: { type: integer, minimum: 0 }
+        embeddingFingerprint: { type: [string, 'null'], pattern: '^[0-9a-f]{64}$' }
+        indexedAt: { type: [string, 'null'], format: date-time }
+        activatedAt: { type: [string, 'null'], format: date-time }
+        supersededAt: { type: [string, 'null'], format: date-time }
+        createdAt: { type: string, format: date-time }
+    DocumentDetail:
+      type: object
+      additionalProperties: false
+      required:
+        [
+          id,
+          sourceName,
+          mimeType,
+          department,
+          sensitivity,
+          ownerId,
+          activeVersion,
+          status,
+          versions,
+          createdAt,
+          updatedAt,
+        ]
+      properties:
+        id: { type: string, format: uuid }
+        sourceName: { type: string }
+        mimeType: { type: string }
+        department: { type: string }
+        sensitivity: { $ref: '#/components/schemas/Sensitivity' }
+        ownerId: { type: string }
+        activeVersion: { type: [integer, 'null'], minimum: 1 }
+        status: { $ref: '#/components/schemas/DocumentStatus' }
+        versions: { type: array, items: { $ref: '#/components/schemas/DocumentVersion' } }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    DocumentDeleteResponse:
+      type: object
+      additionalProperties: false
+      required: [documentId, deleted]
+      properties:
+        documentId: { type: string, format: uuid }
+        deleted: { const: true }
     IngestionStatus:
       type: string
       enum:
@@ -490,7 +610,11 @@ components:
           checkpoint,
           attempts,
           traceId,
+          errorCode,
+          errorCategory,
           retryable,
+          startedAt,
+          completedAt,
           updatedAt,
         ]
       properties:
@@ -509,6 +633,35 @@ components:
         startedAt: { type: [string, 'null'], format: date-time }
         completedAt: { type: [string, 'null'], format: date-time }
         updatedAt: { type: string, format: date-time }
+    IngestionJob:
+      allOf:
+        - { $ref: '#/components/schemas/IngestionJobSummary' }
+        - type: object
+          required: [sourceName, mimeType, parserVersion, embeddingFingerprint, warnings, createdAt]
+          properties:
+            sourceName: { type: string }
+            mimeType: { type: string }
+            parserVersion: { type: [string, 'null'] }
+            embeddingFingerprint: { type: [string, 'null'], pattern: '^[0-9a-f]{64}$' }
+            warnings: { type: array, items: { type: string } }
+            createdAt: { type: string, format: date-time }
+    IngestionJobListResponse:
+      type: object
+      additionalProperties: false
+      required: [items, page, pageSize, total]
+      properties:
+        items: { type: array, maxItems: 100, items: { $ref: '#/components/schemas/IngestionJob' } }
+        page: { type: integer, minimum: 1 }
+        pageSize: { type: integer, minimum: 1, maximum: 100 }
+        total: { type: integer, minimum: 0 }
+    IngestionRetryAccepted:
+      type: object
+      additionalProperties: false
+      required: [jobId, status, traceId]
+      properties:
+        jobId: { type: string, format: uuid }
+        status: { const: queued }
+        traceId: { type: string, format: uuid }
   responses:
     Unauthorized:
       description: Missing, invalid or expired bearer token

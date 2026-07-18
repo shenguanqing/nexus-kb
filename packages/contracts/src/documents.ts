@@ -89,8 +89,69 @@ export const documentUploadAcceptedSchema = z
   })
   .strict();
 
+export const documentVersionSchema = z
+  .object({
+    version: z.number().int().positive(),
+    status: z.enum([
+      'processing',
+      'prepared',
+      'policy_blocked',
+      'active',
+      'superseded',
+      'failed',
+      'deleted',
+    ]),
+    parser: z.string().nullable(),
+    parserVersion: z.string().nullable(),
+    warnings: z.array(z.string()),
+    chunkCount: z.number().int().nonnegative(),
+    embeddingFingerprint: z
+      .string()
+      .regex(/^[0-9a-f]{64}$/)
+      .nullable(),
+    indexedAt: z.iso.datetime({ offset: true }).nullable(),
+    activatedAt: z.iso.datetime({ offset: true }).nullable(),
+    supersededAt: z.iso.datetime({ offset: true }).nullable(),
+    createdAt: z.iso.datetime({ offset: true }),
+  })
+  .strict();
+
+export const documentDetailSchema = z
+  .object({
+    id: z.uuid(),
+    sourceName: z.string().min(1),
+    mimeType: z.string().min(1),
+    department: z.string().min(1),
+    sensitivity: sensitivitySchema,
+    ownerId: z.string().min(1),
+    activeVersion: z.number().int().positive().nullable(),
+    status: documentStatusSchema,
+    versions: z.array(documentVersionSchema),
+    createdAt: z.iso.datetime({ offset: true }),
+    updatedAt: z.iso.datetime({ offset: true }),
+  })
+  .strict();
+
+export const documentReindexAcceptedSchema = z
+  .object({
+    documentId: z.uuid(),
+    documentVersion: z.number().int().min(2),
+    jobId: z.uuid(),
+    status: z.literal('queued'),
+    traceId: z.uuid(),
+  })
+  .strict();
+
+export const documentDeleteResponseSchema = z
+  .object({ documentId: z.uuid(), deleted: z.literal(true) })
+  .strict();
+
 export type DocumentListRequest = z.infer<typeof documentListRequestSchema>;
 export type DocumentListItem = z.infer<typeof documentListItemSchema>;
 export type DocumentListResponse = z.infer<typeof documentListResponseSchema>;
 export type DocumentUploadOptions = z.infer<typeof documentUploadOptionsSchema>;
 export type DocumentUploadAccepted = z.infer<typeof documentUploadAcceptedSchema>;
+export type DocumentVersion = z.infer<typeof documentVersionSchema>;
+export type DocumentDetail = z.infer<typeof documentDetailSchema>;
+export type DocumentReindexAccepted = z.infer<typeof documentReindexAcceptedSchema>;
+export type DocumentDeleteResponse = z.infer<typeof documentDeleteResponseSchema>;

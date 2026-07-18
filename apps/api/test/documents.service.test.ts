@@ -27,6 +27,83 @@ const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() } as unknown as Op
 const acl = new AclPolicy();
 
 describe('DocumentsService tenant isolation', () => {
+  it('lists ACL-visible ingestion jobs with server-side pagination', async () => {
+    const findMany = vi.fn().mockResolvedValue([]);
+    const count = vi.fn().mockResolvedValue(0);
+    const service = new DocumentsService(
+      {} as AppConfig,
+      {
+        ingestionJob: { findMany, count },
+        $transaction: (operations: Array<Promise<unknown>>) => Promise.all(operations),
+      } as unknown as PrismaService,
+      {} as IngestionQueue,
+      {} as ChromaVectorStore,
+      logger,
+      acl,
+    );
+
+    await expect(
+      service.listJobs({ status: 'failed', page: 2, pageSize: 20 }, identity),
+    ).resolves.toEqual({ items: [], page: 2, pageSize: 20, total: 0 });
+    const [query] = findMany.mock.calls[0] as unknown as [
+      { where: { tenantId: string; document: { tenantId: string } }; skip: number; take: number },
+    ];
+    expect(query.where.tenantId).toBe('tenant-a');
+    expect(query.where.document.tenantId).toBe('tenant-a');
+    expect(query.skip).toBe(20);
+  });
+
+  it('requeues only an ACL-visible retryable failed ingestion job', async () => {
+    const retry = vi.fn().mockResolvedValue(undefined);
+    const claimJob = vi.fn().mockResolvedValue({ count: 1 });
+    const updateDocument = vi.fn().mockResolvedValue({});
+    const updateVersion = vi.fn().mockResolvedValue({});
+    const createAudit = vi.fn().mockResolvedValue({});
+    const transactionClient = {
+      ingestionJob: { updateMany: claimJob },
+      document: { update: updateDocument },
+      documentVersion: { update: updateVersion },
+      documentLifecycleAudit: { create: createAudit },
+    };
+    const service = new DocumentsService(
+      {} as AppConfig,
+      {
+        ingestionJob: {
+          findFirst: vi.fn().mockResolvedValue({
+            id: 'a5427e4a-b9db-4750-8dfd-02d601a41473',
+            documentId: '6769af9a-a4d0-4dc2-a97d-942584a9c826',
+            version: 1,
+            status: 'failed',
+            step: 'failed',
+            errorCode: 'EMBEDDING_UNAVAILABLE',
+            errorCategory: 'embedding',
+            retryable: true,
+            completedAt: new Date(),
+            document: { activeVersion: null, status: 'failed' },
+          }),
+        },
+        $transaction: (operation: (tx: typeof transactionClient) => Promise<unknown>) =>
+          operation(transactionClient),
+      } as unknown as PrismaService,
+      { retry } as unknown as IngestionQueue,
+      {} as ChromaVectorStore,
+      logger,
+      acl,
+    );
+
+    await expect(
+      service.retryJob(
+        'a5427e4a-b9db-4750-8dfd-02d601a41473',
+        identity,
+        'd26720b3-1f78-40df-868d-8ca8510dca26',
+      ),
+    ).resolves.toMatchObject({ status: 'queued' });
+    expect(retry).toHaveBeenCalledWith('a5427e4a-b9db-4750-8dfd-02d601a41473');
+    const [updateInput] = claimJob.mock.calls[0] as unknown as [{ data: { status: string } }];
+    expect(updateInput.data.status).toBe('queued');
+    expect(createAudit).toHaveBeenCalledOnce();
+  });
+
   it('lists only ACL-visible documents with server-side pagination and filters', async () => {
     const findMany = vi.fn().mockResolvedValue([
       {

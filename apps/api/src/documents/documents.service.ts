@@ -6,9 +6,14 @@ import { Transform } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { Injectable } from '@nestjs/common';
 import type {
+  DocumentDetail,
   DocumentListRequest,
   DocumentListResponse,
   DocumentUploadOptions,
+  IngestionJob,
+  IngestionJobListRequest,
+  IngestionJobListResponse,
+  IngestionRetryAccepted,
 } from '@nexus-kb/contracts';
 import type { MultipartFile } from '@fastify/multipart';
 import { Prisma } from '@prisma/client';
@@ -255,7 +260,7 @@ export class DocumentsService {
     }
   }
 
-  async getDocument(id: string, identity: Identity): Promise<object> {
+  async getDocument(id: string, identity: Identity): Promise<DocumentDetail> {
     this.acl.assertCapability(identity, 'documents:read');
     const document = await this.prisma.document.findFirst({
       where: {
@@ -267,7 +272,6 @@ export class DocumentsService {
         id: true,
         sourceName: true,
         mimeType: true,
-        contentSha256: true,
         department: true,
         sensitivity: true,
         ownerId: true,
@@ -282,9 +286,9 @@ export class DocumentsService {
             status: true,
             parser: true,
             parserVersion: true,
+            warnings: true,
             chunkCount: true,
             embeddingFingerprint: true,
-            vectorCollection: true,
             indexedAt: true,
             activatedAt: true,
             supersededAt: true,
@@ -294,10 +298,51 @@ export class DocumentsService {
       },
     });
     if (!document) throw new ApiException('DOCUMENT_NOT_FOUND', '文档不存在', 404);
-    return document;
+    return {
+      ...document,
+      createdAt: document.createdAt.toISOString(),
+      updatedAt: document.updatedAt.toISOString(),
+      versions: document.versions.map((version) => ({
+        ...version,
+        warnings: this.stringArray(version.warnings),
+        indexedAt: version.indexedAt?.toISOString() ?? null,
+        activatedAt: version.activatedAt?.toISOString() ?? null,
+        supersededAt: version.supersededAt?.toISOString() ?? null,
+        createdAt: version.createdAt.toISOString(),
+      })),
+    };
   }
 
-  async getJob(id: string, identity: Identity): Promise<object> {
+  async listJobs(
+    request: IngestionJobListRequest,
+    identity: Identity,
+  ): Promise<IngestionJobListResponse> {
+    this.acl.assertCapability(identity, 'documents:read');
+    const where: Prisma.IngestionJobWhereInput = {
+      tenantId: identity.tenantId,
+      ...(request.documentId ? { documentId: request.documentId } : {}),
+      status: request.status ?? { not: 'deleted' },
+      document: this.acl.documentWhere(identity),
+    };
+    const [rows, total] = await this.prisma.$transaction([
+      this.prisma.ingestionJob.findMany({
+        where,
+        orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
+        skip: (request.page - 1) * request.pageSize,
+        take: request.pageSize,
+        select: this.ingestionJobSelect(),
+      }),
+      this.prisma.ingestionJob.count({ where }),
+    ]);
+    return {
+      items: rows.map((row) => this.mapIngestionJob(row)),
+      page: request.page,
+      pageSize: request.pageSize,
+      total,
+    };
+  }
+
+  async getJob(id: string, identity: Identity): Promise<IngestionJob> {
     this.acl.assertCapability(identity, 'documents:read');
     const job = await this.prisma.ingestionJob.findFirst({
       where: {
@@ -306,31 +351,119 @@ export class DocumentsService {
         status: { not: 'deleted' },
         document: this.acl.documentWhere(identity),
       },
+      select: this.ingestionJobSelect(),
+    });
+    if (!job) throw new ApiException('INGESTION_JOB_NOT_FOUND', '入库任务不存在', 404);
+    return this.mapIngestionJob(job);
+  }
+
+  async retryJob(id: string, identity: Identity, traceId: string): Promise<IngestionRetryAccepted> {
+    this.acl.assertCapability(identity, 'documents:write');
+    const job = await this.prisma.ingestionJob.findFirst({
+      where: {
+        id,
+        tenantId: identity.tenantId,
+        document: this.acl.documentWhere(identity),
+      },
       select: {
         id: true,
         documentId: true,
         version: true,
-        kind: true,
         status: true,
         step: true,
-        checkpoint: true,
-        attempts: true,
-        traceId: true,
-        parserVersion: true,
-        embeddingFingerprint: true,
-        vectorCollection: true,
-        warnings: true,
         errorCode: true,
         errorCategory: true,
         retryable: true,
-        startedAt: true,
         completedAt: true,
-        createdAt: true,
-        updatedAt: true,
+        document: { select: { activeVersion: true, status: true } },
       },
     });
     if (!job) throw new ApiException('INGESTION_JOB_NOT_FOUND', '入库任务不存在', 404);
-    return job;
+    if (job.status !== 'failed' || !job.retryable) {
+      throw new ApiException('INGESTION_JOB_NOT_RETRYABLE', '当前入库任务不可重试', 409);
+    }
+    const auditId = randomUUID();
+    await this.prisma.$transaction(async (tx) => {
+      const claimed = await tx.ingestionJob.updateMany({
+        where: {
+          id: job.id,
+          tenantId: identity.tenantId,
+          status: 'failed',
+          retryable: true,
+        },
+        data: {
+          status: 'queued',
+          step: 'queued',
+          errorCode: null,
+          errorCategory: null,
+          retryable: false,
+          completedAt: null,
+        },
+      });
+      if (claimed.count !== 1) {
+        throw new ApiException('INGESTION_JOB_NOT_RETRYABLE', '当前入库任务不可重试', 409);
+      }
+      await tx.document.update({
+        where: { id: job.documentId },
+        data: { status: job.document.activeVersion === null ? 'processing' : 'active' },
+      });
+      await tx.documentVersion.update({
+        where: { documentId_version: { documentId: job.documentId, version: job.version } },
+        data: { status: 'processing' },
+      });
+      await tx.documentLifecycleAudit.create({
+        data: {
+          id: auditId,
+          tenantId: identity.tenantId,
+          userId: identity.userId,
+          traceId,
+          documentId: job.documentId,
+          documentVersion: job.version,
+          ingestionJobId: job.id,
+          eventType: 'ingestion_retry_requested',
+          outcome: 'queued',
+        },
+      });
+    });
+    try {
+      await this.queue.retry(job.id);
+    } catch {
+      await this.prisma.$transaction([
+        this.prisma.ingestionJob.update({
+          where: { id: job.id },
+          data: {
+            status: 'failed',
+            step: job.step,
+            errorCode: job.errorCode,
+            errorCategory: job.errorCategory,
+            retryable: true,
+            completedAt: job.completedAt,
+          },
+        }),
+        this.prisma.documentVersion.update({
+          where: { documentId_version: { documentId: job.documentId, version: job.version } },
+          data: { status: 'failed' },
+        }),
+        this.prisma.document.update({
+          where: { id: job.documentId },
+          data: { status: job.document.status },
+        }),
+        this.prisma.documentLifecycleAudit.update({
+          where: { id: auditId },
+          data: { outcome: 'enqueue_failed' },
+        }),
+      ]);
+      this.logger.error('ingestion_retry_enqueue_failed', {
+        traceId,
+        tenantId: identity.tenantId,
+        userId: identity.userId,
+        jobId: job.id,
+        documentId: job.documentId,
+        status: 'failed',
+      });
+      throw new ApiException('INGESTION_RETRY_FAILED', '入库任务重新排队失败', 503);
+    }
+    return { jobId: job.id, status: 'queued', traceId };
   }
 
   async getFailedJobs(identity: Identity): Promise<object> {
@@ -574,6 +707,71 @@ export class DocumentsService {
 
   private duplicateError(): ApiException {
     return new ApiException('DOCUMENT_DUPLICATE', '相同权限范围内已存在内容相同的文档', 409);
+  }
+
+  private ingestionJobSelect() {
+    return {
+      id: true,
+      documentId: true,
+      version: true,
+      kind: true,
+      status: true,
+      step: true,
+      checkpoint: true,
+      attempts: true,
+      traceId: true,
+      parserVersion: true,
+      embeddingFingerprint: true,
+      warnings: true,
+      errorCode: true,
+      errorCategory: true,
+      retryable: true,
+      startedAt: true,
+      completedAt: true,
+      createdAt: true,
+      updatedAt: true,
+      document: { select: { sourceName: true, mimeType: true } },
+    } as const;
+  }
+
+  private mapIngestionJob(row: {
+    id: string;
+    documentId: string;
+    version: number;
+    kind: string;
+    status: IngestionJob['status'];
+    step: string;
+    checkpoint: string;
+    attempts: number;
+    traceId: string;
+    parserVersion: string | null;
+    embeddingFingerprint: string | null;
+    warnings: unknown;
+    errorCode: string | null;
+    errorCategory: string | null;
+    retryable: boolean;
+    startedAt: Date | null;
+    completedAt: Date | null;
+    createdAt: Date;
+    updatedAt: Date;
+    document: { sourceName: string; mimeType: string };
+  }): IngestionJob {
+    const { document, ...job } = row;
+    return {
+      ...job,
+      sourceName: document.sourceName,
+      mimeType: document.mimeType,
+      kind: job.kind as IngestionJob['kind'],
+      warnings: this.stringArray(job.warnings),
+      startedAt: job.startedAt?.toISOString() ?? null,
+      completedAt: job.completedAt?.toISOString() ?? null,
+      createdAt: job.createdAt.toISOString(),
+      updatedAt: job.updatedAt.toISOString(),
+    };
+  }
+
+  private stringArray(value: unknown): string[] {
+    return Array.isArray(value) && value.every((item) => typeof item === 'string') ? value : [];
   }
 
   private isUniqueConflict(error: unknown): boolean {

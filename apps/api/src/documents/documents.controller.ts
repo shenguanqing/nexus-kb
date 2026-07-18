@@ -9,8 +9,15 @@ import {
   Query,
   Req,
 } from '@nestjs/common';
-import { documentListRequestSchema } from '@nexus-kb/contracts';
-import type { DocumentListResponse, DocumentUploadOptions } from '@nexus-kb/contracts';
+import { documentListRequestSchema, ingestionJobListRequestSchema } from '@nexus-kb/contracts';
+import type {
+  DocumentDetail,
+  DocumentListResponse,
+  DocumentUploadOptions,
+  IngestionJob,
+  IngestionJobListResponse,
+  IngestionRetryAccepted,
+} from '@nexus-kb/contracts';
 import type { FastifyRequest } from 'fastify';
 
 import { requestIdentity } from '../auth/identity';
@@ -47,8 +54,20 @@ export class DocumentsController {
   getDocument(
     @Param('documentId', new ParseUUIDPipe({ version: '4' })) documentId: string,
     @Req() request: FastifyRequest,
-  ): Promise<object> {
+  ): Promise<DocumentDetail> {
     return this.documents.getDocument(documentId, requestIdentity(request));
+  }
+
+  @Get('ingestion-jobs')
+  listJobs(
+    @Query() query: unknown,
+    @Req() request: FastifyRequest,
+  ): Promise<IngestionJobListResponse> {
+    const parsed = ingestionJobListRequestSchema.safeParse(query);
+    if (!parsed.success) {
+      throw new ApiException('INGESTION_JOB_LIST_QUERY_INVALID', '入库任务查询参数不合法', 400);
+    }
+    return this.documents.listJobs(parsed.data, requestIdentity(request));
   }
 
   @Get('ingestion-jobs/failed')
@@ -60,8 +79,17 @@ export class DocumentsController {
   getJob(
     @Param('jobId', new ParseUUIDPipe({ version: '4' })) jobId: string,
     @Req() request: FastifyRequest,
-  ): Promise<object> {
+  ): Promise<IngestionJob> {
     return this.documents.getJob(jobId, requestIdentity(request));
+  }
+
+  @Post('ingestion-jobs/:jobId/retry')
+  @HttpCode(202)
+  retryJob(
+    @Param('jobId', new ParseUUIDPipe({ version: '4' })) jobId: string,
+    @Req() request: FastifyRequest,
+  ): Promise<IngestionRetryAccepted> {
+    return this.documents.retryJob(jobId, requestIdentity(request), request.id);
   }
 
   @Delete('documents/:documentId')

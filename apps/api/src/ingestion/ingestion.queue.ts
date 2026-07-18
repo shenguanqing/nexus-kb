@@ -75,6 +75,12 @@ export class IngestionQueue implements OnModuleInit, OnModuleDestroy {
     });
   }
 
+  async retry(jobId: string): Promise<void> {
+    const job = await this.queue.getJob(jobId);
+    if (!job) throw new Error('Ingestion queue job is missing');
+    await job.retry('failed');
+  }
+
   async metricsSnapshot(): Promise<{
     counts: Record<string, number>;
     oldestWaitSeconds: number;

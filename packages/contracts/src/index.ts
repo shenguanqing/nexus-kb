@@ -6,7 +6,20 @@ export {
   type ParseRequest,
   type ParseResponse,
 } from './parse';
-export { ingestionPayloadSchema, type IngestionPayload } from './ingestion';
+export {
+  ingestionJobListRequestSchema,
+  ingestionJobListResponseSchema,
+  ingestionJobSchema,
+  ingestionPayloadSchema,
+  ingestionRetryAcceptedSchema,
+  ingestionStatusSchema,
+  type IngestionJob,
+  type IngestionJobListRequest,
+  type IngestionJobListResponse,
+  type IngestionPayload,
+  type IngestionRetryAccepted,
+  type IngestionStatus,
+} from './ingestion';
 export {
   authSessionSchema,
   capabilitySchema,
@@ -53,15 +66,23 @@ export {
 } from './knowledge-query';
 export {
   documentFormatSchema,
+  documentDeleteResponseSchema,
+  documentDetailSchema,
   documentListItemSchema,
   documentListRequestSchema,
   documentListResponseSchema,
   documentStatusSchema,
+  documentReindexAcceptedSchema,
   documentUploadAcceptedSchema,
   documentUploadOptionsSchema,
+  documentVersionSchema,
+  type DocumentDeleteResponse,
+  type DocumentDetail,
   type DocumentListItem,
   type DocumentListRequest,
   type DocumentListResponse,
   type DocumentUploadOptions,
   type DocumentUploadAccepted,
+  type DocumentReindexAccepted,
+  type DocumentVersion,
 } from './documents';

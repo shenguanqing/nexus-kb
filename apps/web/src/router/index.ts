@@ -33,8 +33,13 @@ export const router = createRouter({
         },
         {
           path: 'documents/:id',
-          component: () => import('@/views/ComingSoonView.vue'),
+          component: () => import('@/views/DocumentDetailView.vue'),
           meta: { title: '文档详情', capabilities: ['documents:read'] },
+        },
+        {
+          path: 'ingestion-jobs',
+          component: () => import('@/views/IngestionJobsView.vue'),
+          meta: { title: '入库任务', capabilities: ['documents:read'] },
         },
         {
           path: 'audit',

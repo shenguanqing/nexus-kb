@@ -36,6 +36,9 @@ const pageTitle = computed(() => String(route.meta.title ?? '知枢'));
         <RouterLink v-if="auth.hasCapability('documents:read')" to="/documents"
           ><span aria-hidden="true">▤</span><b>文档管理</b></RouterLink
         >
+        <RouterLink v-if="auth.hasCapability('documents:read')" to="/ingestion-jobs"
+          ><span aria-hidden="true">⇄</span><b>入库任务</b></RouterLink
+        >
         <RouterLink v-if="auth.hasCapability('audit:read')" to="/audit"
           ><span aria-hidden="true">⌁</span><b>审计中心</b></RouterLink
         >
