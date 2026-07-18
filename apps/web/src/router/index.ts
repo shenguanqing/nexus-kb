@@ -43,7 +43,7 @@ export const router = createRouter({
         },
         {
           path: 'audit',
-          component: () => import('@/views/ComingSoonView.vue'),
+          component: () => import('@/views/AuditView.vue'),
           meta: { title: '审计中心', capabilities: ['audit:read'] },
         },
       ],
