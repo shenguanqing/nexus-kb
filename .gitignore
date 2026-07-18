@@ -19,3 +19,5 @@ data/chroma/*
 !data/chroma/.gitkeep
 logs/*
 !logs/.gitkeep
+evaluation/private/
+evaluation/results/

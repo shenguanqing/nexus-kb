@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { AclPolicy } from '../src/auth/acl-policy';
 import type { Identity } from '../src/auth/identity';
 import type { AppConfig } from '../src/config/app-config';
+import type { QualityQueryObserver } from '../src/knowledge/knowledge-query.service';
 import { KnowledgeQueryService } from '../src/knowledge/knowledge-query.service';
 import type { QueryAuditService } from '../src/knowledge/query-audit.service';
 import type { QueryRateLimiter } from '../src/knowledge/query-rate-limiter';
@@ -107,6 +108,36 @@ describe('KnowledgeQueryService', () => {
     expect(deps.record).toHaveBeenCalledWith(
       expect.objectContaining({ outcome: 'answered', resultCount: 1 }),
     );
+  });
+
+  it('exposes only source references to the quality observer', async () => {
+    const deps = dependencies();
+    const recordVectorSources = vi.fn();
+    const recordFinalSources = vi.fn();
+    const observer: QualityQueryObserver = {
+      recordVectorSources,
+      recordFinalSources,
+    };
+
+    await deps.service.query({ question: '付款周期是多少？' }, identity, traceId, observer);
+
+    expect(recordVectorSources).toHaveBeenCalledWith([
+      {
+        documentId,
+        page: 2,
+        sheet: null,
+        chunkIds: ['a'.repeat(64), 'b'.repeat(64)],
+      },
+    ]);
+    expect(recordFinalSources).toHaveBeenCalledWith([
+      {
+        documentId,
+        page: 2,
+        sheet: null,
+        chunkIds: ['a'.repeat(64), 'b'.repeat(64)],
+      },
+    ]);
+    expect(JSON.stringify(recordVectorSources.mock.calls)).not.toContain(context.text);
   });
 
   it('rejects without calling Rerank or LLM when relevance is insufficient', async () => {

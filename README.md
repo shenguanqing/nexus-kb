@@ -3,8 +3,8 @@
 知枢 NexusKB 是企业级知识库项目。当前已完成上传、解析、分块脱敏、Alibaba Embedding 抽象和
 Chroma 安全索引激活，正在收尾前序阶段的去重、checkpoint、分类重试和失败任务查询。
 
-查询 API、ACL 检索编排、LLM/Rerank Provider 和 OIDC/SSO 后端基础链路已经完成；会话、前端与评测仍在
-后续阶段，进度以 [`TASK.md`](./TASK.md) 为准。
+查询 API、ACL 检索编排、LLM/Rerank Provider、OIDC/SSO 和质量评测框架已经完成；真实评测运行、会话与
+前端仍在后续阶段，进度以 [`TASK.md`](./TASK.md) 为准。
 
 ## 环境要求
 
@@ -157,6 +157,12 @@ RUN_PAID_PROVIDER_TESTS=true pnpm --filter @nexus-kb/api test:provider:smoke
 - 相关度不足不会调用 LLM；权限在生成期间发生变化时丢弃回答并返回安全的无答案响应。
 - `QueryAudit` 只记录 traceId、身份范围、问题长度、Provider/model、chunk IDs、结果与耗时，不记录问题、
   回答或片段正文。
+
+## 质量评测
+
+阶段 14 已提供严格的私有数据集/双策略运行契约和离线聚合器，可计算 Recall@K、MRR、引用准确率、拒答率、
+越权率、P95 与单次成本，并根据门槛给出 Rerank 建议。真实问题和运行结果不得提交 Git，完整方法见
+[`evaluation/README.md`](./evaluation/README.md)。
 
 ## 入库可靠性
 

@@ -3,6 +3,7 @@ import type {
   KnowledgeQueryRequest,
   KnowledgeQueryResponse,
   KnowledgeSource,
+  QualitySource,
 } from '@nexus-kb/contracts';
 
 import { AclPolicy } from '../auth/acl-policy';
@@ -19,6 +20,11 @@ import { QueryRetrievalService } from './query-retrieval.service';
 import { SourceAuthorizationService } from './source-authorization.service';
 
 const NO_ANSWER_TEXT = '当前知识库中没有找到足够可靠且有权限访问的依据。';
+
+export interface QualityQueryObserver {
+  recordVectorSources(sources: QualitySource[]): void;
+  recordFinalSources(sources: QualitySource[]): void;
+}
 
 @Injectable()
 export class KnowledgeQueryService {
@@ -38,6 +44,7 @@ export class KnowledgeQueryService {
     request: KnowledgeQueryRequest,
     identity: Identity,
     traceId: string,
+    observer?: QualityQueryObserver,
   ): Promise<KnowledgeQueryResponse> {
     this.acl.assertCapability(identity, 'documents:read');
     const startedAt = Date.now();
@@ -60,7 +67,9 @@ export class KnowledgeQueryService {
         sensitivity: identity.defaultSensitivity,
       });
       const candidates = await this.retrieval.retrieve(identity, queryVector);
+      observer?.recordVectorSources(candidates.map((candidate) => this.qualitySource(candidate)));
       if (candidates.length === 0) {
+        observer?.recordFinalSources([]);
         return await this.noAnswer(auditBase, traceId, 'insufficient_relevance', false, startedAt);
       }
       const reranked = await this.rerank.rerank({
@@ -75,6 +84,7 @@ export class KnowledgeQueryService {
         reranked.chunks,
       );
       if (contexts.length === 0) {
+        observer?.recordFinalSources([]);
         return await this.noAnswer(
           auditBase,
           traceId,
@@ -93,6 +103,7 @@ export class KnowledgeQueryService {
         identity,
         contexts,
       );
+      observer?.recordFinalSources(finalContexts.map((context) => this.qualitySource(context)));
       if (!this.sameContexts(contexts, finalContexts)) {
         return await this.noAnswer(
           auditBase,
@@ -179,6 +190,15 @@ export class KnowledgeQueryService {
       page: context.metadata.page ?? null,
       sheet: context.metadata.sheet ?? null,
       sectionPath: context.metadata.sectionPath ?? [],
+    };
+  }
+
+  private qualitySource(context: RetrievedChunk): QualitySource {
+    return {
+      documentId: context.metadata.documentId,
+      page: context.metadata.page ?? null,
+      sheet: context.metadata.sheet ?? null,
+      chunkIds: context.metadata.chunkIds ?? [context.metadata.chunkId],
     };
   }
 
