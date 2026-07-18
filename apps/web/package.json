@@ -19,6 +19,7 @@
     "zod": "^4.1.0"
   },
   "devDependencies": {
+    "@types/node": "^22.18.0",
     "@vitejs/plugin-vue": "6.0.8",
     "@vue/test-utils": "2.4.11",
     "jsdom": "29.1.1",
