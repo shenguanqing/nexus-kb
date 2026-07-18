@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: NexusKB API
-  version: 0.8.0
+  version: 0.9.0
 security:
   - bearerAuth: []
 paths:
@@ -71,6 +71,31 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/SystemStatusResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /v1/access/users:
+    get:
+      summary: List observed authenticated users within the caller's tenant or department scope
+      parameters:
+        - { name: query, in: query, schema: { type: string, minLength: 1, maxLength: 128 } }
+        - { name: department, in: query, schema: { type: string, minLength: 1, maxLength: 128 } }
+        - { name: offset, in: query, schema: { type: integer, minimum: 0, default: 0 } }
+        - {
+            name: limit,
+            in: query,
+            schema: { type: integer, minimum: 1, maximum: 100, default: 25 },
+          }
+      responses:
+        '200':
+          description: Tenant-isolated or department-limited user directory page
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/UserDirectoryQueryResponse' }
+        '400':
+          description: Invalid user directory query
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiError' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
   /v1/knowledge/query:
@@ -325,8 +350,42 @@ components:
               type: array
               items:
                 type: string
-                enum: [documents:read, documents:write, documents:delete, audit:read, system:read]
+                enum:
+                  [
+                    documents:read,
+                    documents:write,
+                    documents:delete,
+                    audit:read,
+                    system:read,
+                    access:read,
+                  ]
             defaultSensitivity: { type: string, enum: [public, internal, confidential] }
+    UserDirectoryEntry:
+      type: object
+      additionalProperties: false
+      required: [userId, department, roles, status, lastAuthenticatedAt]
+      properties:
+        userId: { type: string, minLength: 1, maxLength: 256 }
+        department: { type: string, minLength: 1, maxLength: 128 }
+        roles:
+          type: array
+          maxItems: 32
+          items: { type: string, minLength: 1, maxLength: 64 }
+        status: { const: observed }
+        lastAuthenticatedAt: { type: string, format: date-time }
+    UserDirectoryQueryResponse:
+      type: object
+      additionalProperties: false
+      required: [users, total, offset, limit, scope]
+      properties:
+        users:
+          type: array
+          maxItems: 100
+          items: { $ref: '#/components/schemas/UserDirectoryEntry' }
+        total: { type: integer, minimum: 0 }
+        offset: { type: integer, minimum: 0 }
+        limit: { type: integer, minimum: 1, maximum: 100 }
+        scope: { type: string, enum: [tenant, department] }
     ProviderStatus:
       type: object
       additionalProperties: false

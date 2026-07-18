@@ -99,6 +99,7 @@ curl http://127.0.0.1:3000/metrics
 curl 'http://127.0.0.1:3000/v1/audit/events?limit=50'
 curl http://127.0.0.1:3000/v1/system/providers
 curl http://127.0.0.1:3000/v1/system/status
+curl 'http://127.0.0.1:3000/v1/access/users?limit=25'
 ```
 
 公共 API 契约位于 `packages/contracts/openapi/api.v1.yaml`。API 启动时自动执行不可变 Prisma migration；任务在 Redis 中只携带 ID 与 UUID 文件引用，不携带正文。
@@ -110,7 +111,7 @@ curl http://127.0.0.1:3000/v1/system/status
 - JWT 仅允许配置的 RSA/ECDSA 非对称算法；未知密钥、错误 issuer/audience、过期 token 或不完整 claims
   均返回 401，不回退开发身份。
 - 文档 API 使用 `documents:read`、`documents:write`、`documents:delete` capabilities；tenant 级审计查询
-  另需 `audit:read`；Provider 与系统状态只读摘要另需 `system:read`。
+  另需 `audit:read`；Provider 与系统状态只读摘要另需 `system:read`；已验证用户目录另需 `access:read`。
 - 所有资源查询首先强制 tenant；普通用户只能访问允许敏感度内的 public、同部门或本人文档。
 - `platform_admin`/`document_admin` 可跨部门管理当前 tenant 内允许敏感度的文档，但不能跨 tenant。
 - 入库任务继承关联文档 ACL；VectorStore filter 只能由服务端 Identity 构造。

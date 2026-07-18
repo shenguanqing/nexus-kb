@@ -44,6 +44,8 @@ import { MetricsController } from './observability/metrics.controller';
 import { MetricsService } from './observability/metrics.service';
 import { SystemController } from './system/system.controller';
 import { SystemService } from './system/system.service';
+import { AccessController } from './access/access.controller';
+import { UserDirectoryService } from './access/user-directory.service';
 
 @Module({
   controllers: [
@@ -54,6 +56,7 @@ import { SystemService } from './system/system.service';
     KnowledgeController,
     AuditController,
     SystemController,
+    AccessController,
   ],
   providers: [
     AppConfig,
@@ -92,6 +95,7 @@ import { SystemService } from './system/system.service';
     DocumentsService,
     AuditService,
     SystemService,
+    UserDirectoryService,
   ],
 })
 export class AppModule {}

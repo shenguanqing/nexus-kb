@@ -222,3 +222,16 @@ model QueryAudit {
   @@index([tenantId, createdAt])
   @@index([tenantId, userId, createdAt])
 }
+
+model UserDirectoryEntry {
+  tenantId            String
+  userId              String
+  department          String
+  roles               Json
+  lastAuthenticatedAt DateTime @db.Timestamptz(3)
+  createdAt           DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt           DateTime @updatedAt @db.Timestamptz(3)
+
+  @@id([tenantId, userId])
+  @@index([tenantId, department, lastAuthenticatedAt])
+}

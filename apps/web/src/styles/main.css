@@ -1055,6 +1055,62 @@ a {
 .login-card small {
   color: var(--kb-color-text-secondary);
 }
+.access-page {
+  display: grid;
+  gap: 18px;
+}
+.access-intro,
+.access-boundary-note {
+  background: #fff;
+  border: 1px solid var(--kb-color-border);
+  border-radius: 16px;
+  padding: 20px 22px;
+}
+.access-intro {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+}
+.access-intro strong,
+.access-boundary-note strong {
+  font-size: 17px;
+}
+.access-intro p,
+.access-boundary-note p {
+  margin: 6px 0 0;
+  color: var(--kb-color-text-secondary);
+  line-height: 1.65;
+}
+.access-filters {
+  display: grid;
+  grid-template-columns: minmax(220px, 1.4fr) minmax(180px, 1fr) auto auto;
+  gap: 10px;
+  padding: 16px;
+  background: #fff;
+  border: 1px solid var(--kb-color-border);
+  border-radius: 14px;
+}
+.access-table-wrap {
+  min-height: 260px;
+  overflow: hidden;
+  background: #fff;
+  border: 1px solid var(--kb-color-border);
+  border-radius: 14px;
+}
+.role-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.access-pagination {
+  display: flex;
+  justify-content: flex-end;
+}
+.access-boundary-note {
+  border-color: #cdd8f5;
+  background: #f7f9ff;
+}
 @keyframes pulse {
   50% {
     box-shadow: 0 0 0 3px #2457d630;
@@ -1096,9 +1152,19 @@ a {
     align-items: stretch;
     flex-direction: column;
   }
+  .access-filters {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
   .audit-details {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     padding-inline: 28px;
+  }
+  .access-intro {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .access-filters {
+    grid-template-columns: 1fr;
   }
   .component-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));

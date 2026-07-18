@@ -47,6 +47,11 @@ export const router = createRouter({
           meta: { title: '审计中心', capabilities: ['audit:read'] },
         },
         {
+          path: 'access/users',
+          component: () => import('@/views/UsersView.vue'),
+          meta: { title: '用户与角色', capabilities: ['access:read'] },
+        },
+        {
           path: 'settings/providers',
           component: () => import('@/views/ProviderSettingsView.vue'),
           meta: { title: '模型 Provider', capabilities: ['system:read'] },

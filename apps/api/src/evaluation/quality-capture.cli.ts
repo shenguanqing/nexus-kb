@@ -38,6 +38,7 @@ const identitySchema = z
           'documents:delete',
           'audit:read',
           'system:read',
+          'access:read',
         ]),
       )
       .min(1)

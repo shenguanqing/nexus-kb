@@ -67,6 +67,7 @@ const capabilitySchema = z.enum([
   'documents:delete',
   'audit:read',
   'system:read',
+  'access:read',
 ]);
 const jwtAlgorithmSchema = z.enum(['RS256', 'RS384', 'RS512', 'ES256', 'ES384', 'ES512']);
 const llmProviderSchema = z.enum(['none', 'openai', 'google', 'deepseek', 'alibaba', 'custom']);
@@ -119,7 +120,7 @@ const environmentSchema = z
     ),
     DEV_CAPABILITIES_JSON: jsonEnvironmentValue(
       z.array(capabilitySchema).min(1).max(16),
-      '["documents:read","documents:write","documents:delete","audit:read","system:read"]',
+      '["documents:read","documents:write","documents:delete","audit:read","system:read","access:read"]',
     ),
     OIDC_ISSUER: z.string().trim().max(512).default(''),
     OIDC_AUDIENCE: z.string().trim().max(256).default(''),

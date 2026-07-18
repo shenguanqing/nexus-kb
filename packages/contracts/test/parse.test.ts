@@ -7,6 +7,8 @@ import {
   knowledgeQueryResponseSchema,
   parseRequestSchema,
   parseResponseSchema,
+  userDirectoryQueryRequestSchema,
+  userDirectoryQueryResponseSchema,
 } from '../src';
 
 const id = 'd26720b3-1f78-40df-868d-8ca8510dca26';
@@ -28,6 +30,41 @@ describe('auth session contract', () => {
     };
     expect(authSessionSchema.parse(session)).toMatchObject({ authenticated: true });
     expect(() => authSessionSchema.parse({ ...session, token: 'untrusted' })).toThrow();
+  });
+});
+
+describe('user directory contract', () => {
+  it('bounds filters and rejects caller-controlled tenant scope', () => {
+    expect(userDirectoryQueryRequestSchema.parse({ query: ' alice ' })).toEqual({
+      query: 'alice',
+      offset: 0,
+      limit: 25,
+    });
+    expect(() =>
+      userDirectoryQueryRequestSchema.parse({ tenantId: 'tenant-b', offset: 0, limit: 25 }),
+    ).toThrow();
+  });
+
+  it('accepts only the minimized observed identity response', () => {
+    const response = {
+      users: [
+        {
+          userId: 'alice',
+          department: 'finance',
+          roles: ['department_admin'],
+          status: 'observed',
+          lastAuthenticatedAt: '2026-07-18T08:00:00.000Z',
+        },
+      ],
+      total: 1,
+      offset: 0,
+      limit: 25,
+      scope: 'department',
+    };
+    expect(userDirectoryQueryResponseSchema.parse(response)).toEqual(response);
+    expect(() =>
+      userDirectoryQueryResponseSchema.parse({ ...response, users: [{ ...response.users[0], token: 'forged' }] }),
+    ).toThrow();
   });
 });
 

@@ -1,4 +1,12 @@
 export {
+  userDirectoryEntrySchema,
+  userDirectoryQueryRequestSchema,
+  userDirectoryQueryResponseSchema,
+  type UserDirectoryEntry,
+  type UserDirectoryQueryRequest,
+  type UserDirectoryQueryResponse,
+} from './access';
+export {
   parsedElementSchema,
   parseRequestSchema,
   parseResponseSchema,
