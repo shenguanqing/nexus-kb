@@ -22,7 +22,10 @@ from pathlib import Path
 import ezdxf
 
 output_dir = Path(sys.argv[2])
-source_name = Path(sys.argv[7])
+source_dir = Path(sys.argv[1])
+if sys.argv[3:] != ["ACAD2018", "DXF", "0", "1", "*.dwg"]:
+    raise SystemExit("unexpected ODA command schema")
+source_name = next(source_dir.glob("*.dwg"))
 drawing = ezdxf.new("R2010")
 drawing.modelspace().add_mtext("Converted DWG annotation")
 drawing.saveas(output_dir / source_name.with_suffix(".dxf").name)

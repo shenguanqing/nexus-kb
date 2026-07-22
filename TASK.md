@@ -114,9 +114,18 @@ Vue 3 + TypeScript + Vite
 
 - [x] 新增 `compose.dwg.yaml` 与受控 ODA 派生 Parser Worker：仅从本地忽略目录安装经批准的 Linux x64 Debian 包，
       Apple Silicon Mac 通过 Docker Desktop 的 `linux/amd64` 兼容层运行；不会将 ODA 二进制、许可证或凭据纳入 Git。
-- [ ] 待提供已批准的实际 ODA Debian 包后，构建镜像、记录实际可执行路径/版本，并用 `Drawing1.dwg` 执行端到端
-      上传、转换、索引与问答冒烟验证。
+- [x] 已从 ODA 官方页面取得 Linux x64 Debian 包（`odafileconverter` `27.1.0.0`，SHA-256
+      `c71363cd54758177af47a365154f180dc50a1e2b52a131994fda541c13a36766`），并在 `linux/amd64`
+      派生镜像中验证启动器、运行库和 Worker readiness；本地 `.env` 已使用该实际版本启用转换。
+- [x] 已在最终只读 Worker 中实际转换并解析已上传的 `Drawing1.dwg`：得到 9 个元素，parser version 为
+      `oda-27.1.0.0+ezdxf-1.4.4`；ODA 使用私有 tmpfs 源副本和官方 `*.dwg` 过滤器，不扫描其他上传文件。
+- [x] 已以 `compose.yaml + compose.dwg.yaml` 重建本地 API 与 Worker；Worker `/health/ready` 报告
+      `dwgConverter.status=up`，修复了仅使用基础 Compose 镜像导致的 `PARSER_UNAVAILABLE`。
+- [ ] 在已登录的本地 Web 页面为失败任务点击“重试”，完成 `Drawing1.dwg` 的索引与 Gemini 问答端到端冒烟验证
+      （服务端鉴权保持启用，Gemini 仅在检索到来源后调用）。
 - [x] 无有效 `[来源N]` 的 LLM 文本不再作为 Provider 502 返回；改为安全的无答案响应，保留“只能返回可核验来源”规则。
+- [x] 若 Gemini 已调用但因“资料不足”或缺少有效引用而安全拒答，`QueryAudit` 仍保留实际 LLM Provider/model；
+      未进入 LLM 的检索拒答仅显示 Embedding Provider。
 
 ---
 
@@ -137,6 +146,6 @@ Rerank 继续默认关闭；后续取得数据时返回阶段 14 完成正式验
 
 ## 6. 下一开发入口
 
-阶段 15 已完成。本地 Ollama / Gemini 配置与待建立索引恢复已补齐。当前优先入口为第 3.11 节的 DWG 端到端
-验证：只缺少经批准的 ODA Linux x64 Debian 包。阶段 14 的真实数据质量验收仍按第 5 节保留；完成 DWG 验证后再进入
-阶段 16 服务器上线准备。
+阶段 15 已完成。本地 Ollama / Gemini 配置与待建立索引恢复已补齐。当前优先入口为第 3.11 节的真实
+`Drawing1.dwg` Web 端到端验证：ODA Linux x64 包和转换器已就绪，但服务端鉴权保持启用，需要已登录的本地
+会话完成上传。阶段 14 的真实数据质量验收仍按第 5 节保留；完成 DWG 验证后再进入阶段 16 服务器上线准备。

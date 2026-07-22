@@ -1,0 +1,8 @@
+#!/bin/sh
+set -eu
+
+parser_temp_path="${PARSER_TEMP_PATH:-/tmp/parser}"
+mkdir -p "$parser_temp_path"
+chmod 700 "$parser_temp_path"
+
+exec "$@"

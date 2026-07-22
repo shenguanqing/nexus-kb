@@ -1,4 +1,5 @@
 import os
+import shutil
 import subprocess
 import tempfile
 from pathlib import Path
@@ -67,16 +68,25 @@ def parse_dwg(
     resolved_executable = executable.resolve(strict=True)
     with tempfile.TemporaryDirectory(prefix="dwg-", dir=temp_root) as workspace:
         workspace_path = Path(workspace)
-        output_path = workspace_path / f"{path.stem}.dxf"
+        source_directory = workspace_path / "input"
+        output_directory = workspace_path / "output"
+        staged_source = source_directory / path.name
+        output_path = output_directory / f"{path.stem}.dxf"
+        try:
+            source_directory.mkdir()
+            output_directory.mkdir()
+            shutil.copyfile(path, staged_source)
+        except OSError as error:
+            raise DwgConversionUnavailableError("DWG 转换临时目录不可用") from error
         command = [
             str(resolved_executable),
-            str(path.parent),
-            str(workspace_path),
+            str(source_directory),
+            str(output_directory),
             output_version,
             "DXF",
             "0",
             "1",
-            path.name,
+            "*.dwg",
         ]
         try:
             subprocess.run(  # noqa: S603 -- fixed absolute executable and argument schema
@@ -129,7 +139,6 @@ def _converter_environment(workspace: Path) -> dict[str, str]:
         "TMPDIR": str(workspace),
         "LANG": os.environ.get("LANG", "C.UTF-8"),
         "PATH": "/usr/local/bin:/usr/bin:/bin",
-        "QT_QPA_PLATFORM": "offscreen",
     }
     for name in ("DISPLAY", "LD_LIBRARY_PATH", "XDG_RUNTIME_DIR"):
         value = os.environ.get(name)

@@ -1,0 +1,12 @@
+#!/bin/sh
+set -eu
+
+# The official ODA Linux package ships only the xcb Qt platform plugin.  Run it
+# in an isolated virtual X display; all arguments still originate from the
+# Parser Worker's fixed conversion command.
+export QT_QPA_PLATFORM=xcb
+export XDG_RUNTIME_DIR="${TMPDIR:-/tmp}/nexus-oda-runtime"
+mkdir -p "$XDG_RUNTIME_DIR"
+chmod 700 "$XDG_RUNTIME_DIR"
+exec /usr/bin/xvfb-run --auto-servernum --server-args='-screen 0 1024x768x24' \
+  /usr/bin/ODAFileConverter "$@"

@@ -65,7 +65,7 @@ services:
     volumes:
       - raw_docs:/data/raw-docs:ro
     tmpfs:
-      - /tmp/parser:size=1g,mode=1700,uid=10002,gid=10002
+      - /tmp:size=1g,mode=1777,uid=10002,gid=10002
     healthcheck:
       test:
         - CMD

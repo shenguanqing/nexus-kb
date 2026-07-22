@@ -70,6 +70,8 @@ function dependencies(options: { candidates?: RetrievedChunk[]; finalAuthorized?
     values: {
       EMBEDDING_PROVIDER: 'alibaba',
       EMBEDDING_MODEL: 'text-embedding-v4',
+      LLM_PROVIDER: 'google',
+      LLM_MODEL: 'gemini-3.5-flash-lite',
       RERANK_PROVIDER: 'none',
       RERANK_MODEL: 'qwen3-rerank',
       RERANK_TOP_K: 5,
@@ -182,7 +184,13 @@ describe('KnowledgeQueryService', () => {
       sources: [],
       model: null,
     });
-    expect(deps.record).toHaveBeenCalledWith(expect.objectContaining({ outcome: 'no_answer' }));
+    expect(deps.record).toHaveBeenCalledWith(
+      expect.objectContaining({
+        outcome: 'no_answer',
+        llmProvider: 'google',
+        llmModel: 'gemini-3.5-flash-lite',
+      }),
+    );
     expect(deps.record).not.toHaveBeenCalledWith(expect.objectContaining({ outcome: 'failed' }));
   });
 });

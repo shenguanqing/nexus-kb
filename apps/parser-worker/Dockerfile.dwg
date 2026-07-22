@@ -12,15 +12,38 @@ WORKDIR /app
 # is intentionally ignored by Git and installed only in this derived DWG image.
 COPY ${ODA_DEB} /tmp/oda-file-converter.deb
 COPY apps/parser-worker/requirements.lock ./requirements.lock
+# ODA's Debian package currently expects the older SONAME; Debian 12 ships
+# the compatible libxcb-util.so.1 implementation.
 RUN apt-get update \
-    && apt-get install --no-install-recommends --yes /tmp/oda-file-converter.deb \
+    && apt-get install --no-install-recommends --yes \
+        /tmp/oda-file-converter.deb \
+        fontconfig \
+        libfreetype6 \
+        libgl1 \
+        libpng16-16 \
+        libxcb-util1 \
+        libxcb-icccm4 \
+        libxcb-image0 \
+        libxcb-keysyms1 \
+        libxcb-render-util0 \
+        libxcb-render0 \
+        libxcb-shape0 \
+        libxcb-xkb1 \
+        libxkbcommon0 \
+        libxkbcommon-x11-0 \
+        xauth \
+        xvfb \
+    && ln -s /usr/lib/x86_64-linux-gnu/libxcb-util.so.1 /usr/lib/x86_64-linux-gnu/libxcb-util.so.0 \
     && rm -rf /var/lib/apt/lists/* /tmp/oda-file-converter.deb \
     && pip install --no-cache-dir -r requirements.lock \
     && useradd --uid 10002 --create-home worker \
     && mkdir -p /data/raw-docs /tmp/parser \
     && chown -R worker:worker /app /tmp/parser
 
+COPY --chmod=0755 apps/parser-worker/bin/nexus-oda-file-converter /usr/local/bin/nexus-oda-file-converter
+COPY --chmod=0755 apps/parser-worker/bin/nexus-parser-worker-entrypoint /usr/local/bin/nexus-parser-worker-entrypoint
 COPY --chown=worker:worker apps/parser-worker/app ./app
 USER worker
 EXPOSE 8000
+ENTRYPOINT ["/usr/local/bin/nexus-parser-worker-entrypoint"]
 CMD ["uvicorn", "app.main:create_app", "--factory", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]

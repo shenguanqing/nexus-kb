@@ -11,6 +11,7 @@
 - Node.js 22 LTS 与 pnpm 10.27
 - Docker Desktop（含 Docker Compose）
 - Python 3.11（仅在宿主机直接测试 Parser Worker 时需要）
+- Ollama（仅在选择本机 Ollama 作为 Embedding Provider 时需要）
 - 解析 DWG 时需另行安装并授权 ODA File Converter；仓库和基础镜像不分发该第三方二进制
 
 ## 安装与检查
@@ -43,34 +44,67 @@ mypy app
 pytest
 ```
 
-## Docker Compose 启动
+## 项目启动顺序
 
-首次启动前创建本地配置，并把两个占位密码/token 换成本地随机值；`DATABASE_URL` 中的数据库密码必须与 `POSTGRES_PASSWORD` 一致。
+1. 首次使用先安装依赖：
 
-```bash
-cp .env.example .env
-docker compose config --quiet
-docker compose up -d --build
-docker compose ps
-```
+   ```bash
+   pnpm install --frozen-lockfile
+   ```
 
-只有 API 映射到宿主机的 `127.0.0.1:3000`。Parser Worker、PostgreSQL、Redis 和 Chroma 仅位于 Compose 内部网络；Worker 对原始文档 volume 只有只读权限。
+2. 创建本地配置：
 
-```bash
-curl http://127.0.0.1:3000/health/live
-curl http://127.0.0.1:3000/health/ready
-docker compose logs api parser-worker
-```
+   ```bash
+   cp .env.example .env
+   ```
 
-`/health/live` 只检查进程存活；`/health/ready` 检查 PostgreSQL、Redis、Chroma、Parser Worker 和共享文档目录。健康检查不会调用付费模型。
+   `.env` 已被 Git 忽略。将 `POSTGRES_PASSWORD` 与 `DATABASE_URL` 中的密码改为相同的本地随机值，
+   并将 `PARSER_INTERNAL_TOKEN` 改为本地随机值；再按所选的 LLM、Embedding、Rerank 和认证方式填写
+   `.env.example` 中对应的 Provider 配置。Key、密码和 token 只能留在本机，不能提交、发送或截图。
 
-停止并保留 volume：
+3. 选择启动方式：不测试 DWG 时使用基础 Compose：
+
+   ```bash
+   docker compose config --quiet
+   docker compose up -d --build
+   docker compose ps
+   ```
+
+   需要测试 DWG 时，不要执行上述基础 Compose 命令；按照下一节启用 ODA，并始终使用 DWG 专用 Compose 命令。
+
+4. 检查服务。只有 API 映射到宿主机的 `127.0.0.1:3000`；Parser Worker、PostgreSQL、Redis 和 Chroma
+   仅位于 Compose 内部网络，Worker 对原始文档 volume 只有只读权限。
+
+   ```bash
+   curl http://127.0.0.1:3000/health/live
+   curl http://127.0.0.1:3000/health/ready
+   docker compose logs api parser-worker
+   ```
+
+   `/health/live` 只检查进程存活；`/health/ready` 检查 PostgreSQL、Redis、Chroma、Parser Worker 和共享文档目录。
+   健康检查不会调用模型。
+
+5. 另开一个终端启动前端，并在浏览器打开命令输出的本地地址：
+
+   ```bash
+   pnpm --filter @nexus-kb/web dev
+   ```
+
+6. 将测试文件保存在仓库外的目录（例如
+   `/Users/shenguanqing/Desktop/Git/nexus-kb-local-tests/`），再从网页“上传文档”选择文件。若文档显示
+   “待建立索引”，表示本地解析、分块和脱敏已经完成，但当时没有可用 Embedding；配置并重启后，在文档详情点击
+   “继续建立索引”即可复用本地分块。失败任务请在“上传与入库任务”查看错误码和 trace ID，并只在确认错误已修复后
+   点击一次“重试”。
+
+普通停止命令是：
 
 ```bash
 docker compose down
 ```
 
-不要把 `docker compose down -v` 当作日常停止命令，它会删除本地持久化数据。
+不要把 `docker compose down -v` 当作日常停止命令，它会删除本地持久化数据。原始上传文件位于 Docker `raw_docs`
+volume；文档 metadata、版本、任务和分块位于 PostgreSQL volume；向量及其脱敏 metadata 位于 Chroma volume；
+Redis 只保存队列状态，不保存文件正文。
 
 ## 内部解析契约
 
@@ -86,9 +120,42 @@ docker compose down
 
 项目提供 `compose.dwg.yaml`，会把 Parser Worker 固定为 `linux/amd64`，以便 Docker Desktop 在 Apple Silicon 上
 兼容运行 ODA 的 Linux x64 安装包。将经批准的官方 Debian 包重命名并放入
-`apps/parser-worker/vendor/oda/oda-file-converter.deb`（该文件已被 Git 忽略），再按照
-[本地小白启动与配置指南](./docs/07-本地小白启动与配置指南.md#5-启用-dwg-测试)构建、检查实际路径与版本、启用
-DWG。基础 `docker compose up` 不使用该派生镜像，避免在未安装转换器时影响其他格式。
+`apps/parser-worker/vendor/oda/oda-file-converter.deb`（该文件已被 Git 忽略）。基础 `docker compose up`
+不使用这个派生镜像，因此无法转换 DWG；按以下步骤启用：
+
+1. 从 [ODA 官方下载页](https://www.opendesign.com/guestfiles/oda_File_Converter) 下载经组织许可的
+   **Linux x64 Debian (`.deb`)** 安装包，重命名为 `oda-file-converter.deb` 并放入上述目录；不得提交安装包、
+   许可证或二进制。
+2. 使用 DWG 专用 Compose 构建并启动全部服务：
+
+   ```bash
+   docker compose -f compose.yaml -f compose.dwg.yaml up -d --build
+   ```
+
+3. 读取容器内实际安装版本（不要猜测或运行旧的 `/opt/oda/ODAFileConverter` 路径）：
+
+   ```bash
+   docker compose -f compose.yaml -f compose.dwg.yaml run --rm --no-deps --entrypoint sh parser-worker -lc \
+     'dpkg-query -W odafileconverter'
+   ```
+
+4. 将版本填入 `.env`，并使用项目提供的受控启动器：
+
+   ```dotenv
+   DWG_CONVERSION_ENABLED=true
+   DWG_CONVERTER_EXECUTABLE=/usr/local/bin/nexus-oda-file-converter
+   DWG_CONVERTER_RELEASE=<上一步显示的实际版本>
+   ```
+
+5. 再次应用配置并验证。`/health/ready` 的 `parserWorker` 项必须包含 `dwgConverter.status=up`：
+
+   ```bash
+   docker compose -f compose.yaml -f compose.dwg.yaml up -d --build
+   curl http://127.0.0.1:3000/health/ready
+   ```
+
+转换器就绪后，从网页上传 `Drawing1.dwg`；任务会先显示“正在将 DWG 转为 DXF 并解析”，随后建立索引。若此前
+因为 `PARSER_UNAVAILABLE` 失败，修复环境后在该任务上点击一次“重试”，不需要重新上传。
 
 ## 文档 API
 
@@ -156,12 +223,12 @@ curl http://127.0.0.1:3000/v1/system/usage
 ## Embedding Provider
 
 - 已定义独立的 `EmbeddingProvider` 接口，并严格区分 `embedDocuments` 与 `embedQuery`。
-- 支持阿里云百炼 `text-embedding-v4` 与本机 Ollama OpenAI-compatible Embedding；默认
+- 支持阿里云百炼云端 Embedding 与本机 Ollama OpenAI-compatible Embedding；默认
   `EMBEDDING_PROVIDER=none`，不会在本地启动时要求付费 Key。
 - 显式设置 `EMBEDDING_PROVIDER=alibaba` 后，启动配置会强制校验 model、dimensions、region、HTTPS base URL 和 `DASHSCOPE_API_KEY`。
 - 显式设置 `EMBEDDING_PROVIDER=ollama` 后，启动配置会校验 `EMBEDDING_REGION=local`、模型、维度和受控本机
-  `OLLAMA_BASE_URL`；Docker Desktop 推荐 `http://host.docker.internal:11434`。Ollama 不使用 API Key，`bge-m3:latest`
-  使用 1024 维向量。
+  `OLLAMA_BASE_URL`；Docker Desktop 推荐 `http://host.docker.internal:11434`。Ollama 不使用 API Key，
+  `EMBEDDING_DIMENSIONS` 必须与所选模型实际输出维度一致。
 - 当前官方限制按单次最多 10 条、每条最多 8192 tokens 实现；响应必须与输入数量、顺序和配置维度一致。
 - 429、超时和 500/502/503/504 使用带 jitter 的指数退避；400/401/403/404/422 不重试，也不会切换其他 Provider。
 - 每次调用只记录 Provider、模型、区域、request ID、耗时、尝试次数和 token usage，不记录输入正文或 Key。
@@ -191,6 +258,8 @@ RUN_PAID_PROVIDER_TESTS=true pnpm --filter @nexus-kb/api test:provider:smoke
 - `POST /v1/knowledge/query` 依次执行输入校验、Redis 双层限流、Query Embedding、Chroma ACL Top K、
   active version 复核、相邻 chunk 合并、阈值拒答、可选 Rerank、LLM 和引用最终复核。
 - 相关度不足不会调用 LLM；权限在生成期间发生变化时丢弃回答并返回安全的无答案响应。
+- 若 LLM 已调用但资料没有足够依据，或回答缺少有效 `[来源N]`，系统仍会安全返回“无答案”。审计记录保留实际
+  Provider/model；仅有 Embedding Provider 表示流程在检索阶段结束。
 - `QueryAudit` 只记录 traceId、身份范围、问题长度、Provider/model、chunk IDs、结果与耗时，不记录问题、
   回答或片段正文。
 

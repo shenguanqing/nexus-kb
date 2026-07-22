@@ -121,7 +121,7 @@ export class KnowledgeQueryService {
             request,
             identity,
             await this.noAnswer(
-              auditBase,
+              { ...auditBase, ...this.configuredLlmAuditFields() },
               traceId,
               'insufficient_relevance',
               reranked.degraded,
@@ -141,7 +141,11 @@ export class KnowledgeQueryService {
           request,
           identity,
           await this.noAnswer(
-            auditBase,
+            {
+              ...auditBase,
+              llmProvider: answer.provider,
+              llmModel: answer.model,
+            },
             traceId,
             'authorization_changed',
             reranked.degraded,
@@ -213,6 +217,14 @@ export class KnowledgeQueryService {
       sources: [],
       model: null,
       rerankDegraded,
+    };
+  }
+
+  private configuredLlmAuditFields(): { llmProvider?: string; llmModel?: string } {
+    if (this.config.values.LLM_PROVIDER === 'none') return {};
+    return {
+      llmProvider: this.config.values.LLM_PROVIDER,
+      ...(this.config.values.LLM_MODEL ? { llmModel: this.config.values.LLM_MODEL } : {}),
     };
   }
 
