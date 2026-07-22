@@ -6,18 +6,236 @@
 阶段 14 的真实评测运行仍等待业务方批准的数据；阶段 15 已完成，当前开发进度以
 [`TASK.md`](./TASK.md) 为准。
 
+## 先了解本地运行方式
+
+这个项目由两部分组成：Docker Compose 负责启动 API、内部 Parser Worker、PostgreSQL、Redis 和 Chroma；Vue
+前端在宿主机用 Vite 启动。Ollama **不在**本项目的 Compose 文件中：选择它时，需要先在 Mac 宿主机启动
+Ollama，再让 Docker 中的 API 通过 `host.docker.internal:11434` 调用它。
+
+| 想达到的效果                     | Embedding 配置                  | LLM 配置            | 上传后的结果                                     |
+| -------------------------------- | ------------------------------- | ------------------- | ------------------------------------------------ |
+| 先确认基础设施、解析和前端能运行 | `EMBEDDING_PROVIDER=none`       | `LLM_PROVIDER=none` | 文档完成本地解析、分块和脱敏，状态为“待建立索引” |
+| 本机建立向量索引                 | Ollama                          | 可保持 `none`       | 文档可建立本地向量索引，但不能生成问答回答       |
+| 跑通完整 RAG 问答                | Ollama 或已批准的云端 Embedding | 已配置的云端 LLM    | 文档入库后可检索、生成回答并返回来源             |
+
+当前项目只将 Ollama 用作**本机 Embedding Provider**，不使用它生成问答答案；因此要体验完整问答，仍需按
+`.env.example` 配置一个已批准的云端 LLM。`confidential` 内容默认不会发送给云端 LLM 或 Rerank。
+
 ## 环境要求
 
 - Node.js 22 LTS 与 pnpm 10.27
-- Docker Desktop（含 Docker Compose）
+- Docker Desktop（含 Docker Compose），且 Docker Desktop 必须已启动
 - Python 3.11（仅在宿主机直接测试 Parser Worker 时需要）
 - Ollama（仅在选择本机 Ollama 作为 Embedding Provider 时需要）
 - 解析 DWG 时需另行安装并授权 ODA File Converter；仓库和基础镜像不分发该第三方二进制
 
-## 安装与检查
+在仓库根目录执行下面的命令，确认基础工具可用。若 `pnpm` 版本不是 `10.27.x`，请先按 Node.js 的 Corepack
+说明启用与项目 `packageManager` 字段匹配的 pnpm 版本。
+
+```bash
+node --version
+pnpm --version
+docker info
+docker compose version
+```
+
+## 项目启动顺序
+
+以下步骤适用于第一次启动，也适用于希望从零理解各服务关系的开发者。所有命令都在仓库根目录执行，除非命令
+另有说明。
+
+### 1. 安装 Node.js 依赖
 
 ```bash
 pnpm install --frozen-lockfile
+```
+
+这一步只安装本仓库的 Node.js 依赖，并生成 API 所需的 Prisma 客户端；它不会启动 Docker 服务。
+
+### 2. 创建并填写本地配置
+
+```bash
+cp .env.example .env
+```
+
+`.env` 已被 Git 忽略，不能提交、发送或截图。打开 `.env` 后先完成下面两项：
+
+1. 运行两次 `openssl rand -hex 32`，分别复制两个不同的随机值。
+2. 将其中一个值同时替换 `POSTGRES_PASSWORD` 和 `DATABASE_URL` 中 `kb:` 后、`@postgres` 前的密码；将另一个值
+   替换 `PARSER_INTERNAL_TOKEN`。后者至少需要 16 个字符。
+
+然后根据想运行的模式确认以下配置：
+
+- **只验证基础设施**：保留 `EMBEDDING_PROVIDER=none` 和 `LLM_PROVIDER=none`。服务可以正常启动，上传后显示
+  “待建立索引”是预期行为。
+- **使用 Ollama 建立本机向量索引**：先完成下一节的 Ollama 启动与模型下载，再填写给出的五个
+  `EMBEDDING_*` / `OLLAMA_BASE_URL` 配置。
+- **生成问答回答**：除了 Embedding 外，还要将 `LLM_PROVIDER` 改成 `openai`、`google`、`deepseek`、`alibaba`
+  或 `custom` 之一，并填写该 Provider 当前可用的 `LLM_MODEL` 与对应 API Key。不要把 Key 写入代码、命令历史、
+  截图或 Git。Rerank 保持默认 `none` 即可。
+
+### 3. 如选择 Ollama，先在 Mac 上启动并验证它
+
+不使用 Ollama 时跳到下一步。使用 Ollama 时，请先从 [Ollama macOS 官方安装说明](https://docs.ollama.com/macos)
+安装并打开 Ollama App。首次启动时允许它建立 `ollama` 命令行链接；重新打开终端后执行：
+
+```bash
+ollama --version
+ollama pull bge-m3:latest
+ollama ls
+curl http://127.0.0.1:11434/api/tags
+```
+
+`ollama pull` 会下载本项目使用的 Embedding 模型；`ollama ls` 中应能看到 `bge-m3:latest`，最后一条命令应返回
+模型列表 JSON。该模型在 Ollama 中以约 1.2GB 的下载提供；模型名与拉取方式可在
+[bge-m3 模型页](https://ollama.com/library/bge-m3) 核对。
+
+通常 Mac 上打开 Ollama App 后服务会在后台运行。若 `curl` 无法连接，或只安装了命令行工具，请在一个单独终端运行
+`ollama serve` 并保持该终端打开；不要同时启动多个 `ollama serve` 实例。Ollama 默认本地 API 地址为
+`http://localhost:11434/api`，可参阅 [Ollama API 说明](https://docs.ollama.com/api/introduction)。
+
+确认服务和模型都正常后，在 `.env` 中设置：
+
+```dotenv
+EMBEDDING_PROVIDER=ollama
+EMBEDDING_MODEL=bge-m3:latest
+EMBEDDING_DIMENSIONS=1024
+EMBEDDING_REGION=local
+OLLAMA_BASE_URL=http://host.docker.internal:11434
+```
+
+`OLLAMA_BASE_URL` 是 Docker 内 API 容器访问 Mac 宿主机的地址，不要改成浏览器地址，也不要填写任意公网 HTTP
+地址。Ollama 不需要 API Key。以后若已存在“已生效”的文档，不要直接把模型或维度改成另一套值后继续写旧索引；
+应按本文后面的“版本、删除与索引迁移”流程创建新索引。
+
+### 4. 准备并构建默认启用的 DWG 专用 Worker
+
+DWG 转换默认开启，因此首次启动前必须准备经组织批准的 ODA File Converter。项目会将 Parser Worker 固定为
+`linux/amd64`，使 Docker Desktop 能在 Apple Silicon Mac 上兼容运行 ODA 的 Linux x64 Debian 安装包。基础 Worker
+镜像没有 ODA；缺少这个包时，默认启动会失败关闭，而不会悄悄跳过 DWG 转换。
+
+1. 从 [ODA 官方下载页](https://www.opendesign.com/guestfiles/oda_File_Converter) 下载经组织许可的
+   **Linux x64 Debian (`.deb`)** 安装包，重命名为 `oda-file-converter.deb`，并放入
+   `apps/parser-worker/vendor/oda/`。该文件已被 Git 忽略，绝不能提交安装包、许可证或凭据。
+2. 构建派生 Worker：
+
+   ```bash
+   docker compose -f compose.yaml -f compose.dwg.yaml build parser-worker
+   ```
+
+3. 读取容器内实际安装版本。不要猜测版本，也不要使用旧的 `/opt/oda/ODAFileConverter` 路径：
+
+   ```bash
+   docker compose -f compose.yaml -f compose.dwg.yaml run --rm --no-deps --entrypoint dpkg-query parser-worker \
+     -W -f='${Version}\n' odafileconverter
+   ```
+
+4. `.env.example` 已默认设置 `DWG_CONVERSION_ENABLED=true` 和项目提供的受控启动器。把上一步输出的真实版本填入
+   `.env` 的 `DWG_CONVERTER_RELEASE`，保留以下值：
+
+   ```dotenv
+   DWG_CONVERSION_ENABLED=true
+   DWG_CONVERTER_EXECUTABLE=/usr/local/bin/nexus-oda-file-converter
+   DWG_CONVERTER_RELEASE=<上一步显示的实际版本>
+   ```
+
+### 5. 启动 Docker 服务和内部解析契约
+
+以下 Compose 命令会**同时启动** API、DWG 专用 Parser Worker、PostgreSQL、Redis 和 Chroma。Parser Worker 就是
+“内部解析契约”的运行端，无需也不应在宿主机另开 Python 进程或映射 Worker 端口。
+
+```bash
+docker compose -f compose.yaml -f compose.dwg.yaml config --quiet
+docker compose -f compose.yaml -f compose.dwg.yaml up -d --build
+docker compose -f compose.yaml -f compose.dwg.yaml ps
+```
+
+首次构建会拉取基础镜像并构建 API 与 Parser Worker。`docker compose ... ps` 最终应显示 `api`、`parser-worker`、
+`postgres`、`redis` 和 `chroma` 均在运行；healthcheck 完成后会显示为 `healthy`。默认流程不会使用不含 ODA 的
+基础 Parser Worker 镜像。
+
+内部解析链路在此步骤中的工作方式如下：
+
+```text
+浏览器 → API（唯一宿主机端口：127.0.0.1:3000）
+            → 受控共享 volume 写入原始文件
+            → Parser Worker 的 POST /internal/v1/parse
+               （仅 Compose 内网、X-Internal-Token、原始文件只读）
+```
+
+Worker 不对宿主机暴露端口，也不持有模型 API Key 或 Chroma 写权限。请不要从 Mac 直接请求
+`/internal/v1/parse`，也不要为了调试把它映射到公网；API 会在上传任务中调用它。
+
+### 6. 验证 API、依赖和 Parser Worker
+
+```bash
+curl http://127.0.0.1:3000/health/live
+curl http://127.0.0.1:3000/health/ready
+docker compose -f compose.yaml -f compose.dwg.yaml logs --tail=100 parser-worker
+docker compose -f compose.yaml -f compose.dwg.yaml exec parser-worker python -c \
+  "import urllib.request; print(urllib.request.urlopen('http://127.0.0.1:8000/health/ready').read().decode())"
+```
+
+`/health/live` 只检查 API 进程是否存活；`/health/ready` 会检查 PostgreSQL、Redis、Chroma、Parser Worker 和
+共享文档目录，成功时 `status` 为 `ready`，且 `checks.parserWorker.status` 为 `up`。最后一条命令只在 Compose
+内网检查 Worker 自己的 ready 响应，必须显示 `dwgConverter.status=up`。健康检查不会调用 Ollama 或任何付费模型。
+若这里失败，先阅读 `parser-worker` 日志；不要通过关闭内部 token、关闭 DWG 或暴露 Worker 端口来绕过问题。
+
+### 7. 启动 Vue 前端并完成第一次上传
+
+另开一个终端：
+
+```bash
+pnpm --filter @nexus-kb/web dev
+```
+
+打开命令输出的本地地址，使用“上传文档”上传一份不含敏感数据的 TXT、Markdown、DOCX、XLSX 或 DXF 测试文件。
+上传成功后到“上传与入库任务”查看真实状态：解析 → 分块/脱敏 → Embedding（已配置时）→ 建立索引。
+
+- `EMBEDDING_PROVIDER=none` 时，任务完成后显示“待建立索引”；这表示本地预处理已经成功，不是错误。
+- 已配置 Ollama 时，任务应在本机建立向量索引。若是先上传、后配置 Ollama，运行
+  `docker compose -f compose.yaml -f compose.dwg.yaml up -d --force-recreate api` 使 API 读取新配置，然后在文档详情点击
+  “继续建立索引”，无需重新上传。
+- 已同时配置 LLM 时，文档变为“已生效”后可在“知识问答”提问，并检查回答是否带有来源。未配置 LLM 时不要期待
+  系统生成回答。
+
+失败任务请在“上传与入库任务”查看错误码和 trace ID；排除原因后只点击一次“重试”。
+
+### 8. 正常停止与再次启动
+
+日常停止会保留本地数据：
+
+```bash
+docker compose -f compose.yaml -f compose.dwg.yaml down
+```
+
+再次启动使用：
+
+```bash
+docker compose -f compose.yaml -f compose.dwg.yaml up -d
+```
+
+不要把 `docker compose down -v` 当作日常停止命令，它会删除本地持久化数据。原始上传文件位于 Docker `raw_docs`
+volume；文档 metadata、版本、任务和分块位于 PostgreSQL volume；向量及其脱敏 metadata 位于 Chroma volume；
+Redis 只保存队列状态，不保存文件正文。
+
+## 内部解析契约
+
+- `POST /internal/v1/parse` 已在上述第 5 步随 `parser-worker` 自动启动，只在 Worker 内网提供，并要求
+  `X-Internal-Token`。
+- Worker 支持 UTF-8 TXT/Markdown、DOCX、XLSX、DXF 和 DWG；DWG 在受控临时目录转成 DXF 后，使用 ezdxf
+  提取图纸摘要、布局、图层、文字、块属性和尺寸，并保留 CAD entity metadata。
+- OpenAPI 契约位于 `packages/contracts/openapi/parser-worker.v1.yaml`；API 会在运行时校验 Worker 的响应。
+- Worker 会拒绝共享根目录外路径、`..`、符号链接、超限和空文件。
+- DWG 转换默认开启；第 4 步构建的 Worker 使用受控启动器，`/health/ready` 会将转换器纳入就绪检查，并要求
+  `dwgConverter.status=up`。
+- ODA 可执行文件及其运行库必须通过组织批准的镜像或宿主机部署流程提供，不能把下载包、许可证或二进制提交到 Git。
+
+## 安装与检查
+
+日常代码检查：
+
+```bash
 pnpm lint
 pnpm typecheck
 pnpm test
@@ -26,13 +244,7 @@ pnpm --filter @nexus-kb/web test:e2e
 pnpm build
 ```
 
-前端本地开发（API 运行在 `127.0.0.1:3000`）：
-
-```bash
-pnpm --filter @nexus-kb/web dev
-```
-
-Parser Worker 本机验证：
+Parser Worker 宿主机直接验证（Docker Compose 日常启动不需要执行）：
 
 ```bash
 cd apps/parser-worker
@@ -43,119 +255,6 @@ ruff check app tests
 mypy app
 pytest
 ```
-
-## 项目启动顺序
-
-1. 首次使用先安装依赖：
-
-   ```bash
-   pnpm install --frozen-lockfile
-   ```
-
-2. 创建本地配置：
-
-   ```bash
-   cp .env.example .env
-   ```
-
-   `.env` 已被 Git 忽略。将 `POSTGRES_PASSWORD` 与 `DATABASE_URL` 中的密码改为相同的本地随机值，
-   并将 `PARSER_INTERNAL_TOKEN` 改为本地随机值；再按所选的 LLM、Embedding、Rerank 和认证方式填写
-   `.env.example` 中对应的 Provider 配置。Key、密码和 token 只能留在本机，不能提交、发送或截图。
-
-3. 选择启动方式：不测试 DWG 时使用基础 Compose：
-
-   ```bash
-   docker compose config --quiet
-   docker compose up -d --build
-   docker compose ps
-   ```
-
-   需要测试 DWG 时，不要执行上述基础 Compose 命令；按照下一节启用 ODA，并始终使用 DWG 专用 Compose 命令。
-
-4. 检查服务。只有 API 映射到宿主机的 `127.0.0.1:3000`；Parser Worker、PostgreSQL、Redis 和 Chroma
-   仅位于 Compose 内部网络，Worker 对原始文档 volume 只有只读权限。
-
-   ```bash
-   curl http://127.0.0.1:3000/health/live
-   curl http://127.0.0.1:3000/health/ready
-   docker compose logs api parser-worker
-   ```
-
-   `/health/live` 只检查进程存活；`/health/ready` 检查 PostgreSQL、Redis、Chroma、Parser Worker 和共享文档目录。
-   健康检查不会调用模型。
-
-5. 另开一个终端启动前端，并在浏览器打开命令输出的本地地址：
-
-   ```bash
-   pnpm --filter @nexus-kb/web dev
-   ```
-
-6. 将测试文件保存在仓库外的目录（例如
-   `/Users/shenguanqing/Desktop/Git/nexus-kb-local-tests/`），再从网页“上传文档”选择文件。若文档显示
-   “待建立索引”，表示本地解析、分块和脱敏已经完成，但当时没有可用 Embedding；配置并重启后，在文档详情点击
-   “继续建立索引”即可复用本地分块。失败任务请在“上传与入库任务”查看错误码和 trace ID，并只在确认错误已修复后
-   点击一次“重试”。
-
-普通停止命令是：
-
-```bash
-docker compose down
-```
-
-不要把 `docker compose down -v` 当作日常停止命令，它会删除本地持久化数据。原始上传文件位于 Docker `raw_docs`
-volume；文档 metadata、版本、任务和分块位于 PostgreSQL volume；向量及其脱敏 metadata 位于 Chroma volume；
-Redis 只保存队列状态，不保存文件正文。
-
-## 内部解析契约
-
-- `POST /internal/v1/parse` 只在 Worker 内网提供，并要求 `X-Internal-Token`。
-- Worker 支持 UTF-8 TXT/Markdown、DOCX、XLSX、DXF 和 DWG；DWG 在受控临时目录转成 DXF 后，使用 ezdxf 提取图纸摘要、布局、图层、文字、块属性和尺寸，并保留 CAD entity metadata。
-- OpenAPI 契约位于 `packages/contracts/openapi/parser-worker.v1.yaml`。
-- Worker 会拒绝共享根目录外路径、`..`、符号链接、超限和空文件。
-- DWG 转换默认关闭。安装 ODA File Converter 后，将 `DWG_CONVERTER_EXECUTABLE` 配成其绝对路径、确认
-  `PARSER_TEMP_PATH` 可写，再设置 `DWG_CONVERSION_ENABLED=true`；此时 `/health/ready` 会把转换器纳入就绪检查。
-- ODA 可执行文件及其运行库必须通过组织批准的镜像或宿主机部署流程提供，不能把下载包、许可证或二进制提交到 Git。
-
-### DWG 专用 Worker（Apple Silicon Mac）
-
-项目提供 `compose.dwg.yaml`，会把 Parser Worker 固定为 `linux/amd64`，以便 Docker Desktop 在 Apple Silicon 上
-兼容运行 ODA 的 Linux x64 安装包。将经批准的官方 Debian 包重命名并放入
-`apps/parser-worker/vendor/oda/oda-file-converter.deb`（该文件已被 Git 忽略）。基础 `docker compose up`
-不使用这个派生镜像，因此无法转换 DWG；按以下步骤启用：
-
-1. 从 [ODA 官方下载页](https://www.opendesign.com/guestfiles/oda_File_Converter) 下载经组织许可的
-   **Linux x64 Debian (`.deb`)** 安装包，重命名为 `oda-file-converter.deb` 并放入上述目录；不得提交安装包、
-   许可证或二进制。
-2. 使用 DWG 专用 Compose 构建并启动全部服务：
-
-   ```bash
-   docker compose -f compose.yaml -f compose.dwg.yaml up -d --build
-   ```
-
-3. 读取容器内实际安装版本（不要猜测或运行旧的 `/opt/oda/ODAFileConverter` 路径）：
-
-   ```bash
-   docker compose -f compose.yaml -f compose.dwg.yaml run --rm --no-deps --entrypoint sh parser-worker -lc \
-     'dpkg-query -W odafileconverter'
-   ```
-
-4. 将版本填入 `.env`，并使用项目提供的受控启动器：
-
-   ```dotenv
-   DWG_CONVERSION_ENABLED=true
-   DWG_CONVERTER_EXECUTABLE=/usr/local/bin/nexus-oda-file-converter
-   DWG_CONVERTER_RELEASE=<上一步显示的实际版本>
-   ```
-
-5. 再次应用配置并验证。`/health/ready` 的 `parserWorker` 项必须包含 `dwgConverter.status=up`：
-
-   ```bash
-   docker compose -f compose.yaml -f compose.dwg.yaml up -d --build
-   curl http://127.0.0.1:3000/health/ready
-   ```
-
-转换器就绪后，从网页上传 `Drawing1.dwg`；任务会先显示“正在将 DWG 转为 DXF 并解析”，随后建立索引。若此前
-因为 `PARSER_UNAVAILABLE` 失败，修复环境后在该任务上点击一次“重试”，不需要重新上传。
 
 ## 文档 API
 
@@ -168,6 +267,7 @@ allowedSensitivities 和 capabilities；请求体或自定义 header 中的同�
 ```bash
 curl -F 'file=@policy.md;type=text/markdown' http://127.0.0.1:3000/v1/documents
 curl http://127.0.0.1:3000/v1/documents/<documentId>
+curl 'http://127.0.0.1:3000/v1/documents/<documentId>/chunks?version=1&page=1&pageSize=20'
 curl http://127.0.0.1:3000/v1/ingestion-jobs/<jobId>
 curl http://127.0.0.1:3000/v1/ingestion-jobs/failed
 curl http://127.0.0.1:3000/v1/auth/session
@@ -202,6 +302,8 @@ curl http://127.0.0.1:3000/v1/system/usage
 - 所有资源查询首先强制 tenant；普通用户只能访问允许敏感度内的 public、同部门或本人文档。
 - `platform_admin`/`document_admin` 可跨部门管理当前 tenant 内允许敏感度的文档，但不能跨 tenant。
 - 入库任务继承关联文档 ACL；VectorStore filter 只能由服务端 Identity 构造。
+- 分块详情只允许 `documents:read` 且通过同一文档 ACL 的用户访问；接口按版本分页返回原始/脱敏文本和来源
+  metadata，供管理员核验分块质量，但不返回向量值、内容哈希或内部存储路径。
 - 健康检查是显式 public route，不会暴露身份或业务数据。
 
 相同 tenant、内容哈希、department、sensitivity 和 owner 的重复上传返回

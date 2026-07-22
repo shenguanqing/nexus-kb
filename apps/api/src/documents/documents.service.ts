@@ -7,6 +7,8 @@ import { pipeline } from 'node:stream/promises';
 import { Injectable } from '@nestjs/common';
 import type {
   DocumentDetail,
+  DocumentChunkListRequest,
+  DocumentChunkListResponse,
   DocumentListRequest,
   DocumentListResponse,
   DocumentMetadataUpdateRequest,
@@ -289,6 +291,7 @@ export class DocumentsService {
             parserVersion: true,
             warnings: true,
             chunkCount: true,
+            vectorCollection: true,
             embeddingFingerprint: true,
             indexedAt: true,
             activatedAt: true,
@@ -311,6 +314,88 @@ export class DocumentsService {
         supersededAt: version.supersededAt?.toISOString() ?? null,
         createdAt: version.createdAt.toISOString(),
       })),
+    };
+  }
+
+  async listDocumentChunks(
+    id: string,
+    request: DocumentChunkListRequest,
+    identity: Identity,
+  ): Promise<DocumentChunkListResponse> {
+    this.acl.assertCapability(identity, 'documents:read');
+    const document = await this.prisma.document.findFirst({
+      where: {
+        id,
+        ...this.acl.documentWhere(identity),
+        status: { notIn: ['deleting', 'deleted'] },
+      },
+      select: {
+        id: true,
+        sourceName: true,
+        activeVersion: true,
+        versions: { select: { version: true }, orderBy: { version: 'desc' } },
+      },
+    });
+    if (!document) throw new ApiException('DOCUMENT_NOT_FOUND', '文档不存在', 404);
+    const documentVersion =
+      request.version ?? document.activeVersion ?? document.versions[0]?.version;
+    if (
+      !documentVersion ||
+      !document.versions.some((version) => version.version === documentVersion)
+    ) {
+      throw new ApiException('DOCUMENT_VERSION_NOT_FOUND', '文档版本不存在', 404);
+    }
+    const where: Prisma.KnowledgeChunkWhereInput = {
+      tenantId: identity.tenantId,
+      documentId: id,
+      documentVersion,
+      document: {
+        is: {
+          ...this.acl.documentWhere(identity),
+          status: { notIn: ['deleting', 'deleted'] },
+        },
+      },
+    };
+    const [chunks, total] = await this.prisma.$transaction([
+      this.prisma.knowledgeChunk.findMany({
+        where,
+        orderBy: { ordinal: 'asc' },
+        skip: (request.page - 1) * request.pageSize,
+        take: request.pageSize,
+        select: {
+          id: true,
+          documentVersion: true,
+          ordinal: true,
+          originalText: true,
+          redactedText: true,
+          tokenCount: true,
+          page: true,
+          sheet: true,
+          sectionPath: true,
+          elementTypes: true,
+          previousChunkId: true,
+          nextChunkId: true,
+          redactionPolicyVersion: true,
+          redactionSummary: true,
+          createdAt: true,
+        },
+      }),
+      this.prisma.knowledgeChunk.count({ where }),
+    ]);
+    return {
+      documentId: document.id,
+      sourceName: document.sourceName,
+      documentVersion,
+      items: chunks.map((chunk) => ({
+        ...chunk,
+        sectionPath: this.stringArray(chunk.sectionPath),
+        elementTypes: this.stringArray(chunk.elementTypes),
+        redactionSummary: this.redactionSummary(chunk.redactionSummary),
+        createdAt: chunk.createdAt.toISOString(),
+      })),
+      page: request.page,
+      pageSize: request.pageSize,
+      total,
     };
   }
 
@@ -991,6 +1076,17 @@ export class DocumentsService {
 
   private stringArray(value: unknown): string[] {
     return Array.isArray(value) && value.every((item) => typeof item === 'string') ? value : [];
+  }
+
+  private redactionSummary(value: unknown): Record<string, number> {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+    const entries: Array<[string, number]> = [];
+    for (const [key, count] of Object.entries(value)) {
+      if (key.length > 0 && typeof count === 'number' && Number.isInteger(count) && count >= 0) {
+        entries.push([key, count]);
+      }
+    }
+    return Object.fromEntries(entries);
   }
 
   private isUniqueConflict(error: unknown): boolean {

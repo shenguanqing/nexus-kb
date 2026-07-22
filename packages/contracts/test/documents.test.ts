@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  documentChunkListRequestSchema,
+  documentChunkListResponseSchema,
   documentDetailSchema,
   documentListRequestSchema,
   documentListResponseSchema,
@@ -72,6 +74,7 @@ describe('document contracts', () => {
             parserVersion: '1.0',
             warnings: [],
             chunkCount: 3,
+            vectorCollection: 'nexus_ollama_bge_m3_1024_12345678',
             embeddingFingerprint: 'a'.repeat(64),
             indexedAt: timestamp,
             activatedAt: timestamp,
@@ -83,5 +86,44 @@ describe('document contracts', () => {
         updatedAt: timestamp,
       }).versions[0]?.chunkCount,
     ).toBe(3);
+  });
+
+  it('validates paginated ACL-authorized chunk details', () => {
+    const timestamp = '2026-07-22T09:00:00.000Z';
+    expect(
+      documentChunkListResponseSchema.parse({
+        documentId: '6769af9a-a4d0-4dc2-a97d-942584a9c826',
+        sourceName: '制度.md',
+        documentVersion: 1,
+        items: [
+          {
+            id: 'a'.repeat(64),
+            documentVersion: 1,
+            ordinal: 0,
+            originalText: '原始内容',
+            redactedText: '脱敏内容',
+            tokenCount: 4,
+            page: 1,
+            sheet: null,
+            sectionPath: ['第一章'],
+            elementTypes: ['paragraph'],
+            previousChunkId: null,
+            nextChunkId: null,
+            redactionPolicyVersion: 'v1',
+            redactionSummary: { EMAIL: 1 },
+            createdAt: timestamp,
+          },
+        ],
+        page: 1,
+        pageSize: 20,
+        total: 1,
+      }).items[0]?.originalText,
+    ).toBe('原始内容');
+    expect(documentChunkListRequestSchema.parse({ version: '2' })).toMatchObject({
+      version: 2,
+      page: 1,
+      pageSize: 20,
+    });
+    expect(documentChunkListRequestSchema.safeParse({ tenantId: 'forged' }).success).toBe(false);
   });
 });

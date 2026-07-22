@@ -105,6 +105,7 @@ export const documentVersionSchema = z
     parserVersion: z.string().nullable(),
     warnings: z.array(z.string()),
     chunkCount: z.number().int().nonnegative(),
+    vectorCollection: z.string().min(1).max(255).nullable(),
     embeddingFingerprint: z
       .string()
       .regex(/^[0-9a-f]{64}$/)
@@ -129,6 +130,48 @@ export const documentDetailSchema = z
     versions: z.array(documentVersionSchema),
     createdAt: z.iso.datetime({ offset: true }),
     updatedAt: z.iso.datetime({ offset: true }),
+  })
+  .strict();
+
+export const documentChunkListRequestSchema = z
+  .object({
+    version: z.coerce.number().int().positive().optional(),
+    page: z.coerce.number().int().min(1).max(100_000).default(1),
+    pageSize: z.coerce.number().int().min(1).max(100).default(20),
+  })
+  .strict();
+
+const chunkIdSchema = z.string().regex(/^[0-9a-f]{64}$/);
+
+export const documentChunkSchema = z
+  .object({
+    id: chunkIdSchema,
+    documentVersion: z.number().int().positive(),
+    ordinal: z.number().int().nonnegative(),
+    originalText: z.string(),
+    redactedText: z.string(),
+    tokenCount: z.number().int().nonnegative(),
+    page: z.number().int().nonnegative().nullable(),
+    sheet: z.string().min(1).nullable(),
+    sectionPath: z.array(z.string()),
+    elementTypes: z.array(z.string()),
+    previousChunkId: chunkIdSchema.nullable(),
+    nextChunkId: chunkIdSchema.nullable(),
+    redactionPolicyVersion: z.string().min(1).max(64),
+    redactionSummary: z.record(z.string().min(1), z.number().int().nonnegative()),
+    createdAt: z.iso.datetime({ offset: true }),
+  })
+  .strict();
+
+export const documentChunkListResponseSchema = z
+  .object({
+    documentId: z.uuid(),
+    sourceName: z.string().min(1),
+    documentVersion: z.number().int().positive(),
+    items: z.array(documentChunkSchema).max(100),
+    page: z.number().int().positive(),
+    pageSize: z.number().int().positive().max(100),
+    total: z.number().int().nonnegative(),
   })
   .strict();
 
@@ -170,6 +213,9 @@ export type DocumentUploadOptions = z.infer<typeof documentUploadOptionsSchema>;
 export type DocumentUploadAccepted = z.infer<typeof documentUploadAcceptedSchema>;
 export type DocumentVersion = z.infer<typeof documentVersionSchema>;
 export type DocumentDetail = z.infer<typeof documentDetailSchema>;
+export type DocumentChunkListRequest = z.infer<typeof documentChunkListRequestSchema>;
+export type DocumentChunk = z.infer<typeof documentChunkSchema>;
+export type DocumentChunkListResponse = z.infer<typeof documentChunkListResponseSchema>;
 export type DocumentReindexAccepted = z.infer<typeof documentReindexAcceptedSchema>;
 export type DocumentDeleteResponse = z.infer<typeof documentDeleteResponseSchema>;
 export type DocumentMetadataUpdateRequest = z.infer<typeof documentMetadataUpdateRequestSchema>;

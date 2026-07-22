@@ -20,7 +20,7 @@ import { QueryRateLimiter } from './query-rate-limiter';
 import { QueryRetrievalService } from './query-retrieval.service';
 import { SourceAuthorizationService } from './source-authorization.service';
 import { KnowledgeHistoryService } from '../history/knowledge-history.service';
-import { AnswerCitationError } from './answer-source-validator';
+import { AnswerCitationError, AnswerSourceValidator } from './answer-source-validator';
 
 const NO_ANSWER_TEXT = '当前知识库中没有找到足够可靠且有权限访问的依据。';
 type QueryResult = Omit<KnowledgeQueryResponse, 'conversationId'>;
@@ -42,6 +42,7 @@ export class KnowledgeQueryService {
     private readonly llm: LlmService,
     private readonly sourceAuthorization: SourceAuthorizationService,
     private readonly audit: QueryAuditService,
+    private readonly sourceValidator: AnswerSourceValidator,
     @Optional() private readonly history?: KnowledgeHistoryService,
   ) {}
 
@@ -107,6 +108,7 @@ export class KnowledgeQueryService {
         );
       }
       let answer: Awaited<ReturnType<LlmService['answer']>>;
+      let citedSourceIndexes: number[] = [];
       try {
         answer = await this.llm.answer({
           identity,
@@ -114,6 +116,7 @@ export class KnowledgeQueryService {
           contexts,
           traceId,
         });
+        citedSourceIndexes = this.sourceValidator.validate(answer.text, contexts.length);
       } catch (error) {
         if (error instanceof AnswerCitationError) {
           observer?.recordFinalSources([]);
@@ -153,7 +156,9 @@ export class KnowledgeQueryService {
           ),
         );
       }
-      const sources = finalContexts.map((context, index) => this.source(context, index + 1));
+      const sources = citedSourceIndexes.map((sourceIndex) =>
+        this.source(finalContexts[sourceIndex - 1]!, sourceIndex),
+      );
       await this.audit.record({
         ...auditBase,
         outcome: 'answered',

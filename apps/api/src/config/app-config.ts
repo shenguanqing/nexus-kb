@@ -160,7 +160,7 @@ const environmentSchema = z
     RAW_DOCS_PATH: z.string().min(1),
     DWG_CONVERSION_ENABLED: z
       .enum(['true', 'false'])
-      .default('false')
+      .default('true')
       .transform((value) => value === 'true'),
     CHROMA_URL: z.url(),
     AUTH_REQUIRED: z

@@ -319,6 +319,123 @@ describe('DocumentsService tenant isolation', () => {
     );
   });
 
+  it('returns vector collection metadata only with an ACL-visible document detail', async () => {
+    const timestamp = new Date('2026-07-22T09:00:00.000Z');
+    const findFirst = vi.fn().mockResolvedValue({
+      id: '6769af9a-a4d0-4dc2-a97d-942584a9c826',
+      sourceName: '制度.md',
+      mimeType: 'text/markdown',
+      department: 'finance',
+      sensitivity: 'internal',
+      ownerId: 'user-a',
+      activeVersion: 1,
+      status: 'active',
+      createdAt: timestamp,
+      updatedAt: timestamp,
+      versions: [
+        {
+          version: 1,
+          status: 'active',
+          parser: 'markdown',
+          parserVersion: '1.0',
+          warnings: [],
+          chunkCount: 3,
+          vectorCollection: 'nexus_ollama_bge_m3_1024_12345678',
+          embeddingFingerprint: 'a'.repeat(64),
+          indexedAt: timestamp,
+          activatedAt: timestamp,
+          supersededAt: null,
+          createdAt: timestamp,
+        },
+      ],
+    });
+    const service = new DocumentsService(
+      {} as AppConfig,
+      { document: { findFirst } } as unknown as PrismaService,
+      {} as IngestionQueue,
+      {} as ChromaVectorStore,
+      logger,
+      acl,
+    );
+
+    await expect(
+      service.getDocument('6769af9a-a4d0-4dc2-a97d-942584a9c826', identity),
+    ).resolves.toMatchObject({
+      versions: [{ vectorCollection: 'nexus_ollama_bge_m3_1024_12345678' }],
+    });
+    const [query] = findFirst.mock.calls[0] as unknown as [
+      { select: { versions: { select: { vectorCollection: boolean } } } },
+    ];
+    expect(query.select.versions.select.vectorCollection).toBe(true);
+  });
+
+  it('lists complete chunk details only after document ACL and tenant checks', async () => {
+    const timestamp = new Date('2026-07-22T09:00:00.000Z');
+    const findFirst = vi.fn().mockResolvedValue({
+      id: '6769af9a-a4d0-4dc2-a97d-942584a9c826',
+      sourceName: '制度.md',
+      activeVersion: 2,
+      versions: [{ version: 2 }, { version: 1 }],
+    });
+    const findMany = vi.fn().mockResolvedValue([
+      {
+        id: 'a'.repeat(64),
+        documentVersion: 2,
+        ordinal: 20,
+        originalText: '原始内容',
+        redactedText: '脱敏内容',
+        tokenCount: 4,
+        page: 1,
+        sheet: null,
+        sectionPath: ['第一章'],
+        elementTypes: ['paragraph'],
+        previousChunkId: null,
+        nextChunkId: null,
+        redactionPolicyVersion: 'v1',
+        redactionSummary: { EMAIL: 1 },
+        createdAt: timestamp,
+      },
+    ]);
+    const count = vi.fn().mockResolvedValue(21);
+    const service = new DocumentsService(
+      {} as AppConfig,
+      {
+        document: { findFirst },
+        knowledgeChunk: { findMany, count },
+        $transaction: (operations: Array<Promise<unknown>>) => Promise.all(operations),
+      } as unknown as PrismaService,
+      {} as IngestionQueue,
+      {} as ChromaVectorStore,
+      logger,
+      acl,
+    );
+
+    await expect(
+      service.listDocumentChunks(
+        '6769af9a-a4d0-4dc2-a97d-942584a9c826',
+        { page: 2, pageSize: 20 },
+        identity,
+      ),
+    ).resolves.toMatchObject({
+      documentVersion: 2,
+      page: 2,
+      total: 21,
+      items: [{ originalText: '原始内容', redactionSummary: { EMAIL: 1 } }],
+    });
+    const [chunkQuery] = findMany.mock.calls[0] as unknown as [
+      {
+        where: { tenantId: string; documentId: string; document: { is: { tenantId: string } } };
+        skip: number;
+        take: number;
+      },
+    ];
+    expect(chunkQuery.where.tenantId).toBe('tenant-a');
+    expect(chunkQuery.where.documentId).toBe('6769af9a-a4d0-4dc2-a97d-942584a9c826');
+    expect(chunkQuery.where.document.is.tenantId).toBe('tenant-a');
+    expect(chunkQuery.skip).toBe(20);
+    expect(chunkQuery.take).toBe(20);
+  });
+
   it('always scopes ingestion job reads to the authenticated tenant', async () => {
     const findFirst = vi.fn().mockResolvedValue(null);
     const service = new DocumentsService(

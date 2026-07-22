@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { listDocuments, uploadDocument } from './documents';
+import { listDocumentChunks, listDocuments, uploadDocument } from './documents';
 
 afterEach(() => vi.restoreAllMocks());
 
@@ -40,5 +40,35 @@ describe('documents API', () => {
     const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
     expect(init.body).toBeInstanceOf(FormData);
     expect([...(init.body as FormData).keys()]).toEqual(['file']);
+  });
+
+  it("requests a selected document version's chunks with server-side pagination", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          documentId: '6769af9a-a4d0-4dc2-a97d-942584a9c826',
+          sourceName: '制度.md',
+          documentVersion: 2,
+          items: [],
+          page: 3,
+          pageSize: 20,
+          total: 40,
+        }),
+        { status: 200 },
+      ),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(
+      listDocumentChunks('6769af9a-a4d0-4dc2-a97d-942584a9c826', {
+        version: 2,
+        page: 3,
+        pageSize: 20,
+      }),
+    ).resolves.toMatchObject({ documentVersion: 2, total: 40 });
+
+    expect(fetchMock.mock.calls[0]?.[0]).toBe(
+      '/v1/documents/6769af9a-a4d0-4dc2-a97d-942584a9c826/chunks?version=2&page=3&pageSize=20',
+    );
   });
 });

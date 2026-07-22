@@ -3,7 +3,10 @@ import { describe, expect, it, vi } from 'vitest';
 import { AclPolicy } from '../src/auth/acl-policy';
 import type { Identity } from '../src/auth/identity';
 import type { AppConfig } from '../src/config/app-config';
-import { AnswerCitationError } from '../src/knowledge/answer-source-validator';
+import {
+  AnswerCitationError,
+  AnswerSourceValidator,
+} from '../src/knowledge/answer-source-validator';
 import type { QualityQueryObserver } from '../src/knowledge/knowledge-query.service';
 import { KnowledgeQueryService } from '../src/knowledge/knowledge-query.service';
 import type { QueryAuditService } from '../src/knowledge/query-audit.service';
@@ -43,6 +46,17 @@ const context: RetrievedChunk = {
     ownerId: 'user-a',
     page: 2,
     sectionPath: ['付款制度'],
+  },
+};
+const secondContext: RetrievedChunk = {
+  ...context,
+  id: 'c'.repeat(64),
+  text: '第二条可引用的付款依据',
+  metadata: {
+    ...context.metadata,
+    chunkId: 'c'.repeat(64),
+    chunkIds: ['c'.repeat(64)],
+    ordinal: 3,
   },
 };
 
@@ -87,6 +101,7 @@ function dependencies(options: { candidates?: RetrievedChunk[]; finalAuthorized?
     { answer } as unknown as LlmService,
     { retainActiveAuthorizedSources } as unknown as SourceAuthorizationService,
     { record } as unknown as QueryAuditService,
+    new AnswerSourceValidator(),
   );
   return { service, assertAllowed, embedQuery, retrieve, rerank, answer, record };
 }
@@ -141,6 +156,29 @@ describe('KnowledgeQueryService', () => {
       },
     ]);
     expect(JSON.stringify(recordVectorSources.mock.calls)).not.toContain(context.text);
+  });
+
+  it('returns and audits only the sources cited by the answer', async () => {
+    const deps = dependencies({ candidates: [context, secondContext] });
+    deps.answer.mockResolvedValue({
+      text: '付款依据见第二条资料。[来源2]',
+      provider: 'deepseek',
+      model: 'deepseek-chat',
+      fallbackUsed: false,
+    });
+
+    await expect(
+      deps.service.query({ question: '付款周期是多少？' }, identity, traceId),
+    ).resolves.toMatchObject({
+      sources: [{ index: 2, chunkIds: ['c'.repeat(64)] }],
+    });
+    expect(deps.record).toHaveBeenCalledWith(
+      expect.objectContaining({
+        outcome: 'answered',
+        resultCount: 1,
+        sourceChunkIds: ['c'.repeat(64)],
+      }),
+    );
   });
 
   it('rejects without calling Rerank or LLM when relevance is insufficient', async () => {

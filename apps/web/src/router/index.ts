@@ -42,6 +42,11 @@ export const router = createRouter({
           meta: { title: '文档详情', capabilities: ['documents:read'] },
         },
         {
+          path: 'documents/:id/chunks',
+          component: () => import('@/views/DocumentChunksView.vue'),
+          meta: { title: '文档分块', capabilities: ['documents:read'] },
+        },
+        {
           path: 'ingestion-jobs',
           component: () => import('@/views/IngestionJobsView.vue'),
           meta: { title: '入库任务', capabilities: ['documents:read'] },

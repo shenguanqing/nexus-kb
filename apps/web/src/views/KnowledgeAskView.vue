@@ -1,21 +1,26 @@
 <script setup lang="ts">
-import type { KnowledgeQueryResponse, KnowledgeSource } from '@nexus-kb/contracts';
-import { nextTick, ref } from 'vue';
+import type { KnowledgeSource } from '@nexus-kb/contracts';
+import { computed, nextTick, ref } from 'vue';
 import { queryKnowledge } from '@/api/knowledge';
 import { ApiError } from '@/api/client';
 import AskComposer from '@/components/knowledge/AskComposer.vue';
 import AssistantAnswer from '@/components/knowledge/AssistantAnswer.vue';
 import SourceDrawer from '@/components/knowledge/SourceDrawer.vue';
+import { useKnowledgeConversationStore } from '@/stores/knowledge-conversation';
 
-const question = ref('');
-const submittedQuestion = ref<string | null>(null);
-const response = ref<KnowledgeQueryResponse | null>(null);
+const conversation = useKnowledgeConversationStore();
+const question = ref(conversation.pendingQuestion ?? '');
 const error = ref<ApiError | null>(null);
-const isSubmitting = ref(false);
 const selectedSource = ref<KnowledgeSource | null>(null);
 const isSourceOpen = ref(false);
 const composer = ref<InstanceType<typeof AskComposer> | null>(null);
-const conversationId = ref<string | undefined>();
+const conversationPanel = ref<HTMLElement | null>(null);
+const hasConversation = computed(
+  () =>
+    conversation.turns.length > 0 ||
+    conversation.pendingQuestion !== null ||
+    conversation.isSubmitting,
+);
 const examples = [
   '报销需要准备哪些材料？',
   '项目验收后的付款周期是多久？',
@@ -23,22 +28,32 @@ const examples = [
 ];
 
 async function submit(): Promise<void> {
-  if (isSubmitting.value) return;
+  if (conversation.isSubmitting) return;
   const current = question.value.trim();
-  submittedQuestion.value = current;
+  if (!current) return;
+  const requestId = conversation.begin(current);
   error.value = null;
-  response.value = null;
-  isSubmitting.value = true;
+  await scrollToLatest();
   try {
-    response.value = await queryKnowledge(current, conversationId.value);
-    conversationId.value = response.value.conversationId;
-    question.value = '';
+    const response = await queryKnowledge(current, conversation.conversationId);
+    if (conversation.complete(requestId, response)) {
+      question.value = '';
+      await scrollToLatest();
+    }
   } catch (caught) {
-    error.value =
-      caught instanceof ApiError ? caught : new ApiError(0, 'UNKNOWN', '请求失败，请重试', null);
-  } finally {
-    isSubmitting.value = false;
+    if (conversation.fail(requestId)) {
+      error.value =
+        caught instanceof ApiError ? caught : new ApiError(0, 'UNKNOWN', '请求失败，请重试', null);
+    }
   }
+}
+
+async function scrollToLatest(): Promise<void> {
+  await nextTick();
+  conversationPanel.value?.scrollTo({
+    top: conversationPanel.value.scrollHeight,
+    behavior: 'smooth',
+  });
 }
 
 function openSource(source: KnowledgeSource): void {
@@ -48,12 +63,10 @@ function openSource(source: KnowledgeSource): void {
 
 async function startNewChat(): Promise<void> {
   question.value = '';
-  submittedQuestion.value = null;
-  response.value = null;
+  conversation.reset();
   error.value = null;
   selectedSource.value = null;
   isSourceOpen.value = false;
-  conversationId.value = undefined;
   await nextTick();
   composer.value?.focus();
 }
@@ -68,8 +81,8 @@ async function startNewChat(): Promise<void> {
       </div>
       <button type="button" class="new-chat" @click="startNewChat">＋ 新建问答</button>
     </header>
-    <div class="conversation" :class="{ empty: !submittedQuestion && !isSubmitting }">
-      <div v-if="!submittedQuestion && !isSubmitting" class="welcome-state">
+    <div ref="conversationPanel" class="conversation" :class="{ empty: !hasConversation }">
+      <div v-if="!hasConversation" class="welcome-state">
         <span class="welcome-mark">N</span>
         <h2>今天想从企业知识库了解什么？</h2>
         <p>回答仅基于您有权访问的资料，并附带可核验来源。</p>
@@ -84,11 +97,18 @@ async function startNewChat(): Promise<void> {
           </button>
         </div>
       </div>
-      <div v-if="submittedQuestion" class="user-message">
+      <template v-for="turn in conversation.turns" :key="turn.response.traceId">
+        <div class="user-message">
+          <span>你</span>
+          <p>{{ turn.question }}</p>
+        </div>
+        <AssistantAnswer :response="turn.response" @select-source="openSource" />
+      </template>
+      <div v-if="conversation.pendingQuestion" class="user-message">
         <span>你</span>
-        <p>{{ submittedQuestion }}</p>
+        <p>{{ conversation.pendingQuestion }}</p>
       </div>
-      <div v-if="isSubmitting" class="retrieving-state" aria-live="polite">
+      <div v-if="conversation.isSubmitting" class="retrieving-state" aria-live="polite">
         <span class="pulse"></span>
         <div>
           <strong>正在检索资料</strong>
@@ -102,11 +122,15 @@ async function startNewChat(): Promise<void> {
         </div>
         <el-button @click="submit">重试</el-button>
       </div>
-      <AssistantAnswer v-if="response" :response="response" @select-source="openSource" />
     </div>
-    <AskComposer ref="composer" v-model="question" :is-submitting="isSubmitting" @submit="submit" />
+    <AskComposer
+      ref="composer"
+      v-model="question"
+      :is-submitting="conversation.isSubmitting"
+      @submit="submit"
+    />
     <p class="composer-caption">
-      知枢可能出错，请通过来源核验重要信息。问题与回答不会保存到浏览器持久化存储。
+      当前会话会连续显示；历史会话可在“问答历史”中查看。问题与回答不会保存到浏览器持久化存储。
     </p>
     <SourceDrawer v-model="isSourceOpen" :source="selectedSource" />
   </section>

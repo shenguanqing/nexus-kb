@@ -17,7 +17,7 @@ export class AnswerCitationError extends LlmProviderError {
 
 @Injectable()
 export class AnswerSourceValidator {
-  validate(answer: string, contextCount: number): void {
+  validate(answer: string, contextCount: number): number[] {
     if (!answer.trim() || contextCount < 1) {
       throw new AnswerCitationError();
     }
@@ -31,5 +31,6 @@ export class AnswerSourceValidator {
     ) {
       throw new AnswerCitationError();
     }
+    return [...new Set(citations)];
   }
 }

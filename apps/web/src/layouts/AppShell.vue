@@ -3,10 +3,12 @@ import { computed, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { logout } from '@/api/auth';
 import { useAuthStore } from '@/stores/auth';
+import { useKnowledgeConversationStore } from '@/stores/knowledge-conversation';
 
 const route = useRoute();
 const router = useRouter();
 const auth = useAuthStore();
+const conversation = useKnowledgeConversationStore();
 const isCollapsed = ref(false);
 const pageTitle = computed(() => String(route.meta.title ?? '知枢'));
 
@@ -14,6 +16,7 @@ async function signOut(): Promise<void> {
   try {
     await logout();
   } finally {
+    conversation.clear();
     auth.clear();
     await router.replace('/login');
   }
@@ -65,13 +68,13 @@ async function signOut(): Promise<void> {
         >
         <RouterLink
           v-if="auth.hasCapability('access:read')"
-          class="desktop-only-nav"
+          class="desktop-only-nav access-nav"
           to="/access/users"
           ><span aria-hidden="true">♙</span><b>用户与角色</b></RouterLink
         >
         <RouterLink
           v-if="auth.hasCapability('access:read')"
-          class="desktop-only-nav"
+          class="desktop-only-nav access-nav"
           to="/access/departments"
           ><span aria-hidden="true">⌘</span><b>部门权限</b></RouterLink
         >

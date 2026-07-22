@@ -48,6 +48,10 @@ const allTasksTarget = computed(() => ({
 const activeVersion = computed(() =>
   document.value?.versions.find((version) => version.version === document.value?.activeVersion),
 );
+const chunksTarget = computed(() => ({
+  path: `/documents/${documentId}/chunks`,
+  query: activeVersion.value ? { version: String(activeVersion.value.version) } : {},
+}));
 
 function documentStatusLabel(status: string): string {
   return documentStatusLabels[status] ?? status;
@@ -221,10 +225,19 @@ onMounted(load);
             </dl>
           </article>
           <article class="detail-card">
-            <h3>当前索引</h3>
+            <div class="card-title">
+              <h3>当前向量索引</h3>
+              <RouterLink v-if="activeVersion?.chunkCount" :to="chunksTarget"
+                >查看全部分块</RouterLink
+              >
+            </div>
             <dl>
               <div>
-                <dt>分块数</dt>
+                <dt>向量库</dt>
+                <dd class="fingerprint">{{ activeVersion?.vectorCollection ?? '尚未写入' }}</dd>
+              </div>
+              <div>
+                <dt>向量数（分块）</dt>
                 <dd>{{ activeVersion?.chunkCount ?? 0 }}</dd>
               </div>
               <div>
@@ -234,6 +247,16 @@ onMounted(load);
               <div>
                 <dt>Embedding 指纹</dt>
                 <dd class="fingerprint">{{ activeVersion?.embeddingFingerprint ?? '尚未生成' }}</dd>
+              </div>
+              <div>
+                <dt>写入时间</dt>
+                <dd>
+                  {{
+                    activeVersion?.indexedAt
+                      ? new Date(activeVersion.indexedAt).toLocaleString()
+                      : '—'
+                  }}
+                </dd>
               </div>
             </dl>
             <ul v-if="activeVersion?.warnings.length">
@@ -255,9 +278,13 @@ onMounted(load);
                 documentStatusLabel(scope.row.status)
               }}</template></el-table-column
             ><el-table-column prop="chunkCount" label="分块" width="100" /><el-table-column
-              prop="parserVersion"
-              label="解析器版本"
-            /><el-table-column label="创建时间"
+              label="向量库"
+              min-width="220"
+              ><template #default="scope"
+                ><span class="fingerprint">{{ scope.row.vectorCollection ?? '—' }}</span></template
+              ></el-table-column
+            ><el-table-column prop="parserVersion" label="解析器版本" /><el-table-column
+              label="创建时间"
               ><template #default="scope">{{
                 new Date(scope.row.createdAt).toLocaleString()
               }}</template></el-table-column

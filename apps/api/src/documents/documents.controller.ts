@@ -12,12 +12,14 @@ import {
   Req,
 } from '@nestjs/common';
 import {
+  documentChunkListRequestSchema,
   documentListRequestSchema,
   documentMetadataUpdateRequestSchema,
   ingestionJobListRequestSchema,
 } from '@nexus-kb/contracts';
 import type {
   DocumentDetail,
+  DocumentChunkListResponse,
   DocumentListResponse,
   DocumentUploadOptions,
   IngestionJob,
@@ -62,6 +64,19 @@ export class DocumentsController {
     @Req() request: FastifyRequest,
   ): Promise<DocumentDetail> {
     return this.documents.getDocument(documentId, requestIdentity(request));
+  }
+
+  @Get('documents/:documentId/chunks')
+  listDocumentChunks(
+    @Param('documentId', new ParseUUIDPipe({ version: '4' })) documentId: string,
+    @Query() query: unknown,
+    @Req() request: FastifyRequest,
+  ): Promise<DocumentChunkListResponse> {
+    const parsed = documentChunkListRequestSchema.safeParse(query);
+    if (!parsed.success) {
+      throw new ApiException('DOCUMENT_CHUNK_LIST_QUERY_INVALID', '分块查询参数不合法', 400);
+    }
+    return this.documents.listDocumentChunks(documentId, parsed.data, requestIdentity(request));
   }
 
   @Get('ingestion-jobs')

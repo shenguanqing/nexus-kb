@@ -2,6 +2,8 @@ import {
   documentListRequestSchema,
   documentListResponseSchema,
   documentDeleteResponseSchema,
+  documentChunkListRequestSchema,
+  documentChunkListResponseSchema,
   documentDetailSchema,
   documentReindexAcceptedSchema,
   documentUploadAcceptedSchema,
@@ -10,6 +12,8 @@ import {
   documentMetadataUpdateRequestSchema,
   type DocumentListRequest,
   type DocumentListResponse,
+  type DocumentChunkListRequest,
+  type DocumentChunkListResponse,
   type DocumentUploadAccepted,
   type DocumentUploadOptions,
   type DocumentDeleteResponse,
@@ -48,6 +52,21 @@ export function uploadDocument(file: File): Promise<DocumentUploadAccepted> {
 
 export function fetchDocument(documentId: string): Promise<DocumentDetail> {
   return apiRequest(`/v1/documents/${encodeURIComponent(documentId)}`, documentDetailSchema);
+}
+
+export function listDocumentChunks(
+  documentId: string,
+  request: Partial<DocumentChunkListRequest>,
+): Promise<DocumentChunkListResponse> {
+  const query = documentChunkListRequestSchema.parse(request);
+  const parameters = new URLSearchParams();
+  for (const [key, value] of Object.entries(query)) {
+    if (value !== undefined) parameters.set(key, String(value));
+  }
+  return apiRequest(
+    `/v1/documents/${encodeURIComponent(documentId)}/chunks?${parameters.toString()}`,
+    documentChunkListResponseSchema,
+  );
 }
 
 export function reindexDocument(documentId: string): Promise<DocumentReindexAccepted> {

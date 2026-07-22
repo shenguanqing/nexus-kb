@@ -25,9 +25,9 @@ class Settings(BaseSettings):
     max_cad_insert_depth: int = Field(
         default=8, ge=1, le=32, validation_alias="MAX_CAD_INSERT_DEPTH"
     )
-    dwg_conversion_enabled: bool = Field(default=False, validation_alias="DWG_CONVERSION_ENABLED")
+    dwg_conversion_enabled: bool = Field(default=True, validation_alias="DWG_CONVERSION_ENABLED")
     dwg_converter_executable: Path = Field(
-        default=Path("/opt/oda/ODAFileConverter"),
+        default=Path("/usr/local/bin/nexus-oda-file-converter"),
         validation_alias="DWG_CONVERTER_EXECUTABLE",
     )
     dwg_converter_release: str = Field(

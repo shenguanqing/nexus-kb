@@ -29,14 +29,21 @@ async function mockSession(page: Page, capabilities?: string[]): Promise<void> {
 
 test('asks a grounded question and renders an authorized source', async ({ page }) => {
   await mockSession(page);
-  await page.route('**/v1/knowledge/query', (route) =>
-    route.fulfill({
+  await page.route('**/v1/knowledge/query', (route) => {
+    const question = route.request().postDataJSON().question;
+    return route.fulfill({
       json: {
         conversationId: '11111111-1111-4111-8111-111111111111',
-        answer: '付款周期为 30 天。[来源1]',
+        answer:
+          question === '付款周期是多久？'
+            ? '付款周期为 30 天。[来源1]'
+            : '报销需提交对应材料。[来源1]',
         noAnswer: false,
         reason: null,
-        traceId: '21111111-1111-4111-8111-111111111111',
+        traceId:
+          question === '付款周期是多久？'
+            ? '21111111-1111-4111-8111-111111111111'
+            : '21111111-1111-4111-8111-111111111112',
         sources: [
           {
             index: 1,
@@ -52,13 +59,30 @@ test('asks a grounded question and renders an authorized source', async ({ page 
         model: { provider: 'fixture', model: 'fixture-model', fallbackUsed: false },
         rerankDegraded: false,
       },
-    }),
-  );
+    });
+  });
   await page.goto('/ask');
   await page.getByLabel('输入知识库问题').fill('付款周期是多久？');
   await page.getByRole('button', { name: '发送' }).click();
   await expect(page.getByText('付款周期为 30 天。')).toBeVisible();
   await expect(page.getByText('付款制度.md')).toBeVisible();
+  await page.route('**/v1/history/conversations?**', (route) =>
+    route.fulfill({ json: { conversations: [], total: 0, offset: 0, limit: 20 } }),
+  );
+  await page.getByRole('link', { name: '问答历史' }).click();
+  await expect(page).toHaveURL(/\/history$/);
+  await page.getByRole('link', { name: '知识问答' }).click();
+  await expect(page.getByText('付款周期是多久？')).toBeVisible();
+  await expect(page.getByText('付款周期为 30 天。')).toBeVisible();
+  await page.getByLabel('输入知识库问题').fill('报销需要准备哪些材料？');
+  await page.getByRole('button', { name: '发送' }).click();
+  await expect(page.getByText('报销需要准备哪些材料？')).toBeVisible();
+  await expect(page.getByText('报销需提交对应材料。')).toBeVisible();
+  await expect(page.getByText('付款周期是多久？')).toBeVisible();
+  await expect(page.getByText('付款周期为 30 天。')).toBeVisible();
+  await page.getByRole('button', { name: '新建问答' }).click();
+  await expect(page.getByText('今天想从企业知识库了解什么？')).toBeVisible();
+  await expect(page.getByText('付款周期是多久？', { exact: true })).not.toBeVisible();
 });
 
 test('renders explicit no-answer and blocks unauthorized management routes', async ({ page }) => {
@@ -83,6 +107,100 @@ test('renders explicit no-answer and blocks unauthorized management routes', asy
   await expect(page.getByText('暂时没有找到足够依据')).toBeVisible();
   await page.goto('/access/users');
   await expect(page).toHaveURL(/\/403$/);
+});
+
+test('opens access navigation and displays ACL-authorized document chunks', async ({ page }) => {
+  const documentId = '6769af9a-a4d0-4dc2-a97d-942584a9c826';
+  await mockSession(page);
+  await page.route('**/v1/access/users**', (route) =>
+    route.fulfill({
+      json: { users: [], total: 0, offset: 0, limit: 25, scope: 'tenant' },
+    }),
+  );
+  await page.route('**/v1/access/departments', (route) =>
+    route.fulfill({ json: { departments: [] } }),
+  );
+  await page.route('**/v1/ingestion-jobs**', (route) =>
+    route.fulfill({ json: { items: [], page: 1, pageSize: 20, total: 0 } }),
+  );
+  await page.route('**/v1/documents/**', (route) => {
+    if (route.request().url().includes('/chunks?')) {
+      return route.fulfill({
+        json: {
+          documentId,
+          sourceName: '制度.md',
+          documentVersion: 1,
+          items: [
+            {
+              id: 'a'.repeat(64),
+              documentVersion: 1,
+              ordinal: 0,
+              originalText: '这是原始分块内容。',
+              redactedText: '这是脱敏后分块内容。',
+              tokenCount: 10,
+              page: 1,
+              sheet: null,
+              sectionPath: ['第一章'],
+              elementTypes: ['paragraph'],
+              previousChunkId: null,
+              nextChunkId: null,
+              redactionPolicyVersion: 'v1',
+              redactionSummary: {},
+              createdAt: '2026-07-22T09:00:00.000Z',
+            },
+          ],
+          page: 1,
+          pageSize: 20,
+          total: 1,
+        },
+      });
+    }
+    return route.fulfill({
+      json: {
+        id: documentId,
+        sourceName: '制度.md',
+        mimeType: 'text/markdown',
+        department: 'finance',
+        sensitivity: 'internal',
+        ownerId: 'admin.fixture',
+        activeVersion: 1,
+        status: 'active',
+        versions: [
+          {
+            version: 1,
+            status: 'active',
+            parser: 'markdown',
+            parserVersion: '1.0',
+            warnings: [],
+            chunkCount: 1,
+            vectorCollection: 'nexus_ollama_bge_m3_1024_12345678',
+            embeddingFingerprint: 'a'.repeat(64),
+            indexedAt: '2026-07-22T09:00:00.000Z',
+            activatedAt: '2026-07-22T09:00:00.000Z',
+            supersededAt: null,
+            createdAt: '2026-07-22T09:00:00.000Z',
+          },
+        ],
+        createdAt: '2026-07-22T09:00:00.000Z',
+        updatedAt: '2026-07-22T09:00:00.000Z',
+      },
+    });
+  });
+
+  await page.goto('/ask');
+  await page.getByRole('link', { name: '用户与角色' }).click();
+  await expect(page).toHaveURL(/\/access\/users$/);
+  await expect(page.getByRole('heading', { name: '用户与角色' })).toBeVisible();
+  await page.getByRole('link', { name: '部门权限' }).click();
+  await expect(page).toHaveURL(/\/access\/departments$/);
+  await expect(page.getByRole('heading', { name: '部门权限' })).toBeVisible();
+
+  await page.goto(`/documents/${documentId}`);
+  await page.getByRole('link', { name: '查看全部分块' }).click();
+  await expect(page).toHaveURL(new RegExp(`/documents/${documentId}/chunks\\?version=1$`));
+  await expect(page.getByRole('heading', { name: '文档分块' })).toBeVisible();
+  await expect(page.getByText('这是原始分块内容。')).toBeVisible();
+  await expect(page.getByText('这是脱敏后分块内容。')).toBeVisible();
 });
 
 test('signs in with an enabled account-password session without storing credentials in the page', async ({

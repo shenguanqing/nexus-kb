@@ -13,6 +13,13 @@ def test_liveness_does_not_depend_on_external_services(tmp_path: Path) -> None:
     assert response.json() == {"status": "ok"}
 
 
+def test_dwg_conversion_is_enabled_with_the_controlled_launcher_by_default(tmp_path: Path) -> None:
+    settings = Settings(PARSER_INTERNAL_TOKEN="x" * 16, RAW_DOCS_PATH=tmp_path)
+
+    assert settings.dwg_conversion_enabled is True
+    assert settings.dwg_converter_executable == Path("/usr/local/bin/nexus-oda-file-converter")
+
+
 def test_readiness_reports_missing_enabled_dwg_converter(tmp_path: Path) -> None:
     settings = Settings(
         PARSER_INTERNAL_TOKEN="x" * 16,

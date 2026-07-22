@@ -12,10 +12,11 @@ const baseEnvironment = {
 };
 
 describe('embedding configuration', () => {
-  it('keeps local infrastructure runnable when embedding is disabled', () => {
+  it('keeps local infrastructure runnable when embedding is disabled and enables DWG conversion by default', () => {
     const environment = parseEnvironment(baseEnvironment);
     expect(environment.EMBEDDING_PROVIDER).toBe('none');
     expect(environment.DASHSCOPE_API_KEY).toBe('');
+    expect(environment.DWG_CONVERSION_ENABLED).toBe(true);
   });
 
   it('applies isolated defaults for development, test and production', () => {
