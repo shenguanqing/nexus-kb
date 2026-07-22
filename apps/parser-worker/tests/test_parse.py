@@ -232,17 +232,28 @@ def test_dwg_is_converted_to_dxf_and_parsed(tmp_path: Path) -> None:
     assert any(element["text"] == "Converted DWG annotation" for element in parsed["elements"])
 
 
-def test_dwg_rejects_disabled_conversion_and_forged_signature(tmp_path: Path) -> None:
+def test_dwg_rejects_unavailable_converter_and_forged_signature(tmp_path: Path) -> None:
     path = tmp_path / "drawing.dwg"
     path.write_bytes(b"AC1032" + b"\0" * 64)
     body = payload(path)
     body["mimeType"] = "image/vnd.dwg"
 
-    disabled = make_client(tmp_path).post(
+    unavailable_client = TestClient(
+        create_app(
+            Settings(
+                PARSER_INTERNAL_TOKEN=TOKEN,
+                RAW_DOCS_PATH=tmp_path,
+                DWG_CONVERSION_ENABLED=True,
+                DWG_CONVERTER_EXECUTABLE=tmp_path / "missing-oda-file-converter",
+                PARSER_TEMP_PATH=tmp_path,
+            )
+        )
+    )
+    unavailable = unavailable_client.post(
         "/internal/v1/parse", headers={"x-internal-token": TOKEN}, json=body
     )
-    assert disabled.status_code == 503
-    assert disabled.json()["detail"] == "DWG 格式转换未启用"
+    assert unavailable.status_code == 503
+    assert unavailable.json()["detail"] == "DWG 转换器未就绪"
 
     converter = tmp_path / "fake-oda-file-converter"
     make_fake_dwg_converter(converter)
@@ -263,6 +274,30 @@ def test_dwg_rejects_disabled_conversion_and_forged_signature(tmp_path: Path) ->
     )
     assert invalid.status_code == 422
     assert invalid.json()["detail"] == "DWG 版本不受支持或文件签名无效"
+
+
+def test_dwg_rejects_disabled_conversion(tmp_path: Path) -> None:
+    path = tmp_path / "drawing.dwg"
+    path.write_bytes(b"AC1032" + b"\0" * 64)
+    body = payload(path)
+    body["mimeType"] = "image/vnd.dwg"
+    disabled_client = TestClient(
+        create_app(
+            Settings(
+                PARSER_INTERNAL_TOKEN=TOKEN,
+                RAW_DOCS_PATH=tmp_path,
+                DWG_CONVERSION_ENABLED=False,
+                PARSER_TEMP_PATH=tmp_path,
+            )
+        )
+    )
+
+    disabled = disabled_client.post(
+        "/internal/v1/parse", headers={"x-internal-token": TOKEN}, json=body
+    )
+
+    assert disabled.status_code == 503
+    assert disabled.json()["detail"] == "DWG 格式转换未启用"
 
 
 def test_parse_rejects_path_outside_root_and_symlink(tmp_path: Path) -> None:
