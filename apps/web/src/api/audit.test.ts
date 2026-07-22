@@ -6,9 +6,11 @@ afterEach(() => vi.restoreAllMocks());
 
 describe('audit API', () => {
   it('sends only bounded audit query fields and validates the response', async () => {
-    const fetchMock = vi.fn().mockResolvedValue(
-      new Response(JSON.stringify({ events: [], nextBefore: null }), { status: 200 }),
-    );
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(
+        new Response(JSON.stringify({ events: [], nextBefore: null }), { status: 200 }),
+      );
     vi.stubGlobal('fetch', fetchMock);
 
     await listAuditEvents({ type: 'query', limit: 25 });

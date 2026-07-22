@@ -1,14 +1,15 @@
-import { CanActivate, ExecutionContext, Inject, Injectable } from '@nestjs/common';
+import { CanActivate, ExecutionContext, Inject, Injectable, Optional } from '@nestjs/common';
 import type { FastifyRequest } from 'fastify';
 import { Reflector } from '@nestjs/core';
 
 import { ApiException } from '../common/api-exception';
 import { AppConfig } from '../config/app-config';
-import type { AuthenticatedRequest } from './identity';
+import type { AuthenticatedRequest, Identity } from './identity';
 import { developmentIdentity } from './identity';
 import { IS_PUBLIC_ROUTE } from './public.decorator';
 import { TOKEN_VERIFIER } from './token-verifier';
 import type { TokenVerifier } from './token-verifier';
+import { UserDirectoryService } from '../access/user-directory.service';
 
 @Injectable()
 export class AuthenticationGuard implements CanActivate {
@@ -16,6 +17,7 @@ export class AuthenticationGuard implements CanActivate {
     private readonly config: AppConfig,
     private readonly reflector: Reflector,
     @Inject(TOKEN_VERIFIER) private readonly tokenVerifier: TokenVerifier,
+    @Optional() private readonly users?: UserDirectoryService,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -29,16 +31,20 @@ export class AuthenticationGuard implements CanActivate {
       if (!['development', 'test'].includes(this.config.values.NODE_ENV)) {
         throw new ApiException('AUTH_CONFIGURATION_INVALID', '认证配置不安全', 503);
       }
-      request.identity = developmentIdentity(this.config);
+      request.identity = await this.resolve(developmentIdentity(this.config));
       return true;
     }
     const token = this.bearerToken(request.headers.authorization);
     try {
-      request.identity = await this.tokenVerifier.verify(token);
+      request.identity = await this.resolve(await this.tokenVerifier.verify(token));
       return true;
     } catch {
       throw new ApiException('TOKEN_INVALID', '身份凭证无效或已过期', 401);
     }
+  }
+
+  private async resolve(identity: Identity): Promise<Identity> {
+    return this.users ? this.users.resolve(identity) : identity;
   }
 
   private bearerToken(authorization: string | undefined): string {

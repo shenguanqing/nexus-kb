@@ -4,6 +4,7 @@ export const auditTypeLabels: Record<AuditEventType, string> = {
   query: '知识问答',
   document_lifecycle: '文档生命周期',
   cloud_policy: '云端策略',
+  access_change: '权限变更',
 };
 
 const eventLabels: Record<string, string> = {
@@ -41,8 +42,7 @@ export function auditProvider(event: AuditEvent): string {
     stringAttribute(event, 'llmProvider') ??
     stringAttribute(event, 'embeddingProvider') ??
     stringAttribute(event, 'providerId');
-  const model =
-    stringAttribute(event, 'llmModel') ?? stringAttribute(event, 'embeddingModel');
+  const model = stringAttribute(event, 'llmModel') ?? stringAttribute(event, 'embeddingModel');
   return provider ? `${provider}${model ? ` / ${model}` : ''}` : '—';
 }
 

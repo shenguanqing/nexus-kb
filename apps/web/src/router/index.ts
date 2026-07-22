@@ -27,6 +27,11 @@ export const router = createRouter({
           meta: { title: '知识问答' },
         },
         {
+          path: 'history',
+          component: () => import('@/views/HistoryView.vue'),
+          meta: { title: '问答历史' },
+        },
+        {
           path: 'documents',
           component: () => import('@/views/DocumentsView.vue'),
           meta: { title: '文档管理', capabilities: ['documents:read'] },
@@ -52,6 +57,11 @@ export const router = createRouter({
           meta: { title: '用户与角色', capabilities: ['access:read'] },
         },
         {
+          path: 'access/departments',
+          component: () => import('@/views/DepartmentsView.vue'),
+          meta: { title: '部门权限', capabilities: ['access:read'] },
+        },
+        {
           path: 'settings/providers',
           component: () => import('@/views/ProviderSettingsView.vue'),
           meta: { title: '模型 Provider', capabilities: ['system:read'] },
@@ -60,6 +70,11 @@ export const router = createRouter({
           path: 'system/status',
           component: () => import('@/views/SystemStatusView.vue'),
           meta: { title: '系统状态', capabilities: ['system:read'] },
+        },
+        {
+          path: 'system/usage',
+          component: () => import('@/views/UsageView.vue'),
+          meta: { title: '用量与成本', capabilities: ['system:read'] },
         },
       ],
     },

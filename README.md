@@ -1,9 +1,9 @@
 # 知枢 NexusKB
 
-知枢 NexusKB 是企业级知识库项目。当前后端 RAG、安全索引、审计和质量评测框架已完成，正在实施
-Vue 3 企业知识问答与管理前端。
+知枢 NexusKB 是企业级知识库项目。当前后端 RAG、安全索引、审计、质量评测框架与阶段 15 Vue 3
+企业知识问答和管理前端代码已完成。
 
-前端 F1 基础工程和 F2 知识问答核心切片已完成；阶段 14 的真实评测运行等待业务方批准的数据，进度以
+阶段 14 的真实评测运行仍等待业务方批准的数据；阶段 15 已完成，当前开发进度以
 [`TASK.md`](./TASK.md) 为准。
 
 ## 环境要求
@@ -21,6 +21,7 @@ pnpm lint
 pnpm typecheck
 pnpm test
 pnpm --filter @nexus-kb/api test:integration
+pnpm --filter @nexus-kb/web test:e2e
 pnpm build
 ```
 
@@ -100,6 +101,9 @@ curl 'http://127.0.0.1:3000/v1/audit/events?limit=50'
 curl http://127.0.0.1:3000/v1/system/providers
 curl http://127.0.0.1:3000/v1/system/status
 curl 'http://127.0.0.1:3000/v1/access/users?limit=25'
+curl http://127.0.0.1:3000/v1/access/departments
+curl http://127.0.0.1:3000/v1/history/conversations
+curl http://127.0.0.1:3000/v1/system/usage
 ```
 
 公共 API 契约位于 `packages/contracts/openapi/api.v1.yaml`。API 启动时自动执行不可变 Prisma migration；任务在 Redis 中只携带 ID 与 UUID 文件引用，不携带正文。
@@ -111,7 +115,8 @@ curl 'http://127.0.0.1:3000/v1/access/users?limit=25'
 - JWT 仅允许配置的 RSA/ECDSA 非对称算法；未知密钥、错误 issuer/audience、过期 token 或不完整 claims
   均返回 401，不回退开发身份。
 - 文档 API 使用 `documents:read`、`documents:write`、`documents:delete` capabilities；tenant 级审计查询
-  另需 `audit:read`；Provider 与系统状态只读摘要另需 `system:read`；已验证用户目录另需 `access:read`。
+  另需 `audit:read`；Provider、系统状态与用量摘要另需 `system:read`；已验证用户目录另需 `access:read`，
+  角色与部门 mutation 另需 `access:write` 和平台管理员角色。
 - 所有资源查询首先强制 tenant；普通用户只能访问允许敏感度内的 public、同部门或本人文档。
 - `platform_admin`/`document_admin` 可跨部门管理当前 tenant 内允许敏感度的文档，但不能跨 tenant。
 - 入库任务继承关联文档 ACL；VectorStore filter 只能由服务端 Identity 构造。

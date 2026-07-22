@@ -22,3 +22,6 @@ logs/*
 !logs/.gitkeep
 evaluation/private/
 evaluation/results/
+apps/web/test-results/
+apps/web/playwright-report/
+apps/web/blob-report/

@@ -146,6 +146,23 @@ export const documentDeleteResponseSchema = z
   .object({ documentId: z.uuid(), deleted: z.literal(true) })
   .strict();
 
+export const documentMetadataUpdateRequestSchema = z
+  .object({
+    department: z.string().trim().min(1).max(128),
+    sensitivity: sensitivitySchema,
+  })
+  .strict();
+
+export const documentMetadataUpdateAcceptedSchema = z
+  .object({
+    documentId: z.uuid(),
+    documentVersion: z.number().int().min(2),
+    jobId: z.uuid(),
+    status: z.literal('queued'),
+    traceId: z.uuid(),
+  })
+  .strict();
+
 export type DocumentListRequest = z.infer<typeof documentListRequestSchema>;
 export type DocumentListItem = z.infer<typeof documentListItemSchema>;
 export type DocumentListResponse = z.infer<typeof documentListResponseSchema>;
@@ -155,3 +172,5 @@ export type DocumentVersion = z.infer<typeof documentVersionSchema>;
 export type DocumentDetail = z.infer<typeof documentDetailSchema>;
 export type DocumentReindexAccepted = z.infer<typeof documentReindexAcceptedSchema>;
 export type DocumentDeleteResponse = z.infer<typeof documentDeleteResponseSchema>;
+export type DocumentMetadataUpdateRequest = z.infer<typeof documentMetadataUpdateRequestSchema>;
+export type DocumentMetadataUpdateAccepted = z.infer<typeof documentMetadataUpdateAcceptedSchema>;

@@ -33,6 +33,7 @@ const pageTitle = computed(() => String(route.meta.title ?? '知枢'));
     <aside class="app-sidebar">
       <nav aria-label="主导航">
         <RouterLink to="/ask"><span aria-hidden="true">✦</span><b>知识问答</b></RouterLink>
+        <RouterLink to="/history"><span aria-hidden="true">◷</span><b>问答历史</b></RouterLink>
         <RouterLink v-if="auth.hasCapability('documents:read')" to="/documents"
           ><span aria-hidden="true">▤</span><b>文档管理</b></RouterLink
         >
@@ -49,10 +50,22 @@ const pageTitle = computed(() => String(route.meta.title ?? '知枢'));
           ><span aria-hidden="true">♙</span><b>用户与角色</b></RouterLink
         >
         <RouterLink
+          v-if="auth.hasCapability('access:read')"
+          class="desktop-only-nav"
+          to="/access/departments"
+          ><span aria-hidden="true">⌘</span><b>部门权限</b></RouterLink
+        >
+        <RouterLink
           v-if="auth.hasCapability('system:read')"
           class="desktop-only-nav"
           to="/settings/providers"
           ><span aria-hidden="true">◇</span><b>模型 Provider</b></RouterLink
+        >
+        <RouterLink
+          v-if="auth.hasCapability('system:read')"
+          class="desktop-only-nav"
+          to="/system/usage"
+          ><span aria-hidden="true">▥</span><b>用量与成本</b></RouterLink
         >
         <RouterLink
           v-if="auth.hasCapability('system:read')"
@@ -71,7 +84,7 @@ const pageTitle = computed(() => String(route.meta.title ?? '知枢'));
       </button>
     </aside>
 
-    <main class="app-main">
+    <main class="app-main" :class="{ 'app-main--ask': route.path === '/ask' }">
       <div v-if="route.path !== '/ask'" class="page-heading">
         <p>知枢 NexusKB</p>
         <h1>{{ pageTitle }}</h1>

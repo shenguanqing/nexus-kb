@@ -7,9 +7,7 @@ import {
 
 import { apiRequest } from './client';
 
-export function listAuditEvents(
-  request: Partial<AuditQueryRequest>,
-): Promise<AuditQueryResponse> {
+export function listAuditEvents(request: Partial<AuditQueryRequest>): Promise<AuditQueryResponse> {
   const query = auditQueryRequestSchema.parse(request);
   const parameters = new URLSearchParams();
   for (const [key, value] of Object.entries(query)) {

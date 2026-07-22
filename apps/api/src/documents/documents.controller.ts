@@ -1,15 +1,21 @@
 import {
+  Body,
   Controller,
   Delete,
   Get,
   HttpCode,
   Param,
+  Patch,
   ParseUUIDPipe,
   Post,
   Query,
   Req,
 } from '@nestjs/common';
-import { documentListRequestSchema, ingestionJobListRequestSchema } from '@nexus-kb/contracts';
+import {
+  documentListRequestSchema,
+  documentMetadataUpdateRequestSchema,
+  ingestionJobListRequestSchema,
+} from '@nexus-kb/contracts';
 import type {
   DocumentDetail,
   DocumentListResponse,
@@ -107,5 +113,24 @@ export class DocumentsController {
     @Req() request: FastifyRequest,
   ): Promise<object> {
     return this.documents.reindexDocument(documentId, requestIdentity(request), request.id);
+  }
+
+  @Patch('documents/:documentId/metadata')
+  @HttpCode(202)
+  updateMetadata(
+    @Param('documentId', new ParseUUIDPipe({ version: '4' })) documentId: string,
+    @Body() body: unknown,
+    @Req() request: FastifyRequest,
+  ): Promise<object> {
+    const parsed = documentMetadataUpdateRequestSchema.safeParse(body);
+    if (!parsed.success) {
+      throw new ApiException('DOCUMENT_METADATA_INVALID', '文档 metadata 参数不合法', 400);
+    }
+    return this.documents.updateMetadata(
+      documentId,
+      parsed.data,
+      requestIdentity(request),
+      request.id,
+    );
   }
 }

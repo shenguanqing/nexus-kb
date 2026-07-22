@@ -203,6 +203,7 @@ model QueryAudit {
   traceId           String   @unique @db.Uuid
   tenantId          String
   userId            String
+  department        String?
   queryLength       Int
   outcome           String
   resultCount       Int      @default(0)
@@ -228,10 +229,68 @@ model UserDirectoryEntry {
   userId              String
   department          String
   roles               Json
+  managedRoles        Json?
   lastAuthenticatedAt DateTime @db.Timestamptz(3)
   createdAt           DateTime @default(now()) @db.Timestamptz(3)
   updatedAt           DateTime @updatedAt @db.Timestamptz(3)
 
   @@id([tenantId, userId])
   @@index([tenantId, department, lastAuthenticatedAt])
+}
+
+model DepartmentPolicy {
+  tenantId             String
+  department           String
+  allowedSensitivities Json
+  updatedBy            String
+  createdAt            DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt            DateTime @updatedAt @db.Timestamptz(3)
+
+  @@id([tenantId, department])
+  @@index([tenantId, updatedAt])
+}
+
+model AccessAudit {
+  id          String   @id @db.Uuid
+  tenantId    String
+  actorUserId String
+  targetType  String
+  targetId    String
+  eventType   String
+  before      Json
+  after       Json
+  traceId     String   @db.Uuid
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+
+  @@index([tenantId, createdAt])
+  @@index([tenantId, targetType, targetId, createdAt])
+}
+
+model KnowledgeConversation {
+  id        String          @id @db.Uuid
+  tenantId  String
+  userId    String
+  title     String
+  createdAt DateTime        @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime        @updatedAt @db.Timestamptz(3)
+  turns     KnowledgeTurn[]
+
+  @@index([tenantId, userId, updatedAt])
+}
+
+model KnowledgeTurn {
+  id             String                @id @db.Uuid
+  conversationId String                @db.Uuid
+  question       String                @db.Text
+  answer         String                @db.Text
+  noAnswer       Boolean
+  reason         String?
+  traceId        String                @unique @db.Uuid
+  sources        Json
+  model          Json?
+  rerankDegraded Boolean               @default(false)
+  createdAt      DateTime              @default(now()) @db.Timestamptz(3)
+  conversation   KnowledgeConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId, createdAt])
 }

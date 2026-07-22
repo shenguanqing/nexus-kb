@@ -44,7 +44,9 @@ async function load(reset = true): Promise<void> {
   else loadingMore.value = true;
   errorMessage.value = '';
   try {
-    const result = await listAuditEvents(request(reset ? undefined : nextBefore.value ?? undefined));
+    const result = await listAuditEvents(
+      request(reset ? undefined : (nextBefore.value ?? undefined)),
+    );
     events.value = reset ? result.events : [...events.value, ...result.events];
     nextBefore.value = result.nextBefore;
   } catch (error) {
@@ -112,11 +114,15 @@ onMounted(() => load());
               </div>
               <div>
                 <dt>Trace ID</dt>
-                <dd><code>{{ scope.row.traceId ?? '—' }}</code></dd>
+                <dd>
+                  <code>{{ scope.row.traceId ?? '—' }}</code>
+                </dd>
               </div>
               <div v-if="scope.row.ingestionJobId">
                 <dt>入库任务</dt>
-                <dd><code>{{ scope.row.ingestionJobId }}</code></dd>
+                <dd>
+                  <code>{{ scope.row.ingestionJobId }}</code>
+                </dd>
               </div>
             </dl>
           </template>

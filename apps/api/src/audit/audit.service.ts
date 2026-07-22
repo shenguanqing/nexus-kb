@@ -23,7 +23,7 @@ export class AuditService {
     const take = request.limit + 1;
     const selectedTypes: AuditEventType[] = request.type
       ? [request.type]
-      : ['query', 'document_lifecycle', 'cloud_policy'];
+      : ['query', 'document_lifecycle', 'cloud_policy', 'access_change'];
     const batches = await Promise.all([
       selectedTypes.includes('query')
         ? this.queryEvents(identity.tenantId, before, take)
@@ -33,6 +33,9 @@ export class AuditService {
         : Promise.resolve([]),
       selectedTypes.includes('cloud_policy')
         ? this.policyEvents(identity.tenantId, before, take)
+        : Promise.resolve([]),
+      selectedTypes.includes('access_change')
+        ? this.accessEvents(identity.tenantId, before, take)
         : Promise.resolve([]),
     ]);
     const allEvents = batches
@@ -133,6 +136,31 @@ export class AuditService {
         providerId: row.providerId,
         region: row.region,
         redactionPolicyVersion: row.redactionPolicyVersion,
+      },
+      createdAt: row.createdAt.toISOString(),
+    }));
+  }
+
+  private async accessEvents(tenantId: string, before: Date | undefined, take: number) {
+    const rows = await this.prisma.accessAudit.findMany({
+      where: { tenantId, ...(before ? { createdAt: { lt: before } } : {}) },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      take,
+    });
+    return rows.map((row): AuditEvent => ({
+      id: row.id,
+      type: 'access_change',
+      event: row.eventType,
+      outcome: 'completed',
+      traceId: row.traceId,
+      actorUserId: row.actorUserId,
+      documentId: null,
+      ingestionJobId: null,
+      attributes: {
+        targetType: row.targetType,
+        targetId: row.targetId,
+        before: this.stringArray(row.before),
+        after: this.stringArray(row.after),
       },
       createdAt: row.createdAt.toISOString(),
     }));

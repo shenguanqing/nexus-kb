@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: NexusKB API
-  version: 0.9.0
+  version: 1.0.0
 security:
   - bearerAuth: []
 paths:
@@ -96,6 +96,108 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ApiError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /v1/access/users/{userId}/roles:
+    patch:
+      summary: Replace application-managed roles for an observed tenant user
+      parameters:
+        - { name: userId, in: path, required: true, schema: { type: string, maxLength: 256 } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UserRoleUpdateRequest' }
+      responses:
+        '200':
+          description: Managed roles updated with last-platform-admin protection
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/UserRoleUpdateResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { description: Last platform administrator cannot be removed }
+  /v1/access/departments:
+    get:
+      summary: List tenant or department scoped effective department policies
+      responses:
+        '200':
+          description: Department policy summaries
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DepartmentPolicyListResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /v1/access/departments/{department}:
+    patch:
+      summary: Restrict a department sensitivity policy
+      parameters:
+        - { name: department, in: path, required: true, schema: { type: string, maxLength: 128 } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/DepartmentPolicyUpdateRequest' }
+      responses:
+        '200':
+          description: Effective department policy
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DepartmentPolicyUpdateResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /v1/history/conversations:
+    get:
+      summary: List only the authenticated user's conversations
+      parameters:
+        - { name: query, in: query, schema: { type: string, minLength: 1, maxLength: 200 } }
+        - { name: from, in: query, schema: { type: string, format: date-time } }
+        - { name: to, in: query, schema: { type: string, format: date-time } }
+        - { name: offset, in: query, schema: { type: integer, minimum: 0, default: 0 } }
+        - {
+            name: limit,
+            in: query,
+            schema: { type: integer, minimum: 1, maximum: 100, default: 20 },
+          }
+      responses:
+        '200':
+          description: User-owned conversation page
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ConversationListResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /v1/history/conversations/{conversationId}:
+    parameters:
+      - { name: conversationId, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      summary: Get a user-owned conversation
+      responses:
+        '200':
+          description: Conversation and turns
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ConversationDetail' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    delete:
+      summary: Delete a user-owned conversation and its turns
+      responses:
+        '200':
+          description: Conversation deleted
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ConversationDeleteResponse' }
+  /v1/system/usage:
+    get:
+      summary: Aggregate tenant query and Provider request facts for platform administrators
+      parameters:
+        - { name: from, in: query, required: true, schema: { type: string, format: date-time } }
+        - { name: to, in: query, required: true, schema: { type: string, format: date-time } }
+      responses:
+        '200':
+          description: Request-level usage with nullable token and cost fields
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/UsageResponse' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
   /v1/knowledge/query:
@@ -226,6 +328,30 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ApiError' }
+  /v1/documents/{documentId}/metadata:
+    parameters:
+      - $ref: '#/components/parameters/DocumentId'
+    patch:
+      summary: Update authorized ACL metadata and enqueue a safe new document version
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [department, sensitivity]
+              properties:
+                department: { type: string, minLength: 1, maxLength: 128 }
+                sensitivity: { $ref: '#/components/schemas/Sensitivity' }
+      responses:
+        '202':
+          description: Metadata updated and reindex queued
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ReindexAccepted' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
   /v1/ingestion-jobs:
     get:
       summary: List ACL-visible ingestion jobs with server-side pagination
@@ -358,12 +484,13 @@ components:
                     audit:read,
                     system:read,
                     access:read,
+                    access:write,
                   ]
             defaultSensitivity: { type: string, enum: [public, internal, confidential] }
     UserDirectoryEntry:
       type: object
       additionalProperties: false
-      required: [userId, department, roles, status, lastAuthenticatedAt]
+      required: [userId, department, roles, roleSource, status, lastAuthenticatedAt]
       properties:
         userId: { type: string, minLength: 1, maxLength: 256 }
         department: { type: string, minLength: 1, maxLength: 128 }
@@ -371,6 +498,7 @@ components:
           type: array
           maxItems: 32
           items: { type: string, minLength: 1, maxLength: 64 }
+        roleSource: { type: string, enum: [identity, managed] }
         status: { const: observed }
         lastAuthenticatedAt: { type: string, format: date-time }
     UserDirectoryQueryResponse:
@@ -386,6 +514,156 @@ components:
         offset: { type: integer, minimum: 0 }
         limit: { type: integer, minimum: 1, maximum: 100 }
         scope: { type: string, enum: [tenant, department] }
+    UserRoleUpdateRequest:
+      type: object
+      additionalProperties: false
+      required: [roles]
+      properties:
+        roles:
+          type: array
+          uniqueItems: true
+          items:
+            type: string
+            enum: [platform_admin, department_admin, document_admin, auditor]
+    UserRoleUpdateResponse:
+      type: object
+      additionalProperties: false
+      required: [user, traceId]
+      properties:
+        user: { $ref: '#/components/schemas/UserDirectoryEntry' }
+        traceId: { type: string, format: uuid }
+    DepartmentPolicy:
+      type: object
+      additionalProperties: false
+      required: [department, allowedSensitivities, userCount, documentCount, managed, updatedAt]
+      properties:
+        department: { type: string, minLength: 1, maxLength: 128 }
+        allowedSensitivities:
+          type: array
+          minItems: 1
+          maxItems: 3
+          items: { $ref: '#/components/schemas/Sensitivity' }
+        userCount: { type: integer, minimum: 0 }
+        documentCount: { type: integer, minimum: 0 }
+        managed: { type: boolean }
+        updatedAt: { type: [string, 'null'], format: date-time }
+    DepartmentPolicyListResponse:
+      type: object
+      additionalProperties: false
+      required: [departments, scope]
+      properties:
+        departments:
+          type: array
+          items: { $ref: '#/components/schemas/DepartmentPolicy' }
+        scope: { type: string, enum: [tenant, department] }
+    DepartmentPolicyUpdateRequest:
+      type: object
+      additionalProperties: false
+      required: [allowedSensitivities]
+      properties:
+        allowedSensitivities:
+          type: array
+          minItems: 1
+          maxItems: 3
+          items: { $ref: '#/components/schemas/Sensitivity' }
+    DepartmentPolicyUpdateResponse:
+      type: object
+      additionalProperties: false
+      required: [department, traceId]
+      properties:
+        department: { $ref: '#/components/schemas/DepartmentPolicy' }
+        traceId: { type: string, format: uuid }
+    ConversationSummary:
+      type: object
+      additionalProperties: false
+      required: [id, title, messageCount, createdAt, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        title: { type: string, minLength: 1, maxLength: 200 }
+        messageCount: { type: integer, minimum: 0 }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    ConversationListResponse:
+      type: object
+      additionalProperties: false
+      required: [conversations, total, offset, limit]
+      properties:
+        conversations:
+          type: array
+          maxItems: 100
+          items: { $ref: '#/components/schemas/ConversationSummary' }
+        total: { type: integer, minimum: 0 }
+        offset: { type: integer, minimum: 0 }
+        limit: { type: integer, minimum: 1, maximum: 100 }
+    ConversationTurn:
+      type: object
+      additionalProperties: false
+      required: [id, question, answer, noAnswer, reason, traceId, sourceCount, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        question: { type: string, minLength: 1, maxLength: 2000 }
+        answer: { type: string, minLength: 1 }
+        noAnswer: { type: boolean }
+        reason:
+          { type: [string, 'null'], enum: [insufficient_relevance, authorization_changed, null] }
+        traceId: { type: string, format: uuid }
+        sourceCount: { type: integer, minimum: 0 }
+        createdAt: { type: string, format: date-time }
+    ConversationDetail:
+      allOf:
+        - { $ref: '#/components/schemas/ConversationSummary' }
+        - type: object
+          required: [turns]
+          properties:
+            turns:
+              type: array
+              maxItems: 500
+              items: { $ref: '#/components/schemas/ConversationTurn' }
+    ConversationDeleteResponse:
+      type: object
+      additionalProperties: false
+      required: [conversationId, deleted]
+      properties:
+        conversationId: { type: string, format: uuid }
+        deleted: { const: true }
+    UsageProviderRow:
+      type: object
+      additionalProperties: false
+      required:
+        [kind, provider, model, requests, failures, inputTokens, outputTokens, estimatedCostUsd]
+      properties:
+        kind: { type: string, enum: [embedding, rerank, llm] }
+        provider: { type: string, minLength: 1 }
+        model: { type: string, minLength: 1 }
+        requests: { type: integer, minimum: 1 }
+        failures: { type: integer, minimum: 0 }
+        inputTokens: { type: [integer, 'null'], minimum: 0 }
+        outputTokens: { type: [integer, 'null'], minimum: 0 }
+        estimatedCostUsd: { type: [number, 'null'], minimum: 0 }
+    UsageResponse:
+      type: object
+      additionalProperties: false
+      required:
+        [from, to, totalQueries, failureRate, queryP95Ms, providers, departments, usageCompleteness]
+      properties:
+        from: { type: string, format: date-time }
+        to: { type: string, format: date-time }
+        totalQueries: { type: integer, minimum: 0 }
+        failureRate: { type: [number, 'null'], minimum: 0, maximum: 1 }
+        queryP95Ms: { type: [integer, 'null'], minimum: 0 }
+        providers:
+          type: array
+          items: { $ref: '#/components/schemas/UsageProviderRow' }
+        departments:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [department, requests]
+            properties:
+              department: { type: string, minLength: 1 }
+              requests: { type: integer, minimum: 1 }
+        usageCompleteness: { type: string, enum: [request_only, tokens_and_cost] }
     ProviderStatus:
       type: object
       additionalProperties: false
@@ -462,7 +740,7 @@ components:
         rawDocsDiskUsageRatio: { type: [number, 'null'], minimum: 0, maximum: 1 }
     AuditEventType:
       type: string
-      enum: [query, document_lifecycle, cloud_policy]
+      enum: [query, document_lifecycle, cloud_policy, access_change]
     AuditEvent:
       type: object
       additionalProperties: false
@@ -514,6 +792,7 @@ components:
       additionalProperties: false
       required: [question]
       properties:
+        conversationId: { type: string, format: uuid }
         question: { type: string, minLength: 2, maxLength: 2000 }
     KnowledgeSource:
       type: object
@@ -536,8 +815,9 @@ components:
     KnowledgeQueryResponse:
       type: object
       additionalProperties: false
-      required: [answer, noAnswer, reason, traceId, sources, model, rerankDegraded]
+      required: [conversationId, answer, noAnswer, reason, traceId, sources, model, rerankDegraded]
       properties:
+        conversationId: { type: string, format: uuid }
         answer: { type: string, minLength: 1 }
         noAnswer: { type: boolean }
         reason:

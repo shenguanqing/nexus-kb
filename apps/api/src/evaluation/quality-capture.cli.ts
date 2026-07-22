@@ -39,6 +39,7 @@ const identitySchema = z
           'audit:read',
           'system:read',
           'access:read',
+          'access:write',
         ]),
       )
       .min(1)

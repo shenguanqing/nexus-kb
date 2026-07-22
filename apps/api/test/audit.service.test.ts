@@ -72,16 +72,19 @@ function fixture() {
       ingestionJob: { traceId: 'a1111111-1111-4111-8111-111111111111' },
     },
   ]);
+  const accessFindMany = vi.fn().mockResolvedValue([]);
   const prisma = {
     queryAudit: { findMany: queryFindMany },
     documentLifecycleAudit: { findMany: lifecycleFindMany },
     cloudPolicyEvent: { findMany: policyFindMany },
+    accessAudit: { findMany: accessFindMany },
   } as unknown as PrismaService;
   return {
     service: new AuditService(prisma, new AclPolicy()),
     queryFindMany,
     lifecycleFindMany,
     policyFindMany,
+    accessFindMany,
   };
 }
 

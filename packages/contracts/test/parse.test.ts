@@ -52,6 +52,7 @@ describe('user directory contract', () => {
           userId: 'alice',
           department: 'finance',
           roles: ['department_admin'],
+          roleSource: 'identity',
           status: 'observed',
           lastAuthenticatedAt: '2026-07-18T08:00:00.000Z',
         },
@@ -130,6 +131,7 @@ describe('knowledge query contract', () => {
   it('accepts grounded and explicit no-answer responses', () => {
     expect(
       knowledgeQueryResponseSchema.parse({
+        conversationId: id,
         answer: '付款周期是 30 天。[来源1]',
         noAnswer: false,
         reason: null,
@@ -152,6 +154,7 @@ describe('knowledge query contract', () => {
     ).toMatchObject({ noAnswer: false });
     expect(
       knowledgeQueryResponseSchema.parse({
+        conversationId: id,
         answer: '没有找到足够依据。',
         noAnswer: true,
         reason: 'insufficient_relevance',
@@ -163,6 +166,7 @@ describe('knowledge query contract', () => {
     ).toMatchObject({ noAnswer: true, sources: [] });
     expect(() =>
       knowledgeQueryResponseSchema.parse({
+        conversationId: id,
         answer: '没有找到足够依据。',
         noAnswer: true,
         reason: null,

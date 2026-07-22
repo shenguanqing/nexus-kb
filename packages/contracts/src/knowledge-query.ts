@@ -9,6 +9,7 @@ function containsForbiddenControlCharacter(value: string): boolean {
 
 export const knowledgeQueryRequestSchema = z
   .object({
+    conversationId: z.uuid().optional(),
     question: z
       .string()
       .trim()
@@ -34,6 +35,7 @@ export const knowledgeSourceSchema = z
 
 export const knowledgeQueryResponseSchema = z
   .object({
+    conversationId: z.uuid(),
     answer: z.string().min(1),
     noAnswer: z.boolean(),
     reason: z.enum(['insufficient_relevance', 'authorization_changed']).nullable(),

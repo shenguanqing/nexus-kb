@@ -46,6 +46,10 @@ import { SystemController } from './system/system.controller';
 import { SystemService } from './system/system.service';
 import { AccessController } from './access/access.controller';
 import { UserDirectoryService } from './access/user-directory.service';
+import { HistoryController } from './history/history.controller';
+import { KnowledgeHistoryService } from './history/knowledge-history.service';
+import { UsageController } from './usage/usage.controller';
+import { UsageService } from './usage/usage.service';
 
 @Module({
   controllers: [
@@ -57,6 +61,8 @@ import { UserDirectoryService } from './access/user-directory.service';
     AuditController,
     SystemController,
     AccessController,
+    HistoryController,
+    UsageController,
   ],
   providers: [
     AppConfig,
@@ -96,6 +102,8 @@ import { UserDirectoryService } from './access/user-directory.service';
     AuditService,
     SystemService,
     UserDirectoryService,
+    KnowledgeHistoryService,
+    UsageService,
   ],
 })
 export class AppModule {}

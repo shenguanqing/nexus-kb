@@ -13,6 +13,7 @@ export const CAPABILITIES = [
   'audit:read',
   'system:read',
   'access:read',
+  'access:write',
 ] as const;
 export type Capability = (typeof CAPABILITIES)[number];
 

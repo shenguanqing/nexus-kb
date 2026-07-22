@@ -1,10 +1,15 @@
 <script setup lang="ts">
-import type { DocumentDetail, IngestionJob } from '@nexus-kb/contracts';
+import type { DocumentDetail, IngestionJob, Sensitivity } from '@nexus-kb/contracts';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { computed, onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { ApiError } from '@/api/client';
-import { deleteDocument, fetchDocument, reindexDocument } from '@/api/documents';
+import {
+  deleteDocument,
+  fetchDocument,
+  reindexDocument,
+  updateDocumentMetadata,
+} from '@/api/documents';
 import { listIngestionJobs } from '@/api/ingestion';
 import { documentDetailReturn } from '@/router/return-navigation';
 import { useAuthStore } from '@/stores/auth';
@@ -18,6 +23,9 @@ const jobs = ref<IngestionJob[]>([]);
 const loading = ref(false);
 const errorMessage = ref('');
 const mutating = ref(false);
+const metadataVisible = ref(false);
+const metadataDepartment = ref('');
+const metadataSensitivity = ref<Sensitivity>('internal');
 const canWrite = computed(() => auth.hasCapability('documents:write'));
 const canDelete = computed(() => auth.hasCapability('documents:delete'));
 const backNavigation = computed(() => documentDetailReturn(route.query.from));
@@ -93,6 +101,32 @@ async function remove(): Promise<void> {
   }
 }
 
+function openMetadata(): void {
+  if (!document.value) return;
+  metadataDepartment.value = document.value.department;
+  metadataSensitivity.value = document.value.sensitivity;
+  metadataVisible.value = true;
+}
+
+async function saveMetadata(): Promise<void> {
+  if (!document.value) return;
+  mutating.value = true;
+  try {
+    const accepted = await updateDocumentMetadata(
+      document.value.id,
+      metadataDepartment.value,
+      metadataSensitivity.value,
+    );
+    ElMessage.success(`权限 metadata 已更新，v${accepted.documentVersion} 正在安全重建`);
+    metadataVisible.value = false;
+    await router.push(`/ingestion-jobs?documentId=${document.value.id}`);
+  } catch (error) {
+    ElMessage.error(error instanceof ApiError ? error.message : 'metadata 更新失败');
+  } finally {
+    mutating.value = false;
+  }
+}
+
 onMounted(load);
 </script>
 
@@ -112,6 +146,9 @@ onMounted(load);
           <p>{{ document.mimeType }}</p>
         </div>
         <div class="detail-action-buttons">
+          <el-button v-if="canWrite" :disabled="document.status !== 'active'" @click="openMetadata"
+            >修改权限 metadata</el-button
+          >
           <el-button
             v-if="canWrite"
             :loading="mutating"
@@ -201,6 +238,28 @@ onMounted(load);
           ></el-table
         >
       </article>
+      <el-dialog v-model="metadataVisible" title="修改权限 metadata" width="480px">
+        <el-form label-position="top"
+          ><el-form-item label="部门"
+            ><el-input v-model="metadataDepartment" maxlength="128" /></el-form-item
+          ><el-form-item label="敏感度"
+            ><el-select v-model="metadataSensitivity"
+              ><el-option label="公开" value="public" /><el-option
+                label="内部"
+                value="internal" /><el-option
+                label="机密"
+                value="confidential" /></el-select></el-form-item
+        ></el-form>
+        <p class="upload-warning">
+          修改后会创建新版本并重建索引；旧向量在激活前仍受 PostgreSQL 最新 ACL 二次鉴权。
+        </p>
+        <template #footer
+          ><el-button @click="metadataVisible = false">取消</el-button
+          ><el-button type="primary" :loading="mutating" @click="saveMetadata"
+            >保存并重建</el-button
+          ></template
+        >
+      </el-dialog>
 
       <article v-if="jobs.length" class="detail-card">
         <h3>最近任务</h3>

@@ -34,6 +34,7 @@ export class QueryAuditService {
         traceId: input.traceId,
         tenantId: input.identity.tenantId,
         userId: input.identity.userId,
+        department: input.identity.department,
         queryLength: input.queryLength,
         outcome: input.outcome,
         resultCount: input.resultCount,

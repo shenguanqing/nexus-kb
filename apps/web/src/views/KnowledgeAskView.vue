@@ -15,6 +15,7 @@ const isSubmitting = ref(false);
 const selectedSource = ref<KnowledgeSource | null>(null);
 const isSourceOpen = ref(false);
 const composer = ref<InstanceType<typeof AskComposer> | null>(null);
+const conversationId = ref<string | undefined>();
 const examples = [
   '报销需要准备哪些材料？',
   '项目验收后的付款周期是多久？',
@@ -29,7 +30,8 @@ async function submit(): Promise<void> {
   response.value = null;
   isSubmitting.value = true;
   try {
-    response.value = await queryKnowledge(current);
+    response.value = await queryKnowledge(current, conversationId.value);
+    conversationId.value = response.value.conversationId;
     question.value = '';
   } catch (caught) {
     error.value =
@@ -51,6 +53,7 @@ async function startNewChat(): Promise<void> {
   error.value = null;
   selectedSource.value = null;
   isSourceOpen.value = false;
+  conversationId.value = undefined;
   await nextTick();
   composer.value?.focus();
 }

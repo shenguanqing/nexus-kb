@@ -77,6 +77,7 @@ describe('UserDirectoryService', () => {
           userId: 'user-a',
           department: 'finance',
           roles: ['document_admin'],
+          roleSource: 'identity',
           status: 'observed',
           lastAuthenticatedAt: '2026-07-18T08:00:00.000Z',
         },
@@ -123,5 +124,52 @@ describe('UserDirectoryService', () => {
       ),
     ).rejects.toMatchObject({ code: 'CAPABILITY_REQUIRED' });
     expect(deps.findMany).not.toHaveBeenCalled();
+  });
+
+  it('protects the final effective platform administrator', async () => {
+    const entries = [
+      {
+        tenantId: 'tenant-a',
+        userId: 'admin-a',
+        department: 'platform',
+        roles: ['platform_admin'],
+        managedRoles: null,
+        lastAuthenticatedAt: new Date('2026-07-18T08:00:00.000Z'),
+      },
+      {
+        tenantId: 'tenant-a',
+        userId: 'user-a',
+        department: 'finance',
+        roles: ['editor'],
+        managedRoles: null,
+        lastAuthenticatedAt: new Date('2026-07-18T08:00:00.000Z'),
+      },
+    ];
+    const update = vi.fn();
+    const create = vi.fn();
+    const transaction = {
+      userDirectoryEntry: {
+        findMany: vi.fn().mockResolvedValue(entries),
+        update,
+      },
+      accessAudit: { create },
+    };
+    const prisma = {
+      $transaction: vi.fn((callback: (value: typeof transaction) => unknown) =>
+        Promise.resolve(callback(transaction)),
+      ),
+    } as unknown as PrismaService;
+    const service = new UserDirectoryService(prisma, new AclPolicy());
+
+    await expect(
+      service.updateRoles(
+        'admin-a',
+        { roles: ['viewer'] },
+        { ...platformAdmin, capabilities: ['access:read', 'access:write'] },
+        'trace-role-update',
+      ),
+    ).rejects.toMatchObject({ code: 'LAST_PLATFORM_ADMIN_REQUIRED' });
+    expect(update).not.toHaveBeenCalled();
+    expect(create).not.toHaveBeenCalled();
   });
 });

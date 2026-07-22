@@ -5,8 +5,11 @@ import {
 } from '@nexus-kb/contracts';
 import { apiRequest } from './client';
 
-export function queryKnowledge(question: string): Promise<KnowledgeQueryResponse> {
-  const body = knowledgeQueryRequestSchema.parse({ question });
+export function queryKnowledge(
+  question: string,
+  conversationId?: string,
+): Promise<KnowledgeQueryResponse> {
+  const body = knowledgeQueryRequestSchema.parse({ question, conversationId });
   return apiRequest(
     '/v1/knowledge/query',
     knowledgeQueryResponseSchema,

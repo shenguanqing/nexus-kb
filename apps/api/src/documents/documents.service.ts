@@ -9,6 +9,7 @@ import type {
   DocumentDetail,
   DocumentListRequest,
   DocumentListResponse,
+  DocumentMetadataUpdateRequest,
   DocumentUploadOptions,
   IngestionJob,
   IngestionJobListRequest,
@@ -622,6 +623,100 @@ export class DocumentsService {
       status: 'queued',
       traceId,
     };
+  }
+
+  async updateMetadata(
+    id: string,
+    request: DocumentMetadataUpdateRequest,
+    identity: Identity,
+    traceId: string,
+  ): Promise<object> {
+    this.acl.assertCapability(identity, 'documents:write');
+    if (!identity.allowedSensitivities.includes(request.sensitivity)) {
+      throw new ApiException('SENSITIVITY_FORBIDDEN', '不能设置超出身份范围的敏感度', 403);
+    }
+    const tenantWide = identity.roles.some((role) =>
+      ['platform_admin', 'document_admin'].includes(role),
+    );
+    if (!tenantWide && request.department !== identity.department) {
+      throw new ApiException('DEPARTMENT_FORBIDDEN', '不能把文档移动到其他部门', 403);
+    }
+    const document = await this.prisma.document.findFirst({
+      where: { id, ...this.acl.documentWhere(identity), status: 'active' },
+      select: {
+        id: true,
+        contentSha256: true,
+        ownerId: true,
+        department: true,
+        sensitivity: true,
+      },
+    });
+    if (!document) throw new ApiException('DOCUMENT_NOT_FOUND', '文档不存在或尚未生效', 404);
+    if (
+      document.department === request.department &&
+      document.sensitivity === request.sensitivity
+    ) {
+      throw new ApiException('DOCUMENT_METADATA_UNCHANGED', '文档 metadata 未发生变化', 409);
+    }
+    const runningJob = await this.prisma.ingestionJob.findFirst({
+      where: {
+        tenantId: identity.tenantId,
+        documentId: document.id,
+        status: {
+          in: [
+            'queued',
+            'converting',
+            'parsing',
+            'chunking',
+            'policy_check',
+            'embedding',
+            'indexing',
+          ],
+        },
+      },
+      select: { id: true },
+    });
+    if (runningJob) {
+      throw new ApiException('DOCUMENT_REINDEX_IN_PROGRESS', '文档已有正在执行的入库任务', 409);
+    }
+    const deduplicationKey = createHash('sha256')
+      .update(
+        [
+          identity.tenantId,
+          document.contentSha256,
+          request.department,
+          request.sensitivity,
+          document.ownerId,
+        ].join('\0'),
+      )
+      .digest('hex');
+    try {
+      await this.prisma.$transaction([
+        this.prisma.document.update({
+          where: { id: document.id },
+          data: {
+            department: request.department,
+            sensitivity: request.sensitivity,
+            deduplicationKey,
+          },
+        }),
+        this.prisma.documentLifecycleAudit.create({
+          data: {
+            id: randomUUID(),
+            tenantId: identity.tenantId,
+            userId: identity.userId,
+            traceId,
+            documentId: document.id,
+            eventType: 'document_metadata_updated',
+            outcome: 'reindex_required',
+          },
+        }),
+      ]);
+    } catch (error) {
+      if (this.isUniqueConflict(error)) throw this.duplicateError();
+      throw error;
+    }
+    return this.reindexDocument(id, identity, traceId);
   }
 
   async deleteDocument(id: string, identity: Identity, traceId: string): Promise<object> {

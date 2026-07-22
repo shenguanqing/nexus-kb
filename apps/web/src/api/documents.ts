@@ -6,6 +6,8 @@ import {
   documentReindexAcceptedSchema,
   documentUploadAcceptedSchema,
   documentUploadOptionsSchema,
+  documentMetadataUpdateAcceptedSchema,
+  documentMetadataUpdateRequestSchema,
   type DocumentListRequest,
   type DocumentListResponse,
   type DocumentUploadAccepted,
@@ -13,6 +15,8 @@ import {
   type DocumentDeleteResponse,
   type DocumentDetail,
   type DocumentReindexAccepted,
+  type DocumentMetadataUpdateAccepted,
+  type Sensitivity,
 } from '@nexus-kb/contracts';
 import { apiRequest } from './client';
 
@@ -60,5 +64,22 @@ export function deleteDocument(documentId: string): Promise<DocumentDeleteRespon
     documentDeleteResponseSchema,
     { method: 'DELETE' },
     120_000,
+  );
+}
+
+export function updateDocumentMetadata(
+  documentId: string,
+  department: string,
+  sensitivity: Sensitivity,
+): Promise<DocumentMetadataUpdateAccepted> {
+  const body = documentMetadataUpdateRequestSchema.parse({ department, sensitivity });
+  return apiRequest(
+    `/v1/documents/${encodeURIComponent(documentId)}/metadata`,
+    documentMetadataUpdateAcceptedSchema,
+    {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    },
   );
 }

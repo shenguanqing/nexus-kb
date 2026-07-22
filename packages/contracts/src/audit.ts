@@ -1,6 +1,11 @@
 import { z } from 'zod';
 
-export const auditEventTypeSchema = z.enum(['query', 'document_lifecycle', 'cloud_policy']);
+export const auditEventTypeSchema = z.enum([
+  'query',
+  'document_lifecycle',
+  'cloud_policy',
+  'access_change',
+]);
 
 export const auditQueryRequestSchema = z
   .object({

@@ -1,4 +1,5 @@
-import { Injectable } from '@nestjs/common';
+import { randomUUID } from 'node:crypto';
+import { Injectable, Optional } from '@nestjs/common';
 import type {
   KnowledgeQueryRequest,
   KnowledgeQueryResponse,
@@ -18,8 +19,10 @@ import { QueryAuditService } from './query-audit.service';
 import { QueryRateLimiter } from './query-rate-limiter';
 import { QueryRetrievalService } from './query-retrieval.service';
 import { SourceAuthorizationService } from './source-authorization.service';
+import { KnowledgeHistoryService } from '../history/knowledge-history.service';
 
 const NO_ANSWER_TEXT = '当前知识库中没有找到足够可靠且有权限访问的依据。';
+type QueryResult = Omit<KnowledgeQueryResponse, 'conversationId'>;
 
 export interface QualityQueryObserver {
   recordVectorSources(sources: QualitySource[]): void;
@@ -38,6 +41,7 @@ export class KnowledgeQueryService {
     private readonly llm: LlmService,
     private readonly sourceAuthorization: SourceAuthorizationService,
     private readonly audit: QueryAuditService,
+    @Optional() private readonly history?: KnowledgeHistoryService,
   ) {}
 
   async query(
@@ -70,7 +74,11 @@ export class KnowledgeQueryService {
       observer?.recordVectorSources(candidates.map((candidate) => this.qualitySource(candidate)));
       if (candidates.length === 0) {
         observer?.recordFinalSources([]);
-        return await this.noAnswer(auditBase, traceId, 'insufficient_relevance', false, startedAt);
+        return await this.withHistory(
+          request,
+          identity,
+          await this.noAnswer(auditBase, traceId, 'insufficient_relevance', false, startedAt),
+        );
       }
       const reranked = await this.rerank.rerank({
         identity,
@@ -85,12 +93,16 @@ export class KnowledgeQueryService {
       );
       if (contexts.length === 0) {
         observer?.recordFinalSources([]);
-        return await this.noAnswer(
-          auditBase,
-          traceId,
-          'authorization_changed',
-          reranked.degraded,
-          startedAt,
+        return await this.withHistory(
+          request,
+          identity,
+          await this.noAnswer(
+            auditBase,
+            traceId,
+            'authorization_changed',
+            reranked.degraded,
+            startedAt,
+          ),
         );
       }
       const answer = await this.llm.answer({
@@ -105,12 +117,16 @@ export class KnowledgeQueryService {
       );
       observer?.recordFinalSources(finalContexts.map((context) => this.qualitySource(context)));
       if (!this.sameContexts(contexts, finalContexts)) {
-        return await this.noAnswer(
-          auditBase,
-          traceId,
-          'authorization_changed',
-          reranked.degraded,
-          startedAt,
+        return await this.withHistory(
+          request,
+          identity,
+          await this.noAnswer(
+            auditBase,
+            traceId,
+            'authorization_changed',
+            reranked.degraded,
+            startedAt,
+          ),
         );
       }
       const sources = finalContexts.map((context, index) => this.source(context, index + 1));
@@ -125,7 +141,7 @@ export class KnowledgeQueryService {
         fallbackUsed: answer.fallbackUsed,
         durationMs: Date.now() - startedAt,
       });
-      return {
+      return await this.withHistory(request, identity, {
         answer: answer.text,
         noAnswer: false,
         reason: null,
@@ -137,7 +153,7 @@ export class KnowledgeQueryService {
           fallbackUsed: answer.fallbackUsed,
         },
         rerankDegraded: reranked.degraded,
-      };
+      });
     } catch (error) {
       await this.audit.record({
         ...auditBase,
@@ -160,7 +176,7 @@ export class KnowledgeQueryService {
     reason: 'insufficient_relevance' | 'authorization_changed',
     rerankDegraded: boolean,
     startedAt: number,
-  ): Promise<KnowledgeQueryResponse> {
+  ): Promise<QueryResult> {
     await this.audit.record({
       ...auditBase,
       outcome: 'no_answer',
@@ -178,6 +194,17 @@ export class KnowledgeQueryService {
       model: null,
       rerankDegraded,
     };
+  }
+
+  private async withHistory(
+    request: KnowledgeQueryRequest,
+    identity: Identity,
+    response: QueryResult,
+  ): Promise<KnowledgeQueryResponse> {
+    const conversationId = this.history
+      ? await this.history.recordTurn(request.conversationId, request.question, response, identity)
+      : (request.conversationId ?? randomUUID());
+    return { conversationId, ...response };
   }
 
   private source(context: RetrievedChunk, index: number): KnowledgeSource {
