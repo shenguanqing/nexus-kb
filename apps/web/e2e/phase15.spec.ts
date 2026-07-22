@@ -85,6 +85,36 @@ test('renders explicit no-answer and blocks unauthorized management routes', asy
   await expect(page).toHaveURL(/\/403$/);
 });
 
+test('signs in with an enabled account-password session without storing credentials in the page', async ({
+  page,
+}) => {
+  await page.route('**/v1/auth/session', (route) =>
+    route.fulfill({
+      status: 401,
+      json: { error: { code: 'AUTHENTICATION_REQUIRED', message: '需要登录' } },
+    }),
+  );
+  await page.route('**/v1/auth/login-options', (route) =>
+    route.fulfill({ json: { mode: 'password', passwordEnabled: true } }),
+  );
+  await page.route('**/v1/auth/password/login', (route) => {
+    expect(route.request().postDataJSON()).toEqual({
+      username: 'admin.fixture',
+      password: 'safe-password',
+    });
+    return route.fulfill({ json: { ...session(), mode: 'password' } });
+  });
+
+  await page.goto('/login');
+  await page.locator('input[autocomplete="username"]').fill('admin.fixture');
+  await page.locator('input[autocomplete="current-password"]').fill('safe-password');
+  await page.getByRole('button', { name: '登录' }).click();
+
+  await expect(page).toHaveURL(/\/ask$/);
+  await expect(page.getByRole('button', { name: '退出登录' })).toBeVisible();
+  await expect(page.locator('input[autocomplete="current-password"]')).toHaveCount(0);
+});
+
 test('keeps the core shell within a 768px viewport', async ({ page }) => {
   await page.setViewportSize({ width: 768, height: 900 });
   await mockSession(page);
@@ -109,7 +139,9 @@ test('meets automated WCAG AA checks on the core ask page', async ({ page }) => 
   expect(results.violations).toEqual([]);
 });
 
-test('keeps shell controls visible and page sections aligned', async ({ page }) => {
+test('keeps shell chrome fixed and confines management-page scrolling below controls', async ({
+  page,
+}) => {
   await page.setViewportSize({ width: 1800, height: 900 });
   await mockSession(page, [
     'documents:read',
@@ -161,50 +193,63 @@ test('keeps shell controls visible and page sections aligned', async ({ page }) 
     return {
       headerPosition: header ? getComputedStyle(header).position : '',
       sidebarPosition: sidebar ? getComputedStyle(sidebar).position : '',
+      mainOverflowY: document.querySelector<HTMLElement>('.app-main')
+        ? getComputedStyle(document.querySelector<HTMLElement>('.app-main')!).overflowY
+        : '',
       headingPosition: heading ? getComputedStyle(heading).position : '',
       headingLeft: heading?.getBoundingClientRect().left ?? 0,
       headingRight: heading?.getBoundingClientRect().right ?? 0,
       sectionLeft: section?.getBoundingClientRect().left ?? 0,
       sectionRight: section?.getBoundingClientRect().right ?? 0,
+      sectionHeight: section?.getBoundingClientRect().height ?? 0,
       toolbarPosition: toolbar ? getComputedStyle(toolbar).position : '',
     };
   });
   expect(ingestionLayout).toMatchObject({
     headerPosition: 'fixed',
     sidebarPosition: 'fixed',
-    headingPosition: 'sticky',
-    toolbarPosition: 'sticky',
+    mainOverflowY: 'hidden',
+    headingPosition: 'static',
+    toolbarPosition: 'static',
   });
   expect(ingestionLayout.sectionLeft).toBe(ingestionLayout.headingLeft);
   expect(ingestionLayout.sectionRight).toBe(ingestionLayout.headingRight);
+  expect(ingestionLayout.sectionHeight).toBeGreaterThan(500);
 
   await page.goto('/audit');
   await expect(page.getByRole('heading', { name: '审计中心' })).toBeVisible();
   await expect(page.getByRole('button', { name: '折叠侧栏' })).toBeVisible();
   await page.evaluate(() => {
     const table = document.querySelector<HTMLElement>('.audit-table-wrap');
-    if (table) table.style.minHeight = '1400px';
-    document.querySelector<HTMLElement>('.app-main')?.scrollTo({ top: 700 });
+    if (!table) return;
+    const spacer = document.createElement('div');
+    spacer.style.height = '1400px';
+    spacer.setAttribute('aria-hidden', 'true');
+    table.append(spacer);
+    table.scrollTo({ top: 700 });
   });
-  const auditStickyLayout = await page.evaluate(() => {
+  const auditLayout = await page.evaluate(() => {
     const heading = document.querySelector<HTMLElement>('.page-heading');
     const toolbar = document.querySelector<HTMLElement>('.audit-toolbar');
+    const table = document.querySelector<HTMLElement>('.audit-table-wrap');
     const pageSection = document.querySelector<HTMLElement>('.audit-page');
     return {
       headingBottom: heading?.getBoundingClientRect().bottom ?? 0,
-      headingZIndex: heading ? Number(getComputedStyle(heading).zIndex) : 0,
       toolbarTop: toolbar?.getBoundingClientRect().top ?? 0,
       toolbarPosition: toolbar ? getComputedStyle(toolbar).position : '',
-      toolbarZIndex: toolbar ? Number(getComputedStyle(toolbar).zIndex) : 0,
+      tableScrollTop: table?.scrollTop ?? 0,
+      tableScrollHeight: table?.scrollHeight ?? 0,
+      tableClientHeight: table?.clientHeight ?? 0,
       pageLeft: pageSection?.getBoundingClientRect().left ?? 0,
       pageRight: pageSection?.getBoundingClientRect().right ?? 0,
     };
   });
-  expect(auditStickyLayout.toolbarPosition).toBe('sticky');
-  expect(auditStickyLayout.toolbarTop).toBe(auditStickyLayout.headingBottom);
-  expect(auditStickyLayout.headingZIndex).toBeGreaterThan(auditStickyLayout.toolbarZIndex);
-  expect(auditStickyLayout.pageLeft).toBe(ingestionLayout.headingLeft);
-  expect(auditStickyLayout.pageRight).toBe(ingestionLayout.headingRight);
+  expect(auditLayout.toolbarPosition).toBe('static');
+  expect(auditLayout.toolbarTop).toBeGreaterThanOrEqual(auditLayout.headingBottom);
+  expect(auditLayout.tableScrollTop).toBeGreaterThan(0);
+  expect(auditLayout.tableScrollHeight).toBeGreaterThan(auditLayout.tableClientHeight);
+  expect(auditLayout.pageLeft).toBe(ingestionLayout.headingLeft);
+  expect(auditLayout.pageRight).toBe(ingestionLayout.headingRight);
   const auditBounds = await page.locator('.app-main > section').evaluate((element) => {
     const bounds = element.getBoundingClientRect();
     return { left: bounds.left, right: bounds.right };
@@ -226,7 +271,7 @@ test('keeps shell controls visible and page sections aligned', async ({ page }) 
     };
   });
   expect(usageLayout.actionsGap).toBe('10px');
-  expect(usageLayout.toolbarPosition).toBe('sticky');
+  expect(usageLayout.toolbarPosition).toBe('static');
   expect(usageLayout.sectionLeft).toBe(ingestionLayout.headingLeft);
   expect(usageLayout.sectionRight).toBe(ingestionLayout.headingRight);
 
@@ -234,7 +279,7 @@ test('keeps shell controls visible and page sections aligned', async ({ page }) 
   await expect(page.getByRole('heading', { name: '文档管理' })).toBeVisible();
   await expect(page.locator('.documents-toolbar')).toBeVisible();
   await expect(page.locator('.documents-content')).toBeVisible();
-  await expect(page.locator('.documents-toolbar')).toHaveCSS('position', 'sticky');
+  await expect(page.locator('.documents-toolbar')).toHaveCSS('position', 'static');
   const documentsLayout = await page.evaluate(() => {
     const heading = document.querySelector<HTMLElement>('.page-heading');
     const section = document.querySelector<HTMLElement>('.documents-page');
@@ -256,6 +301,6 @@ test('keeps shell controls visible and page sections aligned', async ({ page }) 
   await page.goto('/access/users');
   await expect(page.getByRole('heading', { name: '用户与角色' })).toBeVisible();
   await expect(page.locator('.access-toolbar')).toBeVisible();
-  await expect(page.locator('.access-toolbar')).toHaveCSS('position', 'sticky');
+  await expect(page.locator('.access-toolbar')).toHaveCSS('position', 'static');
   await expect(page.locator('.access-filters')).toHaveCount(0);
 });

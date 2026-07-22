@@ -238,6 +238,18 @@ model UserDirectoryEntry {
   @@index([tenantId, department, lastAuthenticatedAt])
 }
 
+model PasswordAuthSession {
+  id        String   @id @db.Uuid
+  tokenHash String   @unique @db.Char(64)
+  tenantId  String
+  userId    String
+  expiresAt DateTime @db.Timestamptz(3)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+
+  @@index([expiresAt])
+  @@index([tenantId, userId, expiresAt])
+}
+
 model DepartmentPolicy {
   tenantId             String
   department           String

@@ -138,69 +138,71 @@ onMounted(() => load());
       <el-button native-type="button" @click="resetFilters">重置</el-button>
     </form>
 
-    <div v-if="errorMessage && users.length === 0" class="document-error" role="alert">
-      <strong>无法加载用户目录</strong>
-      <span>{{ errorMessage }}</span>
-      <el-button @click="load">重试</el-button>
-    </div>
+    <div class="access-content">
+      <div v-if="errorMessage && users.length === 0" class="document-error" role="alert">
+        <strong>无法加载用户目录</strong>
+        <span>{{ errorMessage }}</span>
+        <el-button @click="load">重试</el-button>
+      </div>
 
-    <div v-else v-loading="loading" class="access-table-wrap">
-      <el-table v-if="users.length > 0" :data="users" row-key="userId">
-        <el-table-column label="企业用户 ID" prop="userId" min-width="220" />
-        <el-table-column label="部门" prop="department" min-width="160" />
-        <el-table-column label="角色" min-width="240">
-          <template #default="scopeRow">
-            <div class="role-tags">
-              <el-tag
-                v-for="role in accessRoleSummary(userRow(scopeRow.row).roles)"
-                :key="role"
-                effect="plain"
-              >
-                {{ role }}
-              </el-tag>
-            </div>
-          </template>
-        </el-table-column>
-        <el-table-column label="状态" min-width="120">
-          <el-tag type="success">已验证登录</el-tag>
-        </el-table-column>
-        <el-table-column label="最近认证" min-width="190">
-          <template #default="scopeRow">
-            {{ new Date(userRow(scopeRow.row).lastAuthenticatedAt).toLocaleString() }}
-          </template>
-        </el-table-column>
-        <el-table-column v-if="canWrite" label="操作" width="110" fixed="right">
-          <template #default="scopeRow"
-            ><el-button text type="primary" @click="editRoles(userRow(scopeRow.row))"
-              >编辑角色</el-button
-            ></template
-          >
-        </el-table-column>
-      </el-table>
-      <el-empty v-else-if="!loading" description="当前范围内暂无已认证用户" />
-    </div>
+      <div v-else v-loading="loading" class="access-table-wrap">
+        <el-table v-if="users.length > 0" :data="users" row-key="userId">
+          <el-table-column label="企业用户 ID" prop="userId" min-width="220" />
+          <el-table-column label="部门" prop="department" min-width="160" />
+          <el-table-column label="角色" min-width="240">
+            <template #default="scopeRow">
+              <div class="role-tags">
+                <el-tag
+                  v-for="role in accessRoleSummary(userRow(scopeRow.row).roles)"
+                  :key="role"
+                  effect="plain"
+                >
+                  {{ role }}
+                </el-tag>
+              </div>
+            </template>
+          </el-table-column>
+          <el-table-column label="状态" min-width="120">
+            <el-tag type="success">已验证登录</el-tag>
+          </el-table-column>
+          <el-table-column label="最近认证" min-width="190">
+            <template #default="scopeRow">
+              {{ new Date(userRow(scopeRow.row).lastAuthenticatedAt).toLocaleString() }}
+            </template>
+          </el-table-column>
+          <el-table-column v-if="canWrite" label="操作" width="110" fixed="right">
+            <template #default="scopeRow"
+              ><el-button text type="primary" @click="editRoles(userRow(scopeRow.row))"
+                >编辑角色</el-button
+              ></template
+            >
+          </el-table-column>
+        </el-table>
+        <el-empty v-else-if="!loading" description="当前范围内暂无已认证用户" />
+      </div>
 
-    <div v-if="errorMessage && users.length > 0" class="audit-inline-error" role="alert">
-      {{ errorMessage }}
-    </div>
-    <div v-if="total > pageSize" class="access-pagination">
-      <el-pagination
-        background
-        layout="prev, pager, next"
-        :current-page="page"
-        :page-size="pageSize"
-        :total="total"
-        @current-change="changePage"
-      />
-    </div>
+      <div v-if="errorMessage && users.length > 0" class="audit-inline-error" role="alert">
+        {{ errorMessage }}
+      </div>
+      <div v-if="total > pageSize" class="access-pagination">
+        <el-pagination
+          background
+          layout="prev, pager, next"
+          :current-page="page"
+          :page-size="pageSize"
+          :total="total"
+          @current-change="changePage"
+        />
+      </div>
 
-    <aside class="access-boundary-note">
-      <strong>权限边界</strong>
-      <p>
-        OIDC
-        负责验证用户身份，主服务托管角色覆盖负责应用内授权范围。所有变更写入审计，并禁止移除租户内最后一个平台管理员。
-      </p>
-    </aside>
+      <aside class="access-boundary-note">
+        <strong>权限边界</strong>
+        <p>
+          已验证的认证身份源负责确认用户身份，主服务托管角色覆盖负责应用内授权范围。所有变更写入审计，并禁止移除
+          租户内最后一个平台管理员。
+        </p>
+      </aside>
+    </div>
     <el-dialog v-model="roleDialogVisible" title="编辑托管角色" width="480px">
       <p v-if="selectedUser">{{ selectedUser.userId }} · {{ selectedUser.department }}</p>
       <el-checkbox-group v-model="managedRoles" class="role-editor">

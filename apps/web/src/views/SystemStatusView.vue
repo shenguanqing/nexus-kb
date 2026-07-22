@@ -40,82 +40,88 @@ onMounted(load);
       <el-button :loading="loading" @click="load">重新检查</el-button>
     </div>
 
-    <div v-if="errorMessage && !result" class="document-error" role="alert">
-      <strong>无法加载系统状态</strong>
-      <span>{{ errorMessage }}</span>
-      <el-button @click="load">重试</el-button>
+    <div class="page-content">
+      <div v-if="errorMessage && !result" class="document-error" role="alert">
+        <strong>无法加载系统状态</strong>
+        <span>{{ errorMessage }}</span>
+        <el-button @click="load">重试</el-button>
+      </div>
+
+      <template v-else-if="result">
+        <div class="system-overview" aria-live="polite">
+          <div>
+            <span>总体状态</span>
+            <strong :class="`is-${result.status}`">
+              {{ result.status === 'ready' ? '运行正常' : '需要关注' }}
+            </strong>
+          </div>
+          <div>
+            <span>原始文档磁盘使用率</span>
+            <strong>{{ formatDiskUsage(result.rawDocsDiskUsageRatio) }}</strong>
+          </div>
+          <div>
+            <span>检查时间</span>
+            <strong>{{ new Date(result.checkedAt).toLocaleString() }}</strong>
+          </div>
+        </div>
+
+        <div class="component-grid">
+          <article
+            v-for="component in result.components"
+            :key="component.id"
+            class="component-card"
+          >
+            <span
+              class="component-status"
+              :class="`is-${component.status}`"
+              aria-hidden="true"
+            ></span>
+            <div>
+              <strong>{{ systemComponentLabels[component.id] }}</strong>
+              <p>
+                {{
+                  component.status === 'up'
+                    ? '正常'
+                    : healthReasonLabels[component.reason ?? 'unavailable']
+                }}
+              </p>
+            </div>
+          </article>
+        </div>
+
+        <section class="queue-summary" aria-labelledby="queue-title">
+          <div>
+            <h2 id="queue-title">入库队列</h2>
+            <el-tag :type="result.ingestionQueue.status === 'up' ? 'success' : 'danger'">
+              {{ result.ingestionQueue.status === 'up' ? '可用' : '不可用' }}
+            </el-tag>
+          </div>
+          <dl>
+            <div>
+              <dt>等待</dt>
+              <dd>{{ result.ingestionQueue.waiting ?? '—' }}</dd>
+            </div>
+            <div>
+              <dt>处理中</dt>
+              <dd>{{ result.ingestionQueue.active ?? '—' }}</dd>
+            </div>
+            <div>
+              <dt>延迟</dt>
+              <dd>{{ result.ingestionQueue.delayed ?? '—' }}</dd>
+            </div>
+            <div>
+              <dt>失败</dt>
+              <dd>{{ result.ingestionQueue.failed ?? '—' }}</dd>
+            </div>
+            <div>
+              <dt>最老等待任务</dt>
+              <dd>{{ formatDuration(result.ingestionQueue.oldestWaitSeconds) }}</dd>
+            </div>
+          </dl>
+        </section>
+      </template>
+
+      <div v-else v-loading="loading" class="system-loading" aria-label="正在加载系统状态"></div>
     </div>
-
-    <template v-else-if="result">
-      <div class="system-overview" aria-live="polite">
-        <div>
-          <span>总体状态</span>
-          <strong :class="`is-${result.status}`">
-            {{ result.status === 'ready' ? '运行正常' : '需要关注' }}
-          </strong>
-        </div>
-        <div>
-          <span>原始文档磁盘使用率</span>
-          <strong>{{ formatDiskUsage(result.rawDocsDiskUsageRatio) }}</strong>
-        </div>
-        <div>
-          <span>检查时间</span>
-          <strong>{{ new Date(result.checkedAt).toLocaleString() }}</strong>
-        </div>
-      </div>
-
-      <div class="component-grid">
-        <article v-for="component in result.components" :key="component.id" class="component-card">
-          <span
-            class="component-status"
-            :class="`is-${component.status}`"
-            aria-hidden="true"
-          ></span>
-          <div>
-            <strong>{{ systemComponentLabels[component.id] }}</strong>
-            <p>
-              {{
-                component.status === 'up'
-                  ? '正常'
-                  : healthReasonLabels[component.reason ?? 'unavailable']
-              }}
-            </p>
-          </div>
-        </article>
-      </div>
-
-      <section class="queue-summary" aria-labelledby="queue-title">
-        <div>
-          <h2 id="queue-title">入库队列</h2>
-          <el-tag :type="result.ingestionQueue.status === 'up' ? 'success' : 'danger'">
-            {{ result.ingestionQueue.status === 'up' ? '可用' : '不可用' }}
-          </el-tag>
-        </div>
-        <dl>
-          <div>
-            <dt>等待</dt>
-            <dd>{{ result.ingestionQueue.waiting ?? '—' }}</dd>
-          </div>
-          <div>
-            <dt>处理中</dt>
-            <dd>{{ result.ingestionQueue.active ?? '—' }}</dd>
-          </div>
-          <div>
-            <dt>延迟</dt>
-            <dd>{{ result.ingestionQueue.delayed ?? '—' }}</dd>
-          </div>
-          <div>
-            <dt>失败</dt>
-            <dd>{{ result.ingestionQueue.failed ?? '—' }}</dd>
-          </div>
-          <div>
-            <dt>最老等待任务</dt>
-            <dd>{{ formatDuration(result.ingestionQueue.oldestWaitSeconds) }}</dd>
-          </div>
-        </dl>
-      </section>
-    </template>
-
-    <div v-else v-loading="loading" class="system-loading" aria-label="正在加载系统状态"></div>
   </section>
 </template>

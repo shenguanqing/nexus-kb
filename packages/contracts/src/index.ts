@@ -65,9 +65,17 @@ export {
 } from './ingestion';
 export {
   authSessionSchema,
+  authModeSchema,
+  authLoginOptionsSchema,
+  authLogoutResponseSchema,
+  passwordLoginRequestSchema,
   capabilitySchema,
   sensitivitySchema,
   type AuthSession,
+  type AuthMode,
+  type AuthLoginOptions,
+  type AuthLogoutResponse,
+  type PasswordLoginRequest,
   type Capability,
   type Sensitivity,
 } from './auth-session';

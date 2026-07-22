@@ -11,6 +11,7 @@ export const useAuthStore = defineStore('auth', () => {
 
   const isAuthenticated = computed(() => session.value !== null);
   const identity = computed(() => session.value?.identity ?? null);
+  const mode = computed(() => session.value?.mode ?? null);
   const hasCapability = (capability: Capability): boolean =>
     session.value?.identity.capabilities.includes(capability) ?? false;
 
@@ -33,14 +34,21 @@ export const useAuthStore = defineStore('auth', () => {
     isLoaded.value = true;
   }
 
+  function setSession(nextSession: AuthSession): void {
+    session.value = nextSession;
+    isLoaded.value = true;
+  }
+
   return {
     session,
     identity,
+    mode,
     isLoading,
     isLoaded,
     isAuthenticated,
     hasCapability,
     loadSession,
     clear,
+    setSession,
   };
 });

@@ -157,124 +157,128 @@ onUnmounted(() => {
 
 <template>
   <section class="ingestion-page">
-    <RouterLink v-if="returnNavigation" :to="returnNavigation.to" class="back-link task-back-link"
-      >← {{ returnNavigation.label }}</RouterLink
-    >
-    <div class="task-toolbar">
-      <p>共 {{ total }} 个可访问任务</p>
-      <form class="task-filter-form" aria-label="入库任务筛选" @submit.prevent="applyFilters">
-        <el-select v-model="filters.status" clearable placeholder="全部状态"
-          ><el-option
-            v-for="option in statusOptions"
-            :key="option.value"
-            :label="option.label"
-            :value="option.value" /></el-select
-        ><el-button native-type="submit">筛选</el-button
-        ><el-button native-type="button" @click="resetFilters">重置</el-button>
-      </form>
+    <div class="task-controls">
+      <RouterLink v-if="returnNavigation" :to="returnNavigation.to" class="back-link task-back-link"
+        >← {{ returnNavigation.label }}</RouterLink
+      >
+      <div class="task-toolbar">
+        <p>共 {{ total }} 个可访问任务</p>
+        <form class="task-filter-form" aria-label="入库任务筛选" @submit.prevent="applyFilters">
+          <el-select v-model="filters.status" clearable placeholder="全部状态"
+            ><el-option
+              v-for="option in statusOptions"
+              :key="option.value"
+              :label="option.label"
+              :value="option.value" /></el-select
+          ><el-button native-type="submit">筛选</el-button
+          ><el-button native-type="button" @click="resetFilters">重置</el-button>
+        </form>
+      </div>
     </div>
-    <div v-if="errorMessage" class="document-error" role="alert">
-      <strong>无法加载入库任务</strong><span>{{ errorMessage }}</span
-      ><el-button @click="load()">重试</el-button>
+    <div class="task-content">
+      <div v-if="errorMessage" class="document-error" role="alert">
+        <strong>无法加载入库任务</strong><span>{{ errorMessage }}</span
+        ><el-button @click="load()">重试</el-button>
+      </div>
+      <div v-else v-loading="loading" class="task-list">
+        <article v-for="job in items" :key="job.id" class="task-card">
+          <header>
+            <div>
+              <RouterLink
+                :to="{
+                  path: `/documents/${job.documentId}`,
+                  query: { from: route.fullPath },
+                }"
+                >{{ job.sourceName }}</RouterLink
+              ><span>v{{ job.version }} · {{ job.kind }}</span>
+            </div>
+            <el-tag
+              :type="
+                job.status === 'completed'
+                  ? 'success'
+                  : job.status === 'failed'
+                    ? 'danger'
+                    : job.status === 'policy_blocked'
+                      ? 'warning'
+                      : 'info'
+              "
+              >{{ stepLabels[job.status] ?? job.status }}</el-tag
+            >
+          </header>
+          <el-progress
+            v-if="job.status === 'converting'"
+            :percentage="50"
+            :indeterminate="true"
+            :show-text="false"
+          />
+          <el-steps
+            v-else
+            simple
+            :active="activeStep(job)"
+            :process-status="job.status === 'failed' ? 'error' : 'process'"
+            :finish-status="job.status === 'completed' ? 'success' : 'finish'"
+            ><el-step title="排队" /><el-step title="解析" /><el-step title="分块/脱敏" /><el-step
+              title="策略" /><el-step title="Embedding" /><el-step title="索引" /><el-step
+              title="完成"
+          /></el-steps>
+          <dl>
+            <div>
+              <dt>当前步骤</dt>
+              <dd>{{ stepLabels[job.step] ?? job.step }}</dd>
+            </div>
+            <div>
+              <dt>耗时</dt>
+              <dd>{{ elapsed(job) }}</dd>
+            </div>
+            <div>
+              <dt>尝试次数</dt>
+              <dd>{{ job.attempts }}</dd>
+            </div>
+            <div>
+              <dt>更新时间</dt>
+              <dd>{{ new Date(job.updatedAt).toLocaleString() }}</dd>
+            </div>
+          </dl>
+          <div v-if="job.warnings.length" class="task-warning">
+            <strong>Warning</strong>
+            <ul>
+              <li v-for="warning in job.warnings" :key="warning">{{ warning }}</li>
+            </ul>
+          </div>
+          <div v-if="job.errorCode" class="task-error">
+            <p>
+              {{
+                job.errorCode === 'DWG_CONVERSION_DISABLED'
+                  ? 'CAD 转换服务暂不可用，请联系管理员或稍后重试'
+                  : job.errorCode === 'FILE_SIGNATURE_MISMATCH'
+                    ? '文件无效或版本不受支持'
+                    : '任务处理失败，请查看技术详情'
+              }}
+            </p>
+            <details>
+              <summary>技术详情</summary>
+              <code>{{ job.errorCode }}</code
+              ><span>Trace ID：{{ job.traceId }}</span>
+            </details>
+            <el-button
+              v-if="canRetry && job.status === 'failed' && job.retryable"
+              :loading="retryingId === job.id"
+              @click="retry(job)"
+              >重试任务</el-button
+            >
+          </div>
+        </article>
+        <el-empty v-if="!loading && items.length === 0" description="暂无符合条件的入库任务" />
+      </div>
+      <el-pagination
+        v-if="total > filters.pageSize"
+        v-model:current-page="filters.page"
+        v-model:page-size="filters.pageSize"
+        layout="total, sizes, prev, pager, next"
+        :total="total"
+        :page-sizes="[20, 50, 100]"
+        @change="syncAndLoad"
+      />
     </div>
-    <div v-else v-loading="loading" class="task-list">
-      <article v-for="job in items" :key="job.id" class="task-card">
-        <header>
-          <div>
-            <RouterLink
-              :to="{
-                path: `/documents/${job.documentId}`,
-                query: { from: route.fullPath },
-              }"
-              >{{ job.sourceName }}</RouterLink
-            ><span>v{{ job.version }} · {{ job.kind }}</span>
-          </div>
-          <el-tag
-            :type="
-              job.status === 'completed'
-                ? 'success'
-                : job.status === 'failed'
-                  ? 'danger'
-                  : job.status === 'policy_blocked'
-                    ? 'warning'
-                    : 'info'
-            "
-            >{{ stepLabels[job.status] ?? job.status }}</el-tag
-          >
-        </header>
-        <el-progress
-          v-if="job.status === 'converting'"
-          :percentage="50"
-          :indeterminate="true"
-          :show-text="false"
-        />
-        <el-steps
-          v-else
-          simple
-          :active="activeStep(job)"
-          :process-status="job.status === 'failed' ? 'error' : 'process'"
-          :finish-status="job.status === 'completed' ? 'success' : 'finish'"
-          ><el-step title="排队" /><el-step title="解析" /><el-step title="分块/脱敏" /><el-step
-            title="策略" /><el-step title="Embedding" /><el-step title="索引" /><el-step
-            title="完成"
-        /></el-steps>
-        <dl>
-          <div>
-            <dt>当前步骤</dt>
-            <dd>{{ stepLabels[job.step] ?? job.step }}</dd>
-          </div>
-          <div>
-            <dt>耗时</dt>
-            <dd>{{ elapsed(job) }}</dd>
-          </div>
-          <div>
-            <dt>尝试次数</dt>
-            <dd>{{ job.attempts }}</dd>
-          </div>
-          <div>
-            <dt>更新时间</dt>
-            <dd>{{ new Date(job.updatedAt).toLocaleString() }}</dd>
-          </div>
-        </dl>
-        <div v-if="job.warnings.length" class="task-warning">
-          <strong>Warning</strong>
-          <ul>
-            <li v-for="warning in job.warnings" :key="warning">{{ warning }}</li>
-          </ul>
-        </div>
-        <div v-if="job.errorCode" class="task-error">
-          <p>
-            {{
-              job.errorCode === 'DWG_CONVERSION_DISABLED'
-                ? 'CAD 转换服务暂不可用，请联系管理员或稍后重试'
-                : job.errorCode === 'FILE_SIGNATURE_MISMATCH'
-                  ? '文件无效或版本不受支持'
-                  : '任务处理失败，请查看技术详情'
-            }}
-          </p>
-          <details>
-            <summary>技术详情</summary>
-            <code>{{ job.errorCode }}</code
-            ><span>Trace ID：{{ job.traceId }}</span>
-          </details>
-          <el-button
-            v-if="canRetry && job.status === 'failed' && job.retryable"
-            :loading="retryingId === job.id"
-            @click="retry(job)"
-            >重试任务</el-button
-          >
-        </div>
-      </article>
-      <el-empty v-if="!loading && items.length === 0" description="暂无符合条件的入库任务" />
-    </div>
-    <el-pagination
-      v-if="total > filters.pageSize"
-      v-model:current-page="filters.page"
-      v-model:page-size="filters.pageSize"
-      layout="total, sizes, prev, pager, next"
-      :total="total"
-      :page-sizes="[20, 50, 100]"
-      @change="syncAndLoad"
-    />
   </section>
 </template>

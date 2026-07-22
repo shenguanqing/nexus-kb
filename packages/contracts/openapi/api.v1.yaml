@@ -5,6 +5,58 @@ info:
 security:
   - bearerAuth: []
 paths:
+  /v1/auth/login-options:
+    get:
+      security: []
+      summary: Return the enabled browser login method without exposing account details
+      responses:
+        '200':
+          description: Public login method summary
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AuthLoginOptions' }
+  /v1/auth/password/login:
+    post:
+      security: []
+      summary: Start a password-authenticated server-side session
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PasswordLoginRequest' }
+      responses:
+        '200':
+          description: Authenticated identity summary and an HttpOnly session cookie
+          headers:
+            Set-Cookie:
+              schema: { type: string }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AuthSession' }
+        '400':
+          description: Invalid account-password login request
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '429':
+          description: Too many failed login attempts
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiError' }
+  /v1/auth/logout:
+    post:
+      security: []
+      summary: Revoke the current password-authenticated session if present
+      responses:
+        '200':
+          description: Session cookie cleared
+          headers:
+            Set-Cookie:
+              schema: { type: string }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AuthLogoutResponse' }
   /v1/auth/session:
     get:
       summary: Return the authenticated server-side identity summary
@@ -447,7 +499,7 @@ components:
       required: [authenticated, mode, identity]
       properties:
         authenticated: { const: true }
-        mode: { type: string, enum: [development, oidc] }
+        mode: { type: string, enum: [development, password, oidc] }
         identity:
           type: object
           additionalProperties: false
@@ -487,6 +539,26 @@ components:
                     access:write,
                   ]
             defaultSensitivity: { type: string, enum: [public, internal, confidential] }
+    AuthLoginOptions:
+      type: object
+      additionalProperties: false
+      required: [mode, passwordEnabled]
+      properties:
+        mode: { type: string, enum: [development, password, oidc] }
+        passwordEnabled: { type: boolean }
+    PasswordLoginRequest:
+      type: object
+      additionalProperties: false
+      required: [username, password]
+      properties:
+        username: { type: string, minLength: 1, maxLength: 64 }
+        password: { type: string, minLength: 1, maxLength: 256, format: password }
+    AuthLogoutResponse:
+      type: object
+      additionalProperties: false
+      required: [loggedOut]
+      properties:
+        loggedOut: { const: true }
     UserDirectoryEntry:
       type: object
       additionalProperties: false
@@ -1099,7 +1171,7 @@ components:
         traceId: { type: string, format: uuid }
   responses:
     Unauthorized:
-      description: Missing, invalid or expired bearer token
+      description: Missing, invalid or expired authentication session or bearer token
       content:
         application/json:
           schema: { $ref: '#/components/schemas/ApiError' }

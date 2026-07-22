@@ -84,10 +84,11 @@ docker compose down
 
 ## 文档 API
 
-仅在 development/test 且 `AUTH_REQUIRED=false` 时，身份来自服务端 `DEV_*` 配置。启用认证后，API
-只接受 `Authorization: Bearer <JWT>`，通过 OIDC JWKS 校验签名、issuer、audience、算法和时间声明，
-再校验 tenant、department、roles、allowedSensitivities、capabilities 等业务 claims。请求体或自定义
-header 中的 tenant、role、department 不会成为可信身份。
+仅在 development/test 且 `AUTH_REQUIRED=false` 时，身份来自服务端 `DEV_*` 配置。受保护模式可选择
+OIDC Bearer JWT，或启用服务端管理的账号密码会话。OIDC 通过 JWKS 校验签名、issuer、audience、算法和
+时间声明；账号密码模式只在 API 端校验配置的账号，向浏览器签发 HttpOnly、SameSite=Strict 的不透明 Cookie，
+数据库只保存 Cookie 的 SHA-256 摘要。两种模式都会在服务端构造 tenant、department、roles、
+allowedSensitivities 和 capabilities；请求体或自定义 header 中的同名字段不可信。
 
 ```bash
 curl -F 'file=@policy.md;type=text/markdown' http://127.0.0.1:3000/v1/documents
@@ -110,8 +111,14 @@ curl http://127.0.0.1:3000/v1/system/usage
 
 ## 认证与 ACL
 
-- production 强制 `AUTH_REQUIRED=true`，并要求配置 `OIDC_ISSUER`、`OIDC_AUDIENCE` 和 HTTPS
-  `OIDC_JWKS_URI`。
+- production 强制 `AUTH_REQUIRED=true`。默认使用 OIDC，并要求配置 `OIDC_ISSUER`、`OIDC_AUDIENCE` 和
+  HTTPS `OIDC_JWKS_URI`。
+- 如需使用账号密码登录，设置 `PASSWORD_AUTH_ENABLED=true`，并通过本地未提交的 `.env` 或服务器 Secret
+  Manager 注入 `PASSWORD_AUTH_USERS_JSON`。每个账号必须包含 `username`、至少 12 位的 `password`、
+  `tenantId`、`userId`、`department`、roles、allowedSensitivities、capabilities 和 defaultSensitivity；该
+  JSON 不得进入 `.env.example`、Git、镜像层或日志。启用该模式时不需要 OIDC 配置，OIDC 仍是生产环境的首选。
+- 账号密码模式提供 `GET /v1/auth/login-options`、`POST /v1/auth/password/login` 和
+  `POST /v1/auth/logout`。前端不会保存密码或会话 token；退出会撤销服务端会话并清空 Cookie。
 - JWT 仅允许配置的 RSA/ECDSA 非对称算法；未知密钥、错误 issuer/audience、过期 token 或不完整 claims
   均返回 401，不回退开发身份。
 - 文档 API 使用 `documents:read`、`documents:write`、`documents:delete` capabilities；tenant 级审计查询

@@ -57,6 +57,34 @@ describe('embedding configuration', () => {
     ).toThrow('Invalid application configuration: AUTH_REQUIRED');
   });
 
+  it('requires explicit secure account configuration when password login is enabled', () => {
+    expect(() =>
+      parseEnvironment({
+        ...baseEnvironment,
+        AUTH_REQUIRED: 'true',
+        PASSWORD_AUTH_ENABLED: 'true',
+      }),
+    ).toThrow('Invalid application configuration: PASSWORD_AUTH_USERS_JSON');
+    expect(
+      parseEnvironment({
+        ...baseEnvironment,
+        AUTH_REQUIRED: 'true',
+        PASSWORD_AUTH_ENABLED: 'true',
+        PASSWORD_AUTH_USERS_JSON:
+          '[{"username":"admin","password":"password-for-test","tenantId":"tenant-a","userId":"admin-a","department":"platform","roles":["platform_admin"],"allowedSensitivities":["public","internal","confidential"],"capabilities":["documents:read","access:read","access:write"],"defaultSensitivity":"internal"}]',
+      }),
+    ).toMatchObject({ PASSWORD_AUTH_ENABLED: true, AUTH_REQUIRED: true });
+    expect(
+      parseEnvironment({
+        ...baseEnvironment,
+        NODE_ENV: 'production',
+        PASSWORD_AUTH_ENABLED: 'true',
+        PASSWORD_AUTH_USERS_JSON:
+          '[{"username":"admin","password":"password-for-test","tenantId":"tenant-a","userId":"admin-a","department":"platform","roles":["platform_admin"],"allowedSensitivities":["public","internal","confidential"],"capabilities":["documents:read","access:read","access:write"],"defaultSensitivity":"internal"}]',
+      }),
+    ).toMatchObject({ NODE_ENV: 'production', PASSWORD_AUTH_ENABLED: true, AUTH_REQUIRED: true });
+  });
+
   it('requires provider credentials, region, model and HTTPS base URL when enabled', () => {
     expect(() => parseEnvironment({ ...baseEnvironment, EMBEDDING_PROVIDER: 'alibaba' })).toThrow(
       'Invalid application configuration: EMBEDDING_MODEL, EMBEDDING_REGION, DASHSCOPE_API_KEY, ALIBABA_BASE_URL',

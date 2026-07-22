@@ -1,12 +1,14 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  authLoginOptionsSchema,
   authSessionSchema,
   ingestionPayloadSchema,
   knowledgeQueryRequestSchema,
   knowledgeQueryResponseSchema,
   parseRequestSchema,
   parseResponseSchema,
+  passwordLoginRequestSchema,
   userDirectoryQueryRequestSchema,
   userDirectoryQueryResponseSchema,
 } from '../src';
@@ -30,6 +32,26 @@ describe('auth session contract', () => {
     };
     expect(authSessionSchema.parse(session)).toMatchObject({ authenticated: true });
     expect(() => authSessionSchema.parse({ ...session, token: 'untrusted' })).toThrow();
+  });
+
+  it('accepts the public password-login contract without accepting extra identity fields', () => {
+    expect(authLoginOptionsSchema.parse({ mode: 'password', passwordEnabled: true })).toEqual({
+      mode: 'password',
+      passwordEnabled: true,
+    });
+    expect(
+      passwordLoginRequestSchema.parse({ username: 'admin', password: 'safe-password' }),
+    ).toEqual({
+      username: 'admin',
+      password: 'safe-password',
+    });
+    expect(() =>
+      passwordLoginRequestSchema.parse({
+        username: 'admin',
+        password: 'safe-password',
+        tenantId: 'forged',
+      }),
+    ).toThrow();
   });
 });
 
@@ -64,7 +86,10 @@ describe('user directory contract', () => {
     };
     expect(userDirectoryQueryResponseSchema.parse(response)).toEqual(response);
     expect(() =>
-      userDirectoryQueryResponseSchema.parse({ ...response, users: [{ ...response.users[0], token: 'forged' }] }),
+      userDirectoryQueryResponseSchema.parse({
+        ...response,
+        users: [{ ...response.users[0], token: 'forged' }],
+      }),
     ).toThrow();
   });
 });

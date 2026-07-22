@@ -80,6 +80,24 @@ describe('AuthenticationGuard', () => {
     expect(request.identity).toBeUndefined();
   });
 
+  it('uses only a validated password session when password authentication is enabled', async () => {
+    const request = { headers: { cookie: 'nexuskb_session=opaque-token' } } as AuthenticatedRequest;
+    const identityFromCookie = vi.fn().mockResolvedValue(verifiedIdentity);
+    const reflector = { getAllAndOverride: () => false } as unknown as Reflector;
+
+    await expect(
+      new AuthenticationGuard(
+        config({ AUTH_REQUIRED: true, PASSWORD_AUTH_ENABLED: true }),
+        reflector,
+        { verify: vi.fn() },
+        undefined,
+        { identityFromCookie } as never,
+      ).canActivate(executionContext(request)),
+    ).resolves.toBe(true);
+    expect(identityFromCookie).toHaveBeenCalledWith('nexuskb_session=opaque-token');
+    expect(request.identity).toEqual(verifiedIdentity);
+  });
+
   it('uses only the verified token identity and ignores spoofed request fields', async () => {
     const request = {
       headers: {

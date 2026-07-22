@@ -10,6 +10,7 @@ import { IS_PUBLIC_ROUTE } from './public.decorator';
 import { TOKEN_VERIFIER } from './token-verifier';
 import type { TokenVerifier } from './token-verifier';
 import { UserDirectoryService } from '../access/user-directory.service';
+import { PasswordAuthService } from './password-auth.service';
 
 @Injectable()
 export class AuthenticationGuard implements CanActivate {
@@ -18,6 +19,7 @@ export class AuthenticationGuard implements CanActivate {
     private readonly reflector: Reflector,
     @Inject(TOKEN_VERIFIER) private readonly tokenVerifier: TokenVerifier,
     @Optional() private readonly users?: UserDirectoryService,
+    @Optional() private readonly passwordAuth?: PasswordAuthService,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -27,6 +29,15 @@ export class AuthenticationGuard implements CanActivate {
     ]);
     if (isPublic) return true;
     const request = context.switchToHttp().getRequest<FastifyRequest>() as AuthenticatedRequest;
+    if (this.config.values.PASSWORD_AUTH_ENABLED) {
+      if (!this.passwordAuth) {
+        throw new ApiException('AUTH_CONFIGURATION_INVALID', '认证服务未正确初始化', 503);
+      }
+      request.identity = await this.resolve(
+        await this.passwordAuth.identityFromCookie(request.headers.cookie),
+      );
+      return true;
+    }
     if (!this.config.values.AUTH_REQUIRED) {
       if (!['development', 'test'].includes(this.config.values.NODE_ENV)) {
         throw new ApiException('AUTH_CONFIGURATION_INVALID', '认证配置不安全', 503);

@@ -70,6 +70,44 @@ const capabilitySchema = z.enum([
   'access:read',
   'access:write',
 ]);
+const passwordAuthUserSchema = z
+  .object({
+    username: z
+      .string()
+      .trim()
+      .regex(/^[A-Za-z0-9][A-Za-z0-9._@-]{0,63}$/),
+    password: z.string().min(12).max(256),
+    tenantId: z.string().trim().min(1).max(128),
+    userId: z.string().trim().min(1).max(256),
+    department: z.string().trim().min(1).max(128),
+    roles: z.array(z.string().trim().min(1).max(64)).max(32),
+    allowedSensitivities: z.array(sensitivitySchema).min(1).max(3),
+    capabilities: z.array(capabilitySchema).min(1).max(16),
+    defaultSensitivity: sensitivitySchema,
+  })
+  .strict()
+  .superRefine((user, context) => {
+    if (!user.allowedSensitivities.includes(user.defaultSensitivity)) {
+      context.addIssue({
+        code: 'custom',
+        path: ['defaultSensitivity'],
+        message: 'must be included in allowedSensitivities',
+      });
+    }
+  });
+const passwordAuthUsersSchema = z
+  .array(passwordAuthUserSchema)
+  .max(100)
+  .superRefine((users, context) => {
+    const usernames = new Set<string>();
+    for (const [index, user] of users.entries()) {
+      const normalized = user.username.toLowerCase();
+      if (usernames.has(normalized)) {
+        context.addIssue({ code: 'custom', path: [index, 'username'], message: 'must be unique' });
+      }
+      usernames.add(normalized);
+    }
+  });
 const jwtAlgorithmSchema = z.enum(['RS256', 'RS384', 'RS512', 'ES256', 'ES384', 'ES512']);
 const llmProviderSchema = z.enum(['none', 'openai', 'google', 'deepseek', 'alibaba', 'custom']);
 
@@ -110,6 +148,14 @@ const environmentSchema = z
       .enum(['true', 'false'])
       .default('false')
       .transform((value) => value === 'true'),
+    PASSWORD_AUTH_ENABLED: z
+      .enum(['true', 'false'])
+      .default('false')
+      .transform((value) => value === 'true'),
+    PASSWORD_AUTH_SESSION_TTL_SECONDS: z.coerce.number().int().min(300).max(86_400).default(28_800),
+    PASSWORD_AUTH_MAX_ATTEMPTS: z.coerce.number().int().min(1).max(100).default(8),
+    PASSWORD_AUTH_WINDOW_SECONDS: z.coerce.number().int().min(30).max(86_400).default(900),
+    PASSWORD_AUTH_USERS_JSON: jsonEnvironmentValue(passwordAuthUsersSchema, '[]'),
     DEV_TENANT_ID: z.string().min(1).default('local-dev'),
     DEV_USER_ID: z.string().min(1).default('local-user'),
     DEV_DEPARTMENT: z.string().min(1).default('general'),
@@ -223,7 +269,21 @@ const environmentSchema = z
         message: 'must be included in DEV_ALLOWED_SENSITIVITIES_JSON',
       });
     }
-    if (environment.AUTH_REQUIRED) {
+    if (environment.PASSWORD_AUTH_ENABLED && !environment.AUTH_REQUIRED) {
+      context.addIssue({
+        code: 'custom',
+        path: ['AUTH_REQUIRED'],
+        message: 'must be true when password authentication is enabled',
+      });
+    }
+    if (environment.PASSWORD_AUTH_ENABLED && environment.PASSWORD_AUTH_USERS_JSON.length === 0) {
+      context.addIssue({
+        code: 'custom',
+        path: ['PASSWORD_AUTH_USERS_JSON'],
+        message: 'must include at least one account when password authentication is enabled',
+      });
+    }
+    if (environment.AUTH_REQUIRED && !environment.PASSWORD_AUTH_ENABLED) {
       const requiredFields = [
         ['OIDC_ISSUER', environment.OIDC_ISSUER],
         ['OIDC_AUDIENCE', environment.OIDC_AUDIENCE],
@@ -434,6 +494,8 @@ export function safeConfigurationSummary(environment: Environment): Record<strin
     apiPort: environment.API_PORT,
     logLevel: environment.LOG_LEVEL,
     authRequired: environment.AUTH_REQUIRED,
+    passwordAuthEnabled: environment.PASSWORD_AUTH_ENABLED,
+    passwordAuthAccountCount: environment.PASSWORD_AUTH_USERS_JSON.length,
     oidcIssuer: environment.OIDC_ISSUER || null,
     oidcAudience: environment.OIDC_AUDIENCE || null,
     oidcJwksEndpoint: environment.OIDC_JWKS_URI ? safeEndpoint(environment.OIDC_JWKS_URI) : null,

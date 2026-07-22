@@ -94,12 +94,20 @@ Vue 3 + TypeScript + Vite
 - [x] 部门敏感度策略只能收紧已验证身份声明；用量页基于现有查询审计汇总，不可用 token/成本保持未知。
 - [x] Playwright 使用脱敏固定数据覆盖有来源回答、拒答、无权限路由、768px 和 Axe WCAG 2 A/AA。
 
+### 3.9 阶段 15 后续登录与布局收尾
+
+- [x] 新增受控账号密码认证模式、服务端 session migration、登录限速、HttpOnly Cookie、退出登录和共享
+      Zod/OpenAPI 契约；密码、原始 token 和账号配置不进入浏览器持久化、日志或数据库明文。
+- [x] 登录页根据公开的登录方式摘要显示账号密码表单，密码提交后立即清空；OIDC/JWT 与 development 身份模式保留。
+- [x] `app-main` 与所有 `xxxx-page` 填满可用视口；页面标题与工具栏位于非滚动区，文档、入库、审计、用户、
+      历史和系统页面的正文在各自内容块内滚动，移除 toolbar sticky 定位。
+
 ---
 
 ## 4. 阶段 15 验证状态
 
 - [x] `pnpm lint`、`pnpm typecheck`、`pnpm test` 和 `pnpm build` 通过。
-- [x] `pnpm --filter @nexus-kb/web test:e2e` 4/4 通过。
+- [x] `pnpm --filter @nexus-kb/web test:e2e` 6/6 通过，覆盖账号密码登录、固定 shell 与块内滚动。
 - [x] Docker API 镜像构建、Prisma migration、ready 检查和 PostgreSQL/Redis/Chroma 集成测试通过。
 
 ---

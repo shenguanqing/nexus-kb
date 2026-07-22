@@ -7,6 +7,7 @@ import { AclPolicy } from './auth/acl-policy';
 import { AuthenticationGuard } from './auth/authentication.guard';
 import { AuthController } from './auth/auth.controller';
 import { OidcJwtTokenVerifier } from './auth/oidc-jwt-token.verifier';
+import { PasswordAuthService } from './auth/password-auth.service';
 import { TOKEN_VERIFIER } from './auth/token-verifier';
 import { PrismaService } from './database/prisma.service';
 import { DocumentsController } from './documents/documents.controller';
@@ -73,6 +74,7 @@ import { UsageService } from './usage/usage.service';
     PrismaService,
     AclPolicy,
     OidcJwtTokenVerifier,
+    PasswordAuthService,
     { provide: TOKEN_VERIFIER, useExisting: OidcJwtTokenVerifier },
     { provide: APP_GUARD, useClass: AuthenticationGuard },
     ChunkingService,

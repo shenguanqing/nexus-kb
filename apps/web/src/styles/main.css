@@ -140,6 +140,19 @@ a {
   border-radius: 50%;
   background: #2d3c64;
 }
+.logout-button {
+  border: 0;
+  border-radius: 6px;
+  padding: 5px 8px;
+  color: #dce5ff;
+  background: transparent;
+  cursor: pointer;
+}
+.logout-button:hover,
+.logout-button:focus-visible {
+  background: #ffffff18;
+  outline: none;
+}
 .app-sidebar {
   position: fixed;
   top: 56px;
@@ -215,24 +228,25 @@ a {
   grid-column: 2;
   min-width: 0;
   padding: 0 32px 28px;
-  overflow-x: hidden;
-  overflow-y: auto;
-  overscroll-behavior: contain;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   transition: left 0.18s ease;
 }
 .app-main--ask {
   padding-top: 28px;
 }
-.app-main > section {
+.app-main > :not(.page-heading) {
   width: 100%;
   max-width: none;
   margin-right: auto;
   margin-left: auto;
+  flex: 1 1 auto;
+  min-height: 0;
 }
 .page-heading {
-  position: sticky;
-  top: 0;
-  z-index: 20;
+  flex: 0 0 var(--page-heading-height);
+  box-sizing: border-box;
   padding: 28px 0 20px;
   background: var(--kb-color-canvas);
 }
@@ -247,7 +261,10 @@ a {
 }
 .documents-page {
   display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
   gap: 18px;
+  height: 100%;
+  min-height: 0;
 }
 .documents-toolbar,
 .documents-content {
@@ -259,17 +276,6 @@ a {
   display: grid;
   gap: 18px;
   padding: 20px;
-}
-.documents-toolbar,
-.task-toolbar,
-.audit-toolbar,
-.history-toolbar,
-.access-toolbar,
-.usage-intro,
-.system-page-intro {
-  position: sticky;
-  top: var(--page-heading-height);
-  z-index: 15;
 }
 .documents-toolbar-heading,
 .document-filters,
@@ -295,7 +301,8 @@ a {
 }
 .documents-content {
   min-width: 0;
-  overflow: hidden;
+  min-height: 0;
+  overflow: auto;
 }
 .document-link {
   color: var(--kb-color-primary);
@@ -363,6 +370,33 @@ a {
 .system-page {
   max-width: 1280px;
   margin: 0 auto;
+}
+.document-detail-page {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.ingestion-page {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 18px;
+  height: 100%;
+  min-height: 0;
+}
+.task-controls,
+.task-content {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.task-controls {
+  gap: 14px;
+}
+.task-content {
+  gap: 14px;
+}
+.document-detail-page > .page-content {
+  padding-right: 2px;
 }
 .detail-actions,
 .card-title,
@@ -455,7 +489,7 @@ a {
   font-size: 13px;
 }
 .task-toolbar {
-  margin-bottom: 18px;
+  margin-bottom: 0;
 }
 .task-back-link {
   display: inline-flex;
@@ -480,8 +514,24 @@ a {
 }
 .audit-page {
   display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
   gap: 18px;
+  height: 100%;
   min-width: 0;
+  min-height: 0;
+}
+.audit-content,
+.access-content {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+  flex-direction: column;
+  gap: 14px;
+  overflow: auto;
+}
+.audit-content .audit-table-wrap,
+.access-content .access-table-wrap {
+  flex: 1 1 auto;
 }
 .audit-toolbar p {
   margin: 5px 0 0;
@@ -496,8 +546,8 @@ a {
   width: 190px;
 }
 .audit-table-wrap {
-  min-height: 240px;
-  overflow: hidden;
+  min-height: 0;
+  overflow: auto;
   background: var(--kb-color-surface);
   border: 1px solid var(--kb-color-border);
   border-radius: var(--kb-radius-md);
@@ -550,6 +600,11 @@ a {
   gap: 20px;
   padding: 18px 20px;
   margin-bottom: 18px;
+}
+.system-page {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
 }
 .system-page-intro p,
 .system-note p {
@@ -683,6 +738,10 @@ a {
 .task-list {
   display: grid;
   gap: 14px;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  align-content: start;
 }
 .task-card header div {
   display: flex;
@@ -720,8 +779,8 @@ a {
   margin: 8px 0;
 }
 .ask-page {
-  height: calc(100vh - 112px);
-  min-height: 620px;
+  height: 100%;
+  min-height: 0;
   max-width: 1120px;
   margin: 0 auto;
   display: flex;
@@ -1126,9 +1185,31 @@ a {
 .login-card small {
   color: var(--kb-color-text-secondary);
 }
+.login-form {
+  display: grid;
+  gap: 14px;
+}
+.login-form label {
+  display: grid;
+  gap: 7px;
+  color: var(--kb-color-text-primary);
+  font-size: 13px;
+  font-weight: 700;
+}
+.login-form .el-button {
+  width: 100%;
+}
+.login-error {
+  margin: 0;
+  color: var(--kb-color-danger) !important;
+  font-size: 13px;
+}
 .access-page {
   display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
   gap: 18px;
+  height: 100%;
+  min-height: 0;
 }
 .access-intro,
 .access-boundary-note {
@@ -1140,8 +1221,15 @@ a {
 .history-page,
 .usage-page,
 .department-page {
-  display: grid;
+  display: flex;
+  flex-direction: column;
   gap: 18px;
+  height: 100%;
+  min-height: 0;
+}
+.history-page > .document-error,
+.department-page > .document-error {
+  flex: 1 1 auto;
 }
 .history-toolbar,
 .usage-intro {
@@ -1160,7 +1248,8 @@ a {
   display: grid;
   grid-template-columns: minmax(240px, 0.34fr) minmax(0, 1fr);
   gap: 16px;
-  min-height: 480px;
+  flex: 1 1 auto;
+  min-height: 0;
 }
 .history-list,
 .department-list,
@@ -1175,6 +1264,8 @@ a {
 .history-list,
 .department-list {
   padding: 8px;
+  min-height: 0;
+  overflow: auto;
 }
 .history-list > button,
 .department-list > button {
@@ -1203,6 +1294,11 @@ a {
 .department-policy-card,
 .usage-table-card {
   padding: 22px;
+}
+.history-detail,
+.department-policy-card {
+  min-height: 0;
+  overflow: auto;
 }
 .history-turn {
   border-top: 1px solid var(--kb-color-border);
@@ -1246,6 +1342,14 @@ a {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 14px;
+}
+.page-content {
+  display: grid;
+  flex: 1 1 auto;
+  min-height: 0;
+  gap: 18px;
+  overflow: auto;
+  align-content: start;
 }
 .usage-summary article {
   padding: 20px;
@@ -1305,8 +1409,8 @@ a {
   border-radius: 14px;
 }
 .access-table-wrap {
-  min-height: 260px;
-  overflow: hidden;
+  min-height: 0;
+  overflow: auto;
   background: #fff;
   border: 1px solid var(--kb-color-border);
   border-radius: 14px;
@@ -1413,7 +1517,7 @@ a {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
   .ask-page {
-    min-height: 560px;
+    min-height: 0;
   }
   .login-page {
     grid-template-columns: 1fr;
@@ -1474,8 +1578,8 @@ a {
     padding-bottom: 16px;
   }
   .ask-page {
-    height: calc(100vh - 146px);
-    min-height: 520px;
+    height: 100%;
+    min-height: 0;
   }
   .ask-header h1 {
     font-size: 20px;

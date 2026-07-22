@@ -1,12 +1,23 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
-import { useRoute } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
+import { logout } from '@/api/auth';
 import { useAuthStore } from '@/stores/auth';
 
 const route = useRoute();
+const router = useRouter();
 const auth = useAuthStore();
 const isCollapsed = ref(false);
 const pageTitle = computed(() => String(route.meta.title ?? '知枢'));
+
+async function signOut(): Promise<void> {
+  try {
+    await logout();
+  } finally {
+    auth.clear();
+    await router.replace('/login');
+  }
+}
 </script>
 
 <template>
@@ -27,6 +38,15 @@ const pageTitle = computed(() => String(route.meta.title ?? '知枢'));
           ><strong>{{ auth.identity?.userId }}</strong
           ><small>{{ auth.identity?.department }} · {{ auth.identity?.tenantId }}</small></span
         >
+        <button
+          v-if="auth.mode === 'password'"
+          class="logout-button"
+          type="button"
+          aria-label="退出登录"
+          @click="signOut"
+        >
+          退出
+        </button>
       </div>
     </header>
 
