@@ -84,4 +84,25 @@ describe('GoogleLlmProvider', () => {
     expect(fetchFunction).toHaveBeenCalledTimes(2);
     expect(sleepFunction).toHaveBeenCalledWith(10);
   });
+
+  it('omits deprecated sampling parameters for Gemini 3.5 Flash-Lite', async () => {
+    const fetchFunction = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(
+        new Response(
+          JSON.stringify({ candidates: [{ content: { parts: [{ text: '答案。[来源1]' }] } }] }),
+        ),
+      );
+
+    await provider({ fetchFunction, model: 'gemini-3.5-flash-lite' }).answer({
+      question: '问题',
+      contexts,
+      traceId: 'trace-a',
+    });
+
+    const body = fetchFunction.mock.calls[0]?.[1]?.body;
+    if (typeof body !== 'string') throw new Error('Expected a JSON request body');
+    expect(body).toContain('"maxOutputTokens"');
+    expect(body).not.toContain('"temperature"');
+  });
 });

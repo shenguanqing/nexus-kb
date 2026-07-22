@@ -10,6 +10,11 @@ const result = ref<ProviderStatusResponse | null>(null);
 const loading = ref(false);
 const errorMessage = ref('');
 
+function credentialLabel(provider: string | null, configured: boolean): string {
+  if (provider === 'ollama') return '本地无需凭据';
+  return configured ? '已配置' : '未配置';
+}
+
 async function load(): Promise<void> {
   loading.value = true;
   errorMessage.value = '';
@@ -66,7 +71,7 @@ onMounted(load);
             </div>
             <div>
               <dt>凭据状态</dt>
-              <dd>{{ provider.credentialConfigured ? '已配置' : '未配置' }}</dd>
+              <dd>{{ credentialLabel(provider.provider, provider.credentialConfigured) }}</dd>
             </div>
             <div v-if="provider.dimensions">
               <dt>向量维度</dt>

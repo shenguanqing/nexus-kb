@@ -26,6 +26,15 @@ const mutating = ref(false);
 const metadataVisible = ref(false);
 const metadataDepartment = ref('');
 const metadataSensitivity = ref<Sensitivity>('internal');
+const documentStatusLabels: Record<string, string> = {
+  uploaded: '已上传',
+  processing: '处理中',
+  prepared: '待建立索引',
+  active: '已生效',
+  policy_blocked: '策略阻止',
+  failed: '失败',
+  deleted: '已删除',
+};
 const canWrite = computed(() => auth.hasCapability('documents:write'));
 const canDelete = computed(() => auth.hasCapability('documents:delete'));
 const backNavigation = computed(() => documentDetailReturn(route.query.from));
@@ -39,6 +48,10 @@ const allTasksTarget = computed(() => ({
 const activeVersion = computed(() =>
   document.value?.versions.find((version) => version.version === document.value?.activeVersion),
 );
+
+function documentStatusLabel(status: string): string {
+  return documentStatusLabels[status] ?? status;
+}
 
 async function load(): Promise<void> {
   loading.value = true;
@@ -59,10 +72,17 @@ async function load(): Promise<void> {
 
 async function reindex(): Promise<void> {
   if (!document.value) return;
+  const isPrepared = document.value.status === 'prepared';
   await ElMessageBox.confirm(
-    `将为“${document.value.sourceName}”创建新版本。旧版本会在新索引验证并原子激活前继续提供查询。`,
-    '确认重新索引',
-    { confirmButtonText: '开始重建', cancelButtonText: '取消', type: 'warning' },
+    isPrepared
+      ? `将继续为“${document.value.sourceName}”生成本地向量并建立索引，不会重复解析或上传原文件。`
+      : `将为“${document.value.sourceName}”创建新版本。旧版本会在新索引验证并原子激活前继续提供查询。`,
+    isPrepared ? '激活待索引文档' : '确认重新索引',
+    {
+      confirmButtonText: isPrepared ? '继续入库' : '开始重建',
+      cancelButtonText: '取消',
+      type: 'warning',
+    },
   );
   mutating.value = true;
   try {
@@ -156,9 +176,9 @@ onMounted(load);
             <el-button
               v-if="canWrite"
               :loading="mutating"
-              :disabled="document.status !== 'active'"
+              :disabled="document.status !== 'active' && document.status !== 'prepared'"
               @click="reindex"
-              >重新索引</el-button
+              >{{ document.status === 'prepared' ? '继续建立索引' : '重新索引' }}</el-button
             ><el-button
               v-if="canDelete"
               class="delete-document-button"
@@ -176,7 +196,7 @@ onMounted(load);
             <dl>
               <div>
                 <dt>状态</dt>
-                <dd>{{ document.status }}</dd>
+                <dd>{{ documentStatusLabel(document.status) }}</dd>
               </div>
               <div>
                 <dt>部门</dt>
@@ -230,12 +250,14 @@ onMounted(load);
           <el-table :data="document.versions" row-key="version"
             ><el-table-column label="版本" width="90"
               ><template #default="scope">v{{ scope.row.version }}</template></el-table-column
-            ><el-table-column prop="status" label="状态" width="140" /><el-table-column
-              prop="chunkCount"
-              label="分块"
-              width="100"
-            /><el-table-column prop="parserVersion" label="解析器版本" /><el-table-column
-              label="创建时间"
+            ><el-table-column label="状态" width="140"
+              ><template #default="scope">{{
+                documentStatusLabel(scope.row.status)
+              }}</template></el-table-column
+            ><el-table-column prop="chunkCount" label="分块" width="100" /><el-table-column
+              prop="parserVersion"
+              label="解析器版本"
+            /><el-table-column label="创建时间"
               ><template #default="scope">{{
                 new Date(scope.row.createdAt).toLocaleString()
               }}</template></el-table-column

@@ -32,6 +32,10 @@ export class SystemService {
     const environment = this.config.values;
     const embeddingEnabled = environment.EMBEDDING_PROVIDER !== 'none';
     const rerankEnabled = environment.RERANK_PROVIDER !== 'none';
+    const embeddingEndpoint =
+      environment.EMBEDDING_PROVIDER === 'ollama'
+        ? environment.OLLAMA_BASE_URL
+        : environment.ALIBABA_BASE_URL;
     return {
       providers: [
         {
@@ -39,10 +43,12 @@ export class SystemService {
           provider: embeddingEnabled ? environment.EMBEDDING_PROVIDER : null,
           model: embeddingEnabled ? environment.EMBEDDING_MODEL : null,
           configurationStatus: embeddingEnabled ? 'configured' : 'disabled',
-          endpointHost: embeddingEnabled ? this.endpointHost(environment.ALIBABA_BASE_URL) : null,
+          endpointHost: embeddingEnabled ? this.endpointHost(embeddingEndpoint) : null,
           region: embeddingEnabled ? environment.EMBEDDING_REGION : null,
           dimensions: embeddingEnabled ? environment.EMBEDDING_DIMENSIONS : null,
-          credentialConfigured: embeddingEnabled && Boolean(environment.DASHSCOPE_API_KEY),
+          credentialConfigured:
+            embeddingEnabled &&
+            (environment.EMBEDDING_PROVIDER === 'ollama' || Boolean(environment.DASHSCOPE_API_KEY)),
           fingerprint: embeddingEnabled ? this.vectorStore.info().fingerprint : null,
         },
         this.llmStatus('llm', environment.LLM_PROVIDER, environment.LLM_MODEL),

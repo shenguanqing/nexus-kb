@@ -20,6 +20,7 @@ import { QueryRateLimiter } from './query-rate-limiter';
 import { QueryRetrievalService } from './query-retrieval.service';
 import { SourceAuthorizationService } from './source-authorization.service';
 import { KnowledgeHistoryService } from '../history/knowledge-history.service';
+import { AnswerCitationError } from './answer-source-validator';
 
 const NO_ANSWER_TEXT = '当前知识库中没有找到足够可靠且有权限访问的依据。';
 type QueryResult = Omit<KnowledgeQueryResponse, 'conversationId'>;
@@ -105,12 +106,31 @@ export class KnowledgeQueryService {
           ),
         );
       }
-      const answer = await this.llm.answer({
-        identity,
-        question: request.question,
-        contexts,
-        traceId,
-      });
+      let answer: Awaited<ReturnType<LlmService['answer']>>;
+      try {
+        answer = await this.llm.answer({
+          identity,
+          question: request.question,
+          contexts,
+          traceId,
+        });
+      } catch (error) {
+        if (error instanceof AnswerCitationError) {
+          observer?.recordFinalSources([]);
+          return await this.withHistory(
+            request,
+            identity,
+            await this.noAnswer(
+              auditBase,
+              traceId,
+              'insufficient_relevance',
+              reranked.degraded,
+              startedAt,
+            ),
+          );
+        }
+        throw error;
+      }
       const finalContexts = await this.sourceAuthorization.retainActiveAuthorizedSources(
         identity,
         contexts,

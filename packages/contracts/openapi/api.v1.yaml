@@ -365,7 +365,7 @@ paths:
     parameters:
       - $ref: '#/components/parameters/DocumentId'
     post:
-      summary: Create and enqueue a new version while the active version remains queryable
+      summary: Resume a prepared version or create and enqueue a new version while the active version remains queryable
       responses:
         '202':
           description: Reindex queued

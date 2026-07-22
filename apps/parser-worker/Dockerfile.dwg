@@ -1,0 +1,26 @@
+FROM python:3.11.13-slim-bookworm
+
+ARG ODA_DEB=apps/parser-worker/vendor/oda/oda-file-converter.deb
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PYTHONPATH=/app
+
+WORKDIR /app
+
+# The ODA package is obtained by the deployment owner under its own licence.  It
+# is intentionally ignored by Git and installed only in this derived DWG image.
+COPY ${ODA_DEB} /tmp/oda-file-converter.deb
+COPY apps/parser-worker/requirements.lock ./requirements.lock
+RUN apt-get update \
+    && apt-get install --no-install-recommends --yes /tmp/oda-file-converter.deb \
+    && rm -rf /var/lib/apt/lists/* /tmp/oda-file-converter.deb \
+    && pip install --no-cache-dir -r requirements.lock \
+    && useradd --uid 10002 --create-home worker \
+    && mkdir -p /data/raw-docs /tmp/parser \
+    && chown -R worker:worker /app /tmp/parser
+
+COPY --chown=worker:worker apps/parser-worker/app ./app
+USER worker
+EXPOSE 8000
+CMD ["uvicorn", "app.main:create_app", "--factory", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]

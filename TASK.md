@@ -82,7 +82,7 @@ Vue 3 + TypeScript + Vite
 
 - [x] 新增 `UserDirectoryEntry` migration，在会话接口只同步经过验证的 tenant、用户、部门、角色和认证时间。
 - [x] 新增独立 `access:read` capability 与 `GET /v1/access/users` 正式契约；平台管理员限当前 tenant，其他调用者
-  固定到自身部门。
+      固定到自身部门。
 - [x] 实现用户 ID 搜索、平台管理员部门筛选、分页、空态、错误重试与响应式用户目录页面。
 - [x] 角色 mutation 使用应用托管覆盖，并在认证 guard 中参与真实授权；capability 仍来自已验证身份，不能通过角色编辑扩权。
 - [x] 角色和部门策略变更写入独立访问审计，并保护最后一个有效平台管理员。
@@ -101,6 +101,22 @@ Vue 3 + TypeScript + Vite
 - [x] 登录页根据公开的登录方式摘要显示账号密码表单，密码提交后立即清空；OIDC/JWT 与 development 身份模式保留。
 - [x] `app-main` 与所有 `xxxx-page` 填满可用视口；页面标题与工具栏位于非滚动区，文档、入库、审计、用户、
       历史和系统页面的正文在各自内容块内滚动，移除 toolbar sticky 定位。
+
+### 3.10 本地 Provider 与待建立索引恢复
+
+- [x] 新增受控本机 Ollama Embedding Provider，支持 `bge-m3:latest` / 1024 维度，无需 API Key；容器仅可访问
+      `host.docker.internal:11434` 或内部 `ollama:11434`，并有配置、Provider、云策略和 Factory 测试。
+- [x] Google `gemini-3.5-flash-lite` 请求省略该模型已废弃的 `temperature` 参数。
+- [x] `prepared` 文档可在配置 Embedding 后通过“继续建立索引”恢复为 `local_prepared`，复用本地分块而不重新上传或解析。
+- [x] 文档状态由容易误解的“待激活”调整为“待建立索引”，并补充本地启动、Ollama、Gemini、DWG、数据存储与 Vetur/Volar 指南。
+
+### 3.11 DWG 本地优先验证
+
+- [x] 新增 `compose.dwg.yaml` 与受控 ODA 派生 Parser Worker：仅从本地忽略目录安装经批准的 Linux x64 Debian 包，
+      Apple Silicon Mac 通过 Docker Desktop 的 `linux/amd64` 兼容层运行；不会将 ODA 二进制、许可证或凭据纳入 Git。
+- [ ] 待提供已批准的实际 ODA Debian 包后，构建镜像、记录实际可执行路径/版本，并用 `Drawing1.dwg` 执行端到端
+      上传、转换、索引与问答冒烟验证。
+- [x] 无有效 `[来源N]` 的 LLM 文本不再作为 Provider 502 返回；改为安全的无答案响应，保留“只能返回可核验来源”规则。
 
 ---
 
@@ -121,4 +137,6 @@ Rerank 继续默认关闭；后续取得数据时返回阶段 14 完成正式验
 
 ## 6. 下一开发入口
 
-阶段 15 已完成。下一开发入口为阶段 16 服务器上线准备；阶段 14 的真实数据质量验收仍按第 5 节保留。
+阶段 15 已完成。本地 Ollama / Gemini 配置与待建立索引恢复已补齐。当前优先入口为第 3.11 节的 DWG 端到端
+验证：只缺少经批准的 ODA Linux x64 Debian 包。阶段 14 的真实数据质量验收仍按第 5 节保留；完成 DWG 验证后再进入
+阶段 16 服务器上线准备。

@@ -89,10 +89,7 @@ export class GoogleLlmProvider implements LlmProvider {
           body: JSON.stringify({
             system_instruction: { parts: [{ text: KNOWLEDGE_SYSTEM_PROMPT }] },
             contents: [{ role: 'user', parts: [{ text: buildKnowledgePrompt(input) }] }],
-            generationConfig: {
-              temperature: this.options.temperature,
-              maxOutputTokens: this.options.maxOutputTokens,
-            },
+            generationConfig: this.generationConfig(),
           }),
           signal: controller.signal,
         });
@@ -166,5 +163,15 @@ export class GoogleLlmProvider implements LlmProvider {
     if (status === 408) return new LlmProviderError('timeout', true);
     if ([500, 502, 503, 504].includes(status)) return new LlmProviderError('unavailable', true);
     return new LlmProviderError('unavailable', false);
+  }
+
+  private generationConfig(): { maxOutputTokens: number; temperature?: number } {
+    if (this.model === 'gemini-3.5-flash-lite') {
+      return { maxOutputTokens: this.options.maxOutputTokens };
+    }
+    return {
+      temperature: this.options.temperature,
+      maxOutputTokens: this.options.maxOutputTokens,
+    };
   }
 }

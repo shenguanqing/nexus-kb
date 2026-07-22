@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { AclPolicy } from '../src/auth/acl-policy';
 import type { Identity } from '../src/auth/identity';
 import type { AppConfig } from '../src/config/app-config';
+import { AnswerCitationError } from '../src/knowledge/answer-source-validator';
 import type { QualityQueryObserver } from '../src/knowledge/knowledge-query.service';
 import { KnowledgeQueryService } from '../src/knowledge/knowledge-query.service';
 import type { QueryAuditService } from '../src/knowledge/query-audit.service';
@@ -167,5 +168,21 @@ describe('KnowledgeQueryService', () => {
       sources: [],
     });
     expect(deps.answer).toHaveBeenCalledOnce();
+  });
+
+  it('returns a safe no-answer response when the model omits valid source citations', async () => {
+    const deps = dependencies();
+    deps.answer.mockRejectedValue(new AnswerCitationError());
+
+    await expect(
+      deps.service.query({ question: 'CSS 是什么？' }, identity, traceId),
+    ).resolves.toMatchObject({
+      noAnswer: true,
+      reason: 'insufficient_relevance',
+      sources: [],
+      model: null,
+    });
+    expect(deps.record).toHaveBeenCalledWith(expect.objectContaining({ outcome: 'no_answer' }));
+    expect(deps.record).not.toHaveBeenCalledWith(expect.objectContaining({ outcome: 'failed' }));
   });
 });

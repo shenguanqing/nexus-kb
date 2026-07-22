@@ -31,7 +31,7 @@ class Settings(BaseSettings):
         validation_alias="DWG_CONVERTER_EXECUTABLE",
     )
     dwg_converter_release: str = Field(
-        default="27.6",
+        default="not-installed",
         pattern=r"^[A-Za-z0-9._-]{1,24}$",
         validation_alias="DWG_CONVERTER_RELEASE",
     )

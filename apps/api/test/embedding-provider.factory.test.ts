@@ -54,4 +54,34 @@ describe('EmbeddingProviderFactory', () => {
       dimensions: 1024,
     });
   });
+
+  it('constructs the configured local Ollama provider', () => {
+    const config = {
+      values: {
+        EMBEDDING_PROVIDER: 'ollama',
+        EMBEDDING_MODEL: 'bge-m3:latest',
+        EMBEDDING_DIMENSIONS: 1024,
+        EMBEDDING_BATCH_SIZE: 10,
+        EMBEDDING_TASK_MODE: 'symmetric',
+        EMBEDDING_REGION: 'local',
+        EMBEDDING_REQUEST_TIMEOUT_MS: 60_000,
+        EMBEDDING_MAX_ATTEMPTS: 3,
+        EMBEDDING_RETRY_BASE_DELAY_MS: 500,
+        OLLAMA_BASE_URL: 'http://host.docker.internal:11434',
+        CHUNK_MAX_TOKENS: 600,
+        CHUNK_OVERLAP_TOKENS: 80,
+        REDACTION_POLICY_VERSION: 'v1',
+      },
+    } as unknown as AppConfig;
+    const factory = new EmbeddingProviderFactory(config, {
+      record: vi.fn(),
+    } as unknown as EmbeddingTelemetry);
+
+    expect(factory.getProvider()).toMatchObject({
+      id: 'ollama',
+      model: 'bge-m3:latest',
+      dimensions: 1024,
+      region: 'local',
+    });
+  });
 });

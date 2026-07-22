@@ -1,0 +1,8 @@
+services:
+  parser-worker:
+    # ODA currently provides its Linux File Converter package for x64. Docker
+    # Desktop runs it under emulation on Apple Silicon Macs.
+    platform: linux/amd64
+    build:
+      context: .
+      dockerfile: apps/parser-worker/Dockerfile.dwg

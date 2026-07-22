@@ -236,6 +236,63 @@ describe('DocumentsService tenant isolation', () => {
     );
   });
 
+  it('resumes a prepared document from its saved local chunks', async () => {
+    const enqueue = vi.fn().mockResolvedValue(undefined);
+    const updateJob = vi.fn().mockResolvedValue({ count: 1 });
+    const updateDocument = vi.fn().mockResolvedValue({});
+    const updateVersion = vi.fn().mockResolvedValue({});
+    const createAudit = vi.fn().mockResolvedValue({});
+    const transactionClient = {
+      ingestionJob: { updateMany: updateJob },
+      document: { update: updateDocument },
+      documentVersion: { update: updateVersion },
+      documentLifecycleAudit: { create: createAudit },
+    };
+    const service = new DocumentsService(
+      {} as AppConfig,
+      {
+        document: {
+          findFirst: vi.fn().mockResolvedValue({
+            id: '6769af9a-a4d0-4dc2-a97d-942584a9c826',
+            storageKey: '6769af9a-a4d0-4dc2-a97d-942584a9c826.md',
+            activeVersion: null,
+            status: 'prepared',
+            versions: [{ version: 1 }],
+          }),
+        },
+        ingestionJob: {
+          findFirst: vi.fn().mockResolvedValue({ id: 'a5427e4a-b9db-4750-8dfd-02d601a41473' }),
+        },
+        $transaction: (
+          operation: ((tx: typeof transactionClient) => Promise<unknown>) | Array<Promise<unknown>>,
+        ) =>
+          typeof operation === 'function' ? operation(transactionClient) : Promise.all(operation),
+      } as unknown as PrismaService,
+      { enqueue } as unknown as IngestionQueue,
+      {} as ChromaVectorStore,
+      logger,
+      acl,
+    );
+
+    await expect(
+      service.reindexDocument(
+        '6769af9a-a4d0-4dc2-a97d-942584a9c826',
+        identity,
+        'd26720b3-1f78-40df-868d-8ca8510dca26',
+      ),
+    ).resolves.toMatchObject({ documentVersion: 1, status: 'queued' });
+
+    const [[jobUpdateInput]] = updateJob.mock.calls as unknown as [
+      [{ data: { checkpoint: string } }],
+    ];
+    const [[auditInput]] = createAudit.mock.calls as unknown as [[{ data: { eventType: string } }]];
+    expect(jobUpdateInput.data.checkpoint).toBe('local_prepared');
+    expect(auditInput.data.eventType).toBe('document_prepared_index_resume_requested');
+    expect(enqueue).toHaveBeenCalledWith(
+      expect.objectContaining({ ingestionJobId: 'a5427e4a-b9db-4750-8dfd-02d601a41473' }),
+    );
+  });
+
   it('always scopes document reads to the authenticated tenant', async () => {
     const findFirst = vi.fn().mockResolvedValue(null);
     const service = new DocumentsService(

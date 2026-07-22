@@ -18,7 +18,7 @@ const identity: Identity = {
   defaultSensitivity: 'internal',
 };
 
-function fixture() {
+function fixture(environmentOverrides: Record<string, unknown> = {}) {
   const healthReadiness = vi.fn().mockResolvedValue({
     status: 'ready',
     checks: {
@@ -76,6 +76,7 @@ function fixture() {
       RERANK_MODEL: 'qwen3-rerank',
       RERANK_BASE_URL: '',
       RERANK_REGION: 'cn-beijing',
+      ...environmentOverrides,
     },
   } as unknown as AppConfig;
   return {
@@ -105,6 +106,25 @@ describe('SystemService', () => {
     expect(serialized).not.toContain('embedding-secret');
     expect(serialized).not.toContain('llm-secret');
     expect(serialized).not.toContain('must-not-be-returned');
+  });
+
+  it('reports Ollama as configured without an API key', () => {
+    const { service } = fixture({
+      EMBEDDING_PROVIDER: 'ollama',
+      EMBEDDING_MODEL: 'bge-m3:latest',
+      EMBEDDING_REGION: 'local',
+      OLLAMA_BASE_URL: 'http://host.docker.internal:11434',
+      DASHSCOPE_API_KEY: '',
+    });
+
+    expect(service.providers(identity).providers[0]).toMatchObject({
+      kind: 'embedding',
+      provider: 'ollama',
+      model: 'bge-m3:latest',
+      endpointHost: 'host.docker.internal:11434',
+      region: 'local',
+      credentialConfigured: true,
+    });
   });
 
   it('returns dependency, queue, and bounded disk summaries', async () => {

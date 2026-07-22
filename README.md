@@ -82,6 +82,14 @@ docker compose down
   `PARSER_TEMP_PATH` 可写，再设置 `DWG_CONVERSION_ENABLED=true`；此时 `/health/ready` 会把转换器纳入就绪检查。
 - ODA 可执行文件及其运行库必须通过组织批准的镜像或宿主机部署流程提供，不能把下载包、许可证或二进制提交到 Git。
 
+### DWG 专用 Worker（Apple Silicon Mac）
+
+项目提供 `compose.dwg.yaml`，会把 Parser Worker 固定为 `linux/amd64`，以便 Docker Desktop 在 Apple Silicon 上
+兼容运行 ODA 的 Linux x64 安装包。将经批准的官方 Debian 包重命名并放入
+`apps/parser-worker/vendor/oda/oda-file-converter.deb`（该文件已被 Git 忽略），再按照
+[本地小白启动与配置指南](./docs/07-本地小白启动与配置指南.md#5-启用-dwg-测试)构建、检查实际路径与版本、启用
+DWG。基础 `docker compose up` 不使用该派生镜像，避免在未安装转换器时影响其他格式。
+
 ## 文档 API
 
 仅在 development/test 且 `AUTH_REQUIRED=false` 时，身份来自服务端 `DEV_*` 配置。受保护模式可选择
@@ -138,21 +146,27 @@ curl http://127.0.0.1:3000/v1/system/usage
 - TypeScript 主服务按标题路径、页码、工作表和表格结构分块，超长元素按配置的 token 单元切分并保留 overlap。
 - `chunkId` 由文档 ID、版本、元素路径和规范化正文稳定生成；相邻 chunk 保存前后关系。
 - 原文与脱敏文本分别保存在 PostgreSQL；当前内置手机号、身份证、银行卡和邮箱规则，可通过 `BUSINESS_REDACTION_RULES_JSON` 增加受控业务正则。
-- `confidential` 默认在任何 Provider 调用前阻止出网。策略事件只保存资源 ID、决策、原因、敏感度和策略版本，不保存正文。
-- 允许出网的文档完成本地预处理后状态为 `prepared`，等待下一阶段 Embedding 与 Chroma 入库；被阻止的文档状态为 `policy_blocked`。
+- `confidential` 默认在任何云端 Provider 调用前阻止出网。受控本机 Ollama Embedding 不离开本机，但云端 LLM/Rerank
+  仍被禁止；策略事件只保存资源 ID、决策、原因、敏感度和策略版本，不保存正文。
+- 未配置 Embedding 时，文档完成本地预处理后状态为 `prepared`（界面显示“待建立索引”）；配置完成后可在文档详情
+  点击“继续建立索引”，复用本地 chunk 而不重新解析或上传。被策略阻止的文档状态为 `policy_blocked`。
 
 `CHUNK_MAX_TOKENS`、`CHUNK_OVERLAP_TOKENS`、`REDACTION_POLICY_VERSION` 或关键脱敏规则变化会改变索引语义；进入向量阶段后必须创建新 collection 并重建，不能覆盖旧索引。
 
 ## Embedding Provider
 
 - 已定义独立的 `EmbeddingProvider` 接口，并严格区分 `embedDocuments` 与 `embedQuery`。
-- 当前首个适配器为阿里云百炼 `text-embedding-v4` OpenAI 兼容接口；默认 `EMBEDDING_PROVIDER=none`，不会在本地启动时要求付费 Key。
+- 支持阿里云百炼 `text-embedding-v4` 与本机 Ollama OpenAI-compatible Embedding；默认
+  `EMBEDDING_PROVIDER=none`，不会在本地启动时要求付费 Key。
 - 显式设置 `EMBEDDING_PROVIDER=alibaba` 后，启动配置会强制校验 model、dimensions、region、HTTPS base URL 和 `DASHSCOPE_API_KEY`。
+- 显式设置 `EMBEDDING_PROVIDER=ollama` 后，启动配置会校验 `EMBEDDING_REGION=local`、模型、维度和受控本机
+  `OLLAMA_BASE_URL`；Docker Desktop 推荐 `http://host.docker.internal:11434`。Ollama 不使用 API Key，`bge-m3:latest`
+  使用 1024 维向量。
 - 当前官方限制按单次最多 10 条、每条最多 8192 tokens 实现；响应必须与输入数量、顺序和配置维度一致。
 - 429、超时和 500/502/503/504 使用带 jitter 的指数退避；400/401/403/404/422 不重试，也不会切换其他 Provider。
 - 每次调用只记录 Provider、模型、区域、request ID、耗时、尝试次数和 token usage，不记录输入正文或 Key。
 - 配置指纹包含 Provider、模型、维度、task mode、分块参数和脱敏版本，供下一阶段创建并校验 Chroma collection。
-- confidential 仍由 CloudPolicyService 在 Provider 方法执行前失败关闭。
+- confidential 仍由 CloudPolicyService 在云端 Provider 方法执行前失败关闭；对 `ollama/local` 可由显式本机规则放行。
 
 付费冒烟测试默认跳过。仅在已准备专用测试 Key 且明确接受产生费用时运行：
 

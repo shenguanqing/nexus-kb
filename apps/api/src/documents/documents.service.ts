@@ -515,6 +515,9 @@ export class DocumentsService {
       },
     });
     if (!document) throw new ApiException('DOCUMENT_NOT_FOUND', '文档不存在', 404);
+    if (document.activeVersion === null && document.status === 'prepared') {
+      return this.resumePreparedDocument(document, identity, traceId);
+    }
     if (document.activeVersion === null || document.status !== 'active') {
       throw new ApiException('DOCUMENT_NOT_ACTIVE', '只有已生效文档可以重新索引', 409);
     }
@@ -620,6 +623,127 @@ export class DocumentsService {
       documentId: document.id,
       documentVersion: nextVersion,
       jobId,
+      status: 'queued',
+      traceId,
+    };
+  }
+
+  private async resumePreparedDocument(
+    document: {
+      id: string;
+      storageKey: string;
+      versions: Array<{ version: number }>;
+    },
+    identity: Identity,
+    traceId: string,
+  ): Promise<object> {
+    const version = document.versions[0]?.version;
+    if (!version) {
+      throw new ApiException(
+        'DOCUMENT_PREPARED_VERSION_NOT_FOUND',
+        '待建立索引文档缺少可恢复版本',
+        409,
+      );
+    }
+    const job = await this.prisma.ingestionJob.findFirst({
+      where: {
+        tenantId: identity.tenantId,
+        documentId: document.id,
+        version,
+        status: 'completed',
+        checkpoint: 'prepared',
+      },
+      select: { id: true },
+    });
+    if (!job) {
+      throw new ApiException(
+        'DOCUMENT_PREPARED_JOB_NOT_FOUND',
+        '待建立索引文档缺少可恢复任务',
+        409,
+      );
+    }
+
+    const auditId = randomUUID();
+    const claimed = await this.prisma.$transaction(async (tx) => {
+      const jobUpdate = await tx.ingestionJob.updateMany({
+        where: { id: job.id, status: 'completed', checkpoint: 'prepared' },
+        data: {
+          status: 'queued',
+          step: 'queued',
+          checkpoint: 'local_prepared',
+          completedAt: null,
+          errorCode: null,
+          errorCategory: null,
+          retryable: false,
+        },
+      });
+      if (jobUpdate.count !== 1) return false;
+      await tx.document.update({ where: { id: document.id }, data: { status: 'processing' } });
+      await tx.documentVersion.update({
+        where: { documentId_version: { documentId: document.id, version } },
+        data: { status: 'processing' },
+      });
+      await tx.documentLifecycleAudit.create({
+        data: {
+          id: auditId,
+          tenantId: identity.tenantId,
+          userId: identity.userId,
+          traceId,
+          documentId: document.id,
+          documentVersion: version,
+          ingestionJobId: job.id,
+          eventType: 'document_prepared_index_resume_requested',
+          outcome: 'queued',
+        },
+      });
+      return true;
+    });
+    if (!claimed) {
+      throw new ApiException(
+        'DOCUMENT_PREPARED_RESUME_CONFLICT',
+        '待建立索引文档状态已发生变化，请刷新后重试',
+        409,
+      );
+    }
+
+    try {
+      await this.queue.enqueue({
+        ingestionJobId: job.id,
+        documentId: document.id,
+        storageKey: document.storageKey,
+      });
+    } catch (error) {
+      await this.prisma.$transaction([
+        this.prisma.ingestionJob.update({
+          where: { id: job.id },
+          data: {
+            status: 'completed',
+            step: 'prepared',
+            checkpoint: 'prepared',
+            completedAt: new Date(),
+          },
+        }),
+        this.prisma.document.update({ where: { id: document.id }, data: { status: 'prepared' } }),
+        this.prisma.documentVersion.update({
+          where: { documentId_version: { documentId: document.id, version } },
+          data: { status: 'prepared' },
+        }),
+      ]);
+      throw error;
+    }
+
+    this.logger.info('document_prepared_index_resume_queued', {
+      traceId,
+      tenantId: identity.tenantId,
+      userId: identity.userId,
+      jobId: job.id,
+      documentId: document.id,
+      status: 'queued',
+    });
+    return {
+      documentId: document.id,
+      documentVersion: version,
+      jobId: job.id,
       status: 'queued',
       traceId,
     };

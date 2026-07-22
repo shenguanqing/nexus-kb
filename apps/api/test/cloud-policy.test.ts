@@ -58,4 +58,28 @@ describe('CloudPolicyService', () => {
       }),
     ).toMatchObject({ decision: 'allowed', reasonCode: 'EXPLICIT_RULE_ALLOWED' });
   });
+
+  it('allows confidential content for the approved local Ollama provider', () => {
+    const service = new CloudPolicyService(config(false));
+
+    expect(
+      service.evaluate({
+        sensitivity: 'confidential',
+        providerId: 'ollama',
+        region: 'local',
+      }),
+    ).toMatchObject({ decision: 'allowed', reasonCode: 'LOCAL_MODEL_ALLOWED' });
+  });
+
+  it('lets an explicit block override the local provider default', () => {
+    const service = new CloudPolicyService(
+      config(false, [
+        { sensitivity: 'confidential', providerId: 'ollama', region: 'local', allowed: false },
+      ]),
+    );
+
+    expect(
+      service.evaluate({ sensitivity: 'confidential', providerId: 'ollama', region: 'local' }),
+    ).toMatchObject({ decision: 'blocked', reasonCode: 'EXPLICIT_RULE_BLOCKED' });
+  });
 });

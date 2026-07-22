@@ -120,6 +120,40 @@ describe('embedding configuration', () => {
     });
   });
 
+  it('accepts an approved local Ollama embedding configuration without a cloud key', () => {
+    const environment = parseEnvironment({
+      ...baseEnvironment,
+      EMBEDDING_PROVIDER: 'ollama',
+      EMBEDDING_MODEL: 'bge-m3:latest',
+      EMBEDDING_DIMENSIONS: '1024',
+      EMBEDDING_REGION: 'local',
+      OLLAMA_BASE_URL: 'http://host.docker.internal:11434',
+    });
+
+    expect(environment).toMatchObject({
+      EMBEDDING_PROVIDER: 'ollama',
+      EMBEDDING_MODEL: 'bge-m3:latest',
+      EMBEDDING_DIMENSIONS: 1024,
+      EMBEDDING_REGION: 'local',
+    });
+    expect(safeConfigurationSummary(environment)).toMatchObject({
+      embeddingKeyConfigured: true,
+      embeddingEndpoint: 'http://host.docker.internal:11434',
+    });
+  });
+
+  it('rejects non-local Ollama endpoints and non-local regions', () => {
+    expect(() =>
+      parseEnvironment({
+        ...baseEnvironment,
+        EMBEDDING_PROVIDER: 'ollama',
+        EMBEDDING_MODEL: 'bge-m3:latest',
+        EMBEDDING_REGION: 'global',
+        OLLAMA_BASE_URL: 'https://models.example.test',
+      }),
+    ).toThrow('Invalid application configuration: EMBEDDING_REGION, OLLAMA_BASE_URL');
+  });
+
   it('builds a configuration summary without credentials or connection strings', () => {
     const environment = parseEnvironment({
       ...baseEnvironment,

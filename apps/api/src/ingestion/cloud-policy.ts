@@ -38,6 +38,14 @@ export class CloudPolicyService {
         region,
       };
     }
+    if (providerId === 'ollama' && region === 'local') {
+      return {
+        decision: 'allowed',
+        reasonCode: 'LOCAL_MODEL_ALLOWED',
+        providerId,
+        region,
+      };
+    }
     if (context.sensitivity === 'confidential' && !this.config.values.ALLOW_CONFIDENTIAL_TO_CLOUD) {
       return {
         decision: 'blocked',

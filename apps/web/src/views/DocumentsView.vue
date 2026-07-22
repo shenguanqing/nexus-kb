@@ -42,7 +42,7 @@ const canUpload = computed(() => auth.hasCapability('documents:write'));
 const statusLabels: Record<string, string> = {
   uploaded: '已上传',
   processing: '处理中',
-  prepared: '待激活',
+  prepared: '待建立索引',
   active: '已生效',
   policy_blocked: '策略阻止',
   failed: '失败',

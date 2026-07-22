@@ -110,6 +110,25 @@ const passwordAuthUsersSchema = z
   });
 const jwtAlgorithmSchema = z.enum(['RS256', 'RS384', 'RS512', 'ES256', 'ES384', 'ES512']);
 const llmProviderSchema = z.enum(['none', 'openai', 'google', 'deepseek', 'alibaba', 'custom']);
+const ollamaEmbeddingHosts = new Set(['host.docker.internal', 'ollama']);
+
+function isApprovedOllamaEndpoint(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return (
+      url.protocol === 'http:' &&
+      ollamaEmbeddingHosts.has(url.hostname.toLowerCase()) &&
+      url.port === '11434' &&
+      (url.pathname === '' || url.pathname === '/') &&
+      !url.username &&
+      !url.password &&
+      !url.search &&
+      !url.hash
+    );
+  } catch {
+    return false;
+  }
+}
 
 function jsonEnvironmentValue<T extends z.ZodType>(schema: T, fallback: string) {
   return z
@@ -198,7 +217,7 @@ const environmentSchema = z
       .default('false')
       .transform((value) => value === 'true'),
     CLOUD_EGRESS_RULES_JSON: jsonEnvironmentValue(z.array(cloudEgressRuleSchema).max(100), '[]'),
-    EMBEDDING_PROVIDER: z.enum(['none', 'alibaba']).default('none'),
+    EMBEDDING_PROVIDER: z.enum(['none', 'alibaba', 'ollama']).default('none'),
     EMBEDDING_MODEL: z.string().trim().max(128).default(''),
     EMBEDDING_DIMENSIONS: z.coerce
       .number()
@@ -214,6 +233,7 @@ const environmentSchema = z
     DASHSCOPE_API_KEY: z.string().trim().default(''),
     ALIBABA_BASE_URL: z.string().trim().default(''),
     ALIBABA_REGION: z.string().trim().max(64).default('cn-beijing'),
+    OLLAMA_BASE_URL: z.string().trim().default(''),
     LLM_PROVIDER: llmProviderSchema.default('none'),
     LLM_MODEL: z.string().trim().max(128).default(''),
     LLM_FALLBACK_PROVIDER: llmProviderSchema.default('none'),
@@ -323,6 +343,30 @@ const environmentSchema = z
           code: 'custom',
           path: ['EMBEDDING_MODEL'],
           message: 'must be text-embedding-v4 for the current Alibaba adapter',
+        });
+      }
+    }
+    if (environment.EMBEDDING_PROVIDER === 'ollama') {
+      const requiredFields = [
+        ['EMBEDDING_MODEL', environment.EMBEDDING_MODEL],
+        ['EMBEDDING_REGION', environment.EMBEDDING_REGION],
+        ['OLLAMA_BASE_URL', environment.OLLAMA_BASE_URL],
+      ] as const;
+      for (const [field, value] of requiredFields) {
+        if (!value) context.addIssue({ code: 'custom', path: [field], message: 'is required' });
+      }
+      if (environment.EMBEDDING_REGION && environment.EMBEDDING_REGION !== 'local') {
+        context.addIssue({
+          code: 'custom',
+          path: ['EMBEDDING_REGION'],
+          message: 'must be local for the Ollama provider',
+        });
+      }
+      if (environment.OLLAMA_BASE_URL && !isApprovedOllamaEndpoint(environment.OLLAMA_BASE_URL)) {
+        context.addIssue({
+          code: 'custom',
+          path: ['OLLAMA_BASE_URL'],
+          message: 'must be an approved local HTTP endpoint on port 11434',
         });
       }
     }
@@ -510,10 +554,16 @@ export function safeConfigurationSummary(environment: Environment): Record<strin
     embeddingModel: environment.EMBEDDING_MODEL || null,
     embeddingDimensions: environment.EMBEDDING_DIMENSIONS,
     embeddingRegion: environment.EMBEDDING_REGION || null,
-    embeddingKeyConfigured: Boolean(environment.DASHSCOPE_API_KEY),
-    embeddingEndpoint: environment.ALIBABA_BASE_URL
-      ? safeEndpoint(environment.ALIBABA_BASE_URL)
-      : null,
+    embeddingKeyConfigured:
+      environment.EMBEDDING_PROVIDER === 'ollama' ? true : Boolean(environment.DASHSCOPE_API_KEY),
+    embeddingEndpoint:
+      environment.EMBEDDING_PROVIDER === 'ollama'
+        ? environment.OLLAMA_BASE_URL
+          ? safeEndpoint(environment.OLLAMA_BASE_URL)
+          : null
+        : environment.ALIBABA_BASE_URL
+          ? safeEndpoint(environment.ALIBABA_BASE_URL)
+          : null,
     llmProvider: environment.LLM_PROVIDER,
     llmModel: environment.LLM_MODEL || null,
     llmFallbackProvider: environment.LLM_FALLBACK_PROVIDER,
