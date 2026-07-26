@@ -1,8 +1,32 @@
 <script setup lang="ts">
 import type { KnowledgeQueryResponse, KnowledgeSource } from '@nexus-kb/contracts';
+import { computed } from 'vue';
 
-defineProps<{ response: KnowledgeQueryResponse }>();
+const props = defineProps<{ response: KnowledgeQueryResponse }>();
 defineEmits<{ selectSource: [source: KnowledgeSource] }>();
+
+interface AnswerPart {
+  text: string;
+  citation: boolean;
+}
+
+const answerParts = computed<AnswerPart[]>(() => {
+  const parts: AnswerPart[] = [];
+  const pattern = /\[来源\d+\]/g;
+  let offset = 0;
+  for (const match of props.response.answer.matchAll(pattern)) {
+    const index = match.index;
+    if (index > offset) {
+      parts.push({ text: props.response.answer.slice(offset, index), citation: false });
+    }
+    parts.push({ text: match[0], citation: true });
+    offset = index + match[0].length;
+  }
+  if (offset < props.response.answer.length) {
+    parts.push({ text: props.response.answer.slice(offset), citation: false });
+  }
+  return parts;
+});
 </script>
 
 <template>
@@ -20,7 +44,12 @@ defineEmits<{ selectSource: [source: KnowledgeSource] }>();
           }}
         </p>
       </div>
-      <p v-else class="answer-text">{{ response.answer }}</p>
+      <p v-else class="answer-text">
+        <template v-for="(part, index) in answerParts" :key="index">
+          <small v-if="part.citation" class="answer-citation">{{ part.text }}</small>
+          <span v-else>{{ part.text }}</span>
+        </template>
+      </p>
       <div v-if="response.sources.length" class="source-list" aria-label="回答来源">
         <button
           v-for="source in response.sources"
@@ -30,7 +59,7 @@ defineEmits<{ selectSource: [source: KnowledgeSource] }>();
           @click="$emit('selectSource', source)"
         >
           <span>来源 {{ source.index }}</span>
-          <strong>{{ source.sourceName }}</strong>
+          <strong :title="source.sourceName">{{ source.sourceName }}</strong>
           <small>
             {{ source.page ? `第 ${source.page} 页` : source.sheet ? source.sheet : '位置未标注' }}
             · v{{ source.documentVersion }}

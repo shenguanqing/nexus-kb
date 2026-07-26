@@ -61,11 +61,18 @@ export async function validateUploadedFile(
   if (extension === '.txt' || extension === '.md') {
     const handle = await open(path, 'r');
     try {
+      const decoder = new TextDecoder('utf-8', { fatal: true });
       const sample = Buffer.alloc(8192);
-      const { bytesRead } = await handle.read(sample, 0, sample.length, 0);
-      const bytes = sample.subarray(0, bytesRead);
-      if (bytes.includes(0)) throw new Error('binary');
-      new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+      let position = 0;
+      while (true) {
+        const { bytesRead } = await handle.read(sample, 0, sample.length, position);
+        if (bytesRead === 0) break;
+        const bytes = sample.subarray(0, bytesRead);
+        if (bytes.includes(0)) throw new Error('binary');
+        decoder.decode(bytes, { stream: true });
+        position += bytesRead;
+      }
+      decoder.decode();
     } catch {
       throw new ApiException('INVALID_TEXT_ENCODING', '文本文件必须使用 UTF-8 编码', 415);
     } finally {

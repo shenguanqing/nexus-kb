@@ -483,6 +483,7 @@ export class DocumentsService {
           errorCode: null,
           errorCategory: null,
           retryable: false,
+          startedAt: null,
           completedAt: null,
         },
       });

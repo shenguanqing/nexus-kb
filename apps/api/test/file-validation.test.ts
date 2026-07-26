@@ -25,6 +25,18 @@ describe('validateUploadedFile', () => {
     });
   });
 
+  it('accepts UTF-8 text when a multibyte character crosses a validation chunk boundary', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'nexus-upload-'));
+    directories.push(directory);
+    const path = join(directory, 'upload');
+    await writeFile(path, `${'a'.repeat(8191)}知识库`, 'utf8');
+
+    await expect(validateUploadedFile(path, 'knowledge.md', 'text/plain')).resolves.toEqual({
+      extension: '.md',
+      mimeType: 'text/markdown',
+    });
+  });
+
   it('rejects forged MIME and binary text', async () => {
     const directory = await mkdtemp(join(tmpdir(), 'nexus-upload-'));
     directories.push(directory);
@@ -36,6 +48,17 @@ describe('validateUploadedFile', () => {
     ).rejects.toMatchObject({
       code: 'MIME_MISMATCH',
     } satisfies Partial<ApiException>);
+    await expect(validateUploadedFile(path, 'policy.txt', 'text/plain')).rejects.toMatchObject({
+      code: 'INVALID_TEXT_ENCODING',
+    } satisfies Partial<ApiException>);
+  });
+
+  it('rejects invalid UTF-8 after the first validation chunk', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'nexus-upload-'));
+    directories.push(directory);
+    const path = join(directory, 'upload');
+    await writeFile(path, Buffer.concat([Buffer.alloc(8192, 0x61), Buffer.from([0xff])]));
+
     await expect(validateUploadedFile(path, 'policy.txt', 'text/plain')).rejects.toMatchObject({
       code: 'INVALID_TEXT_ENCODING',
     } satisfies Partial<ApiException>);

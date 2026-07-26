@@ -109,6 +109,40 @@ describe('ParserClient contract validation', () => {
     } satisfies Partial<ParserError>);
   });
 
+  it('preserves allowlisted safe Worker error codes', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ detail: 'CAD 实体数量超过限制' }), {
+          status: 422,
+          headers: { 'x-parser-error-code': 'CAD_ENTITY_LIMIT_EXCEEDED' },
+        }),
+      ),
+    );
+    const config = {
+      values: {
+        PARSER_WORKER_URL: 'http://parser-worker:8000',
+        PARSER_INTERNAL_TOKEN: 'internal-test-token',
+        PARSER_REQUEST_TIMEOUT_MS: 1_000,
+      },
+    } as AppConfig;
+
+    await expect(
+      new ParserClient(config).parse(
+        {
+          jobId: id,
+          documentId: id,
+          storagePath: '/data/raw-docs/a.dwg',
+          mimeType: 'image/vnd.dwg',
+        },
+        id,
+      ),
+    ).rejects.toMatchObject({
+      code: 'CAD_ENTITY_LIMIT_EXCEEDED',
+      retryable: false,
+    } satisfies Partial<ParserError>);
+  });
+
   it('does not retry Worker authentication failures', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(null, { status: 401 })));
     const config = {

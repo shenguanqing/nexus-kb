@@ -15,10 +15,10 @@ export class ParserError extends Error {
   constructor(
     readonly kind: ParserErrorKind,
     readonly retryable: boolean,
-    options?: { cause?: unknown },
+    options?: { cause?: unknown; code?: string },
   ) {
-    super(ERROR_CODES[kind], options);
+    super(options?.code ?? ERROR_CODES[kind], options);
     this.name = 'ParserError';
-    this.code = ERROR_CODES[kind];
+    this.code = options?.code ?? ERROR_CODES[kind];
   }
 }

@@ -21,6 +21,7 @@ import { QueryRetrievalService } from './query-retrieval.service';
 import { SourceAuthorizationService } from './source-authorization.service';
 import { KnowledgeHistoryService } from '../history/knowledge-history.service';
 import { AnswerCitationError, AnswerSourceValidator } from './answer-source-validator';
+import { normalizeKnowledgeQuestion } from './knowledge-question';
 
 const NO_ANSWER_TEXT = '当前知识库中没有找到足够可靠且有权限访问的依据。';
 type QueryResult = Omit<KnowledgeQueryResponse, 'conversationId'>;
@@ -54,6 +55,7 @@ export class KnowledgeQueryService {
   ): Promise<KnowledgeQueryResponse> {
     this.acl.assertCapability(identity, 'documents:read');
     const startedAt = Date.now();
+    const normalizedQuestion = normalizeKnowledgeQuestion(request.question);
     const auditBase = {
       traceId,
       identity,
@@ -69,7 +71,7 @@ export class KnowledgeQueryService {
     };
     try {
       await this.rateLimiter.assertAllowed(identity);
-      const queryVector = await this.embedding.embedQuery(request.question, {
+      const queryVector = await this.embedding.embedQuery(normalizedQuestion, {
         sensitivity: identity.defaultSensitivity,
       });
       const candidates = await this.retrieval.retrieve(identity, queryVector);
@@ -84,7 +86,7 @@ export class KnowledgeQueryService {
       }
       const reranked = await this.rerank.rerank({
         identity,
-        query: request.question,
+        query: normalizedQuestion,
         chunks: candidates,
         topK: Math.min(this.config.values.RERANK_TOP_K, candidates.length),
         traceId,
@@ -112,7 +114,7 @@ export class KnowledgeQueryService {
       try {
         answer = await this.llm.answer({
           identity,
-          question: request.question,
+          question: normalizedQuestion,
           contexts,
           traceId,
         });
@@ -124,7 +126,11 @@ export class KnowledgeQueryService {
             request,
             identity,
             await this.noAnswer(
-              { ...auditBase, ...this.configuredLlmAuditFields() },
+              {
+                ...auditBase,
+                ...this.configuredLlmAuditFields(),
+                errorCode: 'LLM_ANSWER_UNVERIFIABLE',
+              },
               traceId,
               'insufficient_relevance',
               reranked.degraded,

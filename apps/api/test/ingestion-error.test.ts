@@ -12,6 +12,15 @@ describe('ingestion error classification', () => {
       category: 'parser',
       retryable: true,
     });
+    expect(
+      classifyIngestionError(
+        new ParserError('invalid_request', false, { code: 'CAD_ENTITY_LIMIT_EXCEEDED' }),
+      ),
+    ).toEqual({
+      code: 'CAD_ENTITY_LIMIT_EXCEEDED',
+      category: 'parser',
+      retryable: false,
+    });
     expect(classifyIngestionError(new ProviderError('authentication', false))).toEqual({
       code: 'EMBEDDING_AUTHENTICATION_FAILED',
       category: 'embedding',

@@ -6,6 +6,16 @@ import { AppConfig } from '../config/app-config';
 import { MetricsService } from '../observability/metrics.service';
 import { ParserError } from './parser-error';
 
+const SAFE_WORKER_ERROR_CODES = new Set([
+  'CAD_ENTITY_LIMIT_EXCEEDED',
+  'PARSER_ELEMENT_LIMIT_EXCEEDED',
+  'DXF_INVALID_OR_UNSUPPORTED',
+  'DWG_VERSION_UNSUPPORTED',
+  'DWG_CONVERTED_SIZE_LIMIT_EXCEEDED',
+  'DWG_CONVERSION_FAILED',
+  'PARSER_EMPTY_RESULT',
+]);
+
 @Injectable()
 export class ParserClient {
   constructor(
@@ -43,7 +53,7 @@ export class ParserClient {
         }
         throw new ParserError('unavailable', true, { cause: error });
       }
-      if (!response.ok) throw this.statusError(response.status);
+      if (!response.ok) throw this.statusError(response);
       try {
         const result = parseResponseSchema.parse(await response.json());
         this.metrics?.observeParser('success', Date.now() - startedAt);
@@ -64,10 +74,14 @@ export class ParserClient {
     }
   }
 
-  private statusError(status: number): ParserError {
+  private statusError(response: Response): ParserError {
+    const status = response.status;
     if (status === 401 || status === 403) return new ParserError('authentication', false);
     if ([400, 404, 413, 415, 422].includes(status)) {
-      return new ParserError('invalid_request', false);
+      const workerCode = response.headers.get('x-parser-error-code');
+      return new ParserError('invalid_request', false, {
+        ...(workerCode && SAFE_WORKER_ERROR_CODES.has(workerCode) ? { code: workerCode } : {}),
+      });
     }
     if (status === 408 || status === 504) return new ParserError('timeout', true);
     if (status === 429 || status >= 500) return new ParserError('unavailable', true);

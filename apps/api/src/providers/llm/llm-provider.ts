@@ -10,6 +10,7 @@ export interface LlmAnswerInput {
   question: string;
   contexts: RetrievedChunk[];
   traceId: string;
+  citationRepair?: true;
 }
 
 export interface LlmAnswer {

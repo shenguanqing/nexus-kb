@@ -185,6 +185,7 @@ def test_dxf_rejects_entity_limit(tmp_path: Path) -> None:
 
     assert response.status_code == 422
     assert response.json()["detail"] == "CAD 实体数量超过限制"
+    assert response.headers["x-parser-error-code"] == "CAD_ENTITY_LIMIT_EXCEEDED"
 
 
 def test_dxf_rejects_corrupted_content_without_leaking_path(tmp_path: Path) -> None:
@@ -274,6 +275,7 @@ def test_dwg_rejects_unavailable_converter_and_forged_signature(tmp_path: Path) 
     )
     assert invalid.status_code == 422
     assert invalid.json()["detail"] == "DWG 版本不受支持或文件签名无效"
+    assert invalid.headers["x-parser-error-code"] == "DWG_VERSION_UNSUPPORTED"
 
 
 def test_dwg_rejects_disabled_conversion(tmp_path: Path) -> None:

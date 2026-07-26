@@ -1,7 +1,10 @@
 import { Injectable } from '@nestjs/common';
 
 import type { Identity } from '../../auth/identity';
-import { AnswerSourceValidator } from '../../knowledge/answer-source-validator';
+import {
+  AnswerCitationError,
+  AnswerSourceValidator,
+} from '../../knowledge/answer-source-validator';
 import { KnowledgeContextPolicy } from '../../knowledge/knowledge-context-policy';
 import type { RetrievedChunk } from '../../knowledge/retrieved-chunk';
 import { OperationalLogger } from '../../common/operational-logger';
@@ -68,8 +71,22 @@ export class LlmService {
     ) {
       throw new LlmProviderError('policy_denied', false);
     }
-    const answer = await provider.answer(input);
-    this.sourceValidator.validate(answer.text, input.contexts.length);
+    let answer = await provider.answer(input);
+    try {
+      this.sourceValidator.validate(answer.text, input.contexts.length);
+    } catch (error) {
+      if (!(error instanceof AnswerCitationError)) throw error;
+      this.logger.warn('llm_citation_repair_retry', {
+        traceId: input.traceId,
+        tenantId: input.identity.tenantId,
+        userId: input.identity.userId,
+        provider: provider.id,
+        model: provider.model,
+        status: 'invalid_citation',
+      });
+      answer = await provider.answer({ ...input, citationRepair: true });
+      this.sourceValidator.validate(answer.text, input.contexts.length);
+    }
     return {
       ...answer,
       provider: provider.id,

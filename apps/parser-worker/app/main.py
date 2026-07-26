@@ -41,6 +41,20 @@ SUPPORTED_TYPES = {
         "application/x-dwg",
     },
 }
+PARSER_ERROR_CODE_HEADER = "x-parser-error-code"
+VALUE_ERROR_CODES = {
+    "CAD 实体数量超过限制": "CAD_ENTITY_LIMIT_EXCEEDED",
+    "解析结果元素数量超过限制": "PARSER_ELEMENT_LIMIT_EXCEEDED",
+    "DXF 文件损坏或格式不受支持": "DXF_INVALID_OR_UNSUPPORTED",
+}
+DWG_INVALID_ERROR_CODES = {
+    "DWG 版本不受支持或文件签名无效": "DWG_VERSION_UNSUPPORTED",
+    "DWG 转换结果为空或超过大小限制": "DWG_CONVERTED_SIZE_LIMIT_EXCEEDED",
+}
+
+
+def parser_error_headers(code: str) -> dict[str, str]:
+    return {PARSER_ERROR_CODE_HEADER: code}
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -174,11 +188,19 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             ) from error
         except DwgConversionInvalidError as error:
             raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(error)
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=str(error),
+                headers=parser_error_headers(
+                    DWG_INVALID_ERROR_CODES.get(str(error), "DWG_CONVERSION_FAILED")
+                ),
             ) from error
         except ValueError as error:
             raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(error)
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=str(error),
+                headers=parser_error_headers(
+                    VALUE_ERROR_CODES.get(str(error), "PARSER_INVALID_REQUEST")
+                ),
             ) from error
         except Exception as error:
             LOGGER.warning(
@@ -197,6 +219,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                 detail="解析结果为空",
+                headers=parser_error_headers("PARSER_EMPTY_RESULT"),
             )
         LOGGER.info(
             "document parsed",

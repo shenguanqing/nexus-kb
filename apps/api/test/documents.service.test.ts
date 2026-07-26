@@ -99,8 +99,11 @@ describe('DocumentsService tenant isolation', () => {
       ),
     ).resolves.toMatchObject({ status: 'queued' });
     expect(retry).toHaveBeenCalledWith('a5427e4a-b9db-4750-8dfd-02d601a41473');
-    const [updateInput] = claimJob.mock.calls[0] as unknown as [{ data: { status: string } }];
+    const [updateInput] = claimJob.mock.calls[0] as unknown as [
+      { data: { status: string; startedAt: Date | null } },
+    ];
     expect(updateInput.data.status).toBe('queued');
+    expect(updateInput.data.startedAt).toBeNull();
     expect(createAudit).toHaveBeenCalledOnce();
   });
 

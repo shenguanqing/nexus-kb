@@ -7,6 +7,7 @@ import { ApiError } from '@/api/client';
 import { listIngestionJobs, retryIngestionJob } from '@/api/ingestion';
 import { ingestionJobsReturn } from '@/router/return-navigation';
 import { useAuthStore } from '@/stores/auth';
+import { formatIngestionElapsed, ingestionErrorMessage } from './ingestion-presentation';
 
 const route = useRoute();
 const router = useRouter();
@@ -24,7 +25,9 @@ const filters = reactive({
 });
 const canRetry = computed(() => auth.hasCapability('documents:write'));
 const returnNavigation = computed(() => ingestionJobsReturn(route.query.returnTo));
-let timer: number | undefined;
+const nowMs = ref(Date.now());
+let pollingTimer: number | undefined;
+let elapsedTimer: number | undefined;
 const runningStatuses = new Set([
   'queued',
   'converting',
@@ -117,10 +120,7 @@ async function retry(job: IngestionJob): Promise<void> {
   }
 }
 function elapsed(job: IngestionJob): string {
-  const start = job.startedAt ? Date.parse(job.startedAt) : Date.parse(job.createdAt);
-  const end = job.completedAt ? Date.parse(job.completedAt) : Date.now();
-  const milliseconds = Math.max(0, end - start);
-  return milliseconds < 1000 ? '< 1 秒' : `${Math.round(milliseconds / 1000)} 秒`;
+  return formatIngestionElapsed(job, nowMs.value);
 }
 
 const stepOrder = [
@@ -146,12 +146,16 @@ function activeStep(job: IngestionJob): number {
 
 onMounted(async () => {
   await load();
-  timer = window.setInterval(() => {
+  elapsedTimer = window.setInterval(() => {
+    nowMs.value = Date.now();
+  }, 1000);
+  pollingTimer = window.setInterval(() => {
     if (items.value.some((job) => runningStatuses.has(job.status))) void load(true);
   }, 5000);
 });
 onUnmounted(() => {
-  if (timer !== undefined) window.clearInterval(timer);
+  if (elapsedTimer !== undefined) window.clearInterval(elapsedTimer);
+  if (pollingTimer !== undefined) window.clearInterval(pollingTimer);
 });
 </script>
 
@@ -251,15 +255,7 @@ onUnmounted(() => {
             </ul>
           </div>
           <div v-if="job.errorCode" class="task-error">
-            <p>
-              {{
-                job.errorCode === 'DWG_CONVERSION_DISABLED'
-                  ? 'CAD 转换服务暂不可用，请联系管理员或稍后重试'
-                  : job.errorCode === 'FILE_SIGNATURE_MISMATCH'
-                    ? '文件无效或版本不受支持'
-                    : '任务处理失败，请查看技术详情'
-              }}
-            </p>
+            <p>{{ ingestionErrorMessage(job.errorCode) }}</p>
             <details>
               <summary>技术详情</summary>
               <code>{{ job.errorCode }}</code>

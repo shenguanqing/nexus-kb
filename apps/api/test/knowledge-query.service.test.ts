@@ -128,6 +128,27 @@ describe('KnowledgeQueryService', () => {
     );
   });
 
+  it('uses the same canonical question for equivalent product-version spacing', async () => {
+    const compact = dependencies();
+    const spaced = dependencies();
+
+    await compact.service.query({ question: 'vue2和vue3区别' }, identity, traceId);
+    await spaced.service.query({ question: 'vue 2和vue 3区别' }, identity, traceId);
+
+    expect(compact.embedQuery).toHaveBeenCalledWith('vue 2和vue 3区别', {
+      sensitivity: 'internal',
+    });
+    expect(spaced.embedQuery).toHaveBeenCalledWith('vue 2和vue 3区别', {
+      sensitivity: 'internal',
+    });
+    expect(compact.rerank).toHaveBeenCalledWith(
+      expect.objectContaining({ query: 'vue 2和vue 3区别' }),
+    );
+    expect(compact.answer).toHaveBeenCalledWith(
+      expect.objectContaining({ question: 'vue 2和vue 3区别' }),
+    );
+  });
+
   it('exposes only source references to the quality observer', async () => {
     const deps = dependencies();
     const recordVectorSources = vi.fn();

@@ -4,7 +4,7 @@ import type {
   DocumentListRequest,
   DocumentUploadOptions,
 } from '@nexus-kb/contracts';
-import { ElMessage, type UploadFile } from 'element-plus';
+import { ElMessage, type UploadFile, type UploadUserFile } from 'element-plus';
 import { computed, onMounted, reactive, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { ApiError } from '@/api/client';
@@ -22,6 +22,7 @@ const uploadVisible = ref(false);
 const uploadOptions = ref<DocumentUploadOptions | null>(null);
 const uploadOptionsLoading = ref(false);
 const uploadOptionsError = ref('');
+const selectedUploadFiles = ref<UploadUserFile[]>([]);
 interface UploadRow {
   file: File;
   status: 'pending' | 'uploading' | 'queued' | 'failed';
@@ -92,9 +93,15 @@ async function resetFilters(): Promise<void> {
 }
 
 async function openUpload(): Promise<void> {
+  resetUploadDialog();
   uploadVisible.value = true;
-  uploadRows.value = [];
   await loadUploadOptions();
+}
+
+function resetUploadDialog(): void {
+  selectedUploadFiles.value = [];
+  uploadRows.value = [];
+  uploading.value = false;
 }
 
 async function loadUploadOptions(): Promise<void> {
@@ -125,9 +132,20 @@ async function submitUpload(): Promise<void> {
       .map(uploadOne),
   );
   uploading.value = false;
-  if (uploadRows.value.every((row) => row.status === 'queued'))
-    ElMessage.success('全部文件已进入入库队列');
+  closeUploadWhenComplete();
   await load();
+}
+
+async function retryUpload(row: UploadRow): Promise<void> {
+  await uploadOne(row);
+  closeUploadWhenComplete();
+  await load();
+}
+
+function closeUploadWhenComplete(): void {
+  if (!uploadRows.value.length || !uploadRows.value.every((row) => row.status === 'queued')) return;
+  ElMessage.success('全部文件已进入入库队列');
+  uploadVisible.value = false;
 }
 
 async function uploadOne(row: UploadRow): Promise<void> {
@@ -173,7 +191,12 @@ onMounted(load);
           clearable
           placeholder="搜索文件名"
         />
-        <el-select class="document-filter-status" v-model="filters.status" clearable placeholder="状态">
+        <el-select
+          class="document-filter-status"
+          v-model="filters.status"
+          clearable
+          placeholder="状态"
+        >
           <el-option
             v-for="(label, value) in statusLabels"
             :key="value"
@@ -191,7 +214,12 @@ onMounted(load);
           <el-option label="内部" value="internal" />
           <el-option label="机密" value="confidential" />
         </el-select>
-        <el-select class="document-filter-format" v-model="filters.format" clearable placeholder="格式">
+        <el-select
+          class="document-filter-format"
+          v-model="filters.format"
+          clearable
+          placeholder="格式"
+        >
           <el-option
             v-for="format in ['txt', 'md', 'docx', 'xlsx', 'dxf', 'dwg']"
             :key="format"
@@ -201,7 +229,9 @@ onMounted(load);
         </el-select>
         <div class="toolbar-actions">
           <el-button native-type="submit">查询</el-button>
-          <el-button class="reset-button" native-type="button" @click="resetFilters">重置</el-button>
+          <el-button class="reset-button" native-type="button" @click="resetFilters"
+            >重置</el-button
+          >
         </div>
       </form>
     </div>
@@ -291,10 +321,12 @@ onMounted(load);
 
     <el-dialog
       v-model="uploadVisible"
+      class="upload-dialog"
       title="上传文档"
       width="min(520px, calc(100vw - 28px))"
       append-to-body
       :z-index="4000"
+      @closed="resetUploadDialog"
     >
       <div v-if="uploadOptionsLoading" v-loading="true" class="upload-options-state">
         正在读取服务器上传限制…
@@ -305,6 +337,7 @@ onMounted(load);
       </div>
       <div v-if="uploadOptions" class="upload-form">
         <el-upload
+          v-model:file-list="selectedUploadFiles"
           drag
           multiple
           :auto-upload="false"
@@ -330,21 +363,29 @@ onMounted(load);
         <p v-if="uploadOptions.defaultSensitivity === 'confidential'" class="upload-warning">
           机密内容默认不会发送到云端 Embedding 服务。
         </p>
-        <ul v-if="uploadRows.length" class="upload-file-list">
+        <ul v-if="uploadRows.length" class="upload-file-list" aria-label="待上传文件" tabindex="0">
           <li v-for="row in uploadRows" :key="`${row.file.name}-${row.file.lastModified}`">
-            <span>
+            <span class="upload-file-summary">
               <strong>{{ row.file.name }}</strong>
               <small>{{ Math.ceil(row.file.size / 1024) }} KB</small>
             </span>
             <el-tag
+              class="upload-file-status"
               :type="
                 row.status === 'queued' ? 'success' : row.status === 'failed' ? 'danger' : 'info'
               "
             >
               {{ row.status }}
             </el-tag>
-            <small v-if="row.error" role="alert">{{ row.error }}</small>
-            <el-button v-if="row.status === 'failed'" text @click="uploadOne(row)">重试</el-button>
+            <small v-if="row.error" class="upload-file-error" role="alert">{{ row.error }}</small>
+            <el-button
+              v-if="row.status === 'failed'"
+              class="upload-file-retry"
+              text
+              @click="retryUpload(row)"
+            >
+              重试
+            </el-button>
           </li>
         </ul>
       </div>

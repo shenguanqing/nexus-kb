@@ -2,7 +2,10 @@ import { describe, expect, it, vi } from 'vitest';
 
 import type { Identity } from '../src/auth/identity';
 import type { OperationalLogger } from '../src/common/operational-logger';
-import { AnswerSourceValidator } from '../src/knowledge/answer-source-validator';
+import {
+  AnswerCitationError,
+  AnswerSourceValidator,
+} from '../src/knowledge/answer-source-validator';
 import type { KnowledgeContextPolicy } from '../src/knowledge/knowledge-context-policy';
 import type { RetrievedChunk } from '../src/knowledge/retrieved-chunk';
 import type { LlmProvider } from '../src/providers/llm/llm-provider';
@@ -57,7 +60,8 @@ describe('LlmService', () => {
     const contextPolicy = {
       allAllowed: vi.fn().mockReturnValue(true),
     } as unknown as KnowledgeContextPolicy;
-    const logger = { warn: vi.fn() } as unknown as OperationalLogger;
+    const warn = vi.fn();
+    const logger = { warn } as unknown as OperationalLogger;
     const service = new LlmService(factory, contextPolicy, new AnswerSourceValidator(), logger);
 
     await expect(
@@ -111,5 +115,57 @@ describe('LlmService', () => {
       service.answer({ identity, question: '问题', contexts, traceId: 'trace-a' }),
     ).rejects.toMatchObject({ kind: 'authentication' });
     expect(fallbackAnswer).not.toHaveBeenCalled();
+  });
+
+  it('retries once with an explicit citation-repair instruction', async () => {
+    const answer = vi
+      .fn<LlmProvider['answer']>()
+      .mockResolvedValueOnce({ text: 'Vue 3 使用 Proxy。' })
+      .mockResolvedValueOnce({ text: 'Vue 3 使用 Proxy。[来源1]' });
+    const factory = {
+      getPrimary: () => llmProvider('google', answer),
+      getFallback: () => null,
+    } as LlmProviderFactory;
+    const repairWarn = vi.fn();
+    const logger = { warn: repairWarn } as unknown as OperationalLogger;
+    const service = new LlmService(
+      factory,
+      { allAllowed: vi.fn().mockReturnValue(true) } as unknown as KnowledgeContextPolicy,
+      new AnswerSourceValidator(),
+      logger,
+    );
+
+    await expect(
+      service.answer({ identity, question: 'Vue 2 和 Vue 3 的区别', contexts, traceId: 'trace-a' }),
+    ).resolves.toMatchObject({
+      text: 'Vue 3 使用 Proxy。[来源1]',
+      provider: 'google',
+      fallbackUsed: false,
+    });
+    expect(answer).toHaveBeenCalledTimes(2);
+    expect(answer).toHaveBeenNthCalledWith(2, expect.objectContaining({ citationRepair: true }));
+    expect(repairWarn).toHaveBeenCalledWith(
+      'llm_citation_repair_retry',
+      expect.objectContaining({ traceId: 'trace-a', status: 'invalid_citation' }),
+    );
+  });
+
+  it('still fails closed after one unsuccessful citation-repair attempt', async () => {
+    const answer = vi.fn<LlmProvider['answer']>().mockResolvedValue({ text: '没有引用的答案。' });
+    const factory = {
+      getPrimary: () => llmProvider('google', answer),
+      getFallback: () => null,
+    } as LlmProviderFactory;
+    const service = new LlmService(
+      factory,
+      { allAllowed: vi.fn().mockReturnValue(true) } as unknown as KnowledgeContextPolicy,
+      new AnswerSourceValidator(),
+      { warn: vi.fn() } as unknown as OperationalLogger,
+    );
+
+    await expect(
+      service.answer({ identity, question: '问题', contexts, traceId: 'trace-a' }),
+    ).rejects.toBeInstanceOf(AnswerCitationError);
+    expect(answer).toHaveBeenCalledTimes(2);
   });
 });

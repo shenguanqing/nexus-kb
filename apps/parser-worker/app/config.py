@@ -20,7 +20,7 @@ class Settings(BaseSettings):
         default=100_000, ge=1, le=1_000_000, validation_alias="MAX_SPREADSHEET_ROWS"
     )
     max_cad_entities: int = Field(
-        default=200_000, ge=1, le=2_000_000, validation_alias="MAX_CAD_ENTITIES"
+        default=1_000_000, ge=1, le=2_000_000, validation_alias="MAX_CAD_ENTITIES"
     )
     max_cad_insert_depth: int = Field(
         default=8, ge=1, le=32, validation_alias="MAX_CAD_INSERT_DEPTH"
