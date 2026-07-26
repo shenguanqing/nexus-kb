@@ -77,14 +77,14 @@ async function startNewChat(): Promise<void> {
     <header class="ask-header">
       <div>
         <span class="eyebrow">企业知识助手</span>
-        <h1>从可信资料中找到答案</h1>
+        <h1>从资料中找到答案</h1>
       </div>
       <button type="button" class="new-chat" @click="startNewChat">＋ 新建问答</button>
     </header>
     <div ref="conversationPanel" class="conversation" :class="{ empty: !hasConversation }">
       <div v-if="!hasConversation" class="welcome-state">
         <span class="welcome-mark">N</span>
-        <h2>今天想从企业知识库了解什么？</h2>
+        <h2>今天想从知识库了解什么？</h2>
         <p>回答仅基于您有权访问的资料，并附带可核验来源。</p>
         <div class="example-grid">
           <button

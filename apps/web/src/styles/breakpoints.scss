@@ -1,0 +1,5 @@
+// 唯一响应式断点。Vue 组件必须通过 useBreakpoint() 判断布局分支。
+$bp-desktop: 1280px; // >= 1280px：完整桌面布局
+$bp-tablet: 900px; // 901–1279px：侧栏折叠、来源抽屉覆盖内容
+$bp-mobile: 768px; // <= 900px：导航 Drawer；<768px 单列 + 44px 触控
+

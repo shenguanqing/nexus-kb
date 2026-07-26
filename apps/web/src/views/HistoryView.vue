@@ -5,8 +5,10 @@ import { onMounted, ref } from 'vue';
 import { deleteConversation, fetchConversation, listConversations } from '@/api/history';
 import { ApiError } from '@/api/client';
 import HistoryAnswer from '@/components/knowledge/HistoryAnswer.vue';
+import { useBreakpoint } from '@/composables/useBreakpoint';
 
 const conversations = ref<ConversationSummary[]>([]);
+const { isMobile } = useBreakpoint();
 const selected = ref<ConversationDetail | null>(null);
 const query = ref('');
 const dateRange = ref<[Date, Date] | null>(null);
@@ -14,6 +16,7 @@ const page = ref(1);
 const total = ref(0);
 const loading = ref(false);
 const errorMessage = ref('');
+const filtersVisible = ref(false);
 
 async function load(): Promise<void> {
   loading.value = true;
@@ -53,12 +56,23 @@ onMounted(load);
 async function search(): Promise<void> {
   page.value = 1;
   await load();
+  filtersVisible.value = false;
+}
+async function resetFilters(): Promise<void> {
+  query.value = '';
+  dateRange.value = null;
+  await search();
 }
 </script>
 
 <template>
   <section class="history-page">
-    <form class="history-toolbar" aria-label="历史记录查询" @submit.prevent="search">
+    <form
+      v-if="!isMobile"
+      class="history-toolbar"
+      aria-label="历史记录查询"
+      @submit.prevent="search"
+    >
       <el-input v-model="query" clearable maxlength="200" placeholder="搜索会话标题" />
       <el-date-picker
         v-model="dateRange"
@@ -68,6 +82,33 @@ async function search(): Promise<void> {
       />
       <el-button native-type="submit">查询</el-button>
     </form>
+    <template v-else>
+      <div class="mobile-filter-bar">
+        <el-button class="filter-trigger" @click="filtersVisible = true">筛选</el-button>
+      </div>
+      <el-drawer
+        v-model="filtersVisible"
+        direction="btt"
+        size="40%"
+        title="筛选问答历史"
+        append-to-body
+        :z-index="4000"
+      >
+        <form class="mobile-filter-form" aria-label="历史记录查询" @submit.prevent="search">
+          <el-input v-model="query" clearable maxlength="200" placeholder="搜索会话标题" />
+          <el-date-picker
+            v-model="dateRange"
+            type="datetimerange"
+            start-placeholder="开始时间"
+            end-placeholder="结束时间"
+          />
+          <div class="mobile-filter-actions">
+            <el-button native-type="button" @click="resetFilters">重置</el-button>
+            <el-button type="primary" native-type="submit">应用</el-button>
+          </div>
+        </form>
+      </el-drawer>
+    </template>
     <div v-if="errorMessage" class="document-error" role="alert">
       <strong>无法加载历史</strong><span>{{ errorMessage }}</span>
       <el-button @click="load">重试</el-button>
@@ -76,41 +117,47 @@ async function search(): Promise<void> {
       <section class="history-list-panel">
         <h2 class="scroll-section-title">会话列表</h2>
         <div class="history-list" role="list" aria-label="问答会话列表">
-          <div
-            v-for="row in conversations"
-            :key="row.id"
-            class="history-list-row"
-            :class="{ active: selected?.id === row.id }"
-            role="listitem"
-          >
+          <div class="history-list-scroll">
             <div
-              class="history-list-item"
+              v-for="row in conversations"
+              :key="row.id"
+              class="history-list-row"
               :class="{ active: selected?.id === row.id }"
-              role="button"
-              tabindex="0"
-              :aria-pressed="selected?.id === row.id"
-              @click="open(row.id)"
-              @keydown.enter="open(row.id)"
-              @keydown.space.prevent="open(row.id)"
+              role="listitem"
             >
-              <strong>{{ row.title }}</strong>
-              <span>
-                {{ row.messageCount }} 条消息 · {{ new Date(row.updatedAt).toLocaleString() }}
-              </span>
+              <div
+                class="history-list-item"
+                :class="{ active: selected?.id === row.id }"
+                role="button"
+                tabindex="0"
+                :aria-pressed="selected?.id === row.id"
+                @click="open(row.id)"
+                @keydown.enter="open(row.id)"
+                @keydown.space.prevent="open(row.id)"
+              >
+                <strong>{{ row.title }}</strong>
+                <span>
+                  {{ row.messageCount }} 条消息 · {{ new Date(row.updatedAt).toLocaleString() }}
+                </span>
+              </div>
+              <el-button
+                class="history-delete"
+                text
+                type="danger"
+                :aria-label="`删除会话：${row.title}`"
+                @click="remove(row)"
+              >
+                删除
+              </el-button>
             </div>
-            <el-button
-              class="history-delete"
-              text
-              type="danger"
-              :aria-label="`删除会话：${row.title}`"
-              @click="remove(row)"
-            >
-              删除
-            </el-button>
+            <el-empty
+              v-if="!loading && conversations.length === 0"
+              description="暂无个人问答历史"
+            />
           </div>
-          <el-empty v-if="!loading && conversations.length === 0" description="暂无个人问答历史" />
           <el-pagination
-            v-if="total > 20"
+            v-if="conversations.length > 0 && total > 20"
+            class="list-pagination history-pagination"
             v-model:current-page="page"
             layout="prev, pager, next"
             :page-size="20"

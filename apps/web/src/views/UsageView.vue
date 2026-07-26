@@ -3,8 +3,10 @@ import type { UsageResponse } from '@nexus-kb/contracts';
 import { onMounted, ref } from 'vue';
 import { fetchUsage } from '@/api/usage';
 import { ApiError } from '@/api/client';
+import { useBreakpoint } from '@/composables/useBreakpoint';
 
 const usage = ref<UsageResponse | null>(null);
+const { isMobile } = useBreakpoint();
 const loading = ref(false);
 const errorMessage = ref('');
 const now = new Date();
@@ -65,6 +67,7 @@ onMounted(load);
         <article class="usage-table-card">
           <h2>Provider / 模型</h2>
           <el-table
+            v-if="!isMobile"
             class="desktop-data-table"
             :data="usage.providers"
             empty-text="暂无 Provider 用量"
@@ -86,7 +89,7 @@ onMounted(load);
               </template>
             </el-table-column>
           </el-table>
-          <div v-if="usage.providers.length" class="mobile-data-list" aria-label="Provider 用量">
+          <div v-else-if="usage.providers.length" class="mobile-data-list" aria-label="Provider 用量">
             <article
               v-for="provider in usage.providers"
               :key="`${provider.kind}-${provider.provider}-${provider.model}`"
@@ -119,6 +122,7 @@ onMounted(load);
         <article class="usage-table-card">
           <h2>部门请求分布</h2>
           <el-table
+            v-if="!isMobile"
             class="desktop-data-table"
             :data="usage.departments"
             empty-text="暂无部门归属数据"
@@ -126,7 +130,7 @@ onMounted(load);
             <el-table-column prop="department" label="部门" fixed="left" />
             <el-table-column prop="requests" label="查询次数" />
           </el-table>
-          <div v-if="usage.departments.length" class="mobile-data-list" aria-label="部门请求分布">
+          <div v-else-if="usage.departments.length" class="mobile-data-list" aria-label="部门请求分布">
             <article
               v-for="department in usage.departments"
               :key="department.department"

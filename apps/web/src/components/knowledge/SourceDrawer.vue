@@ -1,15 +1,18 @@
 <script setup lang="ts">
 import type { KnowledgeSource } from '@nexus-kb/contracts';
+import { useBreakpoint } from '@/composables/useBreakpoint';
 
 defineProps<{ modelValue: boolean; source: KnowledgeSource | null }>();
 defineEmits<{ 'update:modelValue': [value: boolean] }>();
+const { isPhone } = useBreakpoint();
 </script>
 
 <template>
   <el-drawer
     :model-value="modelValue"
-    size="300px"
+    :size="isPhone ? '100%' : '420px'"
     title="来源详情"
+    append-to-body
     @update:model-value="$emit('update:modelValue', $event)"
   >
     <div v-if="source" class="source-detail">
@@ -34,7 +37,7 @@ defineEmits<{ 'update:modelValue': [value: boolean] }>();
         这里只显示本次回答中后端已授权返回的来源信息。查看内容时会重新验证权限。
       </p>
       <RouterLink :to="`/documents/${source.documentId}`">
-        <el-button disabled>文档详情将在 F3 开放</el-button>
+        <el-button>查看文档详情</el-button>
       </RouterLink>
     </div>
   </el-drawer>

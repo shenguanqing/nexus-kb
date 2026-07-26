@@ -11,7 +11,7 @@ defineProps<{ turn: ConversationTurn }>();
     <div class="history-answer-content">
       <div v-if="turn.answerMode === 'general'" class="general-answer-notice">
         <strong>通用知识补充</strong>
-        <span>非企业知识库资料，仅供参考。</span>
+        <span>非知识库资料，仅供参考。</span>
       </div>
       <SafeMarkdown :content="turn.answer" />
     </div>

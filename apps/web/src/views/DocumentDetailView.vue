@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { DocumentDetail, IngestionJob, Sensitivity } from '@nexus-kb/contracts';
-import { ElMessage, ElMessageBox } from 'element-plus';
+import { ElDialog, ElDrawer, ElMessage } from 'element-plus';
 import { computed, onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { ApiError } from '@/api/client';
@@ -12,10 +12,12 @@ import {
 } from '@/api/documents';
 import { listIngestionJobs } from '@/api/ingestion';
 import { useAuthStore } from '@/stores/auth';
+import { useBreakpoint } from '@/composables/useBreakpoint';
 
 const route = useRoute();
 const router = useRouter();
 const auth = useAuthStore();
+const { isMobile, isPhone } = useBreakpoint();
 const documentId = String(route.params.id);
 const document = ref<DocumentDetail | null>(null);
 const jobs = ref<IngestionJob[]>([]);
@@ -25,6 +27,8 @@ const mutating = ref(false);
 const metadataVisible = ref(false);
 const metadataDepartment = ref('');
 const metadataSensitivity = ref<Sensitivity>('internal');
+const dangerAction = ref<'reindex' | 'delete' | null>(null);
+const confirmationName = ref('');
 const documentStatusLabels: Record<string, string> = {
   uploaded: '已上传',
   processing: '处理中',
@@ -72,20 +76,18 @@ async function load(): Promise<void> {
   }
 }
 
+function requestReindex(): void {
+  confirmationName.value = '';
+  dangerAction.value = 'reindex';
+}
+
+function requestRemoval(): void {
+  confirmationName.value = '';
+  dangerAction.value = 'delete';
+}
+
 async function reindex(): Promise<void> {
   if (!document.value) return;
-  const isPrepared = document.value.status === 'prepared';
-  await ElMessageBox.confirm(
-    isPrepared
-      ? `将继续为“${document.value.sourceName}”生成本地向量并建立索引，不会重复解析或上传原文件。`
-      : `将为“${document.value.sourceName}”创建新版本。旧版本会在新索引验证并原子激活前继续提供查询。`,
-    isPrepared ? '激活待索引文档' : '确认重新索引',
-    {
-      confirmButtonText: isPrepared ? '继续入库' : '开始重建',
-      cancelButtonText: '取消',
-      type: 'warning',
-    },
-  );
   mutating.value = true;
   try {
     const accepted = await reindexDocument(document.value.id);
@@ -101,16 +103,6 @@ async function reindex(): Promise<void> {
 
 async function remove(): Promise<void> {
   if (!document.value) return;
-  await ElMessageBox.confirm(
-    `删除“${document.value.sourceName}”将移除原文件、全部版本向量和可识别缓存，此操作不可撤销。`,
-    '永久删除文档',
-    {
-      confirmButtonText: '永久删除',
-      confirmButtonClass: 'el-button--danger',
-      cancelButtonText: '取消',
-      type: 'error',
-    },
-  );
   mutating.value = true;
   try {
     await deleteDocument(document.value.id);
@@ -121,6 +113,19 @@ async function remove(): Promise<void> {
   } finally {
     mutating.value = false;
   }
+}
+
+async function confirmDangerAction(): Promise<void> {
+  if (
+    !document.value ||
+    confirmationName.value !== document.value.sourceName ||
+    !dangerAction.value
+  )
+    return;
+  const action = dangerAction.value;
+  dangerAction.value = null;
+  if (action === 'delete') await remove();
+  else await reindex();
 }
 
 function openMetadata(): void {
@@ -177,7 +182,7 @@ onMounted(load);
               v-if="canWrite"
               :loading="mutating"
               :disabled="document.status !== 'active' && document.status !== 'prepared'"
-              @click="reindex"
+              @click="requestReindex"
             >
               {{ document.status === 'prepared' ? '继续建立索引' : '重新索引' }}
             </el-button>
@@ -186,7 +191,7 @@ onMounted(load);
               class="delete-document-button"
               type="danger"
               :loading="mutating"
-              @click="remove"
+              @click="requestRemoval"
             >
               删除文档
             </el-button>
@@ -210,10 +215,14 @@ onMounted(load);
                 <span>所有者</span><strong>{{ document.ownerId }}</strong>
               </div>
               <div>
-                <span>当前版本</span><strong>{{ document.activeVersion ? `v${document.activeVersion}` : '尚未激活' }}</strong>
+                <span>当前版本</span
+                ><strong>{{
+                  document.activeVersion ? `v${document.activeVersion}` : '尚未激活'
+                }}</strong>
               </div>
               <div>
-                <span>更新时间</span><strong>{{ new Date(document.updatedAt).toLocaleString() }}</strong>
+                <span>更新时间</span
+                ><strong>{{ new Date(document.updatedAt).toLocaleString() }}</strong>
               </div>
             </div>
           </article>
@@ -226,19 +235,30 @@ onMounted(load);
             </div>
             <div class="data-list">
               <div>
-                <span>向量库</span><strong class="fingerprint">{{ activeVersion?.vectorCollection ?? '尚未写入' }}</strong>
+                <span>向量库</span
+                ><strong class="fingerprint">{{
+                  activeVersion?.vectorCollection ?? '尚未写入'
+                }}</strong>
               </div>
               <div>
                 <span>向量数（分块）</span><strong>{{ activeVersion?.chunkCount ?? 0 }}</strong>
               </div>
               <div>
-                <span>解析器</span><strong>{{ activeVersion?.parser ?? '—' }} {{ activeVersion?.parserVersion ?? '' }}</strong>
+                <span>解析器</span
+                ><strong
+                  >{{ activeVersion?.parser ?? '—' }}
+                  {{ activeVersion?.parserVersion ?? '' }}</strong
+                >
               </div>
               <div>
-                <span>Embedding 指纹</span><strong class="fingerprint">{{ activeVersion?.embeddingFingerprint ?? '尚未生成' }}</strong>
+                <span>Embedding 指纹</span
+                ><strong class="fingerprint">{{
+                  activeVersion?.embeddingFingerprint ?? '尚未生成'
+                }}</strong>
               </div>
               <div>
-                <span>写入时间</span><strong>
+                <span>写入时间</span
+                ><strong>
                   {{
                     activeVersion?.indexedAt
                       ? new Date(activeVersion.indexedAt).toLocaleString()
@@ -258,8 +278,13 @@ onMounted(load);
             <h3>版本历史</h3>
             <RouterLink :to="allTasksTarget">查看全部任务</RouterLink>
           </div>
-          <el-table class="desktop-data-table" :data="document.versions" row-key="version">
-            <el-table-column label="版本" width="90" fixed="left">
+          <el-table
+            v-if="!isMobile"
+            class="desktop-data-table"
+            :data="document.versions"
+            row-key="version"
+          >
+            <el-table-column label="版本" width="90">
               <template #default="scope">v{{ scope.row.version }}</template>
             </el-table-column>
             <el-table-column label="状态" width="140">
@@ -280,7 +305,7 @@ onMounted(load);
               </template>
             </el-table-column>
           </el-table>
-          <div v-if="document.versions.length" class="mobile-data-list" aria-label="版本历史">
+          <div v-else-if="document.versions.length" class="mobile-data-list" aria-label="版本历史">
             <article
               v-for="version in document.versions"
               :key="version.version"
@@ -298,21 +323,24 @@ onMounted(load);
                   <span>解析器</span><strong>{{ version.parserVersion }}</strong>
                 </div>
                 <div>
-                  <span>向量库</span><strong class="fingerprint">{{ version.vectorCollection ?? '—' }}</strong>
+                  <span>向量库</span
+                  ><strong class="fingerprint">{{ version.vectorCollection ?? '—' }}</strong>
                 </div>
                 <div>
-                  <span>创建时间</span><strong>{{ new Date(version.createdAt).toLocaleString() }}</strong>
+                  <span>创建时间</span
+                  ><strong>{{ new Date(version.createdAt).toLocaleString() }}</strong>
                 </div>
               </div>
             </article>
           </div>
         </article>
         <el-dialog
+          v-if="!isPhone"
           v-model="metadataVisible"
+          class="metadata-dialog"
           title="修改权限 metadata"
           width="min(480px, calc(100vw - 28px))"
           append-to-body
-          :z-index="4000"
         >
           <el-form label-position="top">
             <el-form-item label="部门">
@@ -336,6 +364,77 @@ onMounted(load);
             </el-button>
           </template>
         </el-dialog>
+
+        <el-drawer
+          v-else
+          v-model="metadataVisible"
+          class="metadata-drawer"
+          direction="rtl"
+          size="100%"
+          title="修改权限 metadata"
+          append-to-body
+        >
+          <el-form label-position="top">
+            <el-form-item label="部门">
+              <el-input v-model="metadataDepartment" maxlength="128" />
+            </el-form-item>
+            <el-form-item label="敏感度">
+              <el-select v-model="metadataSensitivity">
+                <el-option label="公开" value="public" />
+                <el-option label="内部" value="internal" />
+                <el-option label="机密" value="confidential" />
+              </el-select>
+            </el-form-item>
+          </el-form>
+          <p class="upload-warning">
+            修改后会创建新版本并重建索引；旧向量在激活前仍受 PostgreSQL 最新 ACL 二次鉴权。
+          </p>
+          <template #footer>
+            <el-button @click="metadataVisible = false">取消</el-button>
+            <el-button type="primary" :loading="mutating" @click="saveMetadata">
+              保存并重建
+            </el-button>
+          </template>
+        </el-drawer>
+
+        <component
+          :is="isPhone ? ElDrawer : ElDialog"
+          :model-value="dangerAction !== null"
+          title="确认高风险操作"
+          :width="isPhone ? undefined : 'min(520px, calc(100vw - 28px))'"
+          :size="isPhone ? '90%' : undefined"
+          :direction="isPhone ? 'btt' : undefined"
+          append-to-body
+          @update:model-value="
+            (visible: boolean) => {
+              if (!visible) dangerAction = null;
+            }
+          "
+        >
+          <template v-if="document && dangerAction">
+            <p v-if="dangerAction === 'delete'" class="danger-confirmation-copy">
+              删除将永久移除原文件、全部版本向量和可识别缓存，且无法撤销。
+            </p>
+            <p v-else class="danger-confirmation-copy">
+              将创建新的索引版本；旧版本会持续服务，直至新版本通过验证并原子激活。
+            </p>
+            <p>
+              请输入文档名 <strong>{{ document.sourceName }}</strong> 以确认。
+            </p>
+            <el-input v-model="confirmationName" aria-label="输入文档名确认" />
+          </template>
+          <template #footer>
+            <el-button @click="dangerAction = null">取消</el-button>
+            <el-button
+              :type="dangerAction === 'delete' ? 'danger' : 'primary'"
+              :disabled="confirmationName !== document?.sourceName"
+              :loading="mutating"
+              @click="confirmDangerAction"
+            >
+              {{ dangerAction === 'delete' ? '永久删除' : '开始重建' }}
+            </el-button>
+          </template>
+        </component>
 
         <article v-if="jobs.length" class="detail-card">
           <h3>最近任务</h3>

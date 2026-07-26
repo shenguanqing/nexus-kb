@@ -4,21 +4,25 @@ import type {
   DocumentListRequest,
   DocumentUploadOptions,
 } from '@nexus-kb/contracts';
-import { ElMessage, type UploadFile, type UploadUserFile } from 'element-plus';
+import { ElDialog, ElDrawer, ElMessage, type UploadFile, type UploadUserFile } from 'element-plus';
 import { computed, onMounted, reactive, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { ApiError } from '@/api/client';
 import { fetchDocumentUploadOptions, listDocuments, uploadDocument } from '@/api/documents';
 import { useAuthStore } from '@/stores/auth';
+import { useBreakpoint } from '@/composables/useBreakpoint';
+import DocumentCardList from '@/components/documents/DocumentCardList.vue';
 
 const route = useRoute();
 const router = useRouter();
 const auth = useAuthStore();
+const { isMobile, isPhone } = useBreakpoint();
 const loading = ref(false);
 const errorMessage = ref('');
 const items = ref<DocumentListItem[]>([]);
 const total = ref(0);
 const uploadVisible = ref(false);
+const filtersVisible = ref(false);
 const uploadOptions = ref<DocumentUploadOptions | null>(null);
 const uploadOptionsLoading = ref(false);
 const uploadOptionsError = ref('');
@@ -40,6 +44,10 @@ const filters = reactive({
 });
 
 const canUpload = computed(() => auth.hasCapability('documents:write'));
+const activeFilterCount = computed(
+  () =>
+    [filters.search, filters.status, filters.sensitivity, filters.format].filter(Boolean).length,
+);
 const statusLabels: Record<string, string> = {
   uploaded: '已上传',
   processing: '处理中',
@@ -77,6 +85,7 @@ async function load(): Promise<void> {
 async function applyFilters(): Promise<void> {
   filters.page = 1;
   await syncQueryAndLoad();
+  filtersVisible.value = false;
 }
 
 async function syncQueryAndLoad(): Promise<void> {
@@ -181,10 +190,21 @@ onMounted(load);
     <div class="documents-toolbar">
       <div class="documents-toolbar-heading">
         <p>共 {{ total }} 份可访问文档</p>
-        <el-button v-if="canUpload" type="primary" @click="openUpload">上传文档</el-button>
+        <div class="documents-toolbar-actions">
+          <el-button v-if="canUpload" type="primary" @click="openUpload">上传文档</el-button>
+          <el-button v-if="isMobile" class="filter-trigger" @click="filtersVisible = true">
+            筛选
+            <el-badge v-if="activeFilterCount" :value="activeFilterCount" />
+          </el-button>
+        </div>
       </div>
 
-      <form class="document-filters" aria-label="文档筛选" @submit.prevent="applyFilters">
+      <form
+        v-if="!isMobile"
+        class="document-filters"
+        aria-label="文档筛选"
+        @submit.prevent="applyFilters"
+      >
         <el-input
           class="document-filter-search"
           v-model="filters.search"
@@ -234,6 +254,45 @@ onMounted(load);
           >
         </div>
       </form>
+      <template v-else>
+        <el-drawer
+          v-model="filtersVisible"
+          direction="btt"
+          size="40%"
+          title="筛选文档"
+          append-to-body
+          :z-index="4000"
+        >
+          <form class="mobile-filter-form" aria-label="文档筛选" @submit.prevent="applyFilters">
+            <el-input v-model="filters.search" clearable placeholder="搜索文件名" />
+            <el-select v-model="filters.status" clearable placeholder="状态">
+              <el-option
+                v-for="(label, value) in statusLabels"
+                :key="value"
+                :label="label"
+                :value="value"
+              />
+            </el-select>
+            <el-select v-model="filters.sensitivity" clearable placeholder="敏感度">
+              <el-option label="公开" value="public" />
+              <el-option label="内部" value="internal" />
+              <el-option label="机密" value="confidential" />
+            </el-select>
+            <el-select v-model="filters.format" clearable placeholder="格式">
+              <el-option
+                v-for="format in ['txt', 'md', 'docx', 'xlsx', 'dxf', 'dwg']"
+                :key="format"
+                :label="format.toUpperCase()"
+                :value="format"
+              />
+            </el-select>
+            <div class="mobile-filter-actions">
+              <el-button native-type="button" @click="resetFilters">重置</el-button>
+              <el-button type="primary" native-type="submit">应用</el-button>
+            </div>
+          </form>
+        </el-drawer>
+      </template>
     </div>
 
     <div class="documents-content">
@@ -241,89 +300,71 @@ onMounted(load);
         <strong>无法加载文档</strong><span>{{ errorMessage }}</span>
         <el-button @click="load">重试</el-button>
       </div>
-      <el-table
-        v-else
-        class="desktop-data-table"
-        v-loading="loading"
-        :data="items"
-        row-key="id"
-        empty-text="暂无符合条件的文档"
-      >
-        <el-table-column prop="sourceName" label="文件名" min-width="240" fixed="left">
-          <template #default="scope">
-            <RouterLink class="document-link" :to="`/documents/${scope.row.id}`">
-              {{ scope.row.sourceName }}
-            </RouterLink>
-          </template>
-        </el-table-column>
-        <el-table-column label="状态" width="120">
-          <template #default="scope">
-            <el-tag :type="statusType(scope.row.status)">
-              {{ statusLabels[scope.row.status] ?? scope.row.status }}
-            </el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column prop="department" label="部门" width="140" />
-        <el-table-column prop="sensitivity" label="敏感度" width="110" />
-        <el-table-column label="版本" width="90">
-          <template #default="scope">
-            {{ scope.row.activeVersion ? `v${scope.row.activeVersion}` : '—' }}
-          </template>
-        </el-table-column>
-        <el-table-column label="更新时间" min-width="180">
-          <template #default="scope">
-            {{ new Date(scope.row.updatedAt).toLocaleString() }}
-          </template>
-        </el-table-column>
-      </el-table>
-      <div v-if="!loading && items.length" class="mobile-data-list" aria-label="文档列表">
-        <article v-for="item in items" :key="item.id" class="mobile-data-card">
-          <header>
-            <RouterLink class="document-link" :to="`/documents/${item.id}`">
-              {{ item.sourceName }}
-            </RouterLink>
-            <el-tag :type="statusType(item.status)">
-              {{ statusLabels[item.status] ?? item.status }}
-            </el-tag>
-          </header>
-          <div class="mobile-data-fields">
-            <div>
-              <span>部门</span>
-              <strong>{{ item.department }}</strong>
-            </div>
-            <div>
-              <span>敏感度</span>
-              <strong>{{ item.sensitivity }}</strong>
-            </div>
-            <div>
-              <span>版本</span>
-              <strong>{{ item.activeVersion ? `v${item.activeVersion}` : '—' }}</strong>
-            </div>
-            <div>
-              <span>更新时间</span>
-              <strong>{{ new Date(item.updatedAt).toLocaleString() }}</strong>
-            </div>
-          </div>
-        </article>
+      <div v-loading="loading" class="documents-list">
+        <el-table
+          v-if="!isMobile"
+          class="desktop-data-table"
+          :data="items"
+          row-key="id"
+          empty-text="暂无符合条件的文档"
+        >
+          <el-table-column prop="sourceName" label="文件名" min-width="300" fixed="left">
+            <template #default="scope">
+              <RouterLink class="document-link" :to="`/documents/${scope.row.id}`">
+                {{ scope.row.sourceName }}
+              </RouterLink>
+            </template>
+          </el-table-column>
+          <el-table-column label="状态" width="120">
+            <template #default="scope">
+              <el-tag :type="statusType(scope.row.status)">
+                {{ statusLabels[scope.row.status] ?? scope.row.status }}
+              </el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column prop="department" label="部门" width="140" />
+          <el-table-column prop="sensitivity" label="敏感度" width="110" />
+          <el-table-column label="版本" width="90">
+            <template #default="scope">
+              {{ scope.row.activeVersion ? `v${scope.row.activeVersion}` : '—' }}
+            </template>
+          </el-table-column>
+          <el-table-column label="更新时间" min-width="180">
+            <template #default="scope">
+              {{ new Date(scope.row.updatedAt).toLocaleString() }}
+            </template>
+          </el-table-column>
+        </el-table>
+        <DocumentCardList
+          v-else
+          :data="items"
+          :loading="loading"
+          :status-label="(status) => statusLabels[status] ?? status"
+          :status-type="statusType"
+        />
       </div>
 
-      <el-pagination
-        v-if="total > filters.pageSize"
-        v-model:current-page="filters.page"
-        v-model:page-size="filters.pageSize"
-        class="document-pagination"
-        layout="total, sizes, prev, pager, next"
-        :total="total"
-        :page-sizes="[20, 50, 100]"
-        @change="syncQueryAndLoad"
-      />
+      <div v-if="total > filters.pageSize" class="list-pagination document-pagination">
+        <el-pagination
+          v-model:current-page="filters.page"
+          v-model:page-size="filters.pageSize"
+          :layout="isPhone ? 'prev, pager, next' : 'total, sizes, prev, pager, next'"
+          :total="total"
+          :page-sizes="[20, 50, 100]"
+          @change="syncQueryAndLoad"
+        />
+      </div>
     </div>
 
-    <el-dialog
+    <component
+      :is="isPhone ? ElDrawer : ElDialog"
       v-model="uploadVisible"
-      class="upload-dialog"
+      class="upload-surface"
+      :class="isPhone ? 'upload-drawer' : 'upload-dialog'"
       title="上传文档"
-      width="min(520px, calc(100vw - 28px))"
+      :width="isPhone ? undefined : 'min(520px, calc(100vw - 28px))'"
+      :size="isPhone ? '90%' : undefined"
+      :direction="isPhone ? 'btt' : undefined"
       append-to-body
       :z-index="4000"
       @closed="resetUploadDialog"
@@ -338,14 +379,14 @@ onMounted(load);
       <div v-if="uploadOptions" class="upload-form">
         <el-upload
           v-model:file-list="selectedUploadFiles"
-          drag
+          :drag="!isPhone"
           multiple
           :auto-upload="false"
           :show-file-list="false"
           :accept="uploadOptions.acceptedExtensions.map((item) => `.${item}`).join(',')"
           :on-change="chooseFiles"
         >
-          <span>选择或拖入文件</span>
+          <span>{{ isPhone ? '选择文件' : '选择或拖入文件' }}</span>
           <template #tip>文件只会在确认“开始上传”后发送到服务端。</template>
         </el-upload>
         <p>
@@ -400,6 +441,6 @@ onMounted(load);
           开始上传
         </el-button>
       </template>
-    </el-dialog>
+    </component>
   </section>
 </template>

@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { logout } from '@/api/auth';
 import { useAuthStore } from '@/stores/auth';
 import { useKnowledgeConversationStore } from '@/stores/knowledge-conversation';
+import { useBreakpoint } from '@/composables/useBreakpoint';
 import {
   documentDetailReturn,
   ingestionJobsReturn,
@@ -22,21 +23,17 @@ const route = useRoute();
 const router = useRouter();
 const auth = useAuthStore();
 const conversation = useKnowledgeConversationStore();
+const { isMobile } = useBreakpoint();
 const isCollapsed = ref(false);
 const mobileMenuOpen = ref(false);
-const isMobileViewport = ref(false);
-let viewportQuery: MediaQueryList | undefined;
-function syncViewport(event?: MediaQueryListEvent): void {
-  isMobileViewport.value = event?.matches ?? viewportQuery?.matches ?? false;
-  if (isMobileViewport.value) isCollapsed.value = false;
-  else mobileMenuOpen.value = false;
-}
-onMounted(() => {
-  viewportQuery = window.matchMedia('(max-width: 900px)');
-  syncViewport();
-  viewportQuery.addEventListener('change', syncViewport);
-});
-onBeforeUnmount(() => viewportQuery?.removeEventListener('change', syncViewport));
+watch(
+  isMobile,
+  (mobile) => {
+    if (mobile) isCollapsed.value = false;
+    else mobileMenuOpen.value = false;
+  },
+  { immediate: true },
+);
 const pageTitle = computed(() => String(route.meta.title ?? '知枢'));
 const pageSection = computed(() => {
   if (route.path.startsWith('/documents') || route.path === '/ingestion-jobs') return '知识资产';
@@ -121,6 +118,10 @@ const visibleManagementNavigation = computed(() => managementNavigation.filter(c
 function closeMobileMenu(): void {
   mobileMenuOpen.value = false;
 }
+async function navigate(to: string): Promise<void> {
+  closeMobileMenu();
+  await router.push(to);
+}
 const returnNavigation = computed<ReturnNavigation | null>(() => {
   if (/^\/documents\/[^/]+\/chunks$/.test(route.path)) {
     return { to: `/documents/${String(route.params.id)}`, label: '返回文档详情' };
@@ -142,7 +143,7 @@ async function signOut(): Promise<void> {
 </script>
 
 <template>
-  <div class="app-shell" :class="{ 'is-collapsed': isCollapsed && !isMobileViewport }">
+  <div class="app-shell" :class="{ 'is-collapsed': isCollapsed && !isMobile }">
     <header class="app-header">
       <button
         class="mobile-menu-button"
@@ -186,12 +187,22 @@ async function signOut(): Promise<void> {
     <aside class="app-sidebar">
       <nav aria-label="主导航">
         <div class="navigation-label">工作台</div>
-        <RouterLink v-for="item in visiblePrimaryNavigation" :key="item.to" :to="item.to">
+        <RouterLink
+          v-for="item in visiblePrimaryNavigation"
+          :key="item.to"
+          :to="item.to"
+          @click.prevent="navigate(item.to)"
+        >
           <span aria-hidden="true">{{ item.icon }}</span>
           <b>{{ item.label }}</b>
         </RouterLink>
         <div v-if="visibleManagementNavigation.length > 0" class="navigation-label">管理</div>
-        <RouterLink v-for="item in visibleManagementNavigation" :key="item.to" :to="item.to">
+        <RouterLink
+          v-for="item in visibleManagementNavigation"
+          :key="item.to"
+          :to="item.to"
+          @click.prevent="navigate(item.to)"
+        >
           <span aria-hidden="true">{{ item.icon }}</span>
           <b>{{ item.label }}</b>
         </RouterLink>
@@ -223,6 +234,7 @@ async function signOut(): Promise<void> {
     </main>
 
     <el-drawer
+      v-if="isMobile"
       v-model="mobileMenuOpen"
       class="mobile-navigation-drawer"
       direction="ltr"
@@ -249,7 +261,7 @@ async function signOut(): Promise<void> {
           v-for="item in visiblePrimaryNavigation"
           :key="item.to"
           :to="item.to"
-          @click="closeMobileMenu"
+          @click.prevent="navigate(item.to)"
         >
           <span aria-hidden="true">{{ item.icon }}</span>
           <b>{{ item.label }}</b>

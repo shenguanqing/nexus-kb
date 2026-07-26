@@ -108,73 +108,79 @@ onMounted(load);
     </header>
 
     <div class="chunks-content">
-      <div v-if="errorMessage" class="document-error" role="alert">
-        <strong>无法加载文档分块</strong><span>{{ errorMessage }}</span>
-        <el-button @click="load">重试</el-button>
+      <div class="chunks-list-scroll">
+        <div v-if="errorMessage" class="document-error" role="alert">
+          <strong>无法加载文档分块</strong><span>{{ errorMessage }}</span>
+          <el-button @click="load">重试</el-button>
+        </div>
+        <template v-else-if="chunks">
+          <div v-if="chunks.items.length" class="chunk-list">
+            <article v-for="chunk in chunks.items" :key="chunk.id" class="chunk-card">
+              <header>
+                <div>
+                  <h3>分块 {{ chunk.ordinal + 1 }}</h3>
+                  <p>{{ chunkLocation(chunk) }} · {{ chunk.tokenCount }} tokens</p>
+                </div>
+                <span class="fingerprint">{{ chunk.id }}</span>
+              </header>
+              <div class="data-list">
+                <div>
+                  <span>章节路径</span
+                  ><strong>{{ chunk.sectionPath.join(' / ') || '未标注' }}</strong>
+                </div>
+                <div>
+                  <span>元素类型</span
+                  ><strong>{{ chunk.elementTypes.join('、') || '未标注' }}</strong>
+                </div>
+                <div>
+                  <span>相邻分块</span
+                  ><strong class="fingerprint">
+                    上一个：{{ chunk.previousChunkId ?? '无' }}
+                    <br />
+                    下一个：{{ chunk.nextChunkId ?? '无' }}
+                  </strong>
+                </div>
+                <div>
+                  <span>脱敏策略</span
+                  ><strong>
+                    {{ chunk.redactionPolicyVersion }}
+                    <span v-if="redactionEntries(chunk).length"> · </span>
+                    <el-tag
+                      v-for="[kind, count] in redactionEntries(chunk)"
+                      :key="kind"
+                      size="small"
+                      effect="plain"
+                    >
+                      {{ kind }} × {{ count }}
+                    </el-tag>
+                  </strong>
+                </div>
+              </div>
+              <div class="chunk-text-grid">
+                <section>
+                  <h4>原始内容</h4>
+                  <pre>{{ chunk.originalText }}</pre>
+                </section>
+                <section>
+                  <h4>写入向量库的内容（脱敏后）</h4>
+                  <pre>{{ chunk.redactedText }}</pre>
+                </section>
+              </div>
+            </article>
+          </div>
+          <el-empty v-else description="该版本尚未产生分块" />
+        </template>
       </div>
-      <template v-else-if="chunks">
-        <div v-if="chunks.items.length" class="chunk-list">
-          <article v-for="chunk in chunks.items" :key="chunk.id" class="chunk-card">
-            <header>
-              <div>
-                <h3>分块 {{ chunk.ordinal + 1 }}</h3>
-                <p>{{ chunkLocation(chunk) }} · {{ chunk.tokenCount }} tokens</p>
-              </div>
-              <span class="fingerprint">{{ chunk.id }}</span>
-            </header>
-            <div class="data-list">
-              <div>
-                <span>章节路径</span><strong>{{ chunk.sectionPath.join(' / ') || '未标注' }}</strong>
-              </div>
-              <div>
-                <span>元素类型</span><strong>{{ chunk.elementTypes.join('、') || '未标注' }}</strong>
-              </div>
-              <div>
-                <span>相邻分块</span><strong class="fingerprint">
-                  上一个：{{ chunk.previousChunkId ?? '无' }}
-                  <br />
-                  下一个：{{ chunk.nextChunkId ?? '无' }}
-                </strong>
-              </div>
-              <div>
-                <span>脱敏策略</span><strong>
-                  {{ chunk.redactionPolicyVersion }}
-                  <span v-if="redactionEntries(chunk).length"> · </span>
-                  <el-tag
-                    v-for="[kind, count] in redactionEntries(chunk)"
-                    :key="kind"
-                    size="small"
-                    effect="plain"
-                  >
-                    {{ kind }} × {{ count }}
-                  </el-tag>
-                </strong>
-              </div>
-            </div>
-            <div class="chunk-text-grid">
-              <section>
-                <h4>原始内容</h4>
-                <pre>{{ chunk.originalText }}</pre>
-              </section>
-              <section>
-                <h4>写入向量库的内容（脱敏后）</h4>
-                <pre>{{ chunk.redactedText }}</pre>
-              </section>
-            </div>
-          </article>
-        </div>
-        <el-empty v-else description="该版本尚未产生分块" />
-        <div v-if="chunks.total > pageSize" class="document-pagination">
-          <el-pagination
-            background
-            layout="total, prev, pager, next"
-            :current-page="chunks.page"
-            :page-size="chunks.pageSize"
-            :total="chunks.total"
-            @current-change="changePage"
-          />
-        </div>
-      </template>
+      <div v-if="chunks && chunks.total > pageSize" class="list-pagination document-pagination">
+        <el-pagination
+          background
+          layout="total, prev, pager, next"
+          :current-page="chunks.page"
+          :page-size="chunks.pageSize"
+          :total="chunks.total"
+          @current-change="changePage"
+        />
+      </div>
     </div>
   </section>
 </template>

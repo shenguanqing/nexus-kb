@@ -7,12 +7,14 @@ import { useRoute, useRouter } from 'vue-router';
 import { listUsers, updateUserRoles } from '@/api/access';
 import { ApiError } from '@/api/client';
 import { useAuthStore } from '@/stores/auth';
+import { useBreakpoint } from '@/composables/useBreakpoint';
 import { accessRoleSummary, accessScopeLabel } from './access-presentation';
 
 const pageSize = 25;
 const route = useRoute();
 const router = useRouter();
 const auth = useAuthStore();
+const { isMobile } = useBreakpoint();
 const users = ref<UserDirectoryEntry[]>([]);
 const total = ref(0);
 const scope = ref<'tenant' | 'department'>('department');
@@ -22,6 +24,7 @@ const search = ref(typeof route.query.query === 'string' ? route.query.query : '
 const department = ref(typeof route.query.department === 'string' ? route.query.department : '');
 const page = ref(Math.max(1, Number(route.query.page) || 1));
 const roleDialogVisible = ref(false);
+const filtersVisible = ref(false);
 const roleSaving = ref(false);
 const selectedUser = ref<UserDirectoryEntry | null>(null);
 const selectedRole = ref<AppRole>('user');
@@ -71,6 +74,7 @@ async function syncRouteAndLoad(): Promise<void> {
 async function applyFilters(): Promise<void> {
   page.value = 1;
   await syncRouteAndLoad();
+  filtersVisible.value = false;
 }
 
 async function resetFilters(): Promise<void> {
@@ -91,6 +95,11 @@ function editRoles(user: UserDirectoryEntry): void {
   roleDialogVisible.value = true;
 }
 
+function prepareInlineRoles(user: UserDirectoryEntry): void {
+  selectedUser.value = user;
+  selectedRole.value = user.roles[0] ?? 'user';
+}
+
 async function saveRoles(): Promise<void> {
   if (!selectedUser.value) return;
   roleSaving.value = true;
@@ -98,6 +107,7 @@ async function saveRoles(): Promise<void> {
     await updateUserRoles(selectedUser.value.userId, [selectedRole.value]);
     ElMessage.success('托管角色已更新并写入审计');
     roleDialogVisible.value = false;
+    selectedUser.value = null;
     await load();
   } catch (error) {
     ElMessage.error(error instanceof ApiError ? error.message : '角色更新失败');
@@ -119,7 +129,12 @@ onMounted(() => load());
       <el-tag type="info" effect="plain">身份源 + 托管角色</el-tag>
     </div>
 
-    <form class="access-toolbar" aria-label="用户目录查询" @submit.prevent="applyFilters">
+    <form
+      v-if="!isMobile"
+      class="access-toolbar"
+      aria-label="用户目录查询"
+      @submit.prevent="applyFilters"
+    >
       <el-input v-model="search" clearable maxlength="128" placeholder="搜索企业用户 ID" />
       <el-input
         v-if="isAdmin"
@@ -131,6 +146,34 @@ onMounted(() => load());
       <el-button native-type="submit">查询</el-button>
       <el-button class="reset-button" native-type="button" @click="resetFilters">重置</el-button>
     </form>
+    <template v-else>
+      <div class="mobile-filter-bar">
+        <el-button class="filter-trigger" @click="filtersVisible = true">筛选</el-button>
+      </div>
+      <el-drawer
+        v-model="filtersVisible"
+        direction="btt"
+        size="40%"
+        title="筛选用户目录"
+        append-to-body
+        :z-index="4000"
+      >
+        <form class="mobile-filter-form" aria-label="用户目录查询" @submit.prevent="applyFilters">
+          <el-input v-model="search" clearable maxlength="128" placeholder="搜索企业用户 ID" />
+          <el-input
+            v-if="isAdmin"
+            v-model="department"
+            clearable
+            maxlength="128"
+            placeholder="查询部门"
+          />
+          <div class="mobile-filter-actions">
+            <el-button native-type="button" @click="resetFilters">重置</el-button>
+            <el-button type="primary" native-type="submit">应用</el-button>
+          </div>
+        </form>
+      </el-drawer>
+    </template>
 
     <div class="access-content">
       <div v-if="errorMessage && users.length === 0" class="document-error" role="alert">
@@ -140,75 +183,98 @@ onMounted(() => load());
       </div>
 
       <div v-else v-loading="loading" class="access-table-wrap">
-        <el-table v-if="users.length > 0" class="desktop-data-table" :data="users" row-key="userId">
-          <el-table-column label="企业用户 ID" prop="userId" min-width="220" fixed="left" />
-          <el-table-column label="部门" prop="department" min-width="160" />
-          <el-table-column label="角色" min-width="240">
-            <template #default="scopeRow">
-              <div class="role-tags">
-                <el-tag
-                  v-for="role in accessRoleSummary(userRow(scopeRow.row).roles)"
-                  :key="role"
-                  effect="plain"
-                >
-                  {{ role }}
-                </el-tag>
-              </div>
-            </template>
-          </el-table-column>
-          <el-table-column label="状态" min-width="120">
-            <el-tag type="success">已验证登录</el-tag>
-          </el-table-column>
-          <el-table-column label="最近认证" min-width="190">
-            <template #default="scopeRow">
-              {{ new Date(userRow(scopeRow.row).lastAuthenticatedAt).toLocaleString() }}
-            </template>
-          </el-table-column>
-          <el-table-column v-if="canWrite" label="操作" width="110" fixed="right">
-            <template #default="scopeRow">
-              <el-button text type="primary" @click="editRoles(userRow(scopeRow.row))">
-                编辑角色
-              </el-button>
-            </template>
-          </el-table-column>
-        </el-table>
-        <div v-if="users.length > 0" class="mobile-data-list" aria-label="用户目录">
-          <article v-for="user in users" :key="user.userId" class="mobile-data-card">
-            <header>
-              <strong>{{ user.userId }}</strong>
+        <template v-if="users.length > 0">
+          <el-table
+            v-if="!isMobile"
+            class="desktop-data-table"
+            :data="users"
+            row-key="userId"
+            height="100%"
+          >
+            <el-table-column label="企业用户 ID" prop="userId" min-width="220" />
+            <el-table-column label="部门" prop="department" min-width="160" />
+            <el-table-column label="角色" min-width="160">
+              <template #default="scopeRow">
+                <div class="role-tags">
+                  <el-tag
+                    v-for="role in accessRoleSummary(userRow(scopeRow.row).roles)"
+                    :key="role"
+                    effect="plain"
+                  >
+                    {{ role }}
+                  </el-tag>
+                </div>
+              </template>
+            </el-table-column>
+            <el-table-column label="状态" min-width="120">
               <el-tag type="success">已验证登录</el-tag>
-            </header>
-            <div class="mobile-data-fields">
-              <div>
-                <span>部门</span><strong>{{ user.department }}</strong>
-              </div>
-              <div>
-                <span>最近认证</span
-                ><strong>{{ new Date(user.lastAuthenticatedAt).toLocaleString() }}</strong>
-              </div>
-              <div>
-                <span>角色</span
-                ><strong>{{ accessRoleSummary(user.roles).join('、') || '普通用户' }}</strong>
-              </div>
-            </div>
-            <el-button v-if="canWrite" text type="primary" @click="editRoles(user)">
-              编辑角色
-            </el-button>
-          </article>
-        </div>
+            </el-table-column>
+            <el-table-column label="最近认证" min-width="190">
+              <template #default="scopeRow">
+                {{ new Date(userRow(scopeRow.row).lastAuthenticatedAt).toLocaleString() }}
+              </template>
+            </el-table-column>
+            <el-table-column v-if="canWrite" label="操作" width="110">
+              <template #default="scopeRow">
+                <el-button text type="primary" @click="editRoles(userRow(scopeRow.row))">
+                  编辑角色
+                </el-button>
+              </template>
+            </el-table-column>
+          </el-table>
+          <div v-else class="mobile-data-list mobile-user-list" aria-label="用户目录">
+            <el-collapse accordion>
+              <el-collapse-item v-for="user in users" :key="user.userId" :name="user.userId">
+                <template #title>
+                  <div class="mobile-user-summary">
+                    <strong>{{ user.userId }}</strong>
+                    <el-tag type="success">已验证登录</el-tag>
+                  </div>
+                </template>
+                <div class="mobile-data-fields">
+                  <div>
+                    <span>部门</span><strong>{{ user.department }}</strong>
+                  </div>
+                  <div>
+                    <span>最近认证</span>
+                    <strong>{{ new Date(user.lastAuthenticatedAt).toLocaleString() }}</strong>
+                  </div>
+                  <div>
+                    <span>角色</span
+                    ><strong>{{ accessRoleSummary(user.roles).join('、') || '普通用户' }}</strong>
+                  </div>
+                </div>
+                <el-button v-if="canWrite" text type="primary" @click="prepareInlineRoles(user)">
+                  编辑角色
+                </el-button>
+                <div v-if="selectedUser?.userId === user.userId" class="mobile-inline-editor">
+                  <el-radio-group v-model="selectedRole" :disabled="roleSaving">
+                    <el-radio value="user">普通用户</el-radio>
+                    <el-radio value="admin">管理员</el-radio>
+                  </el-radio-group>
+                  <div class="mobile-inline-editor__actions">
+                    <el-button @click="selectedUser = null">取消</el-button>
+                    <el-button type="primary" :loading="roleSaving" @click="saveRoles"
+                      >保存</el-button
+                    >
+                  </div>
+                </div>
+              </el-collapse-item>
+            </el-collapse>
+          </div>
+        </template>
         <el-empty v-else-if="!loading" description="当前范围内暂无已认证用户" />
       </div>
 
       <div v-if="errorMessage && users.length > 0" class="audit-inline-error" role="alert">
         {{ errorMessage }}
       </div>
-      <div v-if="total > pageSize" class="access-pagination">
+      <div v-if="total > pageSize" class="list-pagination access-pagination">
         <el-pagination
           background
           layout="prev, pager, next"
           :current-page="page"
           :page-size="pageSize"
-          :total="total"
           @current-change="changePage"
         />
       </div>
@@ -223,10 +289,12 @@ onMounted(() => load());
     </div>
     <el-dialog
       v-model="roleDialogVisible"
+      class="role-dialog"
       title="编辑托管角色"
       width="min(480px, calc(100vw - 28px))"
       append-to-body
       :z-index="4000"
+      @closed="selectedUser = null"
     >
       <p v-if="selectedUser">{{ selectedUser.userId }} · {{ selectedUser.department }}</p>
       <el-radio-group v-model="selectedRole" class="role-editor">

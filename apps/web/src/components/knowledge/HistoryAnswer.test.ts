@@ -37,7 +37,7 @@ describe('HistoryAnswer', () => {
       },
     });
 
-    expect(wrapper.get('.general-answer-notice').text()).toContain('非企业知识库资料');
+    expect(wrapper.get('.general-answer-notice').text()).toContain('非知识库资料');
     expect(wrapper.get('.markdown-content').text()).toContain('Vue 3 使用 Proxy');
   });
 });

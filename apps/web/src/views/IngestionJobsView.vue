@@ -7,16 +7,19 @@ import { ApiError } from '@/api/client';
 import { listIngestionJobs, retryIngestionJob } from '@/api/ingestion';
 import { ingestionJobsReturn } from '@/router/return-navigation';
 import { useAuthStore } from '@/stores/auth';
+import { useBreakpoint } from '@/composables/useBreakpoint';
 import { formatIngestionElapsed, ingestionErrorMessage } from './ingestion-presentation';
 
 const route = useRoute();
 const router = useRouter();
 const auth = useAuthStore();
+const { isMobile, isPhone } = useBreakpoint();
 const items = ref<IngestionJob[]>([]);
 const total = ref(0);
 const loading = ref(false);
 const errorMessage = ref('');
 const retryingId = ref<string | null>(null);
+const filtersVisible = ref(false);
 const filters = reactive({
   status: typeof route.query.status === 'string' ? route.query.status : '',
   documentId: typeof route.query.documentId === 'string' ? route.query.documentId : '',
@@ -92,6 +95,7 @@ async function load(quiet = false): Promise<void> {
 async function applyFilters(): Promise<void> {
   filters.page = 1;
   await syncAndLoad();
+  filtersVisible.value = false;
 }
 async function syncAndLoad(): Promise<void> {
   const query = Object.fromEntries(
@@ -164,7 +168,12 @@ onUnmounted(() => {
     <div class="task-controls">
       <div class="task-toolbar">
         <p>共 {{ total }} 个可访问任务</p>
-        <form class="task-filter-form" aria-label="入库任务查询" @submit.prevent="applyFilters">
+        <form
+          v-if="!isMobile"
+          class="task-filter-form"
+          aria-label="入库任务查询"
+          @submit.prevent="applyFilters"
+        >
           <el-select v-model="filters.status" clearable placeholder="全部状态">
             <el-option
               v-for="option in statusOptions"
@@ -178,6 +187,39 @@ onUnmounted(() => {
             重置
           </el-button>
         </form>
+        <template v-else>
+          <div class="mobile-filter-bar">
+            <el-button class="filter-trigger" @click="filtersVisible = true">筛选</el-button>
+          </div>
+          <el-drawer
+            v-model="filtersVisible"
+            direction="btt"
+            size="40%"
+            title="筛选入库任务"
+            append-to-body
+            :z-index="4000"
+          >
+            <form
+              class="mobile-filter-form"
+              aria-label="入库任务查询"
+              @submit.prevent="applyFilters"
+            >
+              <el-select v-model="filters.status" clearable placeholder="全部状态">
+                <el-option
+                  v-for="option in statusOptions"
+                  :key="option.value"
+                  :label="option.label"
+                  :value="option.value"
+                />
+              </el-select>
+              <el-input v-model="filters.documentId" clearable placeholder="文档 ID" />
+              <div class="mobile-filter-actions">
+                <el-button native-type="button" @click="resetFilters">重置</el-button>
+                <el-button type="primary" native-type="submit">应用</el-button>
+              </div>
+            </form>
+          </el-drawer>
+        </template>
       </div>
     </div>
     <div class="task-content">
@@ -221,7 +263,9 @@ onUnmounted(() => {
           />
           <el-steps
             v-else
-            simple
+            class="task-steps"
+            :simple="!isPhone"
+            :direction="isPhone ? 'vertical' : 'horizontal'"
             :active="activeStep(job)"
             :process-status="job.status === 'failed' ? 'error' : 'process'"
             :finish-status="job.status === 'completed' ? 'success' : 'finish'"
@@ -272,15 +316,16 @@ onUnmounted(() => {
         </article>
         <el-empty v-if="!loading && items.length === 0" description="暂无符合条件的入库任务" />
       </div>
-      <el-pagination
-        v-if="total > filters.pageSize"
-        v-model:current-page="filters.page"
-        v-model:page-size="filters.pageSize"
-        layout="total, sizes, prev, pager, next"
-        :total="total"
-        :page-sizes="[20, 50, 100]"
-        @change="syncAndLoad"
-      />
+      <div v-if="total > filters.pageSize" class="list-pagination">
+        <el-pagination
+          v-model:current-page="filters.page"
+          v-model:page-size="filters.pageSize"
+          :layout="isPhone ? 'prev, pager, next' : 'total, sizes, prev, pager, next'"
+          :total="total"
+          :page-sizes="[20, 50, 100]"
+          @change="syncAndLoad"
+        />
+      </div>
     </div>
   </section>
 </template>
