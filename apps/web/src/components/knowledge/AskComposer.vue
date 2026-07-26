@@ -47,12 +47,12 @@ watch(
     />
     <div class="composer-footer">
       <span class="scope-pill">全部可访问知识</span>
-      <span class="character-count" :class="{ danger: modelValue.length > 2000 }"
-        >{{ modelValue.length }}/2000</span
-      >
-      <el-button type="primary" round :loading="isSubmitting" :disabled="isInvalid" @click="submit"
-        >发送</el-button
-      >
+      <span class="character-count" :class="{ danger: modelValue.length > 2000 }">
+        {{ modelValue.length }}/2000
+      </span>
+      <el-button type="primary" round :loading="isSubmitting" :disabled="isInvalid" @click="submit">
+        发送
+      </el-button>
     </div>
   </div>
 </template>

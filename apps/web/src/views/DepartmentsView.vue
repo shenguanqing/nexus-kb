@@ -55,37 +55,44 @@ onMounted(load);
 <template>
   <section class="department-page" v-loading="loading">
     <div v-if="errorMessage" class="document-error" role="alert">
-      <strong>无法加载部门</strong><span>{{ errorMessage }}</span
-      ><el-button @click="load">重试</el-button>
+      <strong>无法加载部门</strong><span>{{ errorMessage }}</span>
+      <el-button @click="load">重试</el-button>
     </div>
     <div v-else class="department-layout">
-      <nav class="department-list" aria-label="部门列表">
-        <button
-          v-for="item in departments"
-          :key="item.department"
-          type="button"
-          :class="{ active: selected?.department === item.department }"
-          @click="select(item)"
-        >
-          <strong>{{ item.department }}</strong
-          ><span>{{ item.userCount }} 位用户 · {{ item.documentCount }} 份文档</span>
-        </button>
+      <nav class="department-list-panel" aria-label="部门列表">
+        <h2 class="scroll-section-title">部门列表</h2>
+        <div class="department-list">
+          <button
+            v-for="item in departments"
+            :key="item.department"
+            type="button"
+            :class="{ active: selected?.department === item.department }"
+            @click="select(item)"
+          >
+            <strong>{{ item.department }}</strong>
+            <span>{{ item.userCount }} 位用户 · {{ item.documentCount }} 份文档</span>
+          </button>
+        </div>
       </nav>
       <article v-if="selected" class="department-policy-card">
         <h2>{{ selected.department }}权限</h2>
-        <p>该策略只能收紧身份源声明的敏感度，不能扩大用户权限。</p>
-        <el-checkbox-group v-model="sensitivities" :disabled="!canWrite"
-          ><el-checkbox value="public">公开</el-checkbox
-          ><el-checkbox value="internal">内部</el-checkbox
-          ><el-checkbox value="confidential">机密</el-checkbox></el-checkbox-group
-        ><el-button
-          v-if="canWrite"
-          type="primary"
-          :disabled="sensitivities.length === 0"
-          :loading="saving"
-          @click="save"
-          >保存并生效</el-button
-        >
+        <div class="department-policy-body">
+          <div>该策略只能收紧身份源声明的敏感度，不能扩大用户权限。</div>
+          <el-checkbox-group v-model="sensitivities" :disabled="!canWrite">
+            <el-checkbox value="public">公开</el-checkbox>
+            <el-checkbox value="internal">内部</el-checkbox>
+            <el-checkbox value="confidential">机密</el-checkbox>
+          </el-checkbox-group>
+          <el-button
+            v-if="canWrite"
+            type="primary"
+            :disabled="sensitivities.length === 0"
+            :loading="saving"
+            @click="save"
+          >
+            保存并生效
+          </el-button>
+        </div>
       </article>
       <el-empty v-else description="暂无部门数据" />
     </div>

@@ -29,21 +29,20 @@ defineEmits<{ selectSource: [source: KnowledgeSource] }>();
           class="source-card"
           @click="$emit('selectSource', source)"
         >
-          <span>来源 {{ source.index }}</span
-          ><strong>{{ source.sourceName }}</strong>
-          <small
-            >{{
-              source.page ? `第 ${source.page} 页` : source.sheet ? source.sheet : '位置未标注'
-            }}
-            · v{{ source.documentVersion }}</small
-          >
+          <span>来源 {{ source.index }}</span>
+          <strong>{{ source.sourceName }}</strong>
+          <small>
+            {{ source.page ? `第 ${source.page} 页` : source.sheet ? source.sheet : '位置未标注' }}
+            · v{{ source.documentVersion }}
+          </small>
         </button>
       </div>
       <div class="answer-meta">
-        <span>Trace ID：{{ response.traceId }}</span
-        ><span v-if="response.model"
-          >{{ response.model.provider }} / {{ response.model.model }}</span
-        ><span v-if="response.rerankDegraded">Rerank 已安全降级</span>
+        <span>Trace ID：{{ response.traceId }}</span>
+        <span v-if="response.model">
+          {{ response.model.provider }} / {{ response.model.model }}
+        </span>
+        <span v-if="response.rerankDegraded">Rerank 已安全降级</span>
       </div>
     </div>
   </article>

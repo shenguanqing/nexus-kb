@@ -64,33 +64,37 @@ async function submit(): Promise<void> {
         <h2>登录知枢</h2>
         <p>使用组织批准的身份服务继续访问。</p>
         <form v-if="options?.passwordEnabled" class="login-form" @submit.prevent="submit">
-          <label
-            >账号<el-input
+          <label>
+            账号
+            <el-input
               v-model="username"
               autocomplete="username"
               maxlength="64"
               placeholder="输入账号"
-          /></label>
-          <label
-            >密码<el-input
+            />
+          </label>
+          <label>
+            密码
+            <el-input
               v-model="password"
               type="password"
               show-password
               autocomplete="current-password"
               maxlength="256"
               placeholder="输入密码"
-          /></label>
+            />
+          </label>
           <p v-if="errorMessage" class="login-error" role="alert">{{ errorMessage }}</p>
-          <el-button native-type="submit" type="primary" size="large" :loading="loading"
-            >登录</el-button
-          >
+          <el-button native-type="submit" type="primary" size="large" :loading="loading">
+            登录
+          </el-button>
         </form>
         <template v-else>
           <p v-if="errorMessage" class="login-error" role="alert">{{ errorMessage }}</p>
           <el-button type="primary" size="large" disabled>企业 SSO 登录</el-button>
-          <small v-if="options?.mode === 'development'"
-            >本地开发模式会由服务端自动建立受控身份。</small
-          >
+          <small v-if="options?.mode === 'development'">
+            本地开发模式会由服务端自动建立受控身份。
+          </small>
           <small v-else>请使用组织批准的身份服务获取访问权限。</small>
         </template>
       </div>

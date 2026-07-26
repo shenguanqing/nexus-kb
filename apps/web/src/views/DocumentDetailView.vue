@@ -11,7 +11,6 @@ import {
   updateDocumentMetadata,
 } from '@/api/documents';
 import { listIngestionJobs } from '@/api/ingestion';
-import { documentDetailReturn } from '@/router/return-navigation';
 import { useAuthStore } from '@/stores/auth';
 
 const route = useRoute();
@@ -37,7 +36,6 @@ const documentStatusLabels: Record<string, string> = {
 };
 const canWrite = computed(() => auth.hasCapability('documents:write'));
 const canDelete = computed(() => auth.hasCapability('documents:delete'));
-const backNavigation = computed(() => documentDetailReturn(route.query.from));
 const allTasksTarget = computed(() => ({
   path: '/ingestion-jobs',
   query: {
@@ -158,15 +156,12 @@ onMounted(load);
   <section v-loading="loading" class="document-detail-page">
     <div class="page-content">
       <div v-if="errorMessage" class="document-error" role="alert">
-        <strong>无法加载文档详情</strong><span>{{ errorMessage }}</span
-        ><el-button @click="load">重试</el-button>
+        <strong>无法加载文档详情</strong><span>{{ errorMessage }}</span>
+        <el-button @click="load">重试</el-button>
       </div>
       <template v-else-if="document">
         <header class="detail-actions">
           <div>
-            <RouterLink :to="backNavigation.to" class="back-link"
-              >← {{ backNavigation.label }}</RouterLink
-            >
             <h2>{{ document.sourceName }}</h2>
             <p>{{ document.mimeType }}</p>
           </div>
@@ -175,90 +170,83 @@ onMounted(load);
               v-if="canWrite"
               :disabled="document.status !== 'active'"
               @click="openMetadata"
-              >修改权限 metadata</el-button
             >
+              修改权限 metadata
+            </el-button>
             <el-button
               v-if="canWrite"
               :loading="mutating"
               :disabled="document.status !== 'active' && document.status !== 'prepared'"
               @click="reindex"
-              >{{ document.status === 'prepared' ? '继续建立索引' : '重新索引' }}</el-button
-            ><el-button
+            >
+              {{ document.status === 'prepared' ? '继续建立索引' : '重新索引' }}
+            </el-button>
+            <el-button
               v-if="canDelete"
               class="delete-document-button"
               type="danger"
               :loading="mutating"
               @click="remove"
-              >删除文档</el-button
             >
+              删除文档
+            </el-button>
           </div>
         </header>
 
         <div class="detail-grid">
           <article class="detail-card">
             <h3>基本信息</h3>
-            <dl>
+            <div class="data-list">
               <div>
-                <dt>状态</dt>
-                <dd>{{ documentStatusLabel(document.status) }}</dd>
+                <span>状态</span><strong>{{ documentStatusLabel(document.status) }}</strong>
               </div>
               <div>
-                <dt>部门</dt>
-                <dd>{{ document.department }}</dd>
+                <span>部门</span><strong>{{ document.department }}</strong>
               </div>
               <div>
-                <dt>敏感度</dt>
-                <dd>{{ document.sensitivity }}</dd>
+                <span>敏感度</span><strong>{{ document.sensitivity }}</strong>
               </div>
               <div>
-                <dt>所有者</dt>
-                <dd>{{ document.ownerId }}</dd>
+                <span>所有者</span><strong>{{ document.ownerId }}</strong>
               </div>
               <div>
-                <dt>当前版本</dt>
-                <dd>{{ document.activeVersion ? `v${document.activeVersion}` : '尚未激活' }}</dd>
+                <span>当前版本</span><strong>{{ document.activeVersion ? `v${document.activeVersion}` : '尚未激活' }}</strong>
               </div>
               <div>
-                <dt>更新时间</dt>
-                <dd>{{ new Date(document.updatedAt).toLocaleString() }}</dd>
+                <span>更新时间</span><strong>{{ new Date(document.updatedAt).toLocaleString() }}</strong>
               </div>
-            </dl>
+            </div>
           </article>
           <article class="detail-card">
             <div class="card-title">
               <h3>当前向量索引</h3>
-              <RouterLink v-if="activeVersion?.chunkCount" :to="chunksTarget"
-                >查看全部分块</RouterLink
-              >
+              <RouterLink v-if="activeVersion?.chunkCount" :to="chunksTarget">
+                查看全部分块
+              </RouterLink>
             </div>
-            <dl>
+            <div class="data-list">
               <div>
-                <dt>向量库</dt>
-                <dd class="fingerprint">{{ activeVersion?.vectorCollection ?? '尚未写入' }}</dd>
+                <span>向量库</span><strong class="fingerprint">{{ activeVersion?.vectorCollection ?? '尚未写入' }}</strong>
               </div>
               <div>
-                <dt>向量数（分块）</dt>
-                <dd>{{ activeVersion?.chunkCount ?? 0 }}</dd>
+                <span>向量数（分块）</span><strong>{{ activeVersion?.chunkCount ?? 0 }}</strong>
               </div>
               <div>
-                <dt>解析器</dt>
-                <dd>{{ activeVersion?.parser ?? '—' }} {{ activeVersion?.parserVersion ?? '' }}</dd>
+                <span>解析器</span><strong>{{ activeVersion?.parser ?? '—' }} {{ activeVersion?.parserVersion ?? '' }}</strong>
               </div>
               <div>
-                <dt>Embedding 指纹</dt>
-                <dd class="fingerprint">{{ activeVersion?.embeddingFingerprint ?? '尚未生成' }}</dd>
+                <span>Embedding 指纹</span><strong class="fingerprint">{{ activeVersion?.embeddingFingerprint ?? '尚未生成' }}</strong>
               </div>
               <div>
-                <dt>写入时间</dt>
-                <dd>
+                <span>写入时间</span><strong>
                   {{
                     activeVersion?.indexedAt
                       ? new Date(activeVersion.indexedAt).toLocaleString()
                       : '—'
                   }}
-                </dd>
+                </strong>
               </div>
-            </dl>
+            </div>
             <ul v-if="activeVersion?.warnings.length">
               <li v-for="warning in activeVersion.warnings" :key="warning">{{ warning }}</li>
             </ul>
@@ -270,57 +258,93 @@ onMounted(load);
             <h3>版本历史</h3>
             <RouterLink :to="allTasksTarget">查看全部任务</RouterLink>
           </div>
-          <el-table :data="document.versions" row-key="version"
-            ><el-table-column label="版本" width="90"
-              ><template #default="scope">v{{ scope.row.version }}</template></el-table-column
-            ><el-table-column label="状态" width="140"
-              ><template #default="scope">{{
-                documentStatusLabel(scope.row.status)
-              }}</template></el-table-column
-            ><el-table-column prop="chunkCount" label="分块" width="100" /><el-table-column
-              label="向量库"
-              min-width="220"
-              ><template #default="scope"
-                ><span class="fingerprint">{{ scope.row.vectorCollection ?? '—' }}</span></template
-              ></el-table-column
-            ><el-table-column prop="parserVersion" label="解析器版本" /><el-table-column
-              label="创建时间"
-              ><template #default="scope">{{
-                new Date(scope.row.createdAt).toLocaleString()
-              }}</template></el-table-column
-            ></el-table
-          >
+          <el-table class="desktop-data-table" :data="document.versions" row-key="version">
+            <el-table-column label="版本" width="90" fixed="left">
+              <template #default="scope">v{{ scope.row.version }}</template>
+            </el-table-column>
+            <el-table-column label="状态" width="140">
+              <template #default="scope">
+                {{ documentStatusLabel(scope.row.status) }}
+              </template>
+            </el-table-column>
+            <el-table-column prop="chunkCount" label="分块" width="100" />
+            <el-table-column label="向量库" min-width="220">
+              <template #default="scope">
+                <span class="fingerprint">{{ scope.row.vectorCollection ?? '—' }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column prop="parserVersion" label="解析器版本" />
+            <el-table-column label="创建时间">
+              <template #default="scope">
+                {{ new Date(scope.row.createdAt).toLocaleString() }}
+              </template>
+            </el-table-column>
+          </el-table>
+          <div v-if="document.versions.length" class="mobile-data-list" aria-label="版本历史">
+            <article
+              v-for="version in document.versions"
+              :key="version.version"
+              class="mobile-data-card"
+            >
+              <header>
+                <strong>版本 v{{ version.version }}</strong>
+                <el-tag>{{ documentStatusLabel(version.status) }}</el-tag>
+              </header>
+              <div class="mobile-data-fields">
+                <div>
+                  <span>分块</span><strong>{{ version.chunkCount }}</strong>
+                </div>
+                <div>
+                  <span>解析器</span><strong>{{ version.parserVersion }}</strong>
+                </div>
+                <div>
+                  <span>向量库</span><strong class="fingerprint">{{ version.vectorCollection ?? '—' }}</strong>
+                </div>
+                <div>
+                  <span>创建时间</span><strong>{{ new Date(version.createdAt).toLocaleString() }}</strong>
+                </div>
+              </div>
+            </article>
+          </div>
         </article>
-        <el-dialog v-model="metadataVisible" title="修改权限 metadata" width="480px">
-          <el-form label-position="top"
-            ><el-form-item label="部门"
-              ><el-input v-model="metadataDepartment" maxlength="128" /></el-form-item
-            ><el-form-item label="敏感度"
-              ><el-select v-model="metadataSensitivity"
-                ><el-option label="公开" value="public" /><el-option
-                  label="内部"
-                  value="internal" /><el-option
-                  label="机密"
-                  value="confidential" /></el-select></el-form-item
-          ></el-form>
+        <el-dialog
+          v-model="metadataVisible"
+          title="修改权限 metadata"
+          width="min(480px, calc(100vw - 28px))"
+          append-to-body
+          :z-index="4000"
+        >
+          <el-form label-position="top">
+            <el-form-item label="部门">
+              <el-input v-model="metadataDepartment" maxlength="128" />
+            </el-form-item>
+            <el-form-item label="敏感度">
+              <el-select v-model="metadataSensitivity">
+                <el-option label="公开" value="public" />
+                <el-option label="内部" value="internal" />
+                <el-option label="机密" value="confidential" />
+              </el-select>
+            </el-form-item>
+          </el-form>
           <p class="upload-warning">
             修改后会创建新版本并重建索引；旧向量在激活前仍受 PostgreSQL 最新 ACL 二次鉴权。
           </p>
-          <template #footer
-            ><el-button @click="metadataVisible = false">取消</el-button
-            ><el-button type="primary" :loading="mutating" @click="saveMetadata"
-              >保存并重建</el-button
-            ></template
-          >
+          <template #footer>
+            <el-button @click="metadataVisible = false">取消</el-button>
+            <el-button type="primary" :loading="mutating" @click="saveMetadata">
+              保存并重建
+            </el-button>
+          </template>
         </el-dialog>
 
         <article v-if="jobs.length" class="detail-card">
           <h3>最近任务</h3>
           <ul class="recent-jobs">
             <li v-for="job in jobs.slice(0, 5)" :key="job.id">
-              <RouterLink :to="allTasksTarget"
-                >v{{ job.version }} · {{ job.status }} · {{ job.step }}</RouterLink
-              ><time>{{ new Date(job.updatedAt).toLocaleString() }}</time>
+              <RouterLink :to="allTasksTarget">
+                v{{ job.version }} · {{ job.status }} · {{ job.step }}
+              </RouterLink>
+              <time>{{ new Date(job.updatedAt).toLocaleString() }}</time>
             </li>
           </ul>
         </article>

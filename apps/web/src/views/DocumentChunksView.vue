@@ -81,7 +81,6 @@ onMounted(load);
   <section v-loading="loading" class="document-chunks-page">
     <header class="chunks-toolbar">
       <div>
-        <RouterLink :to="`/documents/${documentId}`" class="back-link">← 返回文档详情</RouterLink>
         <h2>{{ chunks?.sourceName ?? detail?.sourceName ?? '文档分块' }}</h2>
         <p>
           显示原始分块和写入向量库的脱敏文本；不展示向量值。每次读取都会按当前文档权限重新鉴权。
@@ -110,8 +109,8 @@ onMounted(load);
 
     <div class="chunks-content">
       <div v-if="errorMessage" class="document-error" role="alert">
-        <strong>无法加载文档分块</strong><span>{{ errorMessage }}</span
-        ><el-button @click="load">重试</el-button>
+        <strong>无法加载文档分块</strong><span>{{ errorMessage }}</span>
+        <el-button @click="load">重试</el-button>
       </div>
       <template v-else-if="chunks">
         <div v-if="chunks.items.length" class="chunk-list">
@@ -123,26 +122,22 @@ onMounted(load);
               </div>
               <span class="fingerprint">{{ chunk.id }}</span>
             </header>
-            <dl>
+            <div class="data-list">
               <div>
-                <dt>章节路径</dt>
-                <dd>{{ chunk.sectionPath.join(' / ') || '未标注' }}</dd>
+                <span>章节路径</span><strong>{{ chunk.sectionPath.join(' / ') || '未标注' }}</strong>
               </div>
               <div>
-                <dt>元素类型</dt>
-                <dd>{{ chunk.elementTypes.join('、') || '未标注' }}</dd>
+                <span>元素类型</span><strong>{{ chunk.elementTypes.join('、') || '未标注' }}</strong>
               </div>
               <div>
-                <dt>相邻分块</dt>
-                <dd class="fingerprint">
-                  上一个：{{ chunk.previousChunkId ?? '无' }}<br />下一个：{{
-                    chunk.nextChunkId ?? '无'
-                  }}
-                </dd>
+                <span>相邻分块</span><strong class="fingerprint">
+                  上一个：{{ chunk.previousChunkId ?? '无' }}
+                  <br />
+                  下一个：{{ chunk.nextChunkId ?? '无' }}
+                </strong>
               </div>
               <div>
-                <dt>脱敏策略</dt>
-                <dd>
+                <span>脱敏策略</span><strong>
                   {{ chunk.redactionPolicyVersion }}
                   <span v-if="redactionEntries(chunk).length"> · </span>
                   <el-tag
@@ -153,9 +148,9 @@ onMounted(load);
                   >
                     {{ kind }} × {{ count }}
                   </el-tag>
-                </dd>
+                </strong>
               </div>
-            </dl>
+            </div>
             <div class="chunk-text-grid">
               <section>
                 <h4>原始内容</h4>

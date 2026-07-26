@@ -77,7 +77,7 @@ onMounted(() => load());
         <strong>租户审计事件</strong>
         <p>仅展示当前租户内经过最小披露处理的结构化记录。</p>
       </div>
-      <form class="audit-filter-form" aria-label="审计事件筛选" @submit.prevent="applyFilter">
+      <form class="audit-filter-form" aria-label="审计事件查询" @submit.prevent="applyFilter">
         <label>
           <span class="sr-only">事件类型</span>
           <el-select v-model="selectedType" clearable placeholder="全部事件类型">
@@ -89,8 +89,8 @@ onMounted(() => load());
             />
           </el-select>
         </label>
-        <el-button native-type="submit">筛选</el-button>
-        <el-button native-type="button" @click="resetFilter">重置</el-button>
+        <el-button native-type="submit">查询</el-button>
+        <el-button class="reset-button" native-type="button" @click="resetFilter">重置</el-button>
       </form>
     </div>
 
@@ -102,36 +102,40 @@ onMounted(() => load());
       </div>
 
       <div v-else v-loading="loading" class="audit-table-wrap">
-        <el-table v-if="hasEvents" :data="events" row-key="id">
+        <el-table
+          v-if="hasEvents"
+          class="desktop-data-table"
+          :data="events"
+          row-key="id"
+          height="100%"
+        >
           <el-table-column type="expand">
             <template #default="scope">
-              <dl class="audit-details">
+              <div class="audit-details">
                 <div
                   v-for="attribute in visibleAuditAttributes(auditRow(scope.row))"
                   :key="attribute.label"
                 >
-                  <dt>{{ attribute.label }}</dt>
-                  <dd>{{ attribute.value }}</dd>
+                  <span>{{ attribute.label }}</span>
+                  <strong>{{ attribute.value }}</strong>
                 </div>
                 <div>
-                  <dt>Trace ID</dt>
-                  <dd>
+                  <span>Trace ID</span><strong>
                     <code>{{ scope.row.traceId ?? '—' }}</code>
-                  </dd>
+                  </strong>
                 </div>
                 <div v-if="scope.row.ingestionJobId">
-                  <dt>入库任务</dt>
-                  <dd>
+                  <span>入库任务</span><strong>
                     <code>{{ scope.row.ingestionJobId }}</code>
-                  </dd>
+                  </strong>
                 </div>
-              </dl>
+              </div>
             </template>
           </el-table-column>
-          <el-table-column label="时间" min-width="168">
-            <template #default="scope">{{
-              new Date(scope.row.createdAt).toLocaleString()
-            }}</template>
+          <el-table-column label="时间" min-width="168" fixed="left">
+            <template #default="scope">
+              {{ new Date(scope.row.createdAt).toLocaleString() }}
+            </template>
           </el-table-column>
           <el-table-column label="类型" min-width="120">
             <template #default="scope">{{ auditTypeLabels[auditRow(scope.row).type] }}</template>
@@ -159,7 +163,34 @@ onMounted(() => load());
             </template>
           </el-table-column>
         </el-table>
-        <el-empty v-else-if="!loading" description="当前筛选条件下暂无审计事件" />
+        <div v-if="hasEvents" class="mobile-data-list" aria-label="审计事件列表">
+          <article v-for="event in events" :key="event.id" class="mobile-data-card">
+            <header>
+              <strong>{{ auditEventLabel(event) }}</strong>
+              <el-tag :type="outcomeTagType(event.outcome)">
+                {{ auditOutcomeLabel(event.outcome) }}
+              </el-tag>
+            </header>
+            <div class="mobile-data-fields">
+              <div>
+                <span>时间</span><strong>{{ new Date(event.createdAt).toLocaleString() }}</strong>
+              </div>
+              <div>
+                <span>操作者</span><strong>{{ event.actorUserId ?? '系统' }}</strong>
+              </div>
+              <div>
+                <span>资源</span><strong>{{ auditResource(event) }}</strong>
+              </div>
+              <div>
+                <span>云端数据</span><strong>{{ cloudEgressLabel(event) }}</strong>
+              </div>
+              <div>
+                <span>Provider / 模型</span><strong>{{ auditProvider(event) }}</strong>
+              </div>
+            </div>
+          </article>
+        </div>
+        <el-empty v-else-if="!loading" description="当前查询条件下暂无审计事件" />
       </div>
 
       <div v-if="errorMessage && hasEvents" class="audit-inline-error" role="alert">

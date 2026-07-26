@@ -60,30 +60,25 @@ onMounted(load);
             </el-tag>
           </div>
           <h2>{{ providerTitle(provider) }}</h2>
-          <dl>
+          <div class="data-list">
             <div>
-              <dt>服务域名</dt>
-              <dd>{{ provider.endpointHost ?? '—' }}</dd>
+              <span>服务域名</span><strong>{{ provider.endpointHost ?? '—' }}</strong>
             </div>
             <div>
-              <dt>区域</dt>
-              <dd>{{ provider.region ?? '—' }}</dd>
+              <span>区域</span><strong>{{ provider.region ?? '—' }}</strong>
             </div>
             <div>
-              <dt>凭据状态</dt>
-              <dd>{{ credentialLabel(provider.provider, provider.credentialConfigured) }}</dd>
+              <span>凭据状态</span><strong>{{ credentialLabel(provider.provider, provider.credentialConfigured) }}</strong>
             </div>
             <div v-if="provider.dimensions">
-              <dt>向量维度</dt>
-              <dd>{{ provider.dimensions }}</dd>
+              <span>向量维度</span><strong>{{ provider.dimensions }}</strong>
             </div>
             <div v-if="provider.fingerprint" class="provider-fingerprint">
-              <dt>索引配置指纹</dt>
-              <dd>
+              <span>索引配置指纹</span><strong>
                 <code>{{ provider.fingerprint }}</code>
-              </dd>
+              </strong>
             </div>
-          </dl>
+          </div>
         </article>
         <el-empty v-if="result && result.providers.length === 0" description="暂无 Provider 配置" />
       </div>

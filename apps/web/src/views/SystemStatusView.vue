@@ -71,11 +71,8 @@ onMounted(load);
             :key="component.id"
             class="component-card"
           >
-            <span
-              class="component-status"
-              :class="`is-${component.status}`"
-              aria-hidden="true"
-            ></span>
+            <span class="component-status" :class="`is-${component.status}`" aria-hidden="true">
+            </span>
             <div>
               <strong>{{ systemComponentLabels[component.id] }}</strong>
               <p>
@@ -96,28 +93,23 @@ onMounted(load);
               {{ result.ingestionQueue.status === 'up' ? '可用' : '不可用' }}
             </el-tag>
           </div>
-          <dl>
+          <div class="data-list">
             <div>
-              <dt>等待</dt>
-              <dd>{{ result.ingestionQueue.waiting ?? '—' }}</dd>
+              <span>等待</span><strong>{{ result.ingestionQueue.waiting ?? '—' }}</strong>
             </div>
             <div>
-              <dt>处理中</dt>
-              <dd>{{ result.ingestionQueue.active ?? '—' }}</dd>
+              <span>处理中</span><strong>{{ result.ingestionQueue.active ?? '—' }}</strong>
             </div>
             <div>
-              <dt>延迟</dt>
-              <dd>{{ result.ingestionQueue.delayed ?? '—' }}</dd>
+              <span>延迟</span><strong>{{ result.ingestionQueue.delayed ?? '—' }}</strong>
             </div>
             <div>
-              <dt>失败</dt>
-              <dd>{{ result.ingestionQueue.failed ?? '—' }}</dd>
+              <span>失败</span><strong>{{ result.ingestionQueue.failed ?? '—' }}</strong>
             </div>
             <div>
-              <dt>最老等待任务</dt>
-              <dd>{{ formatDuration(result.ingestionQueue.oldestWaitSeconds) }}</dd>
+              <span>最老等待任务</span><strong>{{ formatDuration(result.ingestionQueue.oldestWaitSeconds) }}</strong>
             </div>
-          </dl>
+          </div>
         </section>
       </template>
 

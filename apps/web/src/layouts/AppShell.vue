@@ -1,16 +1,88 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { logout } from '@/api/auth';
 import { useAuthStore } from '@/stores/auth';
 import { useKnowledgeConversationStore } from '@/stores/knowledge-conversation';
+import {
+  documentDetailReturn,
+  ingestionJobsReturn,
+  type ReturnNavigation,
+} from '@/router/return-navigation';
+
+interface NavigationItem {
+  to: string;
+  label: string;
+  icon: string;
+  capability?: 'documents:read' | 'audit:read' | 'access:read' | 'system:read';
+}
 
 const route = useRoute();
 const router = useRouter();
 const auth = useAuthStore();
 const conversation = useKnowledgeConversationStore();
 const isCollapsed = ref(false);
+const mobileMenuOpen = ref(false);
+const isMobileViewport = ref(false);
+let viewportQuery: MediaQueryList | undefined;
+function syncViewport(event?: MediaQueryListEvent): void {
+  isMobileViewport.value = event?.matches ?? viewportQuery?.matches ?? false;
+  if (isMobileViewport.value) isCollapsed.value = false;
+  else mobileMenuOpen.value = false;
+}
+onMounted(() => {
+  viewportQuery = window.matchMedia('(max-width: 900px)');
+  syncViewport();
+  viewportQuery.addEventListener('change', syncViewport);
+});
+onBeforeUnmount(() => viewportQuery?.removeEventListener('change', syncViewport));
 const pageTitle = computed(() => String(route.meta.title ?? '知枢'));
+const pageSection = computed(() => {
+  if (route.path.startsWith('/documents') || route.path === '/ingestion-jobs') return '知识资产';
+  if (route.path === '/audit') return '合规审计';
+  if (route.path.startsWith('/access')) return '访问管理';
+  if (route.path.startsWith('/system') || route.path.startsWith('/settings')) return '系统管理';
+  return '知识工作台';
+});
+const pageDescription = computed(() => {
+  if (route.path === '/history') return '查看与管理个人历史问答记录';
+  if (route.path === '/documents') return '管理已授权文档、索引状态与上传入口';
+  if (route.path === '/ingestion-jobs') return '跟踪文档解析、脱敏与索引进度';
+  if (route.path === '/audit') return '查看当前租户的最小披露审计事件';
+  if (route.path.startsWith('/access')) return '在服务端权限边界内管理访问策略';
+  if (route.path.startsWith('/system') || route.path.startsWith('/settings'))
+    return '查看运行配置与服务健康摘要';
+  if (route.path.startsWith('/documents/')) return '查看文档版本、索引与处理状态';
+  return '';
+});
+const primaryNavigation: NavigationItem[] = [
+  { to: '/ask', label: '知识问答', icon: '✦' },
+  { to: '/history', label: '问答历史', icon: '◷' },
+  { to: '/documents', label: '文档管理', icon: '▤', capability: 'documents:read' },
+  { to: '/ingestion-jobs', label: '入库任务', icon: '⇄', capability: 'documents:read' },
+];
+const managementNavigation: NavigationItem[] = [
+  { to: '/audit', label: '审计中心', icon: '⌁', capability: 'audit:read' },
+  { to: '/access/users', label: '用户与角色', icon: '♙', capability: 'access:read' },
+  { to: '/access/departments', label: '部门权限', icon: '⌘', capability: 'access:read' },
+  { to: '/settings/providers', label: '模型 Provider', icon: '◇', capability: 'system:read' },
+  { to: '/system/usage', label: '用量与成本', icon: '▥', capability: 'system:read' },
+  { to: '/system/status', label: '系统状态', icon: '●', capability: 'system:read' },
+];
+function canShow(item: NavigationItem): boolean {
+  return item.capability === undefined || auth.hasCapability(item.capability);
+}
+function closeMobileMenu(): void {
+  mobileMenuOpen.value = false;
+}
+const returnNavigation = computed<ReturnNavigation | null>(() => {
+  if (/^\/documents\/[^/]+\/chunks$/.test(route.path)) {
+    return { to: `/documents/${String(route.params.id)}`, label: '返回文档详情' };
+  }
+  if (/^\/documents\/[^/]+$/.test(route.path)) return documentDetailReturn(route.query.from);
+  if (route.path === '/ingestion-jobs') return ingestionJobsReturn(route.query.returnTo);
+  return null;
+});
 
 async function signOut(): Promise<void> {
   try {
@@ -24,19 +96,31 @@ async function signOut(): Promise<void> {
 </script>
 
 <template>
-  <div class="app-shell" :class="{ 'is-collapsed': isCollapsed }">
+  <div class="app-shell" :class="{ 'is-collapsed': isCollapsed && !isMobileViewport }">
     <header class="app-header">
+      <button
+        class="mobile-menu-button"
+        type="button"
+        aria-label="打开导航菜单"
+        @click="mobileMenuOpen = true"
+      >
+        ☰
+      </button>
       <RouterLink to="/ask" class="brand" aria-label="知枢 NexusKB 首页">
-        <span class="brand-mark">N</span
-        ><span class="brand-copy"><strong>知枢</strong><small>NexusKB</small></span>
+        <span class="brand-mark">N</span>
+        <span class="brand-copy"><strong>知枢</strong><small>NexusKB</small></span>
       </RouterLink>
       <div class="header-context">
         <span class="status-dot" aria-hidden="true"></span>企业知识服务
       </div>
+      <div class="top-breadcrumb" aria-label="当前位置">
+        <span>{{ pageSection }}</span>
+        <i aria-hidden="true">/</i><strong>{{ pageTitle }}</strong>
+      </div>
       <div class="user-summary">
-        <span class="avatar" aria-hidden="true">{{
-          auth.identity?.userId.slice(0, 1).toUpperCase()
-        }}</span>
+        <span class="avatar" aria-hidden="true">
+          {{ auth.identity?.userId.slice(0, 1).toUpperCase() }}
+        </span>
         <span
           ><strong>{{ auth.identity?.userId }}</strong
           ><small>{{ auth.identity?.department }} · {{ auth.identity?.tenantId }}</small></span
@@ -55,47 +139,20 @@ async function signOut(): Promise<void> {
 
     <aside class="app-sidebar">
       <nav aria-label="主导航">
-        <RouterLink to="/ask"><span aria-hidden="true">✦</span><b>知识问答</b></RouterLink>
-        <RouterLink to="/history"><span aria-hidden="true">◷</span><b>问答历史</b></RouterLink>
-        <RouterLink v-if="auth.hasCapability('documents:read')" to="/documents"
-          ><span aria-hidden="true">▤</span><b>文档管理</b></RouterLink
-        >
-        <RouterLink v-if="auth.hasCapability('documents:read')" to="/ingestion-jobs"
-          ><span aria-hidden="true">⇄</span><b>入库任务</b></RouterLink
-        >
-        <RouterLink v-if="auth.hasCapability('audit:read')" to="/audit"
-          ><span aria-hidden="true">⌁</span><b>审计中心</b></RouterLink
-        >
+        <div class="navigation-label">工作台</div>
+        <RouterLink v-for="item in primaryNavigation.filter(canShow)" :key="item.to" :to="item.to">
+          <span aria-hidden="true">{{ item.icon }}</span>
+          <b>{{ item.label }}</b>
+        </RouterLink>
+        <div class="navigation-label">管理</div>
         <RouterLink
-          v-if="auth.hasCapability('access:read')"
-          class="desktop-only-nav access-nav"
-          to="/access/users"
-          ><span aria-hidden="true">♙</span><b>用户与角色</b></RouterLink
+          v-for="item in managementNavigation.filter(canShow)"
+          :key="item.to"
+          :to="item.to"
         >
-        <RouterLink
-          v-if="auth.hasCapability('access:read')"
-          class="desktop-only-nav access-nav"
-          to="/access/departments"
-          ><span aria-hidden="true">⌘</span><b>部门权限</b></RouterLink
-        >
-        <RouterLink
-          v-if="auth.hasCapability('system:read')"
-          class="desktop-only-nav"
-          to="/settings/providers"
-          ><span aria-hidden="true">◇</span><b>模型 Provider</b></RouterLink
-        >
-        <RouterLink
-          v-if="auth.hasCapability('system:read')"
-          class="desktop-only-nav"
-          to="/system/usage"
-          ><span aria-hidden="true">▥</span><b>用量与成本</b></RouterLink
-        >
-        <RouterLink
-          v-if="auth.hasCapability('system:read')"
-          class="desktop-only-nav"
-          to="/system/status"
-          ><span aria-hidden="true">●</span><b>系统状态</b></RouterLink
-        >
+          <span aria-hidden="true">{{ item.icon }}</span>
+          <b>{{ item.label }}</b>
+        </RouterLink>
       </nav>
       <button
         class="collapse-button"
@@ -109,10 +166,63 @@ async function signOut(): Promise<void> {
 
     <main class="app-main" :class="{ 'app-main--ask': route.path === '/ask' }">
       <div v-if="route.path !== '/ask'" class="page-heading">
-        <p>知枢 NexusKB</p>
-        <h1>{{ pageTitle }}</h1>
+        <div class="page-heading-copy">
+          <span class="page-heading-eyebrow">{{ pageSection }}</span>
+          <h1>{{ pageTitle }}</h1>
+          <p v-if="pageDescription">{{ pageDescription }}</p>
+        </div>
+        <div class="page-heading-actions">
+          <RouterLink v-if="returnNavigation" :to="returnNavigation.to" class="page-return-link">
+            ← {{ returnNavigation.label }}
+          </RouterLink>
+        </div>
       </div>
       <RouterView />
     </main>
+
+    <el-drawer
+      v-model="mobileMenuOpen"
+      class="mobile-navigation-drawer"
+      direction="ltr"
+      size="min(86vw, 280px)"
+      :with-header="false"
+    >
+      <div class="mobile-drawer-header">
+        <RouterLink to="/ask" class="brand" aria-label="知枢 NexusKB 首页" @click="closeMobileMenu">
+          <span class="brand-mark">N</span>
+          <span class="brand-copy"><strong>知枢</strong><small>NexusKB</small></span>
+        </RouterLink>
+        <button
+          type="button"
+          class="mobile-drawer-close"
+          aria-label="关闭导航菜单"
+          @click="closeMobileMenu"
+        >
+          ×
+        </button>
+      </div>
+      <nav class="mobile-drawer-nav" aria-label="移动端主导航">
+        <div>工作台</div>
+        <RouterLink
+          v-for="item in primaryNavigation.filter(canShow)"
+          :key="item.to"
+          :to="item.to"
+          @click="closeMobileMenu"
+        >
+          <span aria-hidden="true">{{ item.icon }}</span>
+          <b>{{ item.label }}</b>
+        </RouterLink>
+        <div>管理</div>
+        <RouterLink
+          v-for="item in managementNavigation.filter(canShow)"
+          :key="item.to"
+          :to="item.to"
+          @click="closeMobileMenu"
+        >
+          <span aria-hidden="true">{{ item.icon }}</span>
+          <b>{{ item.label }}</b>
+        </RouterLink>
+      </nav>
+    </el-drawer>
   </div>
 </template>

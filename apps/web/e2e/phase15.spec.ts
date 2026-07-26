@@ -248,6 +248,188 @@ test('keeps the core shell within a 768px viewport', async ({ page }) => {
   await expect(page.getByRole('heading', { name: '问答历史' })).toBeVisible();
 });
 
+test('keeps every authorized page within a 640px mobile viewport', async ({ page }) => {
+  const documentId = '6769af9a-a4d0-4dc2-a97d-942584a9c826';
+  await page.setViewportSize({ width: 640, height: 900 });
+  await mockSession(page, [
+    'documents:read',
+    'documents:write',
+    'audit:read',
+    'access:read',
+    'access:write',
+    'system:read',
+  ]);
+  await page.route('**/v1/**', (route) => {
+    const path = new URL(route.request().url()).pathname;
+    if (path === '/v1/auth/session')
+      return route.fulfill({
+        json: session([
+          'documents:read',
+          'documents:write',
+          'audit:read',
+          'access:read',
+          'access:write',
+          'system:read',
+        ]),
+      });
+    if (path === '/v1/history/conversations')
+      return route.fulfill({ json: { conversations: [], total: 0, offset: 0, limit: 20 } });
+    if (path === '/v1/documents')
+      return route.fulfill({ json: { items: [], page: 1, pageSize: 20, total: 0 } });
+    if (path.endsWith('/chunks'))
+      return route.fulfill({
+        json: {
+          documentId,
+          sourceName: '制度.md',
+          documentVersion: 1,
+          items: [],
+          page: 1,
+          pageSize: 20,
+          total: 0,
+        },
+      });
+    if (path === `/v1/documents/${documentId}`)
+      return route.fulfill({
+        json: {
+          id: documentId,
+          sourceName: '制度.md',
+          mimeType: 'text/markdown',
+          department: 'finance',
+          sensitivity: 'internal',
+          ownerId: 'admin.fixture',
+          activeVersion: 1,
+          status: 'active',
+          versions: [],
+          createdAt: '2026-07-22T09:00:00.000Z',
+          updatedAt: '2026-07-22T09:00:00.000Z',
+        },
+      });
+    if (path === '/v1/ingestion-jobs')
+      return route.fulfill({ json: { items: [], page: 1, pageSize: 20, total: 0 } });
+    if (path === '/v1/audit/events')
+      return route.fulfill({ json: { events: [], nextBefore: null } });
+    if (path === '/v1/access/users')
+      return route.fulfill({
+        json: { users: [], total: 0, offset: 0, limit: 25, scope: 'tenant' },
+      });
+    if (path === '/v1/access/departments') return route.fulfill({ json: { departments: [] } });
+    if (path === '/v1/system/providers') return route.fulfill({ json: { providers: [] } });
+    if (path === '/v1/system/status')
+      return route.fulfill({
+        json: {
+          status: 'ready',
+          checkedAt: '2026-07-22T09:00:00.000Z',
+          rawDocsDiskUsageRatio: 0,
+          components: [],
+          ingestionQueue: { status: 'up' },
+        },
+      });
+    if (path === '/v1/system/usage')
+      return route.fulfill({
+        json: {
+          from: '2026-06-22T00:00:00.000Z',
+          to: '2026-07-22T00:00:00.000Z',
+          totalQueries: 0,
+          failureRate: null,
+          queryP95Ms: null,
+          providers: [],
+          departments: [],
+          usageCompleteness: 'request_only',
+        },
+      });
+    return route.fulfill({ status: 404, json: { error: { code: 'NOT_FOUND', message: '未找到' } } });
+  });
+
+  await page.goto('/ask');
+  await page.getByRole('button', { name: '打开导航菜单' }).click();
+  await expect(page.getByRole('link', { name: '模型 Provider' })).toBeVisible();
+  await expect(page.getByRole('link', { name: '用量与成本' })).toBeVisible();
+  await expect(page.getByRole('link', { name: '系统状态' })).toBeVisible();
+  await page.getByRole('button', { name: '关闭导航菜单' }).click();
+
+  const pages = [
+    ['/ask', '从可信资料中找到答案'],
+    ['/history', '问答历史'],
+    ['/documents', '文档管理'],
+    [`/documents/${documentId}`, '文档详情'],
+    [`/documents/${documentId}/chunks`, '文档分块'],
+    ['/ingestion-jobs', '入库任务'],
+    ['/audit', '审计中心'],
+    ['/access/users', '用户与角色'],
+    ['/access/departments', '部门权限'],
+    ['/settings/providers', '模型 Provider'],
+    ['/system/status', '系统状态'],
+    ['/system/usage', '用量与成本'],
+  ] as const;
+
+  for (const [path, title] of pages) {
+    await page.goto(path);
+    await expect(page.getByRole('heading', { name: title })).toBeVisible();
+    const bounds = await page.evaluate(() => ({
+      viewport: window.innerWidth,
+      bodyScrollWidth: document.body.scrollWidth,
+      mainScrollWidth: document.querySelector<HTMLElement>('.app-main')?.scrollWidth ?? 0,
+      mainClientWidth: document.querySelector<HTMLElement>('.app-main')?.clientWidth ?? 0,
+    }));
+    expect(bounds.bodyScrollWidth).toBeLessThanOrEqual(bounds.viewport);
+    expect(bounds.mainScrollWidth).toBeLessThanOrEqual(bounds.mainClientWidth);
+  }
+});
+
+test('renders document rows as touch-friendly cards at 640px', async ({ page }) => {
+  await page.setViewportSize({ width: 640, height: 900 });
+  await mockSession(page, ['documents:read']);
+  await page.route('**/v1/documents?**', (route) =>
+    route.fulfill({
+      json: {
+        items: [
+          {
+            id: '6769af9a-a4d0-4dc2-a97d-942584a9c826',
+            sourceName: '移动端验收制度.md',
+            mimeType: 'text/markdown',
+            department: 'finance',
+            sensitivity: 'internal',
+            ownerId: 'admin.fixture',
+            status: 'active',
+            activeVersion: 2,
+            latestJob: null,
+            createdAt: '2026-07-22T09:00:00.000Z',
+            updatedAt: '2026-07-22T09:00:00.000Z',
+          },
+        ],
+        page: 1,
+        pageSize: 20,
+        total: 1,
+      },
+    }),
+  );
+  await page.goto('/documents');
+  await expect(page.getByRole('article')).toContainText('移动端验收制度.md');
+  await expect(page.locator('.mobile-data-card')).toBeVisible();
+  await expect(page.locator('.desktop-data-table')).toBeHidden();
+});
+
+test('keeps every system entry reachable from the mobile drawer', async ({ page }) => {
+  await page.setViewportSize({ width: 640, height: 900 });
+  await mockSession(page, ['system:read']);
+  await page.goto('/ask');
+  await expect(page.locator('.app-sidebar')).toBeHidden();
+  await page.getByRole('button', { name: '打开导航菜单' }).click();
+  await expect(page.locator('.mobile-drawer-header')).toHaveCSS('min-height', '56px');
+  await expect(page.locator('.el-overlay')).toHaveCSS('z-index', '3000');
+  await expect(page.getByRole('link', { name: '模型 Provider' })).toBeVisible();
+  await expect(page.getByRole('link', { name: '用量与成本' })).toBeVisible();
+  await expect(page.getByRole('link', { name: '系统状态' })).toBeVisible();
+});
+
+test('uses the Drawer instead of an icon-only sidebar at 829px', async ({ page }) => {
+  await page.setViewportSize({ width: 829, height: 933 });
+  await mockSession(page);
+  await page.goto('/ask');
+  await expect(page.locator('.app-sidebar')).toBeHidden();
+  await expect(page.getByRole('button', { name: '打开导航菜单' })).toBeVisible();
+});
+
 test('meets automated WCAG AA checks on the core ask page', async ({ page }) => {
   await mockSession(page);
   await page.goto('/ask');

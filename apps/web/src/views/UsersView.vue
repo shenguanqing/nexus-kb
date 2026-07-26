@@ -125,17 +125,17 @@ onMounted(() => load());
       <el-tag type="info" effect="plain">身份源 + 托管角色</el-tag>
     </div>
 
-    <form class="access-toolbar" aria-label="用户目录筛选" @submit.prevent="applyFilters">
+    <form class="access-toolbar" aria-label="用户目录查询" @submit.prevent="applyFilters">
       <el-input v-model="search" clearable maxlength="128" placeholder="搜索企业用户 ID" />
       <el-input
         v-if="isPlatformAdmin"
         v-model="department"
         clearable
         maxlength="128"
-        placeholder="筛选部门"
+        placeholder="查询部门"
       />
-      <el-button native-type="submit">筛选</el-button>
-      <el-button native-type="button" @click="resetFilters">重置</el-button>
+      <el-button native-type="submit">查询</el-button>
+      <el-button class="reset-button" native-type="button" @click="resetFilters">重置</el-button>
     </form>
 
     <div class="access-content">
@@ -146,8 +146,8 @@ onMounted(() => load());
       </div>
 
       <div v-else v-loading="loading" class="access-table-wrap">
-        <el-table v-if="users.length > 0" :data="users" row-key="userId">
-          <el-table-column label="企业用户 ID" prop="userId" min-width="220" />
+        <el-table v-if="users.length > 0" class="desktop-data-table" :data="users" row-key="userId">
+          <el-table-column label="企业用户 ID" prop="userId" min-width="220" fixed="left" />
           <el-table-column label="部门" prop="department" min-width="160" />
           <el-table-column label="角色" min-width="240">
             <template #default="scopeRow">
@@ -171,13 +171,35 @@ onMounted(() => load());
             </template>
           </el-table-column>
           <el-table-column v-if="canWrite" label="操作" width="110" fixed="right">
-            <template #default="scopeRow"
-              ><el-button text type="primary" @click="editRoles(userRow(scopeRow.row))"
-                >编辑角色</el-button
-              ></template
-            >
+            <template #default="scopeRow">
+              <el-button text type="primary" @click="editRoles(userRow(scopeRow.row))">
+                编辑角色
+              </el-button>
+            </template>
           </el-table-column>
         </el-table>
+        <div v-if="users.length > 0" class="mobile-data-list" aria-label="用户目录">
+          <article v-for="user in users" :key="user.userId" class="mobile-data-card">
+            <header>
+              <strong>{{ user.userId }}</strong>
+              <el-tag type="success">已验证登录</el-tag>
+            </header>
+            <div class="mobile-data-fields">
+              <div>
+                <span>部门</span><strong>{{ user.department }}</strong>
+              </div>
+              <div>
+                <span>最近认证</span><strong>{{ new Date(user.lastAuthenticatedAt).toLocaleString() }}</strong>
+              </div>
+              <div>
+                <span>角色</span><strong>{{ accessRoleSummary(user.roles).join('、') || '普通用户' }}</strong>
+              </div>
+            </div>
+            <el-button v-if="canWrite" text type="primary" @click="editRoles(user)">
+              编辑角色
+            </el-button>
+          </article>
+        </div>
         <el-empty v-else-if="!loading" description="当前范围内暂无已认证用户" />
       </div>
 
@@ -203,7 +225,13 @@ onMounted(() => load());
         </p>
       </aside>
     </div>
-    <el-dialog v-model="roleDialogVisible" title="编辑托管角色" width="480px">
+    <el-dialog
+      v-model="roleDialogVisible"
+      title="编辑托管角色"
+      width="min(480px, calc(100vw - 28px))"
+      append-to-body
+      :z-index="4000"
+    >
       <p v-if="selectedUser">{{ selectedUser.userId }} · {{ selectedUser.department }}</p>
       <el-checkbox-group v-model="managedRoles" class="role-editor">
         <el-checkbox value="platform_admin">平台管理员</el-checkbox>
@@ -211,12 +239,10 @@ onMounted(() => load());
         <el-checkbox value="document_admin">文档管理员</el-checkbox>
         <el-checkbox value="auditor">审计员</el-checkbox>
       </el-checkbox-group>
-      <template #footer
-        ><el-button @click="roleDialogVisible = false">取消</el-button
-        ><el-button type="primary" :loading="roleSaving" @click="saveRoles"
-          >保存角色</el-button
-        ></template
-      >
+      <template #footer>
+        <el-button @click="roleDialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="roleSaving" @click="saveRoles"> 保存角色 </el-button>
+      </template>
     </el-dialog>
   </section>
 </template>

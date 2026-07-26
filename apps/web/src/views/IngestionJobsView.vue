@@ -158,27 +158,28 @@ onUnmounted(() => {
 <template>
   <section class="ingestion-page">
     <div class="task-controls">
-      <RouterLink v-if="returnNavigation" :to="returnNavigation.to" class="back-link task-back-link"
-        >← {{ returnNavigation.label }}</RouterLink
-      >
       <div class="task-toolbar">
         <p>共 {{ total }} 个可访问任务</p>
-        <form class="task-filter-form" aria-label="入库任务筛选" @submit.prevent="applyFilters">
-          <el-select v-model="filters.status" clearable placeholder="全部状态"
-            ><el-option
+        <form class="task-filter-form" aria-label="入库任务查询" @submit.prevent="applyFilters">
+          <el-select v-model="filters.status" clearable placeholder="全部状态">
+            <el-option
               v-for="option in statusOptions"
               :key="option.value"
               :label="option.label"
-              :value="option.value" /></el-select
-          ><el-button native-type="submit">筛选</el-button
-          ><el-button native-type="button" @click="resetFilters">重置</el-button>
+              :value="option.value"
+            />
+          </el-select>
+          <el-button native-type="submit">查询</el-button>
+          <el-button class="reset-button" native-type="button" @click="resetFilters">
+            重置
+          </el-button>
         </form>
       </div>
     </div>
     <div class="task-content">
       <div v-if="errorMessage" class="document-error" role="alert">
-        <strong>无法加载入库任务</strong><span>{{ errorMessage }}</span
-        ><el-button @click="load()">重试</el-button>
+        <strong>无法加载入库任务</strong><span>{{ errorMessage }}</span>
+        <el-button @click="load()">重试</el-button>
       </div>
       <div v-else v-loading="loading" class="task-list">
         <article v-for="job in items" :key="job.id" class="task-card">
@@ -189,8 +190,10 @@ onUnmounted(() => {
                   path: `/documents/${job.documentId}`,
                   query: { from: route.fullPath },
                 }"
-                >{{ job.sourceName }}</RouterLink
-              ><span>v{{ job.version }} · {{ job.kind }}</span>
+              >
+                {{ job.sourceName }}
+              </RouterLink>
+              <span>v{{ job.version }} · {{ job.kind }}</span>
             </div>
             <el-tag
               :type="
@@ -202,8 +205,9 @@ onUnmounted(() => {
                       ? 'warning'
                       : 'info'
               "
-              >{{ stepLabels[job.status] ?? job.status }}</el-tag
             >
+              {{ stepLabels[job.status] ?? job.status }}
+            </el-tag>
           </header>
           <el-progress
             v-if="job.status === 'converting'"
@@ -217,28 +221,29 @@ onUnmounted(() => {
             :active="activeStep(job)"
             :process-status="job.status === 'failed' ? 'error' : 'process'"
             :finish-status="job.status === 'completed' ? 'success' : 'finish'"
-            ><el-step title="排队" /><el-step title="解析" /><el-step title="分块/脱敏" /><el-step
-              title="策略" /><el-step title="Embedding" /><el-step title="索引" /><el-step
-              title="完成"
-          /></el-steps>
-          <dl>
+          >
+            <el-step title="排队" />
+            <el-step title="解析" />
+            <el-step title="分块/脱敏" />
+            <el-step title="策略" />
+            <el-step title="Embedding" />
+            <el-step title="索引" />
+            <el-step title="完成" />
+          </el-steps>
+          <div class="data-list">
             <div>
-              <dt>当前步骤</dt>
-              <dd>{{ stepLabels[job.step] ?? job.step }}</dd>
+              <span>当前步骤</span><strong>{{ stepLabels[job.step] ?? job.step }}</strong>
             </div>
             <div>
-              <dt>耗时</dt>
-              <dd>{{ elapsed(job) }}</dd>
+              <span>耗时</span><strong>{{ elapsed(job) }}</strong>
             </div>
             <div>
-              <dt>尝试次数</dt>
-              <dd>{{ job.attempts }}</dd>
+              <span>尝试次数</span><strong>{{ job.attempts }}</strong>
             </div>
             <div>
-              <dt>更新时间</dt>
-              <dd>{{ new Date(job.updatedAt).toLocaleString() }}</dd>
+              <span>更新时间</span><strong>{{ new Date(job.updatedAt).toLocaleString() }}</strong>
             </div>
-          </dl>
+          </div>
           <div v-if="job.warnings.length" class="task-warning">
             <strong>Warning</strong>
             <ul>
@@ -257,15 +262,16 @@ onUnmounted(() => {
             </p>
             <details>
               <summary>技术详情</summary>
-              <code>{{ job.errorCode }}</code
-              ><span>Trace ID：{{ job.traceId }}</span>
+              <code>{{ job.errorCode }}</code>
+              <span>Trace ID：{{ job.traceId }}</span>
             </details>
             <el-button
               v-if="canRetry && job.status === 'failed' && job.retryable"
               :loading="retryingId === job.id"
               @click="retry(job)"
-              >重试任务</el-button
             >
+              重试任务
+            </el-button>
           </div>
         </article>
         <el-empty v-if="!loading && items.length === 0" description="暂无符合条件的入库任务" />

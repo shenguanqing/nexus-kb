@@ -57,7 +57,7 @@ async function search(): Promise<void> {
 
 <template>
   <section class="history-page">
-    <form class="history-toolbar" aria-label="历史记录筛选" @submit.prevent="search">
+    <form class="history-toolbar" aria-label="历史记录查询" @submit.prevent="search">
       <el-input v-model="query" clearable maxlength="200" placeholder="搜索会话标题" />
       <el-date-picker
         v-model="dateRange"
@@ -65,64 +65,70 @@ async function search(): Promise<void> {
         start-placeholder="开始时间"
         end-placeholder="结束时间"
       />
-      <el-button native-type="submit">搜索</el-button>
+      <el-button native-type="submit">查询</el-button>
     </form>
     <div v-if="errorMessage" class="document-error" role="alert">
-      <strong>无法加载历史</strong><span>{{ errorMessage }}</span
-      ><el-button @click="load">重试</el-button>
+      <strong>无法加载历史</strong><span>{{ errorMessage }}</span>
+      <el-button @click="load">重试</el-button>
     </div>
     <div v-else class="history-layout" v-loading="loading">
-      <div class="history-list" role="list" aria-label="问答会话列表">
-        <div
-          v-for="row in conversations"
-          :key="row.id"
-          class="history-list-row"
-          :class="{ active: selected?.id === row.id }"
-          role="listitem"
-        >
+      <section class="history-list-panel">
+        <h2 class="scroll-section-title">会话列表</h2>
+        <div class="history-list" role="list" aria-label="问答会话列表">
           <div
-            class="history-list-item"
+            v-for="row in conversations"
+            :key="row.id"
+            class="history-list-row"
             :class="{ active: selected?.id === row.id }"
-            role="button"
-            tabindex="0"
-            :aria-pressed="selected?.id === row.id"
-            @click="open(row.id)"
-            @keydown.enter="open(row.id)"
-            @keydown.space.prevent="open(row.id)"
+            role="listitem"
           >
-            <strong>{{ row.title }}</strong
-            ><span
-              >{{ row.messageCount }} 条消息 · {{ new Date(row.updatedAt).toLocaleString() }}</span
+            <div
+              class="history-list-item"
+              :class="{ active: selected?.id === row.id }"
+              role="button"
+              tabindex="0"
+              :aria-pressed="selected?.id === row.id"
+              @click="open(row.id)"
+              @keydown.enter="open(row.id)"
+              @keydown.space.prevent="open(row.id)"
             >
+              <strong>{{ row.title }}</strong>
+              <span>
+                {{ row.messageCount }} 条消息 · {{ new Date(row.updatedAt).toLocaleString() }}
+              </span>
+            </div>
+            <el-button
+              class="history-delete"
+              text
+              type="danger"
+              :aria-label="`删除会话：${row.title}`"
+              @click="remove(row)"
+            >
+              删除
+            </el-button>
           </div>
-          <el-button
-            class="history-delete"
-            text
-            type="danger"
-            :aria-label="`删除会话：${row.title}`"
-            @click="remove(row)"
-            >删除</el-button
-          >
+          <el-empty v-if="!loading && conversations.length === 0" description="暂无个人问答历史" />
+          <el-pagination
+            v-if="total > 20"
+            v-model:current-page="page"
+            layout="prev, pager, next"
+            :page-size="20"
+            :total="total"
+            @change="load"
+          />
         </div>
-        <el-empty v-if="!loading && conversations.length === 0" description="暂无个人问答历史" />
-        <el-pagination
-          v-if="total > 20"
-          v-model:current-page="page"
-          layout="prev, pager, next"
-          :page-size="20"
-          :total="total"
-          @change="load"
-        />
-      </div>
+      </section>
       <article class="history-detail">
         <template v-if="selected">
           <h2>{{ selected.title }}</h2>
-          <div v-for="turn in selected.turns" :key="turn.id" class="history-turn">
-            <p class="history-question"><strong>你</strong>{{ turn.question }}</p>
-            <div class="history-answer">
-              <strong>知枢</strong>
-              <p>{{ turn.answer }}</p>
-              <small>{{ turn.sourceCount }} 个历史来源 · Trace {{ turn.traceId }}</small>
+          <div class="history-detail-body">
+            <div v-for="turn in selected.turns" :key="turn.id" class="history-turn">
+              <p class="history-question"><strong>你</strong>{{ turn.question }}</p>
+              <div class="history-answer">
+                <strong>知枢</strong>
+                <p>{{ turn.answer }}</p>
+                <small>{{ turn.sourceCount }} 个历史来源 · Trace {{ turn.traceId }}</small>
+              </div>
             </div>
           </div>
         </template>
