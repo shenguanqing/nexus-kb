@@ -60,7 +60,12 @@ describe('OpenAiCompatibleLlmProvider', () => {
     });
 
     await expect(
-      instance.answer({ question: '付款周期多久？', contexts, traceId: 'trace-a' }),
+      instance.answer({
+        mode: 'grounded',
+        question: '付款周期多久？',
+        contexts,
+        traceId: 'trace-a',
+      }),
     ).resolves.toMatchObject({
       text: '应在验收后30天内付款。[来源1]',
       requestId: 'request-id',
@@ -96,13 +101,14 @@ describe('OpenAiCompatibleLlmProvider', () => {
       fetchFunction: retryingFetch,
       sleepFunction,
       randomFunction: () => 0,
-    }).answer({ question: '问题', contexts, traceId: 'trace-a' });
+    }).answer({ mode: 'grounded', question: '问题', contexts, traceId: 'trace-a' });
     expect(retryingFetch).toHaveBeenCalledTimes(2);
     expect(sleepFunction).toHaveBeenCalledWith(10);
 
     const authFetch = vi.fn<typeof fetch>().mockResolvedValue(new Response('{}', { status: 401 }));
     await expect(
       provider({ fetchFunction: authFetch }).answer({
+        mode: 'grounded',
         question: '问题',
         contexts,
         traceId: 'trace-a',
@@ -118,7 +124,29 @@ describe('OpenAiCompatibleLlmProvider', () => {
         .mockResolvedValue(new Response(JSON.stringify({ choices: [] }))),
     });
     await expect(
-      instance.answer({ question: '问题', contexts, traceId: 'trace-a' }),
+      instance.answer({ mode: 'grounded', question: '问题', contexts, traceId: 'trace-a' }),
     ).rejects.toMatchObject({ kind: 'invalid_response' });
+  });
+
+  it('uses the general-knowledge prompt without source contexts', async () => {
+    const fetchFunction = vi.fn<typeof fetch>().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          choices: [{ index: 0, message: { content: 'Vue 3 使用 Proxy 实现响应式。' } }],
+        }),
+      ),
+    );
+
+    await provider({ fetchFunction }).answer({
+      mode: 'general',
+      question: 'Vue 2 和 Vue 3 的区别',
+      contexts: [],
+      traceId: 'trace-a',
+    });
+
+    const body = fetchFunction.mock.calls[0]?.[1]?.body;
+    if (typeof body !== 'string') throw new Error('Expected a JSON request body');
+    expect(body).toContain('通用知识补充模块');
+    expect(body).not.toContain('<source');
   });
 });

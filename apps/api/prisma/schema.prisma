@@ -206,6 +206,7 @@ model QueryAudit {
   department        String?
   queryLength       Int
   outcome           String
+  answerMode        String?
   resultCount       Int      @default(0)
   sourceChunkIds    Json
   embeddingProvider String?
@@ -297,6 +298,7 @@ model KnowledgeTurn {
   answer         String                @db.Text
   noAnswer       Boolean
   reason         String?
+  answerMode     String?
   traceId        String                @unique @db.Uuid
   sources        Json
   model          Json?

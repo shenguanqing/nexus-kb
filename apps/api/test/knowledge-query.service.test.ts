@@ -16,6 +16,7 @@ import type { RetrievedChunk } from '../src/knowledge/retrieved-chunk';
 import type { SourceAuthorizationService } from '../src/knowledge/source-authorization.service';
 import type { EmbeddingService } from '../src/providers/embedding/embedding.service';
 import type { LlmService } from '../src/providers/llm/llm.service';
+import { LlmProviderError } from '../src/providers/llm/llm-provider-error';
 import type { RerankService } from '../src/providers/rerank/rerank.service';
 
 const traceId = 'd26720b3-1f78-40df-868d-8ca8510dca26';
@@ -60,7 +61,13 @@ const secondContext: RetrievedChunk = {
   },
 };
 
-function dependencies(options: { candidates?: RetrievedChunk[]; finalAuthorized?: boolean } = {}) {
+function dependencies(
+  options: {
+    candidates?: RetrievedChunk[];
+    finalAuthorized?: boolean;
+    queryAnswerMode?: 'strict' | 'hybrid';
+  } = {},
+) {
   const candidates = options.candidates ?? [context];
   const assertAllowed = vi.fn().mockResolvedValue(undefined);
   const embedQuery = vi.fn().mockResolvedValue([1, 0, 0]);
@@ -79,6 +86,12 @@ function dependencies(options: { candidates?: RetrievedChunk[]; finalAuthorized?
     model: 'deepseek-chat',
     fallbackUsed: false,
   });
+  const answerGeneral = vi.fn().mockResolvedValue({
+    text: '这是模型通用知识回答。',
+    provider: 'deepseek',
+    model: 'deepseek-chat',
+    fallbackUsed: false,
+  });
   const record = vi.fn().mockResolvedValue(undefined);
   const config = {
     values: {
@@ -89,6 +102,7 @@ function dependencies(options: { candidates?: RetrievedChunk[]; finalAuthorized?
       RERANK_PROVIDER: 'none',
       RERANK_MODEL: 'qwen3-rerank',
       RERANK_TOP_K: 5,
+      QUERY_ANSWER_MODE: options.queryAnswerMode ?? 'hybrid',
     },
   } as AppConfig;
   const service = new KnowledgeQueryService(
@@ -98,12 +112,21 @@ function dependencies(options: { candidates?: RetrievedChunk[]; finalAuthorized?
     { embedQuery } as unknown as EmbeddingService,
     { retrieve } as unknown as QueryRetrievalService,
     { rerank } as unknown as RerankService,
-    { answer } as unknown as LlmService,
+    { answer, answerGeneral } as unknown as LlmService,
     { retainActiveAuthorizedSources } as unknown as SourceAuthorizationService,
     { record } as unknown as QueryAuditService,
     new AnswerSourceValidator(),
   );
-  return { service, assertAllowed, embedQuery, retrieve, rerank, answer, record };
+  return {
+    service,
+    assertAllowed,
+    embedQuery,
+    retrieve,
+    rerank,
+    answer,
+    answerGeneral,
+    record,
+  };
 }
 
 describe('KnowledgeQueryService', () => {
@@ -115,6 +138,7 @@ describe('KnowledgeQueryService', () => {
     ).resolves.toMatchObject({
       answer: '付款周期为 30 天。[来源1]',
       noAnswer: false,
+      answerMode: 'grounded',
       traceId,
       sources: [{ index: 1, chunkIds: ['a'.repeat(64), 'b'.repeat(64)] }],
       model: { provider: 'deepseek', model: 'deepseek-chat', fallbackUsed: false },
@@ -234,20 +258,41 @@ describe('KnowledgeQueryService', () => {
     });
   });
 
-  it('rejects without calling Rerank or LLM when relevance is insufficient', async () => {
+  it('returns a labeled general answer without Rerank when relevance is insufficient', async () => {
     const deps = dependencies({ candidates: [] });
+
+    await expect(
+      deps.service.query({ question: '不存在的问题' }, identity, traceId),
+    ).resolves.toMatchObject({
+      noAnswer: false,
+      reason: null,
+      answerMode: 'general',
+      sources: [],
+      model: { provider: 'deepseek', model: 'deepseek-chat' },
+    });
+    expect(deps.rerank).not.toHaveBeenCalled();
+    expect(deps.answer).not.toHaveBeenCalled();
+    expect(deps.answerGeneral).toHaveBeenCalledWith(
+      expect.objectContaining({ question: '不存在的问题' }),
+    );
+    expect(deps.record).toHaveBeenCalledWith(
+      expect.objectContaining({ outcome: 'answered', answerMode: 'general', resultCount: 0 }),
+    );
+  });
+
+  it('keeps the original no-answer behavior when strict mode is configured', async () => {
+    const deps = dependencies({ candidates: [], queryAnswerMode: 'strict' });
 
     await expect(
       deps.service.query({ question: '不存在的问题' }, identity, traceId),
     ).resolves.toMatchObject({
       noAnswer: true,
       reason: 'insufficient_relevance',
+      answerMode: null,
       sources: [],
       model: null,
     });
-    expect(deps.rerank).not.toHaveBeenCalled();
-    expect(deps.answer).not.toHaveBeenCalled();
-    expect(deps.record).toHaveBeenCalledWith(expect.objectContaining({ outcome: 'no_answer' }));
+    expect(deps.answerGeneral).not.toHaveBeenCalled();
   });
 
   it('discards an answer if source authorization changes before return', async () => {
@@ -258,30 +303,53 @@ describe('KnowledgeQueryService', () => {
     ).resolves.toMatchObject({
       noAnswer: true,
       reason: 'authorization_changed',
+      answerMode: null,
       sources: [],
     });
     expect(deps.answer).toHaveBeenCalledOnce();
   });
 
-  it('returns a safe no-answer response when the model omits valid source citations', async () => {
+  it('falls back to a general answer when a grounded answer remains unverifiable', async () => {
     const deps = dependencies();
     deps.answer.mockRejectedValue(new AnswerCitationError());
 
     await expect(
       deps.service.query({ question: 'CSS 是什么？' }, identity, traceId),
     ).resolves.toMatchObject({
+      noAnswer: false,
+      reason: null,
+      answerMode: 'general',
+      sources: [],
+      model: { provider: 'deepseek', model: 'deepseek-chat' },
+    });
+    expect(deps.record).toHaveBeenCalledWith(
+      expect.objectContaining({
+        outcome: 'answered',
+        answerMode: 'general',
+        llmProvider: 'deepseek',
+        llmModel: 'deepseek-chat',
+      }),
+    );
+    expect(deps.record).not.toHaveBeenCalledWith(expect.objectContaining({ outcome: 'failed' }));
+  });
+
+  it('keeps a safe no-answer when general question egress is policy-blocked', async () => {
+    const deps = dependencies({ candidates: [] });
+    deps.answerGeneral.mockRejectedValue(new LlmProviderError('policy_denied', false));
+
+    await expect(
+      deps.service.query({ question: '机密问题' }, identity, traceId),
+    ).resolves.toMatchObject({
       noAnswer: true,
-      reason: 'insufficient_relevance',
+      answerMode: null,
       sources: [],
       model: null,
     });
     expect(deps.record).toHaveBeenCalledWith(
       expect.objectContaining({
         outcome: 'no_answer',
-        llmProvider: 'google',
-        llmModel: 'gemini-3.5-flash-lite',
+        errorCode: 'GENERAL_ANSWER_POLICY_BLOCKED',
       }),
     );
-    expect(deps.record).not.toHaveBeenCalledWith(expect.objectContaining({ outcome: 'failed' }));
   });
 });

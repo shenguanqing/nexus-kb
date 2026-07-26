@@ -52,7 +52,12 @@ describe('GoogleLlmProvider', () => {
       ),
     );
     await expect(
-      provider({ fetchFunction }).answer({ question: '问题', contexts, traceId: 'trace-a' }),
+      provider({ fetchFunction }).answer({
+        mode: 'grounded',
+        question: '问题',
+        contexts,
+        traceId: 'trace-a',
+      }),
     ).resolves.toMatchObject({
       text: '答案。[来源1]',
       requestId: 'response-a',
@@ -80,7 +85,7 @@ describe('GoogleLlmProvider', () => {
       fetchFunction,
       sleepFunction,
       randomFunction: () => 0,
-    }).answer({ question: '问题', contexts, traceId: 'trace-a' });
+    }).answer({ mode: 'grounded', question: '问题', contexts, traceId: 'trace-a' });
     expect(fetchFunction).toHaveBeenCalledTimes(2);
     expect(sleepFunction).toHaveBeenCalledWith(10);
   });
@@ -95,6 +100,7 @@ describe('GoogleLlmProvider', () => {
       );
 
     await provider({ fetchFunction, model: 'gemini-3.5-flash-lite' }).answer({
+      mode: 'grounded',
       question: '问题',
       contexts,
       traceId: 'trace-a',
@@ -104,5 +110,26 @@ describe('GoogleLlmProvider', () => {
     if (typeof body !== 'string') throw new Error('Expected a JSON request body');
     expect(body).toContain('"maxOutputTokens"');
     expect(body).not.toContain('"temperature"');
+  });
+
+  it('allows a general-knowledge request without source contexts', async () => {
+    const fetchFunction = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(
+        new Response(
+          JSON.stringify({ candidates: [{ content: { parts: [{ text: '通用回答' }] } }] }),
+        ),
+      );
+
+    await provider({ fetchFunction }).answer({
+      mode: 'general',
+      question: 'Vue 是什么？',
+      contexts: [],
+      traceId: 'trace-a',
+    });
+
+    const body = fetchFunction.mock.calls[0]?.[1]?.body;
+    if (typeof body !== 'string') throw new Error('Expected a JSON request body');
+    expect(body).toContain('通用知识补充模块');
   });
 });

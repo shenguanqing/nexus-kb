@@ -7,6 +7,7 @@ export interface ModelUsage {
 }
 
 export interface LlmAnswerInput {
+  mode: 'grounded' | 'general';
   question: string;
   contexts: RetrievedChunk[];
   traceId: string;

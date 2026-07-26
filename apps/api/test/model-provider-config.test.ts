@@ -21,6 +21,7 @@ describe('model provider configuration', () => {
       QUERY_RECALL_TOP_K: 20,
       RERANK_TOP_K: 5,
       QUERY_MAX_DISTANCE: 0.45,
+      QUERY_ANSWER_MODE: 'hybrid',
       MODEL_PRICING_USD_PER_MILLION_TOKENS_JSON: {},
     });
   });

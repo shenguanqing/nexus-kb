@@ -20,6 +20,7 @@ const event: AuditEvent = {
   ingestionJobId: null,
   attributes: {
     queryLength: 12,
+    answerMode: 'general',
     llmProvider: 'deepseek',
     llmModel: 'model-a',
     sourceChunkIds: ['sensitive-chunk-id'],
@@ -30,7 +31,10 @@ const event: AuditEvent = {
 describe('audit presentation', () => {
   it('renders provider summaries without exposing source chunk identifiers', () => {
     expect(auditProvider(event)).toBe('deepseek / model-a');
-    expect(visibleAuditAttributes(event)).toEqual([{ label: '问题长度', value: '12' }]);
+    expect(visibleAuditAttributes(event)).toEqual([
+      { label: '问题长度', value: '12' },
+      { label: '回答模式', value: '通用知识补充' },
+    ]);
   });
 
   it('identifies embedding usage when retrieval ended before an LLM call', () => {

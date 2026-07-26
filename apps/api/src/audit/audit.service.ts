@@ -72,6 +72,7 @@ export class AuditService {
       ingestionJobId: null,
       attributes: {
         queryLength: row.queryLength,
+        answerMode: row.answerMode,
         resultCount: row.resultCount,
         sourceChunkIds: this.stringArray(row.sourceChunkIds),
         embeddingProvider: row.embeddingProvider,

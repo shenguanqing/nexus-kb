@@ -70,6 +70,7 @@ export function visibleAuditAttributes(event: AuditEvent): Array<{ label: string
   const definitions = [
     ['documentVersion', '文档版本'],
     ['queryLength', '问题长度'],
+    ['answerMode', '回答模式'],
     ['resultCount', '结果数量'],
     ['durationMs', '耗时（毫秒）'],
     ['reasonCode', '策略原因'],
@@ -81,8 +82,16 @@ export function visibleAuditAttributes(event: AuditEvent): Array<{ label: string
     const value = event.attributes[key];
     return value === null || value === undefined || Array.isArray(value)
       ? []
-      : [{ label, value: String(value) }];
+      : [{ label, value: formatAuditAttribute(key, value) }];
   });
+}
+
+function formatAuditAttribute(key: string, value: string | number | boolean): string {
+  if (key === 'answerMode') {
+    if (value === 'grounded') return '知识库依据';
+    if (value === 'general') return '通用知识补充';
+  }
+  return String(value);
 }
 
 function stringAttribute(event: AuditEvent, key: string): string | null {

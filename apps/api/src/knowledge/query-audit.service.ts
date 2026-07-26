@@ -9,6 +9,7 @@ export interface QueryAuditRecord {
   identity: Identity;
   queryLength: number;
   outcome: 'answered' | 'no_answer' | 'failed';
+  answerMode?: 'grounded' | 'general';
   resultCount: number;
   sourceChunkIds: string[];
   embeddingProvider?: string;
@@ -37,6 +38,7 @@ export class QueryAuditService {
         department: input.identity.department,
         queryLength: input.queryLength,
         outcome: input.outcome,
+        answerMode: input.answerMode,
         resultCount: input.resultCount,
         sourceChunkIds: input.sourceChunkIds,
         embeddingProvider: input.embeddingProvider,

@@ -13,6 +13,7 @@ import { ApiException } from '../common/api-exception';
 import { AppConfig } from '../config/app-config';
 import { EmbeddingService } from '../providers/embedding/embedding.service';
 import { LlmService } from '../providers/llm/llm.service';
+import { LlmProviderError } from '../providers/llm/llm-provider-error';
 import { RerankService } from '../providers/rerank/rerank.service';
 import type { RetrievedChunk } from './retrieved-chunk';
 import { QueryAuditService } from './query-audit.service';
@@ -81,7 +82,14 @@ export class KnowledgeQueryService {
         return await this.withHistory(
           request,
           identity,
-          await this.noAnswer(auditBase, traceId, 'insufficient_relevance', false, startedAt),
+          await this.generalAnswerOrNoAnswer(
+            auditBase,
+            identity,
+            normalizedQuestion,
+            traceId,
+            false,
+            startedAt,
+          ),
         );
       }
       const reranked = await this.rerank.rerank({
@@ -125,14 +133,15 @@ export class KnowledgeQueryService {
           return await this.withHistory(
             request,
             identity,
-            await this.noAnswer(
+            await this.generalAnswerOrNoAnswer(
               {
                 ...auditBase,
                 ...this.configuredLlmAuditFields(),
                 errorCode: 'LLM_ANSWER_UNVERIFIABLE',
               },
+              identity,
+              normalizedQuestion,
               traceId,
-              'insufficient_relevance',
               reranked.degraded,
               startedAt,
             ),
@@ -178,6 +187,7 @@ export class KnowledgeQueryService {
       await this.audit.record({
         ...auditBase,
         outcome: 'answered',
+        answerMode: 'grounded',
         resultCount: sources.length,
         sourceChunkIds: sources.flatMap((source) => source.chunkIds),
         rerankDegraded: reranked.degraded,
@@ -190,6 +200,7 @@ export class KnowledgeQueryService {
         answer: compactAnswer,
         noAnswer: false,
         reason: null,
+        answerMode: 'grounded',
         traceId,
         sources,
         model: {
@@ -234,9 +245,76 @@ export class KnowledgeQueryService {
       answer: NO_ANSWER_TEXT,
       noAnswer: true,
       reason,
+      answerMode: null,
       traceId,
       sources: [],
       model: null,
+      rerankDegraded,
+    };
+  }
+
+  private async generalAnswerOrNoAnswer(
+    auditBase: Omit<
+      Parameters<QueryAuditService['record']>[0],
+      'outcome' | 'resultCount' | 'sourceChunkIds' | 'durationMs'
+    >,
+    identity: Identity,
+    question: string,
+    traceId: string,
+    rerankDegraded: boolean,
+    startedAt: number,
+  ): Promise<QueryResult> {
+    if (
+      this.config.values.QUERY_ANSWER_MODE !== 'hybrid' ||
+      this.config.values.LLM_PROVIDER === 'none'
+    ) {
+      return this.noAnswer(
+        auditBase,
+        traceId,
+        'insufficient_relevance',
+        rerankDegraded,
+        startedAt,
+      );
+    }
+    let answer: Awaited<ReturnType<LlmService['answerGeneral']>>;
+    try {
+      answer = await this.llm.answerGeneral({ identity, question, traceId });
+    } catch (error) {
+      if (error instanceof LlmProviderError && error.kind === 'policy_denied') {
+        return this.noAnswer(
+          { ...auditBase, errorCode: 'GENERAL_ANSWER_POLICY_BLOCKED' },
+          traceId,
+          'insufficient_relevance',
+          rerankDegraded,
+          startedAt,
+        );
+      }
+      throw error;
+    }
+    await this.audit.record({
+      ...auditBase,
+      outcome: 'answered',
+      answerMode: 'general',
+      resultCount: 0,
+      sourceChunkIds: [],
+      rerankDegraded,
+      llmProvider: answer.provider,
+      llmModel: answer.model,
+      fallbackUsed: answer.fallbackUsed,
+      durationMs: Date.now() - startedAt,
+    });
+    return {
+      answer: answer.text,
+      noAnswer: false,
+      reason: null,
+      answerMode: 'general',
+      traceId,
+      sources: [],
+      model: {
+        provider: answer.provider,
+        model: answer.model,
+        fallbackUsed: answer.fallbackUsed,
+      },
       rerankDegraded,
     };
   }

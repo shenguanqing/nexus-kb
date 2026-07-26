@@ -40,6 +40,7 @@ test('asks a grounded question and renders an authorized source', async ({ page 
             : '报销需提交对应材料。[来源1]',
         noAnswer: false,
         reason: null,
+        answerMode: 'grounded',
         traceId:
           question === '付款周期是多久？'
             ? '21111111-1111-4111-8111-111111111111'
@@ -94,6 +95,7 @@ test('renders explicit no-answer and blocks unauthorized management routes', asy
         answer: '当前知识库中没有找到足够可靠且有权限访问的依据。',
         noAnswer: true,
         reason: 'insufficient_relevance',
+        answerMode: null,
         traceId: '21111111-1111-4111-8111-111111111111',
         sources: [],
         model: null,
@@ -107,6 +109,35 @@ test('renders explicit no-answer and blocks unauthorized management routes', asy
   await expect(page.getByText('暂时没有找到足够依据')).toBeVisible();
   await page.goto('/access/users');
   await expect(page).toHaveURL(/\/403$/);
+});
+
+test('labels a hybrid general-knowledge answer without knowledge-base sources', async ({
+  page,
+}) => {
+  await mockSession(page, ['documents:read']);
+  await page.route('**/v1/knowledge/query', (route) =>
+    route.fulfill({
+      json: {
+        conversationId: '11111111-1111-4111-8111-111111111111',
+        answer: 'Vue 3 使用 Proxy 实现响应式，并提供 Composition API。',
+        noAnswer: false,
+        reason: null,
+        answerMode: 'general',
+        traceId: '21111111-1111-4111-8111-111111111111',
+        sources: [],
+        model: { provider: 'fixture', model: 'fixture-model', fallbackUsed: false },
+        rerankDegraded: false,
+      },
+    }),
+  );
+
+  await page.goto('/ask');
+  await page.getByLabel('输入知识库问题').fill('Vue 2 和 Vue 3 的区别？');
+  await page.getByRole('button', { name: '发送' }).click();
+  await expect(page.getByText('通用知识补充', { exact: true })).toBeVisible();
+  await expect(page.getByText('不是企业知识库资料', { exact: false })).toBeVisible();
+  await expect(page.getByText('Vue 3 使用 Proxy', { exact: false })).toBeVisible();
+  await expect(page.locator('.answer-sources')).toHaveCount(0);
 });
 
 test('opens access navigation and displays ACL-authorized document chunks', async ({ page }) => {

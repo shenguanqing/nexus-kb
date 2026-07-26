@@ -9,6 +9,7 @@ const response: KnowledgeQueryResponse = {
   answer: '付款周期为 30 天。[来源1]',
   noAnswer: false,
   reason: null,
+  answerMode: 'grounded',
   traceId: '21111111-1111-4111-8111-111111111111',
   sources: [
     {

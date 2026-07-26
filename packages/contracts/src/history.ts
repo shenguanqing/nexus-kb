@@ -37,6 +37,7 @@ export const conversationTurnSchema = z
     answer: z.string().min(1),
     noAnswer: z.boolean(),
     reason: z.enum(['insufficient_relevance', 'authorization_changed']).nullable(),
+    answerMode: z.enum(['grounded', 'general']).nullable(),
     traceId: z.uuid(),
     sourceCount: z.number().int().nonnegative(),
     createdAt: z.iso.datetime({ offset: true }),

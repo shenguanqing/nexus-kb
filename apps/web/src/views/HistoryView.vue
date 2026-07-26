@@ -4,6 +4,7 @@ import { ElMessage, ElMessageBox } from 'element-plus';
 import { onMounted, ref } from 'vue';
 import { deleteConversation, fetchConversation, listConversations } from '@/api/history';
 import { ApiError } from '@/api/client';
+import HistoryAnswer from '@/components/knowledge/HistoryAnswer.vue';
 
 const conversations = ref<ConversationSummary[]>([]);
 const selected = ref<ConversationDetail | null>(null);
@@ -124,11 +125,7 @@ async function search(): Promise<void> {
           <div class="history-detail-body">
             <div v-for="turn in selected.turns" :key="turn.id" class="history-turn">
               <p class="history-question"><strong>你</strong>{{ turn.question }}</p>
-              <div class="history-answer">
-                <strong>知枢</strong>
-                <div>{{ turn.answer }}</div>
-                <small>{{ turn.sourceCount }} 个历史来源 · Trace {{ turn.traceId }}</small>
-              </div>
+              <HistoryAnswer :turn="turn" />
             </div>
           </div>
         </template>

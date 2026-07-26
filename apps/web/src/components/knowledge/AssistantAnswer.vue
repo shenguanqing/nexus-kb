@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { KnowledgeQueryResponse, KnowledgeSource } from '@nexus-kb/contracts';
 import { computed } from 'vue';
+import SafeMarkdown from '@/components/common/SafeMarkdown.vue';
 
 const props = defineProps<{ response: KnowledgeQueryResponse }>();
 defineEmits<{ selectSource: [source: KnowledgeSource] }>();
@@ -18,28 +19,6 @@ const displayAnswer = computed(() =>
   }),
 );
 
-interface AnswerPart {
-  text: string;
-  citation: boolean;
-}
-
-const answerParts = computed<AnswerPart[]>(() => {
-  const parts: AnswerPart[] = [];
-  const pattern = /\[来源\d+\]/g;
-  let offset = 0;
-  for (const match of displayAnswer.value.matchAll(pattern)) {
-    const index = match.index;
-    if (index > offset) {
-      parts.push({ text: displayAnswer.value.slice(offset, index), citation: false });
-    }
-    parts.push({ text: match[0], citation: true });
-    offset = index + match[0].length;
-  }
-  if (offset < displayAnswer.value.length) {
-    parts.push({ text: displayAnswer.value.slice(offset), citation: false });
-  }
-  return parts;
-});
 </script>
 
 <template>
@@ -57,12 +36,13 @@ const answerParts = computed<AnswerPart[]>(() => {
           }}
         </p>
       </div>
-      <p v-else class="answer-text">
-        <template v-for="(part, index) in answerParts" :key="index">
-          <small v-if="part.citation" class="answer-citation">{{ part.text }}</small>
-          <span v-else>{{ part.text }}</span>
-        </template>
-      </p>
+      <template v-else>
+        <div v-if="response.answerMode === 'general'" class="general-answer-notice">
+          <strong>通用知识补充</strong>
+          <span>以下内容来自模型通用知识，不是企业知识库资料，仅供参考。</span>
+        </div>
+        <SafeMarkdown class="answer-text" :content="displayAnswer" />
+      </template>
       <section v-if="displaySources.length" class="answer-sources" aria-label="回答来源">
         <div class="answer-sources-label">回答来源</div>
         <div class="source-list">

@@ -1,6 +1,10 @@
 import { z } from 'zod';
 
-import { buildKnowledgePrompt, KNOWLEDGE_SYSTEM_PROMPT } from './llm-prompt';
+import {
+  buildKnowledgePrompt,
+  GENERAL_KNOWLEDGE_SYSTEM_PROMPT,
+  KNOWLEDGE_SYSTEM_PROMPT,
+} from './llm-prompt';
 import type {
   LlmAnswer,
   LlmAnswerInput,
@@ -76,7 +80,11 @@ export class OpenAiCompatibleLlmProvider implements LlmProvider {
   }
 
   async answer(input: LlmAnswerInput): Promise<LlmAnswer> {
-    if (!input.question.trim() || input.contexts.length === 0) {
+    if (
+      !input.question.trim() ||
+      (input.mode === 'grounded' && input.contexts.length === 0) ||
+      (input.mode === 'general' && input.contexts.length > 0)
+    ) {
       throw new LlmProviderError('invalid_request', false);
     }
     const startedAt = this.nowFunction();
@@ -97,7 +105,13 @@ export class OpenAiCompatibleLlmProvider implements LlmProvider {
             temperature: this.options.temperature,
             max_tokens: this.options.maxOutputTokens,
             messages: [
-              { role: 'system', content: KNOWLEDGE_SYSTEM_PROMPT },
+              {
+                role: 'system',
+                content:
+                  input.mode === 'general'
+                    ? GENERAL_KNOWLEDGE_SYSTEM_PROMPT
+                    : KNOWLEDGE_SYSTEM_PROMPT,
+              },
               { role: 'user', content: buildKnowledgePrompt(input) },
             ],
           }),

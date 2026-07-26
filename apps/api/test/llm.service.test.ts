@@ -168,4 +168,74 @@ describe('LlmService', () => {
     ).rejects.toBeInstanceOf(AnswerCitationError);
     expect(answer).toHaveBeenCalledTimes(2);
   });
+
+  it('answers from general knowledge without contexts and removes fake source markers', async () => {
+    const answer = vi
+      .fn<LlmProvider['answer']>()
+      .mockResolvedValue({ text: 'Vue 3 使用 Proxy。[来源1]' });
+    const factory = {
+      getPrimary: () => llmProvider('google', answer),
+      getFallback: () => null,
+    } as LlmProviderFactory;
+    const canSendQuestion = vi.fn().mockReturnValue(true);
+    const service = new LlmService(
+      factory,
+      { canSendQuestion } as unknown as KnowledgeContextPolicy,
+      new AnswerSourceValidator(),
+      { warn: vi.fn() } as unknown as OperationalLogger,
+    );
+
+    await expect(
+      service.answerGeneral({
+        identity,
+        question: 'Vue 2 和 Vue 3 的区别',
+        traceId: 'trace-a',
+      }),
+    ).resolves.toMatchObject({
+      text: 'Vue 3 使用 Proxy。',
+      provider: 'google',
+      fallbackUsed: false,
+    });
+    expect(answer).toHaveBeenCalledWith(
+      expect.objectContaining({ mode: 'general', contexts: [] }),
+    );
+    expect(canSendQuestion).toHaveBeenCalledOnce();
+  });
+
+  it('blocks a general answer before provider invocation when question egress is denied', async () => {
+    const answer = vi.fn<LlmProvider['answer']>();
+    const factory = {
+      getPrimary: () => llmProvider('google', answer),
+      getFallback: () => null,
+    } as LlmProviderFactory;
+    const service = new LlmService(
+      factory,
+      { canSendQuestion: vi.fn().mockReturnValue(false) } as unknown as KnowledgeContextPolicy,
+      new AnswerSourceValidator(),
+      { warn: vi.fn() } as unknown as OperationalLogger,
+    );
+
+    await expect(
+      service.answerGeneral({ identity, question: '问题', traceId: 'trace-a' }),
+    ).rejects.toMatchObject({ kind: 'policy_denied' });
+    expect(answer).not.toHaveBeenCalled();
+  });
+
+  it('rejects a general response that becomes empty after fake citations are removed', async () => {
+    const factory = {
+      getPrimary: () =>
+        llmProvider('google', vi.fn<LlmProvider['answer']>().mockResolvedValue({ text: '[来源1]' })),
+      getFallback: () => null,
+    } as LlmProviderFactory;
+    const service = new LlmService(
+      factory,
+      { canSendQuestion: vi.fn().mockReturnValue(true) } as unknown as KnowledgeContextPolicy,
+      new AnswerSourceValidator(),
+      { warn: vi.fn() } as unknown as OperationalLogger,
+    );
+
+    await expect(
+      service.answerGeneral({ identity, question: '问题', traceId: 'trace-a' }),
+    ).rejects.toMatchObject({ kind: 'invalid_response' });
+  });
 });

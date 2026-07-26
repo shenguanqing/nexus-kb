@@ -264,6 +264,7 @@ const environmentSchema = z
     MODEL_PRICING_USD_PER_MILLION_TOKENS_JSON: jsonEnvironmentValue(modelPricingSchema, '{}'),
     QUERY_RECALL_TOP_K: z.coerce.number().int().min(1).max(100).default(20),
     QUERY_MAX_DISTANCE: z.coerce.number().min(0).max(2).default(0.45),
+    QUERY_ANSWER_MODE: z.enum(['strict', 'hybrid']).default('hybrid'),
     QUERY_NEIGHBOR_WINDOW: z.coerce.number().int().min(0).max(3).default(1),
     QUERY_MAX_MERGED_CONTEXT_CHARS: z.coerce.number().int().min(1000).max(100_000).default(20_000),
     QUERY_MAX_RERANK_INPUT_CHARS: z.coerce.number().int().min(1000).max(1_000_000).default(120_000),
@@ -568,6 +569,7 @@ export function safeConfigurationSummary(environment: Environment): Record<strin
     llmModel: environment.LLM_MODEL || null,
     llmFallbackProvider: environment.LLM_FALLBACK_PROVIDER,
     llmFallbackModel: environment.LLM_FALLBACK_MODEL || null,
+    queryAnswerMode: environment.QUERY_ANSWER_MODE,
     llmKeyConfigured:
       environment.LLM_PROVIDER === 'none'
         ? false

@@ -160,6 +160,7 @@ describe('knowledge query contract', () => {
         answer: '付款周期是 30 天。[来源1]',
         noAnswer: false,
         reason: null,
+        answerMode: 'grounded',
         traceId: id,
         sources: [
           {
@@ -183,6 +184,7 @@ describe('knowledge query contract', () => {
         answer: '没有找到足够依据。',
         noAnswer: true,
         reason: 'insufficient_relevance',
+        answerMode: null,
         traceId: id,
         sources: [],
         model: null,
@@ -195,12 +197,26 @@ describe('knowledge query contract', () => {
         answer: '没有找到足够依据。',
         noAnswer: true,
         reason: null,
+        answerMode: null,
         traceId: id,
         sources: [],
         model: null,
         rerankDegraded: false,
       }),
     ).toThrow();
+    expect(
+      knowledgeQueryResponseSchema.parse({
+        conversationId: id,
+        answer: 'Vue 3 使用 Proxy 实现响应式。',
+        noAnswer: false,
+        reason: null,
+        answerMode: 'general',
+        traceId: id,
+        sources: [],
+        model: { provider: 'google', model: 'gemini', fallbackUsed: false },
+        rerankDegraded: false,
+      }),
+    ).toMatchObject({ noAnswer: false, answerMode: 'general', sources: [] });
   });
 });
 

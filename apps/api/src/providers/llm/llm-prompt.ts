@@ -7,7 +7,16 @@ export const KNOWLEDGE_SYSTEM_PROMPT =
   '引用多个来源时必须分别写成[来源1][来源2]，禁止写成[来源1, 2]。' +
   '依据不足时只输出“资料不足”。不得编造不存在的来源编号，也不得使用参考资料以外的知识。';
 
+export const GENERAL_KNOWLEDGE_SYSTEM_PROMPT =
+  '你是企业知识库助手的通用知识补充模块。当前没有足够的企业知识库资料。' +
+  '可以使用模型通用知识回答，但不得声称答案来自企业知识库、公司制度、内部项目或用户所在组织。' +
+  '如果问题依赖企业内部事实、实时信息或无法可靠判断的内容，应明确说明无法从通用知识确认。' +
+  '不要编造或输出[来源N]，不要声称访问了文档、网页、系统或工具。使用简洁、清晰的 Markdown。';
+
 export function buildKnowledgePrompt(input: LlmAnswerInput): string {
+  if (input.mode === 'general') {
+    return `问题：${input.question}\n\n请仅提供通用知识补充，不要输出企业知识库来源标记。`;
+  }
   const contexts = input.contexts
     .map((context, index) => {
       const location =

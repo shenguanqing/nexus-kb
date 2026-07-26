@@ -49,6 +49,37 @@ describe('KnowledgeHistoryService', () => {
     expect(input.where).toMatchObject({ tenantId: 'tenant-a', userId: 'user-a' });
   });
 
+  it('returns the persisted answer mode for historical general answers', async () => {
+    const findFirst = vi.fn().mockResolvedValue({
+      id: '11111111-1111-4111-8111-111111111111',
+      title: 'Vue 版本区别',
+      createdAt: new Date('2026-07-26T00:00:00Z'),
+      updatedAt: new Date('2026-07-26T00:01:00Z'),
+      turns: [
+        {
+          id: '21111111-1111-4111-8111-111111111111',
+          question: 'Vue 2 和 Vue 3 的区别',
+          answer: 'Vue 3 使用 Proxy。',
+          noAnswer: false,
+          reason: null,
+          answerMode: 'general',
+          traceId: '31111111-1111-4111-8111-111111111111',
+          sources: [],
+          createdAt: new Date('2026-07-26T00:01:00Z'),
+        },
+      ],
+    });
+    const service = new KnowledgeHistoryService({
+      knowledgeConversation: { findFirst },
+    } as unknown as PrismaService);
+
+    await expect(
+      service.detail('11111111-1111-4111-8111-111111111111', identity),
+    ).resolves.toMatchObject({
+      turns: [{ answerMode: 'general', sourceCount: 0 }],
+    });
+  });
+
   it('deletes with tenant and user ownership filters', async () => {
     const deleteMany = vi.fn().mockResolvedValue({ count: 0 });
     const service = new KnowledgeHistoryService({

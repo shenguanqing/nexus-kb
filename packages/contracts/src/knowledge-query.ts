@@ -39,6 +39,7 @@ export const knowledgeQueryResponseSchema = z
     answer: z.string().min(1),
     noAnswer: z.boolean(),
     reason: z.enum(['insufficient_relevance', 'authorization_changed']).nullable(),
+    answerMode: z.enum(['grounded', 'general']).nullable(),
     traceId: z.uuid(),
     sources: z.array(knowledgeSourceSchema),
     model: z
@@ -55,11 +56,25 @@ export const knowledgeQueryResponseSchema = z
   .superRefine((response, context) => {
     const invalidNoAnswer =
       response.noAnswer &&
-      (response.reason === null || response.sources.length > 0 || response.model !== null);
-    const invalidAnswer =
+      (response.reason === null ||
+        response.answerMode !== null ||
+        response.sources.length > 0 ||
+        response.model !== null);
+    const invalidGroundedAnswer =
       !response.noAnswer &&
+      response.answerMode === 'grounded' &&
       (response.reason !== null || response.sources.length === 0 || response.model === null);
-    if (invalidNoAnswer || invalidAnswer) {
+    const invalidGeneralAnswer =
+      !response.noAnswer &&
+      response.answerMode === 'general' &&
+      (response.reason !== null || response.sources.length > 0 || response.model === null);
+    const missingAnswerMode = !response.noAnswer && response.answerMode === null;
+    if (
+      invalidNoAnswer ||
+      invalidGroundedAnswer ||
+      invalidGeneralAnswer ||
+      missingAnswerMode
+    ) {
       context.addIssue({ code: 'custom', message: 'answer state is inconsistent' });
     }
   });

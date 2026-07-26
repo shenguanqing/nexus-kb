@@ -5,9 +5,11 @@ import AssistantAnswer from './AssistantAnswer.vue';
 
 const response: KnowledgeQueryResponse = {
   conversationId: '5b9fd225-a565-42cd-8d63-1fc3f19b745d',
-  answer: 'Vue 3 使用 Proxy。[来源1][来源2]\n并支持 Composition API。[来源2]',
+  answer:
+    '## Vue 3\n\n**Proxy** 驱动响应式。[来源1][来源2]\n\n- 支持 Composition API。[来源2]',
   noAnswer: false,
   reason: null,
+  answerMode: 'grounded',
   traceId: '83fcad07-64b0-4d94-9fd4-42cb82038db9',
   sources: [1, 4].map((index) => ({
     index,
@@ -36,9 +38,9 @@ describe('AssistantAnswer', () => {
       '[来源2]',
       '[来源2]',
     ]);
-    expect(wrapper.get('.answer-text').text()).toBe(
-      'Vue 3 使用 Proxy。[来源1][来源2]\n并支持 Composition API。[来源2]',
-    );
+    expect(wrapper.get('.answer-text h2').text()).toBe('Vue 3');
+    expect(wrapper.get('.answer-text strong').text()).toBe('Proxy');
+    expect(wrapper.get('.answer-text li').text()).toBe('支持 Composition API。[来源2]');
     expect(wrapper.get('.answer-sources-label').text()).toBe('回答来源');
     expect(wrapper.findAll('.source-card').map((source) => source.text())).toEqual([
       expect.stringContaining('来源 1'),
@@ -46,5 +48,22 @@ describe('AssistantAnswer', () => {
     ]);
     await wrapper.findAll('.source-card')[1]!.trigger('click');
     expect(wrapper.emitted('selectSource')?.[0]?.[0]).toMatchObject({ index: 2 });
+  });
+
+  it('labels a source-free general-knowledge answer', () => {
+    const wrapper = mount(AssistantAnswer, {
+      props: {
+        response: {
+          ...response,
+          answer: 'Vue 3 使用 Proxy 实现响应式。',
+          answerMode: 'general',
+          sources: [],
+        },
+      },
+    });
+
+    expect(wrapper.get('.general-answer-notice').text()).toContain('不是企业知识库资料');
+    expect(wrapper.get('.answer-text').text()).toContain('Vue 3 使用 Proxy');
+    expect(wrapper.find('.answer-sources').exists()).toBe(false);
   });
 });

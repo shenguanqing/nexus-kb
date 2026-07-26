@@ -51,6 +51,7 @@ export class KnowledgeHistoryService {
           answer: response.answer,
           noAnswer: response.noAnswer,
           reason: response.reason,
+          answerMode: response.answerMode,
           traceId: response.traceId,
           sources: response.sources,
           model: response.model ?? undefined,
@@ -125,6 +126,14 @@ export class KnowledgeHistoryService {
           turn.reason === 'insufficient_relevance' || turn.reason === 'authorization_changed'
             ? turn.reason
             : null,
+        answerMode:
+          turn.answerMode === 'grounded' || turn.answerMode === 'general'
+            ? turn.answerMode
+            : turn.noAnswer
+              ? null
+              : Array.isArray(turn.sources) && turn.sources.length > 0
+                ? 'grounded'
+                : 'general',
         traceId: turn.traceId,
         sourceCount: Array.isArray(turn.sources) ? turn.sources.length : 0,
         createdAt: turn.createdAt.toISOString(),

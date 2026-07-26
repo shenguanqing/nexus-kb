@@ -223,6 +223,9 @@ async function main(): Promise<void> {
 
 function assertConfiguration(variant: CliArguments['variant'], config: AppConfig): void {
   const values = config.values;
+  if (values.QUERY_ANSWER_MODE !== 'strict') {
+    throw new Error('Quality capture requires QUERY_ANSWER_MODE=strict');
+  }
   if (values.EMBEDDING_PROVIDER === 'none' || values.LLM_PROVIDER === 'none') {
     throw new Error('Quality capture requires configured Embedding and LLM providers');
   }

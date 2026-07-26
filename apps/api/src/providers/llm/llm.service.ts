@@ -33,6 +33,34 @@ export class LlmService {
     contexts: RetrievedChunk[];
     traceId: string;
   }): Promise<SecuredLlmAnswer> {
+    return this.answerWithFallback({ ...input, mode: 'grounded' });
+  }
+
+  async answerGeneral(input: {
+    identity: Identity;
+    question: string;
+    traceId: string;
+  }): Promise<SecuredLlmAnswer> {
+    const answer = await this.answerWithFallback({
+      ...input,
+      mode: 'general',
+      contexts: [],
+    });
+    const text = answer.text.replace(/\[来源\d+\]/g, '').trim();
+    if (!text) throw new LlmProviderError('invalid_response', false);
+    return {
+      ...answer,
+      text,
+    };
+  }
+
+  private async answerWithFallback(input: {
+    identity: Identity;
+    mode: 'grounded' | 'general';
+    question: string;
+    contexts: RetrievedChunk[];
+    traceId: string;
+  }): Promise<SecuredLlmAnswer> {
     const primary = this.factory.getPrimary();
     try {
       return await this.answerWith(primary, input, false);
@@ -60,18 +88,27 @@ export class LlmService {
       question: string;
       contexts: RetrievedChunk[];
       traceId: string;
+      mode: 'grounded' | 'general';
     },
     fallbackUsed: boolean,
   ): Promise<SecuredLlmAnswer> {
-    if (
-      !this.contextPolicy.allAllowed(input.identity, input.contexts, 'llm', {
-        id: provider.id,
-        region: provider.region,
-      })
-    ) {
+    const providerIdentity = { id: provider.id, region: provider.region };
+    const isAllowed =
+      input.mode === 'general'
+        ? this.contextPolicy.canSendQuestion(input.identity, providerIdentity)
+        : this.contextPolicy.allAllowed(input.identity, input.contexts, 'llm', providerIdentity);
+    if (!isAllowed) {
       throw new LlmProviderError('policy_denied', false);
     }
     let answer = await provider.answer(input);
+    if (input.mode === 'general') {
+      return {
+        ...answer,
+        provider: provider.id,
+        model: provider.model,
+        fallbackUsed,
+      };
+    }
     try {
       this.sourceValidator.validate(answer.text, input.contexts.length);
     } catch (error) {

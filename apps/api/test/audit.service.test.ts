@@ -24,6 +24,7 @@ function fixture() {
       userId: 'user-a',
       queryLength: 12,
       outcome: 'answered',
+      answerMode: 'general',
       resultCount: 1,
       sourceChunkIds: ['a'.repeat(64)],
       embeddingProvider: 'alibaba',
