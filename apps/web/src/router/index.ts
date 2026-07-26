@@ -7,6 +7,7 @@ declare module 'vue-router' {
   interface RouteMeta {
     requiresAuth?: boolean;
     capabilities?: Capability[];
+    adminOnly?: boolean;
     title?: string;
   }
 }
@@ -34,52 +35,52 @@ export const router = createRouter({
         {
           path: 'documents',
           component: () => import('@/views/DocumentsView.vue'),
-          meta: { title: '文档管理', capabilities: ['documents:read'] },
+          meta: { title: '文档管理', capabilities: ['documents:read'], adminOnly: true },
         },
         {
           path: 'documents/:id',
           component: () => import('@/views/DocumentDetailView.vue'),
-          meta: { title: '文档详情', capabilities: ['documents:read'] },
+          meta: { title: '文档详情', capabilities: ['documents:read'], adminOnly: true },
         },
         {
           path: 'documents/:id/chunks',
           component: () => import('@/views/DocumentChunksView.vue'),
-          meta: { title: '文档分块', capabilities: ['documents:read'] },
+          meta: { title: '文档分块', capabilities: ['documents:read'], adminOnly: true },
         },
         {
           path: 'ingestion-jobs',
           component: () => import('@/views/IngestionJobsView.vue'),
-          meta: { title: '入库任务', capabilities: ['documents:read'] },
+          meta: { title: '入库任务', capabilities: ['documents:read'], adminOnly: true },
         },
         {
           path: 'audit',
           component: () => import('@/views/AuditView.vue'),
-          meta: { title: '审计中心', capabilities: ['audit:read'] },
+          meta: { title: '审计中心', capabilities: ['audit:read'], adminOnly: true },
         },
         {
           path: 'access/users',
           component: () => import('@/views/UsersView.vue'),
-          meta: { title: '用户与角色', capabilities: ['access:read'] },
+          meta: { title: '用户与角色', capabilities: ['access:read'], adminOnly: true },
         },
         {
           path: 'access/departments',
           component: () => import('@/views/DepartmentsView.vue'),
-          meta: { title: '部门权限', capabilities: ['access:read'] },
+          meta: { title: '部门权限', capabilities: ['access:read'], adminOnly: true },
         },
         {
           path: 'settings/providers',
           component: () => import('@/views/ProviderSettingsView.vue'),
-          meta: { title: '模型 Provider', capabilities: ['system:read'] },
+          meta: { title: '模型 Provider', capabilities: ['system:read'], adminOnly: true },
         },
         {
           path: 'system/status',
           component: () => import('@/views/SystemStatusView.vue'),
-          meta: { title: '系统状态', capabilities: ['system:read'] },
+          meta: { title: '系统状态', capabilities: ['system:read'], adminOnly: true },
         },
         {
           path: 'system/usage',
           component: () => import('@/views/UsageView.vue'),
-          meta: { title: '用量与成本', capabilities: ['system:read'] },
+          meta: { title: '用量与成本', capabilities: ['system:read'], adminOnly: true },
         },
       ],
     },
@@ -103,8 +104,10 @@ router.beforeEach(async (to) => {
   if (to.path === '/login' && auth.isAuthenticated) return '/ask';
   const decision = decideRouteAccess(
     auth.isAuthenticated,
+    auth.identity?.roles.includes('admin') ?? false,
     auth.identity?.capabilities ?? [],
     to.meta.capabilities ?? [],
+    to.meta.adminOnly ?? false,
   );
   if (to.meta.requiresAuth && decision === 'login') {
     return { path: '/login', query: { redirect: to.fullPath } };

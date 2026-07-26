@@ -78,7 +78,7 @@ describe('PostgreSQL and Redis integration', () => {
       tenantId: tenantA,
       userId: 'user-a',
       department: 'legal',
-      roles: [],
+      roles: ['user'],
       allowedSensitivities: ['public', 'internal'],
       capabilities: ['documents:read'],
       defaultSensitivity: 'internal',
@@ -123,7 +123,7 @@ describe('PostgreSQL and Redis integration', () => {
       prisma.document.findFirst({
         where: {
           id: aclDocumentId,
-          ...policy.documentWhere(identity({ roles: ['platform_admin'] })),
+          ...policy.documentWhere(identity({ roles: ['admin'] })),
         },
       }),
     ).resolves.toMatchObject({ id: aclDocumentId });
@@ -131,7 +131,7 @@ describe('PostgreSQL and Redis integration', () => {
       prisma.document.findFirst({
         where: {
           id: aclDocumentId,
-          ...policy.documentWhere(identity({ tenantId: tenantB, roles: ['platform_admin'] })),
+          ...policy.documentWhere(identity({ tenantId: tenantB, roles: ['admin'] })),
         },
       }),
     ).resolves.toBeNull();
@@ -163,7 +163,7 @@ describe('PostgreSQL and Redis integration', () => {
       tenantId: `rate-tenant-${randomUUID()}`,
       userId: `rate-user-${randomUUID()}`,
       department: 'finance',
-      roles: [],
+      roles: ['user'],
       allowedSensitivities: ['internal'],
       capabilities: ['documents:read'],
       defaultSensitivity: 'internal',
@@ -357,7 +357,7 @@ describe('PostgreSQL and Redis integration', () => {
       tenantId: tenantA,
       userId: 'auditor-a',
       department: 'audit',
-      roles: ['platform_admin'],
+      roles: ['admin'],
       allowedSensitivities: ['public', 'internal', 'confidential'],
       capabilities: ['audit:read'],
       defaultSensitivity: 'internal',

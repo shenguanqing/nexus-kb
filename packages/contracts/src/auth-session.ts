@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import { appRolesSchema } from './roles';
+
 export const capabilitySchema = z.enum([
   'documents:read',
   'documents:write',
@@ -39,7 +41,7 @@ export const authSessionSchema = z
         tenantId: z.string().min(1),
         userId: z.string().min(1),
         department: z.string().min(1),
-        roles: z.array(z.string()),
+        roles: appRolesSchema,
         allowedSensitivities: z.array(sensitivitySchema).min(1),
         capabilities: z.array(capabilitySchema),
         defaultSensitivity: sensitivitySchema,

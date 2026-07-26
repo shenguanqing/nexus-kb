@@ -10,7 +10,7 @@ const account = {
   tenantId: 'tenant-a',
   userId: 'admin-a',
   department: 'platform',
-  roles: ['platform_admin'],
+  roles: ['admin'],
   allowedSensitivities: ['public', 'internal', 'confidential'],
   capabilities: ['documents:read', 'access:read', 'access:write'],
   defaultSensitivity: 'internal',
@@ -75,7 +75,7 @@ describe('PasswordAuthService', () => {
     });
     await expect(
       deps.service.identityFromCookie(`nexuskb_session=${result.token}; other=value`),
-    ).resolves.toMatchObject({ userId: 'admin-a', roles: ['platform_admin'] });
+    ).resolves.toMatchObject({ userId: 'admin-a', roles: ['admin'] });
   });
 
   it('rate limits repeated failed passwords without exposing account existence', async () => {

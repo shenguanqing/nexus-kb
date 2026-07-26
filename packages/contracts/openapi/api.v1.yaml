@@ -152,7 +152,7 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
   /v1/access/users/{userId}/roles:
     patch:
-      summary: Replace application-managed roles for an observed tenant user
+      summary: Replace the application role for an observed tenant user
       parameters:
         - { name: userId, in: path, required: true, schema: { type: string, maxLength: 256 } }
       requestBody:
@@ -162,13 +162,13 @@ paths:
             schema: { $ref: '#/components/schemas/UserRoleUpdateRequest' }
       responses:
         '200':
-          description: Managed roles updated with last-platform-admin protection
+          description: Application role updated with last-admin protection
           content:
             application/json:
               schema: { $ref: '#/components/schemas/UserRoleUpdateResponse' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
-        '409': { description: Last platform administrator cannot be removed }
+        '409': { description: Last administrator cannot be removed }
   /v1/access/departments:
     get:
       summary: List tenant or department scoped effective department policies
@@ -546,7 +546,9 @@ components:
             department: { type: string }
             roles:
               type: array
-              items: { type: string }
+              minItems: 1
+              maxItems: 1
+              items: { type: string, enum: [user, admin] }
             allowedSensitivities:
               type: array
               minItems: 1
@@ -595,8 +597,9 @@ components:
         department: { type: string, minLength: 1, maxLength: 128 }
         roles:
           type: array
-          maxItems: 32
-          items: { type: string, minLength: 1, maxLength: 64 }
+          minItems: 1
+          maxItems: 1
+          items: { type: string, enum: [user, admin] }
         roleSource: { type: string, enum: [identity, managed] }
         status: { const: observed }
         lastAuthenticatedAt: { type: string, format: date-time }
@@ -621,9 +624,11 @@ components:
         roles:
           type: array
           uniqueItems: true
+          minItems: 1
+          maxItems: 1
           items:
             type: string
-            enum: [platform_admin, department_admin, document_admin, auditor]
+            enum: [user, admin]
     UserRoleUpdateResponse:
       type: object
       additionalProperties: false

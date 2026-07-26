@@ -9,7 +9,7 @@ const identity: Identity = {
   tenantId: 'tenant-a',
   userId: 'auditor-a',
   department: 'audit',
-  roles: ['platform_admin'],
+  roles: ['admin'],
   allowedSensitivities: ['public', 'internal', 'confidential'],
   capabilities: ['audit:read'],
   defaultSensitivity: 'internal',

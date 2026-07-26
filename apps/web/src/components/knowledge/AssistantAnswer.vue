@@ -18,7 +18,6 @@ const displayAnswer = computed(() =>
     return compactIndex === undefined ? citation : `[来源${compactIndex}]`;
   }),
 );
-
 </script>
 
 <template>
@@ -32,7 +31,7 @@ const displayAnswer = computed(() =>
           {{
             response.reason === 'authorization_changed'
               ? '可用来源已发生变化，请重试。'
-              : '您可以换一种问法，或联系文档管理员补充资料。'
+              : '您可以换一种问法，或联系管理员补充资料。'
           }}
         </p>
       </div>

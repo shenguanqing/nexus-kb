@@ -4,6 +4,7 @@ import type { JWTPayload, JWTVerifyResult } from 'jose';
 import { z } from 'zod';
 
 import { AppConfig } from '../config/app-config';
+import { IDENTITY_ROLE_INPUTS, normalizeAppRoles } from './app-role';
 import { CAPABILITIES, SENSITIVITIES } from './identity';
 import type { Identity } from './identity';
 import type { TokenVerifier } from './token-verifier';
@@ -17,7 +18,7 @@ const identityClaimsSchema = z
     sub: z.string().min(1).max(256),
     tenantId: z.string().min(1).max(128),
     department: z.string().min(1).max(128),
-    roles: z.array(z.string().min(1).max(64)).max(32),
+    roles: z.array(z.enum(IDENTITY_ROLE_INPUTS)).min(1).max(32),
     allowedSensitivities: z.array(z.enum(SENSITIVITIES)).min(1).max(3),
     capabilities: z.array(z.enum(CAPABILITIES)).max(16),
     defaultSensitivity: z.enum(SENSITIVITIES),
@@ -49,7 +50,7 @@ export class OidcJwtTokenVerifier implements TokenVerifier {
         tenantId: claims.tenantId,
         userId: claims.sub,
         department: claims.department,
-        roles: [...new Set(claims.roles)],
+        roles: normalizeAppRoles(claims.roles),
         allowedSensitivities: [...new Set(claims.allowedSensitivities)],
         capabilities: [...new Set(claims.capabilities)],
         defaultSensitivity: claims.defaultSensitivity,

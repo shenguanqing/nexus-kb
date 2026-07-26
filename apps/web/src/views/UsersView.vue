@@ -1,9 +1,5 @@
 <script setup lang="ts">
-import type {
-  ManagedRole,
-  UserDirectoryEntry,
-  UserDirectoryQueryRequest,
-} from '@nexus-kb/contracts';
+import type { AppRole, UserDirectoryEntry, UserDirectoryQueryRequest } from '@nexus-kb/contracts';
 import { ElMessage } from 'element-plus';
 import { computed, onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
@@ -28,9 +24,9 @@ const page = ref(Math.max(1, Number(route.query.page) || 1));
 const roleDialogVisible = ref(false);
 const roleSaving = ref(false);
 const selectedUser = ref<UserDirectoryEntry | null>(null);
-const managedRoles = ref<ManagedRole[]>([]);
-const isPlatformAdmin = computed(() => auth.identity?.roles.includes('platform_admin') ?? false);
-const canWrite = computed(() => isPlatformAdmin.value && auth.hasCapability('access:write'));
+const selectedRole = ref<AppRole>('user');
+const isAdmin = computed(() => auth.identity?.roles.includes('admin') ?? false);
+const canWrite = computed(() => isAdmin.value && auth.hasCapability('access:write'));
 const scopeText = computed(() =>
   accessScopeLabel(scope.value, auth.identity?.department ?? '当前'),
 );
@@ -42,7 +38,7 @@ function userRow(row: unknown): UserDirectoryEntry {
 function request(): Partial<UserDirectoryQueryRequest> {
   return {
     query: search.value.trim() || undefined,
-    department: isPlatformAdmin.value ? department.value.trim() || undefined : undefined,
+    department: isAdmin.value ? department.value.trim() || undefined : undefined,
     offset: (page.value - 1) * pageSize,
     limit: pageSize,
   };
@@ -66,7 +62,7 @@ async function load(): Promise<void> {
 async function syncRouteAndLoad(): Promise<void> {
   const query: Record<string, string> = {};
   if (search.value.trim()) query.query = search.value.trim();
-  if (isPlatformAdmin.value && department.value.trim()) query.department = department.value.trim();
+  if (isAdmin.value && department.value.trim()) query.department = department.value.trim();
   if (page.value > 1) query.page = String(page.value);
   await router.replace({ query });
   await load();
@@ -91,9 +87,7 @@ async function changePage(nextPage: number): Promise<void> {
 
 function editRoles(user: UserDirectoryEntry): void {
   selectedUser.value = user;
-  managedRoles.value = user.roles.filter((role): role is ManagedRole =>
-    ['platform_admin', 'department_admin', 'document_admin', 'auditor'].includes(role),
-  );
+  selectedRole.value = user.roles[0] ?? 'user';
   roleDialogVisible.value = true;
 }
 
@@ -101,7 +95,7 @@ async function saveRoles(): Promise<void> {
   if (!selectedUser.value) return;
   roleSaving.value = true;
   try {
-    await updateUserRoles(selectedUser.value.userId, managedRoles.value);
+    await updateUserRoles(selectedUser.value.userId, [selectedRole.value]);
     ElMessage.success('托管角色已更新并写入审计');
     roleDialogVisible.value = false;
     await load();
@@ -128,7 +122,7 @@ onMounted(() => load());
     <form class="access-toolbar" aria-label="用户目录查询" @submit.prevent="applyFilters">
       <el-input v-model="search" clearable maxlength="128" placeholder="搜索企业用户 ID" />
       <el-input
-        v-if="isPlatformAdmin"
+        v-if="isAdmin"
         v-model="department"
         clearable
         maxlength="128"
@@ -189,10 +183,12 @@ onMounted(() => load());
                 <span>部门</span><strong>{{ user.department }}</strong>
               </div>
               <div>
-                <span>最近认证</span><strong>{{ new Date(user.lastAuthenticatedAt).toLocaleString() }}</strong>
+                <span>最近认证</span
+                ><strong>{{ new Date(user.lastAuthenticatedAt).toLocaleString() }}</strong>
               </div>
               <div>
-                <span>角色</span><strong>{{ accessRoleSummary(user.roles).join('、') || '普通用户' }}</strong>
+                <span>角色</span
+                ><strong>{{ accessRoleSummary(user.roles).join('、') || '普通用户' }}</strong>
               </div>
             </div>
             <el-button v-if="canWrite" text type="primary" @click="editRoles(user)">
@@ -221,7 +217,7 @@ onMounted(() => load());
         <strong>权限边界</strong>
         <p>
           已验证的认证身份源负责确认用户身份，主服务托管角色覆盖负责应用内授权范围。所有变更写入审计，并禁止移除
-          租户内最后一个平台管理员。
+          租户内最后一个管理员。
         </p>
       </aside>
     </div>
@@ -233,12 +229,10 @@ onMounted(() => load());
       :z-index="4000"
     >
       <p v-if="selectedUser">{{ selectedUser.userId }} · {{ selectedUser.department }}</p>
-      <el-checkbox-group v-model="managedRoles" class="role-editor">
-        <el-checkbox value="platform_admin">平台管理员</el-checkbox>
-        <el-checkbox value="department_admin">部门管理员</el-checkbox>
-        <el-checkbox value="document_admin">文档管理员</el-checkbox>
-        <el-checkbox value="auditor">审计员</el-checkbox>
-      </el-checkbox-group>
+      <el-radio-group v-model="selectedRole" class="role-editor">
+        <el-radio value="user">普通用户</el-radio>
+        <el-radio value="admin">管理员</el-radio>
+      </el-radio-group>
       <template #footer>
         <el-button @click="roleDialogVisible = false">取消</el-button>
         <el-button type="primary" :loading="roleSaving" @click="saveRoles"> 保存角色 </el-button>

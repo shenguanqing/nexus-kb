@@ -22,6 +22,7 @@ import type { MultipartFile } from '@fastify/multipart';
 import { Prisma } from '@prisma/client';
 
 import { AclPolicy } from '../auth/acl-policy';
+import { isAdmin } from '../auth/app-role';
 import type { Identity } from '../auth/identity';
 import { ApiException } from '../common/api-exception';
 import { OperationalLogger } from '../common/operational-logger';
@@ -845,9 +846,7 @@ export class DocumentsService {
     if (!identity.allowedSensitivities.includes(request.sensitivity)) {
       throw new ApiException('SENSITIVITY_FORBIDDEN', '不能设置超出身份范围的敏感度', 403);
     }
-    const tenantWide = identity.roles.some((role) =>
-      ['platform_admin', 'document_admin'].includes(role),
-    );
+    const tenantWide = isAdmin(identity.roles);
     if (!tenantWide && request.department !== identity.department) {
       throw new ApiException('DEPARTMENT_FORBIDDEN', '不能把文档移动到其他部门', 403);
     }

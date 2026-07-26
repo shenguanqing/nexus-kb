@@ -17,7 +17,7 @@ const identity: Identity = {
   tenantId: 'tenant-a',
   userId: 'user-a',
   department: 'finance',
-  roles: [],
+  roles: ['user'],
   allowedSensitivities: ['public', 'internal', 'confidential'],
   capabilities: ['documents:read'],
   defaultSensitivity: 'internal',
@@ -196,9 +196,7 @@ describe('LlmService', () => {
       provider: 'google',
       fallbackUsed: false,
     });
-    expect(answer).toHaveBeenCalledWith(
-      expect.objectContaining({ mode: 'general', contexts: [] }),
-    );
+    expect(answer).toHaveBeenCalledWith(expect.objectContaining({ mode: 'general', contexts: [] }));
     expect(canSendQuestion).toHaveBeenCalledOnce();
   });
 
@@ -224,7 +222,10 @@ describe('LlmService', () => {
   it('rejects a general response that becomes empty after fake citations are removed', async () => {
     const factory = {
       getPrimary: () =>
-        llmProvider('google', vi.fn<LlmProvider['answer']>().mockResolvedValue({ text: '[来源1]' })),
+        llmProvider(
+          'google',
+          vi.fn<LlmProvider['answer']>().mockResolvedValue({ text: '[来源1]' }),
+        ),
       getFallback: () => null,
     } as LlmProviderFactory;
     const service = new LlmService(

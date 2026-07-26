@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import type { UsageQueryRequest, UsageResponse } from '@nexus-kb/contracts';
 
 import { AclPolicy } from '../auth/acl-policy';
+import { isAdmin } from '../auth/app-role';
 import type { Identity } from '../auth/identity';
 import { ApiException } from '../common/api-exception';
 import { PrismaService } from '../database/prisma.service';
@@ -15,8 +16,8 @@ export class UsageService {
 
   async query(request: UsageQueryRequest, identity: Identity): Promise<UsageResponse> {
     this.acl.assertCapability(identity, 'system:read');
-    if (!identity.roles.includes('platform_admin')) {
-      throw new ApiException('PLATFORM_ADMIN_REQUIRED', '需要平台管理员权限', 403);
+    if (!isAdmin(identity.roles)) {
+      throw new ApiException('ADMIN_REQUIRED', '需要管理员权限', 403);
     }
     const rows = await this.prisma.queryAudit.findMany({
       where: {

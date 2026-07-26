@@ -13,6 +13,7 @@ import type {
 import { randomUUID } from 'node:crypto';
 
 import { AclPolicy } from '../auth/acl-policy';
+import { isAdmin, normalizeAppRoles } from '../auth/app-role';
 import type { Identity } from '../auth/identity';
 import { ApiException } from '../common/api-exception';
 import { PrismaService } from '../database/prisma.service';
@@ -32,12 +33,12 @@ export class UserDirectoryService {
         tenantId: identity.tenantId,
         userId: identity.userId,
         department: identity.department,
-        roles: this.normalizedRoles(identity.roles),
+        roles: normalizeAppRoles(identity.roles),
         lastAuthenticatedAt: now,
       },
       update: {
         department: identity.department,
-        roles: this.normalizedRoles(identity.roles),
+        roles: normalizeAppRoles(identity.roles),
         lastAuthenticatedAt: now,
       },
     });
@@ -70,7 +71,9 @@ export class UserDirectoryService {
     }
     return {
       ...identity,
-      roles: entry?.managedRoles ? this.stringArray(entry.managedRoles) : identity.roles,
+      roles: entry?.managedRoles
+        ? normalizeAppRoles(this.stringArray(entry.managedRoles))
+        : normalizeAppRoles(identity.roles),
       allowedSensitivities,
       defaultSensitivity: allowedSensitivities.includes(identity.defaultSensitivity)
         ? identity.defaultSensitivity
@@ -83,7 +86,7 @@ export class UserDirectoryService {
     identity: Identity,
   ): Promise<UserDirectoryQueryResponse> {
     this.acl.assertCapability(identity, 'access:read');
-    const tenantWide = identity.roles.includes('platform_admin');
+    const tenantWide = isAdmin(identity.roles);
     if (!tenantWide && request.department && request.department !== identity.department) {
       throw new ApiException('ACCESS_SCOPE_FORBIDDEN', '不能查看其他部门的用户', 403);
     }
@@ -107,7 +110,7 @@ export class UserDirectoryService {
       users: rows.map((row): UserDirectoryEntry => ({
         userId: row.userId,
         department: row.department,
-        roles: this.stringArray(row.managedRoles ?? row.roles),
+        roles: normalizeAppRoles(this.stringArray(row.managedRoles ?? row.roles)),
         roleSource: row.managedRoles ? 'managed' : 'identity',
         status: 'observed',
         lastAuthenticatedAt: row.lastAuthenticatedAt.toISOString(),
@@ -125,8 +128,8 @@ export class UserDirectoryService {
     identity: Identity,
     traceId: string,
   ): Promise<UserRoleUpdateResponse> {
-    this.assertPlatformWrite(identity);
-    const roles = [...new Set(request.roles)].sort();
+    this.assertAdminWrite(identity);
+    const roles = normalizeAppRoles(request.roles);
     const updated = await this.prisma.$transaction(
       async (transaction) => {
         const entries = await transaction.userDirectoryEntry.findMany({
@@ -134,16 +137,12 @@ export class UserDirectoryService {
         });
         const target = entries.find((entry) => entry.userId === userId);
         if (!target) throw new ApiException('USER_DIRECTORY_NOT_FOUND', '用户不存在', 404);
-        const before = this.stringArray(target.managedRoles ?? target.roles);
-        const platformAdmins = entries.filter((entry) =>
-          this.stringArray(entry.managedRoles ?? entry.roles).includes('platform_admin'),
+        const before = normalizeAppRoles(this.stringArray(target.managedRoles ?? target.roles));
+        const administrators = entries.filter((entry) =>
+          isAdmin(normalizeAppRoles(this.stringArray(entry.managedRoles ?? entry.roles))),
         ).length;
-        if (
-          before.includes('platform_admin') &&
-          !roles.includes('platform_admin') &&
-          platformAdmins <= 1
-        ) {
-          throw new ApiException('LAST_PLATFORM_ADMIN_REQUIRED', '不能移除最后一个平台管理员', 409);
+        if (isAdmin(before) && !isAdmin(roles) && administrators <= 1) {
+          throw new ApiException('LAST_ADMIN_REQUIRED', '不能移除最后一个管理员', 409);
         }
         const row = await transaction.userDirectoryEntry.update({
           where: { tenantId_userId: { tenantId: identity.tenantId, userId } },
@@ -174,7 +173,7 @@ export class UserDirectoryService {
 
   async listDepartments(identity: Identity): Promise<DepartmentPolicyListResponse> {
     this.acl.assertCapability(identity, 'access:read');
-    const tenantWide = identity.roles.includes('platform_admin');
+    const tenantWide = isAdmin(identity.roles);
     const departmentWhere = tenantWide ? {} : { department: identity.department };
     const [users, documents, policies] = await Promise.all([
       this.prisma.userDirectoryEntry.groupBy({
@@ -221,7 +220,7 @@ export class UserDirectoryService {
     identity: Identity,
     traceId: string,
   ): Promise<DepartmentPolicyUpdateResponse> {
-    this.assertPlatformWrite(identity);
+    this.assertAdminWrite(identity);
     const allowedSensitivities = [...new Set(request.allowedSensitivities)];
     const existing = await this.prisma.departmentPolicy.findUnique({
       where: { tenantId_department: { tenantId: identity.tenantId, department } },
@@ -258,10 +257,6 @@ export class UserDirectoryService {
     return { department: result, traceId };
   }
 
-  private normalizedRoles(roles: string[]): string[] {
-    return [...new Set(roles)].sort();
-  }
-
   private stringArray(value: unknown): string[] {
     return Array.isArray(value) && value.every((item) => typeof item === 'string') ? value : [];
   }
@@ -285,17 +280,17 @@ export class UserDirectoryService {
     return {
       userId: row.userId,
       department: row.department,
-      roles: this.stringArray(row.managedRoles ?? row.roles),
+      roles: normalizeAppRoles(this.stringArray(row.managedRoles ?? row.roles)),
       roleSource: row.managedRoles ? 'managed' : 'identity',
       status: 'observed',
       lastAuthenticatedAt: row.lastAuthenticatedAt.toISOString(),
     };
   }
 
-  private assertPlatformWrite(identity: Identity): void {
+  private assertAdminWrite(identity: Identity): void {
     this.acl.assertCapability(identity, 'access:write');
-    if (!identity.roles.includes('platform_admin')) {
-      throw new ApiException('PLATFORM_ADMIN_REQUIRED', '需要平台管理员权限', 403);
+    if (!isAdmin(identity.roles)) {
+      throw new ApiException('ADMIN_REQUIRED', '需要管理员权限', 403);
     }
   }
 }

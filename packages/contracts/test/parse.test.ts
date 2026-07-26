@@ -11,6 +11,7 @@ import {
   passwordLoginRequestSchema,
   userDirectoryQueryRequestSchema,
   userDirectoryQueryResponseSchema,
+  userRoleUpdateRequestSchema,
 } from '../src';
 
 const id = 'd26720b3-1f78-40df-868d-8ca8510dca26';
@@ -24,7 +25,7 @@ describe('auth session contract', () => {
         tenantId: 'tenant-a',
         userId: 'user-a',
         department: 'finance',
-        roles: ['document_admin'],
+        roles: ['admin'],
         allowedSensitivities: ['public', 'internal'],
         capabilities: ['documents:read'],
         defaultSensitivity: 'internal',
@@ -73,7 +74,7 @@ describe('user directory contract', () => {
         {
           userId: 'alice',
           department: 'finance',
-          roles: ['department_admin'],
+          roles: ['user'],
           roleSource: 'identity',
           status: 'observed',
           lastAuthenticatedAt: '2026-07-18T08:00:00.000Z',
@@ -91,6 +92,15 @@ describe('user directory contract', () => {
         users: [{ ...response.users[0], token: 'forged' }],
       }),
     ).toThrow();
+  });
+
+  it('accepts exactly one of the two application roles', () => {
+    expect(userRoleUpdateRequestSchema.parse({ roles: ['admin'] })).toEqual({
+      roles: ['admin'],
+    });
+    expect(() => userRoleUpdateRequestSchema.parse({ roles: [] })).toThrow();
+    expect(() => userRoleUpdateRequestSchema.parse({ roles: ['user', 'admin'] })).toThrow();
+    expect(() => userRoleUpdateRequestSchema.parse({ roles: ['platform_admin'] })).toThrow();
   });
 });
 

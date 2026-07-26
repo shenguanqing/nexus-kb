@@ -82,11 +82,13 @@ Vue 3 + TypeScript + Vite
 ### 3.7 F4 用户目录切片
 
 - [x] 新增 `UserDirectoryEntry` migration，在会话接口只同步经过验证的 tenant、用户、部门、角色和认证时间。
-- [x] 新增独立 `access:read` capability 与 `GET /v1/access/users` 正式契约；平台管理员限当前 tenant，其他调用者
+- [x] 新增独立 `access:read` capability 与 `GET /v1/access/users` 正式契约；管理员限当前 tenant，其他调用者
       固定到自身部门。
-- [x] 实现用户 ID 搜索、平台管理员部门筛选、分页、空态、错误重试与响应式用户目录页面。
+- [x] 实现用户 ID 搜索、管理员部门筛选、分页、空态、错误重试与响应式用户目录页面。
 - [x] 角色 mutation 使用应用托管覆盖，并在认证 guard 中参与真实授权；capability 仍来自已验证身份，不能通过角色编辑扩权。
-- [x] 角色和部门策略变更写入独立访问审计，并保护最后一个有效平台管理员。
+- [x] 角色和部门策略变更写入独立访问审计，并保护最后一个有效管理员。
+- [x] 应用角色收敛为 `user`/`admin`，保留 capability 与 ACL 独立校验，并提供旧角色的降权迁移。
+- [x] `user` 侧栏与前端路由只保留知识问答、问答历史；管理页面同时要求 `admin` 和对应 capability。
 
 ### 3.8 F2–F5 收尾
 

@@ -3,8 +3,13 @@ import { decideRouteAccess } from './access';
 
 describe('decideRouteAccess', () => {
   it('distinguishes authentication from authorization', () => {
-    expect(decideRouteAccess(false, [], [])).toBe('login');
-    expect(decideRouteAccess(true, ['documents:read'], ['audit:read'])).toBe('forbidden');
-    expect(decideRouteAccess(true, ['documents:read'], ['documents:read'])).toBe('allow');
+    expect(decideRouteAccess(false, false, [], [])).toBe('login');
+    expect(decideRouteAccess(true, true, ['documents:read'], ['audit:read'])).toBe('forbidden');
+    expect(decideRouteAccess(true, true, ['documents:read'], ['documents:read'], true)).toBe(
+      'allow',
+    );
+    expect(decideRouteAccess(true, false, ['documents:read'], ['documents:read'], true)).toBe(
+      'forbidden',
+    );
   });
 });

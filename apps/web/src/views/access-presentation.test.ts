@@ -4,11 +4,8 @@ import { accessRoleLabel, accessRoleSummary, accessScopeLabel } from './access-p
 
 describe('access presentation', () => {
   it('uses business labels while preserving unknown signed roles', () => {
-    expect(accessRoleSummary(['platform_admin', 'custom_reader'])).toEqual([
-      '平台管理员',
-      'custom_reader',
-    ]);
-    expect(accessRoleLabel('department_admin')).toBe('部门管理员');
+    expect(accessRoleSummary(['admin'])).toEqual(['管理员']);
+    expect(accessRoleLabel('user')).toBe('普通用户');
   });
 
   it('labels empty roles and server-enforced scopes', () => {

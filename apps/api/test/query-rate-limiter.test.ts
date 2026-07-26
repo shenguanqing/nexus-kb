@@ -8,7 +8,7 @@ const identity: Identity = {
   tenantId: 'tenant-a',
   userId: 'user-a',
   department: 'finance',
-  roles: [],
+  roles: ['user'],
   allowedSensitivities: ['public', 'internal'],
   capabilities: ['documents:read'],
   defaultSensitivity: 'internal',

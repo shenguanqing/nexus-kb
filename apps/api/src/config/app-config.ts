@@ -1,6 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import { z } from 'zod';
 
+import { IDENTITY_ROLE_INPUTS } from '../auth/app-role';
+
 const environmentProfiles = {
   development: {
     API_HOST: '127.0.0.1',
@@ -80,7 +82,7 @@ const passwordAuthUserSchema = z
     tenantId: z.string().trim().min(1).max(128),
     userId: z.string().trim().min(1).max(256),
     department: z.string().trim().min(1).max(128),
-    roles: z.array(z.string().trim().min(1).max(64)).max(32),
+    roles: z.array(z.enum(IDENTITY_ROLE_INPUTS)).min(1).max(32),
     allowedSensitivities: z.array(sensitivitySchema).min(1).max(3),
     capabilities: z.array(capabilitySchema).min(1).max(16),
     defaultSensitivity: sensitivitySchema,
@@ -179,7 +181,10 @@ const environmentSchema = z
     DEV_USER_ID: z.string().min(1).default('local-user'),
     DEV_DEPARTMENT: z.string().min(1).default('general'),
     DEV_SENSITIVITY: sensitivitySchema.default('internal'),
-    DEV_ROLES_JSON: jsonEnvironmentValue(z.array(z.string().min(1).max(64)).max(32), '[]'),
+    DEV_ROLES_JSON: jsonEnvironmentValue(
+      z.array(z.enum(IDENTITY_ROLE_INPUTS)).min(1).max(32),
+      '["user"]',
+    ),
     DEV_ALLOWED_SENSITIVITIES_JSON: jsonEnvironmentValue(
       z.array(sensitivitySchema).min(1).max(3),
       '["public","internal","confidential"]',

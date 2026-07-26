@@ -12,7 +12,7 @@ const identity: Identity = {
   tenantId: 'tenant-a',
   userId: 'admin-a',
   department: 'platform',
-  roles: ['platform_admin'],
+  roles: ['admin'],
   allowedSensitivities: ['public', 'internal', 'confidential'],
   capabilities: ['system:read'],
   defaultSensitivity: 'internal',

@@ -15,7 +15,7 @@ describe('password authentication API', () => {
             tenantId: 'tenant-a',
             userId: 'admin-a',
             department: 'platform',
-            roles: ['platform_admin'],
+            roles: ['admin'],
             allowedSensitivities: ['public', 'internal'],
             capabilities: ['documents:read'],
             defaultSensitivity: 'internal',

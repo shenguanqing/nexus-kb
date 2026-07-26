@@ -14,7 +14,7 @@ const loading = ref(false);
 const saving = ref(false);
 const errorMessage = ref('');
 const canWrite = computed(
-  () => auth.hasCapability('access:write') && auth.identity?.roles.includes('platform_admin'),
+  () => auth.hasCapability('access:write') && auth.identity?.roles.includes('admin'),
 );
 async function load(): Promise<void> {
   loading.value = true;

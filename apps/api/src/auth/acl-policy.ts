@@ -3,9 +3,8 @@ import type { Prisma } from '@prisma/client';
 
 import { ApiException } from '../common/api-exception';
 import type { VectorAclFilter } from '../vector-store/vector-store';
+import { isAdmin } from './app-role';
 import type { Capability, Identity, Sensitivity } from './identity';
-
-const TENANT_WIDE_ROLES = new Set(['platform_admin', 'document_admin']);
 
 @Injectable()
 export class AclPolicy {
@@ -65,6 +64,6 @@ export class AclPolicy {
   }
 
   private hasTenantWideAccess(identity: Identity): boolean {
-    return identity.roles.some((role) => TENANT_WIDE_ROLES.has(role));
+    return isAdmin(identity.roles);
   }
 }

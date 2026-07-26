@@ -11,7 +11,7 @@ const verifiedIdentity: Identity = {
   tenantId: 'verified-tenant',
   userId: 'verified-user',
   department: 'finance',
-  roles: [],
+  roles: ['user'],
   allowedSensitivities: ['public', 'internal'],
   capabilities: ['documents:read'],
   defaultSensitivity: 'internal',
@@ -35,7 +35,7 @@ function config(values: Partial<AppConfig['values']>): AppConfig {
       DEV_TENANT_ID: 'test-tenant',
       DEV_USER_ID: 'test-user',
       DEV_DEPARTMENT: 'test-department',
-      DEV_ROLES_JSON: [],
+      DEV_ROLES_JSON: ['user'],
       DEV_ALLOWED_SENSITIVITIES_JSON: ['public', 'internal'],
       DEV_CAPABILITIES_JSON: ['documents:read'],
       DEV_SENSITIVITY: 'internal',
@@ -103,12 +103,12 @@ describe('AuthenticationGuard', () => {
       headers: {
         authorization: 'Bearer signed.token.value',
         'x-tenant-id': 'spoofed-tenant',
-        'x-role': 'platform_admin',
+        'x-role': 'admin',
       },
       body: {
         tenantId: 'spoofed-tenant',
         department: 'executive',
-        roles: ['platform_admin'],
+        roles: ['admin'],
       },
     } as unknown as AuthenticatedRequest;
     const verify = vi.fn().mockResolvedValue(verifiedIdentity);

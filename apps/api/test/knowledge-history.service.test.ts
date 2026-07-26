@@ -7,7 +7,7 @@ const identity: Identity = {
   tenantId: 'tenant-a',
   userId: 'user-a',
   department: 'finance',
-  roles: [],
+  roles: ['user'],
   allowedSensitivities: ['public', 'internal'],
   capabilities: ['documents:read'],
   defaultSensitivity: 'internal',
@@ -15,17 +15,15 @@ const identity: Identity = {
 
 describe('KnowledgeHistoryService', () => {
   it('lists only conversations owned by the authenticated tenant user', async () => {
-    const findMany = vi
-      .fn()
-      .mockResolvedValue([
-        {
-          id: '11111111-1111-4111-8111-111111111111',
-          title: '付款周期',
-          createdAt: new Date('2026-07-20T00:00:00Z'),
-          updatedAt: new Date('2026-07-20T01:00:00Z'),
-          _count: { turns: 2 },
-        },
-      ]);
+    const findMany = vi.fn().mockResolvedValue([
+      {
+        id: '11111111-1111-4111-8111-111111111111',
+        title: '付款周期',
+        createdAt: new Date('2026-07-20T00:00:00Z'),
+        updatedAt: new Date('2026-07-20T01:00:00Z'),
+        _count: { turns: 2 },
+      },
+    ]);
     const count = vi.fn().mockResolvedValue(1);
     const service = new KnowledgeHistoryService({
       knowledgeConversation: { findMany, count },

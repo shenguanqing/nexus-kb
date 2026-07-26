@@ -1,7 +1,9 @@
 import type { FastifyRequest } from 'fastify';
+import type { AppRole } from '@nexus-kb/contracts';
 
 import { ApiException } from '../common/api-exception';
 import type { AppConfig } from '../config/app-config';
+import { normalizeAppRoles } from './app-role';
 
 export const SENSITIVITIES = ['public', 'internal', 'confidential'] as const;
 export type Sensitivity = (typeof SENSITIVITIES)[number];
@@ -21,7 +23,7 @@ export interface Identity {
   tenantId: string;
   userId: string;
   department: string;
-  roles: string[];
+  roles: AppRole[];
   allowedSensitivities: Sensitivity[];
   capabilities: Capability[];
   defaultSensitivity: Sensitivity;
@@ -36,7 +38,7 @@ export function developmentIdentity(config: AppConfig): Identity {
     tenantId: config.values.DEV_TENANT_ID,
     userId: config.values.DEV_USER_ID,
     department: config.values.DEV_DEPARTMENT,
-    roles: [...config.values.DEV_ROLES_JSON],
+    roles: normalizeAppRoles(config.values.DEV_ROLES_JSON),
     allowedSensitivities: [...new Set(config.values.DEV_ALLOWED_SENSITIVITIES_JSON)],
     capabilities: [...new Set(config.values.DEV_CAPABILITIES_JSON)],
     defaultSensitivity: config.values.DEV_SENSITIVITY,

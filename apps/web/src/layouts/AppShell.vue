@@ -15,6 +15,7 @@ interface NavigationItem {
   label: string;
   icon: string;
   capability?: 'documents:read' | 'audit:read' | 'access:read' | 'system:read';
+  adminOnly?: boolean;
 }
 
 const route = useRoute();
@@ -58,20 +59,65 @@ const pageDescription = computed(() => {
 const primaryNavigation: NavigationItem[] = [
   { to: '/ask', label: '知识问答', icon: '✦' },
   { to: '/history', label: '问答历史', icon: '◷' },
-  { to: '/documents', label: '文档管理', icon: '▤', capability: 'documents:read' },
-  { to: '/ingestion-jobs', label: '入库任务', icon: '⇄', capability: 'documents:read' },
+  {
+    to: '/documents',
+    label: '文档管理',
+    icon: '▤',
+    capability: 'documents:read',
+    adminOnly: true,
+  },
+  {
+    to: '/ingestion-jobs',
+    label: '入库任务',
+    icon: '⇄',
+    capability: 'documents:read',
+    adminOnly: true,
+  },
 ];
 const managementNavigation: NavigationItem[] = [
-  { to: '/audit', label: '审计中心', icon: '⌁', capability: 'audit:read' },
-  { to: '/access/users', label: '用户与角色', icon: '♙', capability: 'access:read' },
-  { to: '/access/departments', label: '部门权限', icon: '⌘', capability: 'access:read' },
-  { to: '/settings/providers', label: '模型 Provider', icon: '◇', capability: 'system:read' },
-  { to: '/system/usage', label: '用量与成本', icon: '▥', capability: 'system:read' },
-  { to: '/system/status', label: '系统状态', icon: '●', capability: 'system:read' },
+  { to: '/audit', label: '审计中心', icon: '⌁', capability: 'audit:read', adminOnly: true },
+  {
+    to: '/access/users',
+    label: '用户与角色',
+    icon: '♙',
+    capability: 'access:read',
+    adminOnly: true,
+  },
+  {
+    to: '/access/departments',
+    label: '部门权限',
+    icon: '⌘',
+    capability: 'access:read',
+    adminOnly: true,
+  },
+  {
+    to: '/settings/providers',
+    label: '模型 Provider',
+    icon: '◇',
+    capability: 'system:read',
+    adminOnly: true,
+  },
+  {
+    to: '/system/usage',
+    label: '用量与成本',
+    icon: '▥',
+    capability: 'system:read',
+    adminOnly: true,
+  },
+  {
+    to: '/system/status',
+    label: '系统状态',
+    icon: '●',
+    capability: 'system:read',
+    adminOnly: true,
+  },
 ];
 function canShow(item: NavigationItem): boolean {
+  if (item.adminOnly && !auth.identity?.roles.includes('admin')) return false;
   return item.capability === undefined || auth.hasCapability(item.capability);
 }
+const visiblePrimaryNavigation = computed(() => primaryNavigation.filter(canShow));
+const visibleManagementNavigation = computed(() => managementNavigation.filter(canShow));
 function closeMobileMenu(): void {
   mobileMenuOpen.value = false;
 }
@@ -140,16 +186,12 @@ async function signOut(): Promise<void> {
     <aside class="app-sidebar">
       <nav aria-label="主导航">
         <div class="navigation-label">工作台</div>
-        <RouterLink v-for="item in primaryNavigation.filter(canShow)" :key="item.to" :to="item.to">
+        <RouterLink v-for="item in visiblePrimaryNavigation" :key="item.to" :to="item.to">
           <span aria-hidden="true">{{ item.icon }}</span>
           <b>{{ item.label }}</b>
         </RouterLink>
-        <div class="navigation-label">管理</div>
-        <RouterLink
-          v-for="item in managementNavigation.filter(canShow)"
-          :key="item.to"
-          :to="item.to"
-        >
+        <div v-if="visibleManagementNavigation.length > 0" class="navigation-label">管理</div>
+        <RouterLink v-for="item in visibleManagementNavigation" :key="item.to" :to="item.to">
           <span aria-hidden="true">{{ item.icon }}</span>
           <b>{{ item.label }}</b>
         </RouterLink>
@@ -204,7 +246,7 @@ async function signOut(): Promise<void> {
       <nav class="mobile-drawer-nav" aria-label="移动端主导航">
         <div>工作台</div>
         <RouterLink
-          v-for="item in primaryNavigation.filter(canShow)"
+          v-for="item in visiblePrimaryNavigation"
           :key="item.to"
           :to="item.to"
           @click="closeMobileMenu"
@@ -212,9 +254,9 @@ async function signOut(): Promise<void> {
           <span aria-hidden="true">{{ item.icon }}</span>
           <b>{{ item.label }}</b>
         </RouterLink>
-        <div>管理</div>
+        <div v-if="visibleManagementNavigation.length > 0">管理</div>
         <RouterLink
-          v-for="item in managementNavigation.filter(canShow)"
+          v-for="item in visibleManagementNavigation"
           :key="item.to"
           :to="item.to"
           @click="closeMobileMenu"

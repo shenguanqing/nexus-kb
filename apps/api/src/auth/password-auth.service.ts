@@ -10,6 +10,7 @@ import {
 import { ApiException } from '../common/api-exception';
 import { AppConfig, type Environment } from '../config/app-config';
 import { PrismaService } from '../database/prisma.service';
+import { normalizeAppRoles } from './app-role';
 import type { Identity } from './identity';
 
 const sessionCookieName = 'nexuskb_session';
@@ -156,7 +157,7 @@ export class PasswordAuthService implements OnModuleInit {
       tenantId: account.tenantId,
       userId: account.userId,
       department: account.department,
-      roles: [...new Set(account.roles)],
+      roles: normalizeAppRoles(account.roles),
       allowedSensitivities: [...new Set(account.allowedSensitivities)],
       capabilities: [...new Set(account.capabilities)],
       defaultSensitivity: account.defaultSensitivity,

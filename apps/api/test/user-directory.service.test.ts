@@ -5,11 +5,11 @@ import { AclPolicy } from '../src/auth/acl-policy';
 import type { Identity } from '../src/auth/identity';
 import type { PrismaService } from '../src/database/prisma.service';
 
-const platformAdmin: Identity = {
+const adminIdentity: Identity = {
   tenantId: 'tenant-a',
   userId: 'admin-a',
   department: 'platform',
-  roles: ['platform_admin'],
+  roles: ['admin'],
   allowedSensitivities: ['public', 'internal', 'confidential'],
   capabilities: ['access:read'],
   defaultSensitivity: 'internal',
@@ -34,7 +34,7 @@ function fixture() {
 describe('UserDirectoryService', () => {
   it('observes only verified identity fields with normalized roles', async () => {
     const deps = fixture();
-    await deps.service.observe({ ...platformAdmin, roles: ['platform_admin', 'editor', 'editor'] });
+    await deps.service.observe({ ...adminIdentity, roles: ['admin', 'admin'] });
 
     const [upsertInput] = deps.upsert.mock.calls[0] as [
       {
@@ -48,17 +48,17 @@ describe('UserDirectoryService', () => {
         tenantId: 'tenant-a',
         userId: 'admin-a',
         department: 'platform',
-        roles: ['editor', 'platform_admin'],
+        roles: ['admin'],
       },
     });
     expect(JSON.stringify(deps.upsert.mock.calls)).not.toContain('capabilities');
   });
 
-  it('returns a tenant-scoped paginated directory for platform admins', async () => {
+  it('returns a tenant-scoped paginated directory for administrators', async () => {
     const deps = fixture();
     const result = await deps.service.query(
       { query: 'user', department: 'finance', offset: 25, limit: 25 },
-      platformAdmin,
+      adminIdentity,
     );
 
     expect(deps.findMany).toHaveBeenCalledWith({
@@ -76,7 +76,7 @@ describe('UserDirectoryService', () => {
         {
           userId: 'user-a',
           department: 'finance',
-          roles: ['document_admin'],
+          roles: ['user'],
           roleSource: 'identity',
           status: 'observed',
           lastAuthenticatedAt: '2026-07-18T08:00:00.000Z',
@@ -92,9 +92,9 @@ describe('UserDirectoryService', () => {
   it('forces non-platform readers to their verified department', async () => {
     const deps = fixture();
     const identity = {
-      ...platformAdmin,
+      ...adminIdentity,
       department: 'finance',
-      roles: ['department_admin'],
+      roles: ['user'],
     };
     const result = await deps.service.query({ offset: 0, limit: 25 }, identity);
 
@@ -109,7 +109,7 @@ describe('UserDirectoryService', () => {
     await expect(
       deps.service.query(
         { department: 'legal', offset: 0, limit: 25 },
-        { ...platformAdmin, department: 'finance', roles: ['department_admin'] },
+        { ...adminIdentity, department: 'finance', roles: ['user'] },
       ),
     ).rejects.toMatchObject({ code: 'ACCESS_SCOPE_FORBIDDEN' });
     expect(deps.findMany).not.toHaveBeenCalled();
@@ -120,13 +120,13 @@ describe('UserDirectoryService', () => {
     await expect(
       deps.service.query(
         { offset: 0, limit: 25 },
-        { ...platformAdmin, capabilities: ['documents:read'] },
+        { ...adminIdentity, capabilities: ['documents:read'] },
       ),
     ).rejects.toMatchObject({ code: 'CAPABILITY_REQUIRED' });
     expect(deps.findMany).not.toHaveBeenCalled();
   });
 
-  it('protects the final effective platform administrator', async () => {
+  it('protects the final effective administrator, including legacy data', async () => {
     const entries = [
       {
         tenantId: 'tenant-a',
@@ -164,11 +164,11 @@ describe('UserDirectoryService', () => {
     await expect(
       service.updateRoles(
         'admin-a',
-        { roles: ['viewer'] },
-        { ...platformAdmin, capabilities: ['access:read', 'access:write'] },
+        { roles: ['user'] },
+        { ...adminIdentity, capabilities: ['access:read', 'access:write'] },
         'trace-role-update',
       ),
-    ).rejects.toMatchObject({ code: 'LAST_PLATFORM_ADMIN_REQUIRED' });
+    ).rejects.toMatchObject({ code: 'LAST_ADMIN_REQUIRED' });
     expect(update).not.toHaveBeenCalled();
     expect(create).not.toHaveBeenCalled();
   });

@@ -1,8 +1,6 @@
 const roleLabels: Record<string, string> = {
-  platform_admin: '平台管理员',
-  department_admin: '部门管理员',
-  document_admin: '文档管理员',
-  auditor: '审计员',
+  user: '普通用户',
+  admin: '管理员',
 };
 
 export function accessRoleLabel(role: string): string {

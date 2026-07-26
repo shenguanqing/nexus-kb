@@ -30,17 +30,16 @@ export {
   departmentPolicySchema,
   departmentPolicyUpdateRequestSchema,
   departmentPolicyUpdateResponseSchema,
-  managedRoleSchema,
   userRoleUpdateRequestSchema,
   userRoleUpdateResponseSchema,
   type DepartmentPolicy,
   type DepartmentPolicyListResponse,
   type DepartmentPolicyUpdateRequest,
   type DepartmentPolicyUpdateResponse,
-  type ManagedRole,
   type UserRoleUpdateRequest,
   type UserRoleUpdateResponse,
 } from './access';
+export { appRoleSchema, appRolesSchema, type AppRole } from './roles';
 export {
   parsedElementSchema,
   parseRequestSchema,

@@ -8,7 +8,7 @@ const identity: Identity = {
   tenantId: 'tenant-a',
   userId: 'admin-a',
   department: 'platform',
-  roles: ['platform_admin'],
+  roles: ['admin'],
   allowedSensitivities: ['public', 'internal', 'confidential'],
   capabilities: ['system:read'],
   defaultSensitivity: 'internal',
@@ -73,9 +73,9 @@ describe('UsageService', () => {
     await expect(
       service.query(
         { from: '2026-07-01T00:00:00.000Z', to: '2026-07-20T00:00:00.000Z' },
-        { ...identity, roles: [] },
+        { ...identity, roles: ['user'] },
       ),
-    ).rejects.toMatchObject({ code: 'PLATFORM_ADMIN_REQUIRED' });
+    ).rejects.toMatchObject({ code: 'ADMIN_REQUIRED' });
     expect(findMany).not.toHaveBeenCalled();
   });
 });

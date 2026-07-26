@@ -7,6 +7,7 @@ import {
   qualityEvaluationRunSchema,
   qualitySourceSchema,
   qualityVariantSchema,
+  appRolesSchema,
 } from '@nexus-kb/contracts';
 import type { QualityObservation, QualitySource } from '@nexus-kb/contracts';
 import { z } from 'zod';
@@ -25,7 +26,7 @@ const identitySchema = z
     tenantId: z.string().min(1).max(128),
     userId: z.string().min(1).max(256),
     department: z.string().min(1).max(128),
-    roles: z.array(z.string().min(1).max(64)).max(32),
+    roles: appRolesSchema,
     allowedSensitivities: z
       .array(z.enum(['public', 'internal', 'confidential']))
       .min(1)

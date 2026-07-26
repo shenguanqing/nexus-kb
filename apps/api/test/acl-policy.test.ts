@@ -7,7 +7,7 @@ const user: Identity = {
   tenantId: 'tenant-a',
   userId: 'user-a',
   department: 'finance',
-  roles: [],
+  roles: ['user'],
   allowedSensitivities: ['public', 'internal'],
   capabilities: ['documents:read'],
   defaultSensitivity: 'internal',
@@ -25,7 +25,7 @@ describe('AclPolicy', () => {
   });
 
   it('allows tenant administrators across departments without crossing tenants or sensitivities', () => {
-    const admin = { ...user, roles: ['platform_admin'] };
+    const admin: Identity = { ...user, roles: ['admin'] };
     expect(policy.documentWhere(admin)).toEqual({
       tenantId: 'tenant-a',
       sensitivity: { in: ['public', 'internal'] },

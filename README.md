@@ -290,7 +290,8 @@ curl http://127.0.0.1:3000/v1/system/usage
   HTTPS `OIDC_JWKS_URI`。
 - 如需使用账号密码登录，设置 `PASSWORD_AUTH_ENABLED=true`，并通过本地未提交的 `.env` 或服务器 Secret
   Manager 注入 `PASSWORD_AUTH_USERS_JSON`。每个账号必须包含 `username`、至少 12 位的 `password`、
-  `tenantId`、`userId`、`department`、roles、allowedSensitivities、capabilities 和 defaultSensitivity；该
+  `tenantId`、`userId`、`department`、`roles`（`["user"]` 或 `["admin"]`）、`allowedSensitivities`、
+  `capabilities` 和 `defaultSensitivity`；该
   JSON 不得进入 `.env.example`、Git、镜像层或日志。启用该模式时不需要 OIDC 配置，OIDC 仍是生产环境的首选。
 - 账号密码模式提供 `GET /v1/auth/login-options`、`POST /v1/auth/password/login` 和
   `POST /v1/auth/logout`。前端不会保存密码或会话 token；退出会撤销服务端会话并清空 Cookie。
@@ -298,9 +299,10 @@ curl http://127.0.0.1:3000/v1/system/usage
   均返回 401，不回退开发身份。
 - 文档 API 使用 `documents:read`、`documents:write`、`documents:delete` capabilities；tenant 级审计查询
   另需 `audit:read`；Provider、系统状态与用量摘要另需 `system:read`；已验证用户目录另需 `access:read`，
-  角色与部门 mutation 另需 `access:write` 和平台管理员角色。
+  角色与部门 mutation 另需 `access:write` 和管理员角色。
 - 所有资源查询首先强制 tenant；普通用户只能访问允许敏感度内的 public、同部门或本人文档。
-- `platform_admin`/`document_admin` 可跨部门管理当前 tenant 内允许敏感度的文档，但不能跨 tenant。
+- 应用角色只允许 `user` 和 `admin`；`admin` 可在 capability 允许时跨部门管理当前 tenant 内允许敏感度的
+  文档，但不能跨 tenant，也不能绕过敏感度和数据出网策略。
 - 入库任务继承关联文档 ACL；VectorStore filter 只能由服务端 Identity 构造。
 - 分块详情只允许 `documents:read` 且通过同一文档 ACL 的用户访问；接口按版本分页返回原始/脱敏文本和来源
   metadata，供管理员核验分块质量，但不返回向量值、内容哈希或内部存储路径。

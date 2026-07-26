@@ -10,7 +10,7 @@ import {
   type UserDirectoryQueryResponse,
   type DepartmentPolicyListResponse,
   type DepartmentPolicyUpdateResponse,
-  type ManagedRole,
+  type AppRole,
   type UserRoleUpdateResponse,
 } from '@nexus-kb/contracts';
 
@@ -27,10 +27,7 @@ export function listUsers(
   return apiRequest(`/v1/access/users?${parameters.toString()}`, userDirectoryQueryResponseSchema);
 }
 
-export function updateUserRoles(
-  userId: string,
-  roles: ManagedRole[],
-): Promise<UserRoleUpdateResponse> {
+export function updateUserRoles(userId: string, roles: AppRole[]): Promise<UserRoleUpdateResponse> {
   const body = userRoleUpdateRequestSchema.parse({ roles });
   return apiRequest(
     `/v1/access/users/${encodeURIComponent(userId)}/roles`,

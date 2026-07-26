@@ -9,6 +9,7 @@ const session = (
     'access:write',
     'system:read',
   ],
+  role: 'user' | 'admin' = 'admin',
 ) => ({
   authenticated: true,
   mode: 'development',
@@ -16,15 +17,21 @@ const session = (
     tenantId: 'tenant-fixture',
     userId: 'admin.fixture',
     department: 'platform',
-    roles: ['platform_admin'],
+    roles: [role],
     allowedSensitivities: ['public', 'internal', 'confidential'],
     capabilities,
     defaultSensitivity: 'internal',
   },
 });
 
-async function mockSession(page: Page, capabilities?: string[]): Promise<void> {
-  await page.route('**/v1/auth/session', (route) => route.fulfill({ json: session(capabilities) }));
+async function mockSession(
+  page: Page,
+  capabilities?: string[],
+  role: 'user' | 'admin' = 'admin',
+): Promise<void> {
+  await page.route('**/v1/auth/session', (route) =>
+    route.fulfill({ json: session(capabilities, role) }),
+  );
 }
 
 test('asks a grounded question and renders an authorized source', async ({ page }) => {
@@ -87,7 +94,7 @@ test('asks a grounded question and renders an authorized source', async ({ page 
 });
 
 test('renders explicit no-answer and blocks unauthorized management routes', async ({ page }) => {
-  await mockSession(page, ['documents:read']);
+  await mockSession(page, ['documents:read'], 'user');
   await page.route('**/v1/knowledge/query', (route) =>
     route.fulfill({
       json: {
@@ -104,10 +111,15 @@ test('renders explicit no-answer and blocks unauthorized management routes', asy
     }),
   );
   await page.goto('/ask');
+  await expect(page.getByRole('link', { name: '知识问答' })).toBeVisible();
+  await expect(page.getByRole('link', { name: '问答历史' })).toBeVisible();
+  await expect(page.getByRole('link', { name: '文档管理' })).toHaveCount(0);
+  await expect(page.getByRole('link', { name: '入库任务' })).toHaveCount(0);
+  await expect(page.getByText('管理', { exact: true })).toHaveCount(0);
   await page.getByLabel('输入知识库问题').fill('不存在的制度？');
   await page.getByRole('button', { name: '发送' }).click();
   await expect(page.getByText('暂时没有找到足够依据')).toBeVisible();
-  await page.goto('/access/users');
+  await page.goto('/documents');
   await expect(page).toHaveURL(/\/403$/);
 });
 
@@ -368,7 +380,10 @@ test('keeps every authorized page within a 640px mobile viewport', async ({ page
           usageCompleteness: 'request_only',
         },
       });
-    return route.fulfill({ status: 404, json: { error: { code: 'NOT_FOUND', message: '未找到' } } });
+    return route.fulfill({
+      status: 404,
+      json: { error: { code: 'NOT_FOUND', message: '未找到' } },
+    });
   });
 
   await page.goto('/ask');

@@ -72,7 +72,7 @@ describe('embedding configuration', () => {
         AUTH_REQUIRED: 'true',
         PASSWORD_AUTH_ENABLED: 'true',
         PASSWORD_AUTH_USERS_JSON:
-          '[{"username":"admin","password":"password-for-test","tenantId":"tenant-a","userId":"admin-a","department":"platform","roles":["platform_admin"],"allowedSensitivities":["public","internal","confidential"],"capabilities":["documents:read","access:read","access:write"],"defaultSensitivity":"internal"}]',
+          '[{"username":"admin","password":"password-for-test","tenantId":"tenant-a","userId":"admin-a","department":"platform","roles":["admin"],"allowedSensitivities":["public","internal","confidential"],"capabilities":["documents:read","access:read","access:write"],"defaultSensitivity":"internal"}]',
       }),
     ).toMatchObject({ PASSWORD_AUTH_ENABLED: true, AUTH_REQUIRED: true });
     expect(
@@ -81,7 +81,7 @@ describe('embedding configuration', () => {
         NODE_ENV: 'production',
         PASSWORD_AUTH_ENABLED: 'true',
         PASSWORD_AUTH_USERS_JSON:
-          '[{"username":"admin","password":"password-for-test","tenantId":"tenant-a","userId":"admin-a","department":"platform","roles":["platform_admin"],"allowedSensitivities":["public","internal","confidential"],"capabilities":["documents:read","access:read","access:write"],"defaultSensitivity":"internal"}]',
+          '[{"username":"admin","password":"password-for-test","tenantId":"tenant-a","userId":"admin-a","department":"platform","roles":["admin"],"allowedSensitivities":["public","internal","confidential"],"capabilities":["documents:read","access:read","access:write"],"defaultSensitivity":"internal"}]',
       }),
     ).toMatchObject({ NODE_ENV: 'production', PASSWORD_AUTH_ENABLED: true, AUTH_REQUIRED: true });
   });
