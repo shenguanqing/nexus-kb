@@ -191,7 +191,8 @@ describe('KnowledgeQueryService', () => {
     await expect(
       deps.service.query({ question: '付款周期是多少？' }, identity, traceId),
     ).resolves.toMatchObject({
-      sources: [{ index: 2, chunkIds: ['c'.repeat(64)] }],
+      answer: '付款依据见第二条资料。[来源1]',
+      sources: [{ index: 1, chunkIds: ['c'.repeat(64)] }],
     });
     expect(deps.record).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -200,6 +201,37 @@ describe('KnowledgeQueryService', () => {
         sourceChunkIds: ['c'.repeat(64)],
       }),
     );
+  });
+
+  it('renumbers non-contiguous cited sources by first appearance', async () => {
+    const candidates = ['a', 'c', 'd', 'e'].map((character, index) => ({
+      ...context,
+      id: character.repeat(64),
+      text: `第 ${index + 1} 条资料`,
+      metadata: {
+        ...context.metadata,
+        chunkId: character.repeat(64),
+        chunkIds: [character.repeat(64)],
+        ordinal: index,
+      },
+    }));
+    const deps = dependencies({ candidates });
+    deps.answer.mockResolvedValue({
+      text: '规格由两条资料共同证明。[来源1][来源4]，并再次引用第四条。[来源4]',
+      provider: 'deepseek',
+      model: 'deepseek-chat',
+      fallbackUsed: false,
+    });
+
+    await expect(
+      deps.service.query({ question: '线缆规格是什么？' }, identity, traceId),
+    ).resolves.toMatchObject({
+      answer: '规格由两条资料共同证明。[来源1][来源2]，并再次引用第四条。[来源2]',
+      sources: [
+        { index: 1, chunkIds: ['a'.repeat(64)] },
+        { index: 2, chunkIds: ['e'.repeat(64)] },
+      ],
+    });
   });
 
   it('rejects without calling Rerank or LLM when relevance is insufficient', async () => {

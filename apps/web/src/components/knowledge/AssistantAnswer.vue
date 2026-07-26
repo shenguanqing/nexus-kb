@@ -5,6 +5,19 @@ import { computed } from 'vue';
 const props = defineProps<{ response: KnowledgeQueryResponse }>();
 defineEmits<{ selectSource: [source: KnowledgeSource] }>();
 
+const displaySources = computed(() =>
+  props.response.sources.map((source, index) => ({ ...source, index: index + 1 })),
+);
+const compactSourceIndexes = computed(
+  () => new Map(props.response.sources.map((source, index) => [source.index, index + 1])),
+);
+const displayAnswer = computed(() =>
+  props.response.answer.replace(/\[来源(\d+)\]/g, (citation, sourceIndex: string) => {
+    const compactIndex = compactSourceIndexes.value.get(Number(sourceIndex));
+    return compactIndex === undefined ? citation : `[来源${compactIndex}]`;
+  }),
+);
+
 interface AnswerPart {
   text: string;
   citation: boolean;
@@ -14,16 +27,16 @@ const answerParts = computed<AnswerPart[]>(() => {
   const parts: AnswerPart[] = [];
   const pattern = /\[来源\d+\]/g;
   let offset = 0;
-  for (const match of props.response.answer.matchAll(pattern)) {
+  for (const match of displayAnswer.value.matchAll(pattern)) {
     const index = match.index;
     if (index > offset) {
-      parts.push({ text: props.response.answer.slice(offset, index), citation: false });
+      parts.push({ text: displayAnswer.value.slice(offset, index), citation: false });
     }
     parts.push({ text: match[0], citation: true });
     offset = index + match[0].length;
   }
-  if (offset < props.response.answer.length) {
-    parts.push({ text: props.response.answer.slice(offset), citation: false });
+  if (offset < displayAnswer.value.length) {
+    parts.push({ text: displayAnswer.value.slice(offset), citation: false });
   }
   return parts;
 });
@@ -50,22 +63,27 @@ const answerParts = computed<AnswerPart[]>(() => {
           <span v-else>{{ part.text }}</span>
         </template>
       </p>
-      <div v-if="response.sources.length" class="source-list" aria-label="回答来源">
-        <button
-          v-for="source in response.sources"
-          :key="source.index"
-          type="button"
-          class="source-card"
-          @click="$emit('selectSource', source)"
-        >
-          <span>来源 {{ source.index }}</span>
-          <strong :title="source.sourceName">{{ source.sourceName }}</strong>
-          <small>
-            {{ source.page ? `第 ${source.page} 页` : source.sheet ? source.sheet : '位置未标注' }}
-            · v{{ source.documentVersion }}
-          </small>
-        </button>
-      </div>
+      <section v-if="displaySources.length" class="answer-sources" aria-label="回答来源">
+        <div class="answer-sources-label">回答来源</div>
+        <div class="source-list">
+          <button
+            v-for="source in displaySources"
+            :key="source.index"
+            type="button"
+            class="source-card"
+            @click="$emit('selectSource', source)"
+          >
+            <span>来源 {{ source.index }}</span>
+            <strong :title="source.sourceName">{{ source.sourceName }}</strong>
+            <small>
+              {{
+                source.page ? `第 ${source.page} 页` : source.sheet ? source.sheet : '位置未标注'
+              }}
+              · v{{ source.documentVersion }}
+            </small>
+          </button>
+        </div>
+      </section>
       <div class="answer-meta">
         <span>Trace ID：{{ response.traceId }}</span>
         <span v-if="response.model">

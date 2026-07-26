@@ -99,13 +99,13 @@ async function startNewChat(): Promise<void> {
       </div>
       <template v-for="turn in conversation.turns" :key="turn.response.traceId">
         <div class="user-message">
-          <span>你</span>
+          <span>用户</span>
           <p>{{ turn.question }}</p>
         </div>
         <AssistantAnswer :response="turn.response" @select-source="openSource" />
       </template>
       <div v-if="conversation.pendingQuestion" class="user-message">
-        <span>你</span>
+        <span>用户</span>
         <p>{{ conversation.pendingQuestion }}</p>
       </div>
       <div v-if="conversation.isSubmitting" class="retrieving-state" aria-live="polite">

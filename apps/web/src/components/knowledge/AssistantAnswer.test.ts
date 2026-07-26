@@ -9,7 +9,16 @@ const response: KnowledgeQueryResponse = {
   noAnswer: false,
   reason: null,
   traceId: '83fcad07-64b0-4d94-9fd4-42cb82038db9',
-  sources: [],
+  sources: [1, 4].map((index) => ({
+    index,
+    documentId: '6769af9a-a4d0-4dc2-a97d-942584a9c826',
+    documentVersion: 1,
+    chunkIds: [String(index).repeat(64)],
+    sourceName: `vue-${index}.md`,
+    page: null,
+    sheet: null,
+    sectionPath: [],
+  })),
   model: {
     provider: 'google',
     model: 'gemini-3.5-flash-lite',
@@ -19,17 +28,23 @@ const response: KnowledgeQueryResponse = {
 };
 
 describe('AssistantAnswer', () => {
-  it('renders inline source citations as small secondary markers', () => {
+  it('renders compact inline citations and matching source details', async () => {
     const wrapper = mount(AssistantAnswer, { props: { response } });
-    const citations = wrapper.findAll('.answer-citation');
 
-    expect(citations.map((citation) => citation.element.tagName)).toEqual([
-      'SMALL',
-      'SMALL',
-      'SMALL',
+    expect(wrapper.findAll('.answer-citation').map((citation) => citation.text())).toEqual([
+      '[来源1]',
+      '[来源2]',
+      '[来源2]',
     ]);
-    expect(citations.map((citation) => citation.text())).toEqual(['[来源1]', '[来源2]', '[来源2]']);
-    expect(wrapper.get('.answer-text').text()).toContain('Vue 3 使用 Proxy。');
-    expect(wrapper.get('.answer-text').text()).toContain('并支持 Composition API。');
+    expect(wrapper.get('.answer-text').text()).toBe(
+      'Vue 3 使用 Proxy。[来源1][来源2]\n并支持 Composition API。[来源2]',
+    );
+    expect(wrapper.get('.answer-sources-label').text()).toBe('回答来源');
+    expect(wrapper.findAll('.source-card').map((source) => source.text())).toEqual([
+      expect.stringContaining('来源 1'),
+      expect.stringContaining('来源 2'),
+    ]);
+    await wrapper.findAll('.source-card')[1]!.trigger('click');
+    expect(wrapper.emitted('selectSource')?.[0]?.[0]).toMatchObject({ index: 2 });
   });
 });

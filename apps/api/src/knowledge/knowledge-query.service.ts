@@ -162,8 +162,18 @@ export class KnowledgeQueryService {
           ),
         );
       }
-      const sources = citedSourceIndexes.map((sourceIndex) =>
-        this.source(finalContexts[sourceIndex - 1]!, sourceIndex),
+      const compactSourceIndexes = new Map(
+        citedSourceIndexes.map((sourceIndex, index) => [sourceIndex, index + 1]),
+      );
+      const compactAnswer = answer.text.replace(
+        /\[来源(\d+)\]/g,
+        (citation, sourceIndex: string) => {
+          const compactIndex = compactSourceIndexes.get(Number(sourceIndex));
+          return compactIndex === undefined ? citation : `[来源${compactIndex}]`;
+        },
+      );
+      const sources = citedSourceIndexes.map((sourceIndex, index) =>
+        this.source(finalContexts[sourceIndex - 1]!, index + 1),
       );
       await this.audit.record({
         ...auditBase,
@@ -177,7 +187,7 @@ export class KnowledgeQueryService {
         durationMs: Date.now() - startedAt,
       });
       return await this.withHistory(request, identity, {
-        answer: answer.text,
+        answer: compactAnswer,
         noAnswer: false,
         reason: null,
         traceId,

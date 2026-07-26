@@ -126,7 +126,7 @@ async function search(): Promise<void> {
               <p class="history-question"><strong>你</strong>{{ turn.question }}</p>
               <div class="history-answer">
                 <strong>知枢</strong>
-                <p>{{ turn.answer }}</p>
+                <div>{{ turn.answer }}</div>
                 <small>{{ turn.sourceCount }} 个历史来源 · Trace {{ turn.traceId }}</small>
               </div>
             </div>
