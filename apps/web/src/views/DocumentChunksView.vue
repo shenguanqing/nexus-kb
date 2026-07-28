@@ -181,7 +181,7 @@ onMounted(load);
       </div>
       <div v-if="chunks && chunks.total > pageSize" class="list-pagination">
         <el-pagination
-          layout="prev, pager, next"
+          layout="total, prev, pager, next"
           :current-page="chunks.page"
           :page-size="chunks.pageSize"
           :total="chunks.total"

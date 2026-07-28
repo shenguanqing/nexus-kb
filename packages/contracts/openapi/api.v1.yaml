@@ -2,9 +2,38 @@ openapi: 3.1.0
 info:
   title: NexusKB API
   version: 1.0.0
+servers:
+  - url: http://127.0.0.1:3000
+    description: Mac local development
 security:
   - bearerAuth: []
+  - sessionCookie: []
 paths:
+  /health/live:
+    get:
+      security: []
+      summary: Confirm that the API process is alive without checking dependencies
+      responses:
+        '200':
+          description: API process is alive
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/HealthLiveResponse' }
+  /health/ready:
+    get:
+      security: []
+      summary: Check PostgreSQL, Redis, Chroma, Parser Worker and raw document storage readiness
+      responses:
+        '200':
+          description: All required dependencies are ready
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/HealthReadyResponse' }
+        '503':
+          description: One or more required dependencies are not ready
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/HealthReadyResponse' }
   /v1/auth/login-options:
     get:
       security: []
@@ -262,7 +291,7 @@ paths:
             schema: { $ref: '#/components/schemas/KnowledgeQueryRequest' }
       responses:
         '200':
-          description: Grounded answer or explicit no-answer response
+          description: Grounded answer, general-knowledge supplement or explicit no-answer response
           content:
             application/json:
               schema: { $ref: '#/components/schemas/KnowledgeQueryResponse' }
@@ -510,6 +539,10 @@ components:
       type: http
       scheme: bearer
       bearerFormat: JWT
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: nexuskb_session
   parameters:
     DocumentId:
       name: documentId
@@ -517,6 +550,30 @@ components:
       required: true
       schema: { type: string, format: uuid }
   schemas:
+    HealthLiveResponse:
+      type: object
+      additionalProperties: false
+      required: [status]
+      properties:
+        status: { const: ok }
+    HealthCheck:
+      type: object
+      additionalProperties: false
+      required: [status]
+      properties:
+        status: { type: string, enum: [up, down] }
+        reason:
+          type: string
+          enum: [unavailable, unhealthy, configuration_mismatch]
+    HealthReadyResponse:
+      type: object
+      additionalProperties: false
+      required: [status, checks]
+      properties:
+        status: { type: string, enum: [ready, not_ready] }
+        checks:
+          type: object
+          additionalProperties: { $ref: '#/components/schemas/HealthCheck' }
     Sensitivity:
       type: string
       enum: [public, internal, confidential]
@@ -702,7 +759,8 @@ components:
     ConversationTurn:
       type: object
       additionalProperties: false
-      required: [id, question, answer, noAnswer, reason, traceId, sourceCount, createdAt]
+      required:
+        [id, question, answer, noAnswer, reason, answerMode, traceId, sourceCount, createdAt]
       properties:
         id: { type: string, format: uuid }
         question: { type: string, minLength: 1, maxLength: 2000 }
@@ -710,6 +768,7 @@ components:
         noAnswer: { type: boolean }
         reason:
           { type: [string, 'null'], enum: [insufficient_relevance, authorization_changed, null] }
+        answerMode: { type: [string, 'null'], enum: [grounded, general, null] }
         traceId: { type: string, format: uuid }
         sourceCount: { type: integer, minimum: 0 }
         createdAt: { type: string, format: date-time }
@@ -919,13 +978,25 @@ components:
     KnowledgeQueryResponse:
       type: object
       additionalProperties: false
-      required: [conversationId, answer, noAnswer, reason, traceId, sources, model, rerankDegraded]
+      required:
+        [
+          conversationId,
+          answer,
+          noAnswer,
+          reason,
+          answerMode,
+          traceId,
+          sources,
+          model,
+          rerankDegraded,
+        ]
       properties:
         conversationId: { type: string, format: uuid }
         answer: { type: string, minLength: 1 }
         noAnswer: { type: boolean }
         reason:
           { type: [string, 'null'], enum: [insufficient_relevance, authorization_changed, null] }
+        answerMode: { type: [string, 'null'], enum: [grounded, general, null] }
         traceId: { type: string, format: uuid }
         sources:
           type: array

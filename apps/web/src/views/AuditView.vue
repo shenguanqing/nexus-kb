@@ -259,7 +259,7 @@ onMounted(() => load());
       </div>
       <div v-if="pageCount > 1" class="list-pagination">
         <el-pagination
-          layout="prev, pager, next"
+          layout="total, prev, pager, next"
           :current-page="page"
           :page-count="pageCount"
           @current-change="changePage"

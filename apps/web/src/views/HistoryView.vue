@@ -172,7 +172,7 @@ async function changePage(nextPage: number): Promise<void> {
           <el-pagination
             v-if="conversations.length > 0 && total > 20"
             class="list-pagination history-pagination"
-            layout="prev, pager, next"
+            layout="total, prev, pager, next"
             :current-page="page"
             :page-size="20"
             :total="total"

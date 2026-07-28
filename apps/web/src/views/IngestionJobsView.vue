@@ -326,7 +326,7 @@ onUnmounted(() => {
       </div>
       <div v-if="total > filters.pageSize" class="list-pagination">
         <el-pagination
-          layout="prev, pager, next"
+          layout="total, prev, pager, next"
           :current-page="filters.page"
           :page-size="filters.pageSize"
           :total="total"

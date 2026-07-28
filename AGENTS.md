@@ -26,7 +26,8 @@
 4. `docs/04-开发规范.md`
 5. `docs/05-开发任务清单.md`
 6. `docs/06-部署运维手册.md`
-7. `TASK.md`
+7. `docs/07-API使用说明.md`
+8. `TASK.md`
 
 文档冲突时，优先级如下：
 
@@ -34,7 +35,7 @@
 2. `docs/01-项目实施规格.md` 的范围、安全和验收要求。
 3. 本文件的长期工程约束。
 4. `docs/02-技术设计.md`。
-5. `docs/03-前端产品与界面设计.md` 和 `docs/04-开发规范.md`。
+5. `docs/03-前端产品与界面设计.md`、`docs/04-开发规范.md` 和 `docs/07-API使用说明.md`。
 6. `TASK.md` 和 `docs/05-开发任务清单.md`。
 7. `docs/06-部署运维手册.md`。
 
@@ -237,6 +238,8 @@ docker compose logs -f api parser-worker
 - 编码、测试、Git 或协作规范变化：更新 `docs/04-开发规范.md`。
 - 工作拆分或完成状态变化：更新 `docs/05-开发任务清单.md`。
 - 部署、配置、备份或告警变化：更新 `docs/06-部署运维手册.md`。
+- 公开 API 的认证、权限、端点、错误码或调用方式变化：同步更新运行时契约、
+  `packages/contracts/openapi/api.v1.yaml` 和 `docs/07-API使用说明.md`。
 - 当前开发阶段变化：更新 `TASK.md`。
 - 长期工程规则变化：更新本文件。
 

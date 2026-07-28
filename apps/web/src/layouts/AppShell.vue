@@ -217,7 +217,7 @@ async function signOut(): Promise<void> {
       </button>
     </aside>
 
-    <main class="app-main" :class="{ 'app-main--ask': route.path === '/ask' }">
+    <main class="app-main">
       <div v-if="route.path !== '/ask'" class="page-heading">
         <div class="page-heading-copy">
           <span class="page-heading-eyebrow">{{ pageSection }}</span>

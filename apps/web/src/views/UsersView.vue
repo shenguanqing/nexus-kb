@@ -273,7 +273,7 @@ onMounted(() => load());
       </div>
       <div v-if="total > pageSize" class="list-pagination">
         <el-pagination
-          layout="prev, pager, next"
+          layout="total, prev, pager, next"
           :current-page="page"
           :page-size="pageSize"
           :total="total"

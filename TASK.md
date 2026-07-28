@@ -156,6 +156,26 @@ Vue 3 + TypeScript + Vite
       出网策略检查的问题并返回 `answerMode=general`。实时回答、历史和审计明确标记“通用知识补充”，权限变化、
       confidential 阻止与正式质量评测仍保持严格模式。
 
+### 3.12 本地启动与数据库调试文档
+
+- [x] README 与部署运维手册明确：执行 DWG Worker 的 `docker compose build` 前必须启动 Docker Desktop，并先
+      通过 `docker info` / `docker compose version` 验证 Docker Engine。
+- [x] 明确 `.env` 变更按实际读取服务重建：主服务配置重建 `api`，解析/CAD 配置重建 `parser-worker`，
+      `PARSER_INTERNAL_TOKEN` 同时重建两端；普通运行配置变化不要求重新构建镜像。
+- [x] 明确 PostgreSQL 初始化账号、数据库和密码在已有 volume 上不会因重建容器自动变更，禁止使用
+      `down -v` 作为配置重载方式。
+- [x] 新增仅绑定 `127.0.0.1:15432` 的 `compose.db-gui.yaml` 和 DBeaver 只读查看说明；生产环境仍不暴露
+      PostgreSQL。
+
+### 3.13 API 使用说明
+
+- [x] 新增 `docs/07-API使用说明.md`，将 README 的接口调用清单迁入，并补全认证模式、trace ID、错误结构、
+      capability/ACL、全部公开端点、分页、状态语义、重试规则和安全调用示例。
+- [x] README 收敛为 API 文档与 OpenAPI 契约入口，不再维护重复的 curl 端点清单。
+- [x] 修正 OpenAPI 文档漂移：补充 live/ready 健康端点、密码会话 Cookie security scheme，以及知识问答和
+      历史轮次的 `answerMode` 字段。
+- [x] 同步 AGENTS、实施规格、技术设计、前端设计、开发规范、任务清单和运维手册中的 API 文档索引。
+
 ---
 
 ## 4. 阶段 15 验证状态
@@ -204,3 +224,4 @@ Rerank 继续默认关闭；后续取得数据时返回阶段 14 完成正式验
   - [x] 移动端补充回归：文档分块页在手机上使用紧凑页码且保持不透明底部分页栏；用量与成本的时间筛选收纳至底部 Drawer，横屏低高度场景压缩介绍区并保留内容块滚动空间。
   - [x] 横屏可操作性回归：用户目录与部门权限使用独立可滚动内容容器；历史筛选右对齐；导航 Drawer 顶栏与应用顶栏统一为 48px；用量、Provider、系统状态及各工具栏收敛为低高度单行布局。Playwright 使用长列表实际验证 `scrollTop` 可写入。
   - [x] 管理页工具栏命名与层级收敛：用户目录身份摘要和筛选合并为单一 `access-toolbar`；Provider、系统状态和用量统一采用 `xxxx-toolbar` 命名；用量桌面端介绍与筛选纵向排列，移动端任务、审计、Provider、系统状态和用量工具栏保持单行操作。
+  - [x] 问答历史布局收敛：桌面端 `history-layout` 使用可伸展的主行填满筛选栏以下空间，左侧会话列表与右侧详情保持独立滚动。

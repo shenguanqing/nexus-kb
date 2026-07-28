@@ -81,6 +81,15 @@ test('asks a grounded question and renders an authorized source', async ({ page 
   await page.getByRole('link', { name: '问答历史' }).click();
   await expect(page).toHaveURL(/\/history$/);
   await expect(page.locator('.history-pagination')).toHaveCount(0);
+  const historyLayout = await page.evaluate(() => {
+    const page = document.querySelector<HTMLElement>('.history-page');
+    const layout = document.querySelector<HTMLElement>('.history-layout');
+    return {
+      pageBottom: page?.getBoundingClientRect().bottom ?? Number.NEGATIVE_INFINITY,
+      layoutBottom: layout?.getBoundingClientRect().bottom ?? Number.POSITIVE_INFINITY,
+    };
+  });
+  expect(Math.abs(historyLayout.pageBottom - historyLayout.layoutBottom)).toBeLessThanOrEqual(1);
   await page.getByRole('link', { name: '知识问答' }).click();
   await expect(page.getByText('付款周期是多久？')).toBeVisible();
   await expect(page.getByText('付款周期为 30 天。')).toBeVisible();

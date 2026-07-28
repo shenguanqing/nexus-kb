@@ -114,23 +114,33 @@ DWG 转换默认开启，因此首次启动前必须准备经组织批准的 ODA
 `linux/amd64`，使 Docker Desktop 能在 Apple Silicon Mac 上兼容运行 ODA 的 Linux x64 Debian 安装包。基础 Worker
 镜像没有 ODA；缺少这个包时，默认启动会失败关闭，而不会悄悄跳过 DWG 转换。
 
-1. 从 [ODA 官方下载页](https://www.opendesign.com/guestfiles/oda_File_Converter) 下载经组织许可的
+1. 打开 Docker Desktop，等待状态显示 Docker Engine 已运行，并在终端确认：
+
+   ```bash
+   docker info
+   docker compose version
+   ```
+
+   后续的 `docker compose build`、`run`、`up` 都依赖正在运行的 Docker Engine；只安装 Docker Desktop
+   但没有打开它时不能执行这些命令。
+
+2. 从 [ODA 官方下载页](https://www.opendesign.com/guestfiles/oda_File_Converter) 下载经组织许可的
    **Linux x64 Debian (`.deb`)** 安装包，重命名为 `oda-file-converter.deb`，并放入
    `apps/parser-worker/vendor/oda/`。该文件已被 Git 忽略，绝不能提交安装包、许可证或凭据。
-2. 构建派生 Worker：
+3. 构建派生 Worker：
 
    ```bash
    docker compose -f compose.yaml -f compose.dwg.yaml build parser-worker
    ```
 
-3. 读取容器内实际安装版本。不要猜测版本，也不要使用旧的 `/opt/oda/ODAFileConverter` 路径：
+4. 读取容器内实际安装版本。不要猜测版本，也不要使用旧的 `/opt/oda/ODAFileConverter` 路径：
 
    ```bash
    docker compose -f compose.yaml -f compose.dwg.yaml run --rm --no-deps --entrypoint dpkg-query parser-worker \
      -W -f='${Version}\n' odafileconverter
    ```
 
-4. `.env.example` 已默认设置 `DWG_CONVERSION_ENABLED=true` 和项目提供的受控启动器。把上一步输出的真实版本填入
+5. `.env.example` 已默认设置 `DWG_CONVERSION_ENABLED=true` 和项目提供的受控启动器。把上一步输出的真实版本填入
    `.env` 的 `DWG_CONVERTER_RELEASE`，保留以下值：
 
    ```dotenv
@@ -219,6 +229,77 @@ docker compose -f compose.yaml -f compose.dwg.yaml up -d
 volume；文档 metadata、版本、任务和分块位于 PostgreSQL volume；向量及其脱敏 metadata 位于 Chroma volume；
 Redis 只保存队列状态，不保存文件正文。
 
+### 9. 修改 `.env` 后让配置生效
+
+容器只在创建时读取环境变量。修改 `.env` 后不需要重新构建镜像，但必须重建实际使用该配置的服务。不要无差别
+重建全部服务：
+
+| 修改的配置                                                                             | 需要执行的操作                                                                            |
+| -------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| LLM、Embedding、Rerank、查询、认证、ACL、API 日志等主服务配置                          | `docker compose -f compose.yaml -f compose.dwg.yaml up -d --force-recreate api`           |
+| `MAX_PARSE_*`、`MAX_ELEMENTS`、`MAX_SPREADSHEET_ROWS`、`MAX_CAD_*`、`DWG_*` 等解析配置 | `docker compose -f compose.yaml -f compose.dwg.yaml up -d --force-recreate parser-worker` |
+| `PARSER_INTERNAL_TOKEN`                                                                | 使用同一新值，同时 `--force-recreate api parser-worker`，避免两端 token 不一致            |
+| `POSTGRES_USER`、`POSTGRES_DB`、`POSTGRES_PASSWORD`、`DATABASE_URL`                    | 不得只重建容器；见下方 PostgreSQL 说明                                                    |
+| 只修改注释，或修改当前服务未读取的变量                                                 | 无需重建运行中的服务                                                                      |
+
+例如同时修改主服务与 Parser Worker 配置：
+
+```bash
+docker compose -f compose.yaml -f compose.dwg.yaml \
+  up -d --force-recreate api parser-worker
+docker compose -f compose.yaml -f compose.dwg.yaml ps
+curl http://127.0.0.1:3000/health/ready
+```
+
+以下情况才需要重新构建镜像：
+
+- API、Worker 源码或锁定依赖发生变化；
+- Dockerfile 或构建上下文发生变化；
+- ODA `.deb` 安装包或 DWG Worker 构建逻辑发生变化。
+
+此时使用 `up -d --build <service>`，或先执行第 4 步的 `build parser-worker`。仅轮换 API Key、修改模型名或
+调整普通运行参数，不需要 `build`。
+
+PostgreSQL 的 `POSTGRES_USER`、`POSTGRES_DB` 和 `POSTGRES_PASSWORD` 只在空数据卷首次初始化时生效。已有
+`postgres_data` volume 时，重建 `postgres` 不会修改数据库中的角色、数据库或密码。需要轮换本地数据库密码时，
+应先在 PostgreSQL 内执行受控的角色密码变更，再同步更新 `.env` 中的 `POSTGRES_PASSWORD` 和
+`DATABASE_URL`，最后重建 API；不要通过 `down -v` 删除数据卷来“应用”密码。
+
+Embedding Provider、模型、维度、关键分块或脱敏配置变化即使已被 API 重新读取，也不能继续写入旧 collection；
+必须按“版本、删除与索引迁移”流程创建并验证新索引。
+
+### 10. 使用 DBeaver 查看本地 PostgreSQL
+
+PostgreSQL 默认只在 Compose 内网提供。需要用 DBeaver 查看时，仓库提供
+[`compose.db-gui.yaml`](./compose.db-gui.yaml)，它只把数据库映射到 Mac 回环地址，不对局域网或公网开放：
+
+```bash
+docker compose \
+  -f compose.yaml \
+  -f compose.dwg.yaml \
+  -f compose.db-gui.yaml \
+  up -d postgres
+```
+
+DBeaver 新建 PostgreSQL 连接：
+
+| 字段     | 值                                     |
+| -------- | -------------------------------------- |
+| Host     | `127.0.0.1`                            |
+| Port     | `15432`                                |
+| Database | `.env` 中的 `POSTGRES_DB`，默认 `kb`   |
+| Username | `.env` 中的 `POSTGRES_USER`，默认 `kb` |
+| Password | `.env` 中的 `POSTGRES_PASSWORD`        |
+
+连接后展开 `kb → Schemas/模式 → public → Tables/表`。常用表包括 `Document`、`DocumentVersion`、
+`IngestionJob`、`KnowledgeChunk`、`QueryAudit` 和 `UserDirectoryEntry`。DBeaver 是运维调试入口，不应绕过
+应用 ACL 修改业务数据；日常查看建议启用只读连接。DB Browser for SQLite 和 NoSQLBooster for MongoDB 不适用于
+本项目的 PostgreSQL。向量保存在 Chroma，不会出现在 PostgreSQL 表中。
+
+如果希望整套服务启动时同时保留 DBeaver 端口，应在对应的 `up`、`ps` 和 `down` 命令中都追加
+`-f compose.db-gui.yaml`。调试结束后使用不含该覆盖文件的配置重建 PostgreSQL，或停止整套 Compose，以移除
+宿主机端口映射。生产环境不得使用该覆盖文件。
+
 ## 内部解析契约
 
 - `POST /internal/v1/parse` 已在上述第 5 步随 `parser-worker` 自动启动，只在 Worker 内网提供，并要求
@@ -256,33 +337,18 @@ mypy app
 pytest
 ```
 
-## 文档 API
+## API 文档
 
-仅在 development/test 且 `AUTH_REQUIRED=false` 时，身份来自服务端 `DEV_*` 配置。受保护模式可选择
-OIDC Bearer JWT，或启用服务端管理的账号密码会话。OIDC 通过 JWKS 校验签名、issuer、audience、算法和
-时间声明；账号密码模式只在 API 端校验配置的账号，向浏览器签发 HttpOnly、SameSite=Strict 的不透明 Cookie，
-数据库只保存 Cookie 的 SHA-256 摘要。两种模式都会在服务端构造 tenant、department、roles、
-allowedSensitivities 和 capabilities；请求体或自定义 header 中的同名字段不可信。
+认证方式、capability/ACL、完整端点目录、分页、错误码和安全调用示例见
+[`docs/07-API使用说明.md`](./docs/07-API使用说明.md)。
 
-```bash
-curl -F 'file=@policy.md;type=text/markdown' http://127.0.0.1:3000/v1/documents
-curl http://127.0.0.1:3000/v1/documents/<documentId>
-curl 'http://127.0.0.1:3000/v1/documents/<documentId>/chunks?version=1&page=1&pageSize=20'
-curl http://127.0.0.1:3000/v1/ingestion-jobs/<jobId>
-curl http://127.0.0.1:3000/v1/ingestion-jobs/failed
-curl http://127.0.0.1:3000/v1/auth/session
-curl -X DELETE http://127.0.0.1:3000/v1/documents/<documentId>
-curl http://127.0.0.1:3000/metrics
-curl 'http://127.0.0.1:3000/v1/audit/events?limit=50'
-curl http://127.0.0.1:3000/v1/system/providers
-curl http://127.0.0.1:3000/v1/system/status
-curl 'http://127.0.0.1:3000/v1/access/users?limit=25'
-curl http://127.0.0.1:3000/v1/access/departments
-curl http://127.0.0.1:3000/v1/history/conversations
-curl http://127.0.0.1:3000/v1/system/usage
-```
+机器可读公共契约位于 [`packages/contracts/openapi/api.v1.yaml`](./packages/contracts/openapi/api.v1.yaml)；
+Parser Worker 内部契约位于
+[`packages/contracts/openapi/parser-worker.v1.yaml`](./packages/contracts/openapi/parser-worker.v1.yaml)。
+内部 `/internal/v1/parse` 只允许 API 通过 Compose 内网调用，不是外部集成入口。
 
-公共 API 契约位于 `packages/contracts/openapi/api.v1.yaml`。API 启动时自动执行不可变 Prisma migration；任务在 Redis 中只携带 ID 与 UUID 文件引用，不携带正文。
+README 只保留启动与最小验证说明，接口字段和响应结构以 OpenAPI 为事实源。API 启动时自动执行不可变 Prisma
+migration；任务在 Redis 中只携带 ID 与 UUID 文件引用，不携带正文。
 
 ## 认证与 ACL
 
