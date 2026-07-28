@@ -9,7 +9,7 @@ describe('audit API', () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValue(
-        new Response(JSON.stringify({ events: [], nextBefore: null }), { status: 200 }),
+        new Response(JSON.stringify({ events: [], nextBefore: null, total: 0 }), { status: 200 }),
       );
     vi.stubGlobal('fetch', fetchMock);
 

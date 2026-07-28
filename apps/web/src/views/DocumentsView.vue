@@ -254,9 +254,9 @@ onMounted(load);
         </el-select>
         <div class="toolbar-actions">
           <el-button native-type="submit">筛选</el-button>
-          <el-button class="reset-button" native-type="button" @click="resetFilters"
-            >重置</el-button
-          >
+          <el-button class="reset-button" native-type="button" @click="resetFilters">
+            重置
+          </el-button>
         </div>
       </form>
       <template v-else>

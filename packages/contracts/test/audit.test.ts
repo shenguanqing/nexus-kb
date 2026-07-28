@@ -34,6 +34,7 @@ describe('audit contracts', () => {
         },
       ],
       nextBefore: null,
+      total: 1,
     });
 
     const serialized = JSON.stringify(response);

@@ -21,13 +21,13 @@ const { isPhone } = useBreakpoint();
       <el-descriptions :column="1" border size="small">
         <el-descriptions-item label="版本">v{{ source.documentVersion }}</el-descriptions-item>
         <el-descriptions-item label="位置">
-            {{
-              source.page
-                ? `第 ${source.page} 页`
-                : source.sheet
-                  ? `工作表 ${source.sheet}`
-                  : '未标注位置'
-            }}
+          {{
+            source.page
+              ? `第 ${source.page} 页`
+              : source.sheet
+                ? `工作表 ${source.sheet}`
+                : '未标注位置'
+          }}
         </el-descriptions-item>
         <el-descriptions-item label="章节">
           {{ source.sectionPath.join(' / ') || '未标注章节' }}

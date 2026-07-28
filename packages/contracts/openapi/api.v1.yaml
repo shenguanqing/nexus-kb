@@ -943,13 +943,14 @@ components:
     AuditQueryResponse:
       type: object
       additionalProperties: false
-      required: [events, nextBefore]
+      required: [events, nextBefore, total]
       properties:
         events:
           type: array
           maxItems: 100
           items: { $ref: '#/components/schemas/AuditEvent' }
         nextBefore: { type: [string, 'null'], format: date-time }
+        total: { type: integer, minimum: 0 }
     KnowledgeQueryRequest:
       type: object
       additionalProperties: false

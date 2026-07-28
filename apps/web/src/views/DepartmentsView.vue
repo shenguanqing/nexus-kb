@@ -67,7 +67,9 @@ onMounted(load);
     </div>
     <div v-else class="department-layout">
       <nav v-if="!isMobile" class="department-list-panel" aria-label="部门列表">
-        <div class="heading heading--h2 scroll-section-title" role="heading" aria-level="2">部门列表</div>
+        <div class="heading heading--h2 scroll-section-title" role="heading" aria-level="2">
+          部门列表
+        </div>
         <div class="department-list">
           <button
             v-for="item in departments"
@@ -82,7 +84,9 @@ onMounted(load);
         </div>
       </nav>
       <article v-if="selected && !isMobile" class="department-policy-card">
-        <div class="heading heading--h2" role="heading" aria-level="2">{{ selected.department }}权限</div>
+        <div class="heading heading--h2" role="heading" aria-level="2">
+          {{ selected.department }}权限
+        </div>
         <div class="department-policy-body">
           <div>该策略只能收紧身份源声明的敏感度，不能扩大用户权限。</div>
           <el-checkbox-group v-model="sensitivities" :disabled="!canWrite">

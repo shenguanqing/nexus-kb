@@ -206,6 +206,11 @@ Rerank 继续默认关闭；后续取得数据时返回阶段 14 完成正式验
 `Drawing1.dwg` Web 端到端验证：ODA Linux x64 包和转换器已就绪，但服务端鉴权保持启用，需要已登录的本地
 会话完成上传。阶段 14 的真实数据质量验收仍按第 5 节保留；完成 DWG 验证后再进入阶段 16 服务器上线准备。
 
+- [x] 新增 Stylelint CSS 声明语义排序配置及独立检查/自动修复命令，覆盖 CSS、SCSS 和 Vue SFC；
+      现有大文件样式不在本次配置变更中批量重排。
+- [x] 为 Playwright E2E 增加独立 TypeScript project reference，修复编辑器 ESLint Project Service
+      无法解析 `apps/web/e2e` 测试文件的问题。
+
 ### 6.1 Web 与移动端兼容规范收敛（2026-07-26）
 
 - [x] 新增唯一 `breakpoints.scss` 与 `useBreakpoint()`；壳层不再自行调用 `matchMedia`。
@@ -215,6 +220,8 @@ Rerank 继续默认关闭；后续取得数据时返回阶段 14 完成正式验
 - [x] Playwright 回归：375px、768px、900px、1280px，覆盖无横向溢出、Drawer 导航、卡片/表格结构切换和可访问性。
 - [x] 截图显示回归：修复审计/用户桌面表格与空状态并存、历史列表分页未固定、文档/Provider 受限宽度换行、手机纵向步骤条撑高和部门卡片自动行拉伸；430px 回归断言步骤条紧凑、部门卡片间距固定。
   - [x] 分页与筛选体验收敛：文档、分块、入库、审计、用户和历史共用底部 `list-pagination` 样式与位置，并统一使用 `prev, pager, next` 分页格式；审计 cursor 记录通过受控游标页栈呈现页码翻页。手机端筛选统一置于工具栏右侧，筛选 Drawer 统一为 `72%` 视口高度；用户与部门摘要改为折叠卡片。
+  - [x] 审计分页总数修复：接口按 tenant 与事件类型返回准确 `total`，前端分页绑定真实记录总数，同时保留
+        cursor 页栈的顺序翻页约束。
   - [x] 权限编辑体验收敛：手机端“编辑角色”和“编辑权限”在已展开的用户/部门卡片内直接编辑并保存，不再额外打开 Drawer；桌面端角色编辑使用标准 `el-dialog`。空问答历史不渲染分页，审计表与底部分页合并为同一内容卡片，避免表格列与分页背景被裁切。
   - [x] 移动端浮层层级：`el-config-provider` 将 Element Plus 浮层基线设为 `5000`，移除覆盖组件层级的全局 Overlay 强制值；确保筛选 Drawer、文档权限 metadata 弹框中的 Select、日期选择器等 `el-popper` 位于所属 Overlay 之上。
   - [x] 弹框基础样式回归：动态 `ElDialog/ElDrawer` 显式引入 Element Plus Dialog/Drawer CSS；上传与权限 metadata 弹框恢复桌面居中限宽、手机安全高度、正文独立滚动和固定 footer，手机上传入口不显示拖放文案。

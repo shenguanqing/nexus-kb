@@ -131,24 +131,24 @@ onMounted(load);
               </header>
               <div class="data-list">
                 <div>
-                  <span>章节路径</span
-                  ><strong>{{ chunk.sectionPath.join(' / ') || '未标注' }}</strong>
+                  <span>章节路径</span>
+                  <strong>{{ chunk.sectionPath.join(' / ') || '未标注' }}</strong>
                 </div>
                 <div>
-                  <span>元素类型</span
-                  ><strong>{{ chunk.elementTypes.join('、') || '未标注' }}</strong>
+                  <span>元素类型</span>
+                  <strong>{{ chunk.elementTypes.join('、') || '未标注' }}</strong>
                 </div>
                 <div>
-                  <span>相邻分块</span
-                  ><strong class="fingerprint">
+                  <span>相邻分块</span>
+                  <strong class="fingerprint">
                     上一个：{{ chunk.previousChunkId ?? '无' }}
                     <br />
                     下一个：{{ chunk.nextChunkId ?? '无' }}
                   </strong>
                 </div>
                 <div>
-                  <span>脱敏策略</span
-                  ><strong>
+                  <span>脱敏策略</span>
+                  <strong>
                     {{ chunk.redactionPolicyVersion }}
                     <span v-if="redactionEntries(chunk).length"> · </span>
                     <el-tag

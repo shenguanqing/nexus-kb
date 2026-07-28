@@ -74,11 +74,15 @@ function fixture() {
     },
   ]);
   const accessFindMany = vi.fn().mockResolvedValue([]);
+  const queryCount = vi.fn().mockResolvedValue(1);
+  const lifecycleCount = vi.fn().mockResolvedValue(1);
+  const policyCount = vi.fn().mockResolvedValue(1);
+  const accessCount = vi.fn().mockResolvedValue(0);
   const prisma = {
-    queryAudit: { findMany: queryFindMany },
-    documentLifecycleAudit: { findMany: lifecycleFindMany },
-    cloudPolicyEvent: { findMany: policyFindMany },
-    accessAudit: { findMany: accessFindMany },
+    queryAudit: { findMany: queryFindMany, count: queryCount },
+    documentLifecycleAudit: { findMany: lifecycleFindMany, count: lifecycleCount },
+    cloudPolicyEvent: { findMany: policyFindMany, count: policyCount },
+    accessAudit: { findMany: accessFindMany, count: accessCount },
   } as unknown as PrismaService;
   return {
     service: new AuditService(prisma, new AclPolicy()),
@@ -86,6 +90,10 @@ function fixture() {
     lifecycleFindMany,
     policyFindMany,
     accessFindMany,
+    queryCount,
+    lifecycleCount,
+    policyCount,
+    accessCount,
   };
 }
 
@@ -100,6 +108,7 @@ describe('AuditService', () => {
       'cloud_policy',
     ]);
     expect(result.events.at(-1)?.traceId).toBe('a1111111-1111-4111-8111-111111111111');
+    expect(result.total).toBe(3);
     expect(deps.queryFindMany).toHaveBeenCalledWith(
       expect.objectContaining({ where: { tenantId: 'tenant-a' } }),
     );
@@ -118,8 +127,11 @@ describe('AuditService', () => {
     await deps.service.query({ type: 'query', limit: 10 }, identity);
 
     expect(deps.queryFindMany).toHaveBeenCalledOnce();
+    expect(deps.queryCount).toHaveBeenCalledWith({ where: { tenantId: 'tenant-a' } });
     expect(deps.lifecycleFindMany).not.toHaveBeenCalled();
     expect(deps.policyFindMany).not.toHaveBeenCalled();
+    expect(deps.lifecycleCount).not.toHaveBeenCalled();
+    expect(deps.policyCount).not.toHaveBeenCalled();
   });
 
   it('rejects identities without audit capability before database access', async () => {

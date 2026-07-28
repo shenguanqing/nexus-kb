@@ -24,19 +24,35 @@ export class AuditService {
     const selectedTypes: AuditEventType[] = request.type
       ? [request.type]
       : ['query', 'document_lifecycle', 'cloud_policy', 'access_change'];
-    const batches = await Promise.all([
-      selectedTypes.includes('query')
-        ? this.queryEvents(identity.tenantId, before, take)
-        : Promise.resolve([]),
-      selectedTypes.includes('document_lifecycle')
-        ? this.lifecycleEvents(identity.tenantId, before, take)
-        : Promise.resolve([]),
-      selectedTypes.includes('cloud_policy')
-        ? this.policyEvents(identity.tenantId, before, take)
-        : Promise.resolve([]),
-      selectedTypes.includes('access_change')
-        ? this.accessEvents(identity.tenantId, before, take)
-        : Promise.resolve([]),
+    const [batches, counts] = await Promise.all([
+      Promise.all([
+        selectedTypes.includes('query')
+          ? this.queryEvents(identity.tenantId, before, take)
+          : Promise.resolve([]),
+        selectedTypes.includes('document_lifecycle')
+          ? this.lifecycleEvents(identity.tenantId, before, take)
+          : Promise.resolve([]),
+        selectedTypes.includes('cloud_policy')
+          ? this.policyEvents(identity.tenantId, before, take)
+          : Promise.resolve([]),
+        selectedTypes.includes('access_change')
+          ? this.accessEvents(identity.tenantId, before, take)
+          : Promise.resolve([]),
+      ]),
+      Promise.all([
+        selectedTypes.includes('query')
+          ? this.prisma.queryAudit.count({ where: { tenantId: identity.tenantId } })
+          : Promise.resolve(0),
+        selectedTypes.includes('document_lifecycle')
+          ? this.prisma.documentLifecycleAudit.count({ where: { tenantId: identity.tenantId } })
+          : Promise.resolve(0),
+        selectedTypes.includes('cloud_policy')
+          ? this.prisma.cloudPolicyEvent.count({ where: { tenantId: identity.tenantId } })
+          : Promise.resolve(0),
+        selectedTypes.includes('access_change')
+          ? this.prisma.accessAudit.count({ where: { tenantId: identity.tenantId } })
+          : Promise.resolve(0),
+      ]),
     ]);
     const allEvents = batches
       .flat()
@@ -52,6 +68,7 @@ export class AuditService {
       events,
       nextBefore:
         hasMore && oldest ? new Date(Date.parse(oldest.createdAt) - 1).toISOString() : null,
+      total: counts.reduce((sum, count) => sum + count, 0),
     };
   }
 

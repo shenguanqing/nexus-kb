@@ -70,17 +70,17 @@ onMounted(load);
               <span>区域</span><strong>{{ provider.region ?? '—' }}</strong>
             </div>
             <div>
-              <span>凭据状态</span
-              ><strong>{{
-                credentialLabel(provider.provider, provider.credentialConfigured)
-              }}</strong>
+              <span>凭据状态</span>
+              <strong>
+                {{ credentialLabel(provider.provider, provider.credentialConfigured) }}
+              </strong>
             </div>
             <div v-if="provider.dimensions">
               <span>向量维度</span><strong>{{ provider.dimensions }}</strong>
             </div>
             <div v-if="provider.fingerprint" class="provider-fingerprint">
-              <span>索引配置指纹</span
-              ><strong>
+              <span>索引配置指纹</span>
+              <strong>
                 <code>{{ provider.fingerprint }}</code>
               </strong>
             </div>

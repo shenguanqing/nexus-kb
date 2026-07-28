@@ -42,6 +42,7 @@ export const auditQueryResponseSchema = z
   .object({
     events: z.array(auditEventSchema).max(100),
     nextBefore: z.iso.datetime({ offset: true }).nullable(),
+    total: z.number().int().nonnegative(),
   })
   .strict();
 

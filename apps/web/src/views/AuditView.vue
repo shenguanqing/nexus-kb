@@ -29,6 +29,7 @@ const selectedType = ref<AuditEventType | ''>(
 const page = ref(1);
 const pageCursors = ref<Array<string | undefined>>([undefined]);
 const nextBefore = ref<string | null>(null);
+const total = ref(0);
 const loading = ref(false);
 const errorMessage = ref('');
 const filtersVisible = ref(false);
@@ -55,6 +56,7 @@ async function load(): Promise<void> {
     const result = await listAuditEvents(request());
     events.value = result.events;
     nextBefore.value = result.nextBefore;
+    total.value = result.total;
     if (result.nextBefore) pageCursors.value[page.value] = result.nextBefore;
     else pageCursors.value.length = page.value;
   } catch (error) {
@@ -171,14 +173,14 @@ onMounted(() => load());
                     <strong>{{ attribute.value }}</strong>
                   </div>
                   <div>
-                    <span>Trace ID</span
-                    ><strong>
+                    <span>Trace ID</span>
+                    <strong>
                       <code>{{ scope.row.traceId ?? '—' }}</code>
                     </strong>
                   </div>
                   <div v-if="scope.row.ingestionJobId">
-                    <span>入库任务</span
-                    ><strong>
+                    <span>入库任务</span>
+                    <strong>
                       <code>{{ scope.row.ingestionJobId }}</code>
                     </strong>
                   </div>
@@ -262,6 +264,7 @@ onMounted(() => load());
           layout="total, prev, pager, next"
           :current-page="page"
           :page-count="pageCount"
+          :total="total"
           @current-change="changePage"
         />
       </div>

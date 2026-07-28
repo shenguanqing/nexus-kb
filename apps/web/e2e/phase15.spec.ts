@@ -38,7 +38,14 @@ async function mockSession(
 test('asks a grounded question and renders an authorized source', async ({ page }) => {
   await mockSession(page);
   await page.route('**/v1/knowledge/query', (route) => {
-    const question = route.request().postDataJSON().question;
+    const requestBody: unknown = route.request().postDataJSON();
+    const question =
+      typeof requestBody === 'object' &&
+      requestBody !== null &&
+      'question' in requestBody &&
+      typeof requestBody.question === 'string'
+        ? requestBody.question
+        : '';
     return route.fulfill({
       json: {
         conversationId: '11111111-1111-4111-8111-111111111111',
@@ -459,7 +466,7 @@ test('keeps every authorized page within a 375px mobile viewport', async ({ page
     if (path === '/v1/ingestion-jobs')
       return route.fulfill({ json: { items: [], page: 1, pageSize: 20, total: 0 } });
     if (path === '/v1/audit/events')
-      return route.fulfill({ json: { events: [], nextBefore: null } });
+      return route.fulfill({ json: { events: [], nextBefore: null, total: 0 } });
     if (path === '/v1/access/users')
       return route.fulfill({
         json: { users: [], total: 0, offset: 0, limit: 25, scope: 'tenant' },
@@ -839,7 +846,7 @@ test('keeps landscape mobile controls aligned and management content scrollable'
     }),
   );
   await page.route('**/v1/audit/events', (route) =>
-    route.fulfill({ json: { events: [], nextBefore: null } }),
+    route.fulfill({ json: { events: [], nextBefore: null, total: 0 } }),
   );
 
   await page.goto('/access/users');
@@ -1101,7 +1108,8 @@ test('keeps shell chrome fixed and confines management-page scrolling below cont
             createdAt: '2026-07-22T09:00:00.000Z',
           },
         ],
-        nextBefore: null,
+        nextBefore: '2026-07-22T08:59:59.999Z',
+        total: 51,
       },
     }),
   );
@@ -1183,6 +1191,7 @@ test('keeps shell chrome fixed and confines management-page scrolling below cont
   await expect(page.getByRole('heading', { name: '审计中心' })).toBeVisible();
   await expect(page.getByRole('button', { name: '折叠侧栏' })).toBeVisible();
   await expect(page.locator('.audit-table-wrap .el-empty')).toHaveCount(0);
+  await expect(page.locator('.audit-content .el-pagination__total')).toContainText('51');
   await page.evaluate(() => {
     const table = document.querySelector<HTMLElement>('.audit-table-wrap');
     if (!table) return;

@@ -278,7 +278,8 @@ tenant 或部门的数据是否存在。
 | `GET` | `/v1/system/usage` | `admin` + `system:read` | 指定时间范围内的用量事实 |
 
 审计接口支持 `type=query|document_lifecycle|cloud_policy|access_change`、`before` 和 `limit`，返回
-`nextBefore` 时间游标。下一页继续传递 `before=<nextBefore>`；游标不是权限凭据。
+`nextBefore` 时间游标及当前 tenant、事件类型筛选范围内的 `total`。下一页继续传递
+`before=<nextBefore>`；`before` 不改变 `total`，游标不是权限凭据。
 
 用户目录使用 `offset`/`limit` 分页，支持 `query` 和 `department`。普通用户即使有 `access:read`，也不能通过
 `department` 查看其他部门。用量接口要求同时提供 `from` 和 `to`。

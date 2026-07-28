@@ -167,7 +167,9 @@ onMounted(load);
       <template v-else-if="document">
         <header class="detail-actions">
           <div>
-            <div class="heading heading--h2" role="heading" aria-level="2">{{ document.sourceName }}</div>
+            <div class="heading heading--h2" role="heading" aria-level="2">
+              {{ document.sourceName }}
+            </div>
             <div class="text-block">{{ document.mimeType }}</div>
           </div>
           <div class="detail-action-buttons">
@@ -235,30 +237,30 @@ onMounted(load);
             </div>
             <div class="data-list">
               <div>
-                <span>向量库</span
-                ><strong class="fingerprint">{{
-                  activeVersion?.vectorCollection ?? '尚未写入'
-                }}</strong>
+                <span>向量库</span>
+                <strong class="fingerprint">
+                  {{ activeVersion?.vectorCollection ?? '尚未写入' }}
+                </strong>
               </div>
               <div>
                 <span>向量数（分块）</span><strong>{{ activeVersion?.chunkCount ?? 0 }}</strong>
               </div>
               <div>
-                <span>解析器</span
-                ><strong
-                  >{{ activeVersion?.parser ?? '—' }}
-                  {{ activeVersion?.parserVersion ?? '' }}</strong
-                >
+                <span>解析器</span>
+                <strong>
+                  {{ activeVersion?.parser ?? '—' }}
+                  {{ activeVersion?.parserVersion ?? '' }}
+                </strong>
               </div>
               <div>
-                <span>Embedding 指纹</span
-                ><strong class="fingerprint">{{
-                  activeVersion?.embeddingFingerprint ?? '尚未生成'
-                }}</strong>
+                <span>Embedding 指纹</span>
+                <strong class="fingerprint">
+                  {{ activeVersion?.embeddingFingerprint ?? '尚未生成' }}
+                </strong>
               </div>
               <div>
-                <span>写入时间</span
-                ><strong>
+                <span>写入时间</span>
+                <strong>
                   {{
                     activeVersion?.indexedAt
                       ? new Date(activeVersion.indexedAt).toLocaleString()
@@ -268,7 +270,9 @@ onMounted(load);
               </div>
             </div>
             <div v-if="activeVersion?.warnings.length" class="list-block">
-              <div v-for="warning in activeVersion.warnings" :key="warning" class="list-item">{{ warning }}</div>
+              <div v-for="warning in activeVersion.warnings" :key="warning" class="list-item">
+                {{ warning }}
+              </div>
             </div>
           </article>
         </div>
@@ -327,8 +331,8 @@ onMounted(load);
                   ><strong class="fingerprint">{{ version.vectorCollection ?? '—' }}</strong>
                 </div>
                 <div>
-                  <span>创建时间</span
-                  ><strong>{{ new Date(version.createdAt).toLocaleString() }}</strong>
+                  <span>创建时间</span>
+                  <strong>{{ new Date(version.createdAt).toLocaleString() }}</strong>
                 </div>
               </div>
             </article>
