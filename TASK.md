@@ -180,6 +180,8 @@ Vue 3 + TypeScript + Vite
 - [x] 同步 AGENTS、实施规格、技术设计、前端设计、开发规范、任务清单和运维手册中的 API 文档索引。
 - [x] 重构 README 的信息层级，新增零模型/零 ODA 的新手基础模式、分步骤启动流程和常见问题 FAQ，并将
       Ollama、完整 RAG、DWG 与数据库调试下沉为按需章节。
+- [x] 新增 `apps/README.md` 及 API、Web、Parser Worker 目录级 README，集中说明模块入口、调用关系、开发命令、
+      安全边界和当前解析算法，避免为每个源文件维护易漂移的独立说明。
 
 ---
 

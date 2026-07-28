@@ -1,0 +1,89 @@
+# Vue Web 应用说明
+
+`apps/web` 是 NexusKB 的浏览器界面，使用 Vue 3、TypeScript、Vite、Vue Router、Pinia 和 Element Plus。
+它提供知识问答、来源展示、问答历史、文档与入库任务管理、访问控制、审计、Provider、系统状态和用量页面。
+
+Web 只负责用户体验。真正的身份、tenant、ACL、敏感度和 capability 校验始终由 NestJS API 执行。
+
+## 关键入口
+
+| 路径                                                           | 作用                                                   |
+| -------------------------------------------------------------- | ------------------------------------------------------ |
+| [`src/main.ts`](./src/main.ts)                                 | 创建 Vue 应用、注册 Router、Pinia 和 Element Plus 配置 |
+| [`src/App.vue`](./src/App.vue)                                 | 应用根组件                                             |
+| [`src/router/index.ts`](./src/router/index.ts)                 | 页面路由与导航守卫                                     |
+| [`src/layouts/AppShell.vue`](./src/layouts/AppShell.vue)       | 桌面侧栏、移动 Drawer、顶栏和内容壳层                  |
+| [`src/api/client.ts`](./src/api/client.ts)                     | 统一 HTTP client、超时、Cookie 和安全错误映射          |
+| [`src/stores/auth.ts`](./src/stores/auth.ts)                   | 服务端会话、角色和 capability 状态                     |
+| [`src/styles/tokens.css`](./src/styles/tokens.css)             | 共享设计 token                                         |
+| [`src/styles/breakpoints.scss`](./src/styles/breakpoints.scss) | 唯一响应式断点定义                                     |
+
+## 目录结构
+
+| 目录                       | 职责                                  |
+| -------------------------- | ------------------------------------- |
+| `src/api`                  | 按业务域封装 API 调用和运行时响应校验 |
+| `src/views`                | 路由页面                              |
+| `src/components/common`    | 通用、安全渲染组件                    |
+| `src/components/knowledge` | 提问、回答、历史回答和来源抽屉        |
+| `src/components/documents` | 文档列表与移动端卡片                  |
+| `src/layouts`              | 应用壳层与全局导航                    |
+| `src/router`               | 路由、权限体验和安全返回导航          |
+| `src/stores`               | Pinia 会话状态                        |
+| `src/composables`          | 响应式断点等可复用逻辑                |
+| `src/styles`               | 设计 token、全局样式和断点            |
+| `src/utils`                | Markdown 等纯工具函数                 |
+| `src/test`                 | Vitest 公共测试环境                   |
+| `e2e`                      | Playwright 完整流程和响应式回归       |
+
+同目录的 `*.test.ts` 是对应模块的单元或组件测试；展示层数据整理通常放在
+`*-presentation.ts`，避免把复杂转换散落在 Vue 模板中。
+
+## 页面范围
+
+主要页面位于 `src/views`：
+
+- `KnowledgeAskView`：知识问答、严格/通用回答模式和来源。
+- `HistoryView`：当前登录用户的问答历史。
+- `DocumentsView`、`DocumentDetailView`、`DocumentChunksView`：文档、版本和授权分块。
+- `IngestionJobsView`：入库状态、步骤、失败详情和安全重试。
+- `UsersView`、`DepartmentsView`：角色与部门权限。
+- `AuditView`：无正文结构化审计。
+- `ProviderSettingsView`、`SystemStatusView`、`UsageView`：Provider、依赖和用量摘要。
+
+## 安全与前端边界
+
+- 请求不能携带可信 `tenantId`、角色、部门或任意向量过滤表达式。
+- 路由和按钮隐藏只改善体验，不能替代后端鉴权。
+- 问题、回答和文档片段不写入浏览器持久化、analytics 或普通错误上报。
+- Markdown 必须通过统一的严格清洗组件渲染；禁止原始 HTML、脚本、iframe、图片、事件属性和危险协议。
+- 外部链接必须使用安全协议，并添加 `noopener noreferrer`。
+- API 错误分支依赖稳定错误码和 HTTP 状态，不依赖可变的错误文案。
+
+## 响应式约定
+
+- 断点只从 `breakpoints.scss` 和 `useBreakpoint()` 读取。
+- `<=900px` 使用移动端 Drawer 导航和卡片结构，不保留仅靠 CSS 隐藏的桌面表格。
+- 表格、列表和详情正文在各自内容块内滚动，避免整个页面横向溢出。
+- 触控目标至少 44px；手机可聚焦输入控件字号至少 16px。
+
+详细页面和交互规范见
+[`docs/03-前端产品与界面设计.md`](../../docs/03-前端产品与界面设计.md)。
+
+## 开发命令
+
+在仓库根目录执行：
+
+```bash
+pnpm --filter @nexus-kb/web dev
+pnpm --filter @nexus-kb/web lint
+pnpm --filter @nexus-kb/web typecheck
+pnpm --filter @nexus-kb/web test
+pnpm --filter @nexus-kb/web build
+```
+
+需要浏览器完整回归时：
+
+```bash
+pnpm --filter @nexus-kb/web test:e2e
+```

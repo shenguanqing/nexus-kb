@@ -503,6 +503,10 @@ pnpm --filter @nexus-kb/web test:e2e
 | [`docs/05-开发任务清单.md`](./docs/05-开发任务清单.md)             | 完整阶段任务                       |
 | [`docs/06-部署运维手册.md`](./docs/06-部署运维手册.md)             | 部署、配置、备份、监控与故障处理   |
 | [`docs/07-API使用说明.md`](./docs/07-API使用说明.md)               | 认证、权限、端点、错误码与调用示例 |
+| [`apps/README.md`](./apps/README.md)                               | Web、API 与 Parser Worker 应用索引 |
+| [`apps/api/README.md`](./apps/api/README.md)                       | NestJS API 模块、链路与安全边界    |
+| [`apps/web/README.md`](./apps/web/README.md)                       | Vue 页面、目录、响应式与前端边界   |
+| [`apps/parser-worker/README.md`](./apps/parser-worker/README.md)   | 文档解析算法、限制与开发方式       |
 
 机器可读契约：
 
