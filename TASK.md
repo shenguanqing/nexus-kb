@@ -159,13 +159,16 @@ Vue 3 + TypeScript + Vite
 ### 3.12 本地启动与数据库调试文档
 
 - [x] README 与部署运维手册明确：执行 DWG Worker 的 `docker compose build` 前必须启动 Docker Desktop，并先
-      通过 `docker info` / `docker compose version` 验证 Docker Engine。
+      通过 `docker info` / `docker compose version` 验证 Docker Engine；两处均补齐专用 Worker 构建、合并
+      配置校验、整套服务启动和状态检查的完整命令序列。
 - [x] 明确 `.env` 变更按实际读取服务重建：主服务配置重建 `api`，解析/CAD 配置重建 `parser-worker`，
       `PARSER_INTERNAL_TOKEN` 同时重建两端；普通运行配置变化不要求重新构建镜像。
 - [x] 明确 PostgreSQL 初始化账号、数据库和密码在已有 volume 上不会因重建容器自动变更，禁止使用
       `down -v` 作为配置重载方式。
 - [x] 新增仅绑定 `127.0.0.1:15432` 的 `compose.db-gui.yaml` 和 DBeaver 只读查看说明；生产环境仍不暴露
       PostgreSQL。
+- [x] README 补全基础、DWG、DBeaver 及组合模式的固定 Compose 文件前缀，完善依赖健康分项诊断、已有 volume
+      的数据库密码同步流程、URL 密码编码提示和 PostgreSQL/Chroma 数据归属说明。
 
 ### 3.13 API 使用说明
 
@@ -175,6 +178,8 @@ Vue 3 + TypeScript + Vite
 - [x] 修正 OpenAPI 文档漂移：补充 live/ready 健康端点、密码会话 Cookie security scheme，以及知识问答和
       历史轮次的 `answerMode` 字段。
 - [x] 同步 AGENTS、实施规格、技术设计、前端设计、开发规范、任务清单和运维手册中的 API 文档索引。
+- [x] 重构 README 的信息层级，新增零模型/零 ODA 的新手基础模式、分步骤启动流程和常见问题 FAQ，并将
+      Ollama、完整 RAG、DWG 与数据库调试下沉为按需章节。
 
 ---
 
