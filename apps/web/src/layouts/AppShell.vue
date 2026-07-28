@@ -221,8 +221,8 @@ async function signOut(): Promise<void> {
       <div v-if="route.path !== '/ask'" class="page-heading">
         <div class="page-heading-copy">
           <span class="page-heading-eyebrow">{{ pageSection }}</span>
-          <h1>{{ pageTitle }}</h1>
-          <p v-if="pageDescription">{{ pageDescription }}</p>
+          <div class="heading heading--h1" role="heading" aria-level="1">{{ pageTitle }}</div>
+          <div v-if="pageDescription" class="text-block">{{ pageDescription }}</div>
         </div>
         <div class="page-heading-actions">
           <RouterLink v-if="returnNavigation" :to="returnNavigation.to" class="page-return-link">

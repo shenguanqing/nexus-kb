@@ -17,7 +17,7 @@ const { isPhone } = useBreakpoint();
   >
     <div v-if="source" class="source-detail">
       <span class="source-index">来源 {{ source.index }}</span>
-      <h2>{{ source.sourceName }}</h2>
+      <div class="heading heading--h2" role="heading" aria-level="2">{{ source.sourceName }}</div>
       <el-descriptions :column="1" border size="small">
         <el-descriptions-item label="版本">v{{ source.documentVersion }}</el-descriptions-item>
         <el-descriptions-item label="位置">
@@ -33,9 +33,9 @@ const { isPhone } = useBreakpoint();
           {{ source.sectionPath.join(' / ') || '未标注章节' }}
         </el-descriptions-item>
       </el-descriptions>
-      <p class="security-note">
+      <div class="security-note text-block">
         这里只显示本次回答中后端已授权返回的来源信息。查看内容时会重新验证权限。
-      </p>
+      </div>
       <RouterLink :to="`/documents/${source.documentId}`">
         <el-button>查看文档详情</el-button>
       </RouterLink>

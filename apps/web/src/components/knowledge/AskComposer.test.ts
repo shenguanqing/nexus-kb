@@ -7,7 +7,13 @@ describe('AskComposer', () => {
     const wrapper = mount(AskComposer, {
       props: { modelValue: '付款周期？', isSubmitting: false },
       global: {
-        stubs: { ElButton: { template: '<button @click="$emit(\'click\')"><slot /></button>' } },
+        stubs: {
+          ElButton: { template: '<button @click="$emit(\'click\')"><slot /></button>' },
+          ElInput: {
+            emits: ['keydown'],
+            template: '<textarea @keydown="$emit(\'keydown\', $event)"></textarea>',
+          },
+        },
       },
     });
     const textarea = wrapper.get('textarea');
@@ -19,7 +25,15 @@ describe('AskComposer', () => {
   it('does not submit empty or one-character questions', async () => {
     const wrapper = mount(AskComposer, {
       props: { modelValue: '问', isSubmitting: false },
-      global: { stubs: { ElButton: true } },
+      global: {
+        stubs: {
+          ElButton: true,
+          ElInput: {
+            emits: ['keydown'],
+            template: '<textarea @keydown="$emit(\'keydown\', $event)"></textarea>',
+          },
+        },
+      },
     });
     await wrapper.get('textarea').trigger('keydown', { key: 'Enter' });
     expect(wrapper.emitted('submit')).toBeUndefined();

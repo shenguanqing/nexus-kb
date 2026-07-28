@@ -11,7 +11,8 @@ const conversations = ref<ConversationSummary[]>([]);
 const { isMobile } = useBreakpoint();
 const selected = ref<ConversationDetail | null>(null);
 const query = ref('');
-const dateRange = ref<[Date, Date] | null>(null);
+const startAt = ref<Date | null>(null);
+const endAt = ref<Date | null>(null);
 const page = ref(1);
 const total = ref(0);
 const loading = ref(false);
@@ -24,8 +25,8 @@ async function load(): Promise<void> {
   try {
     const result = await listConversations({
       query: query.value.trim() || undefined,
-      from: dateRange.value?.[0].toISOString(),
-      to: dateRange.value?.[1].toISOString(),
+      from: startAt.value?.toISOString(),
+      to: endAt.value?.toISOString(),
       offset: (page.value - 1) * 20,
       limit: 20,
     });
@@ -60,8 +61,14 @@ async function search(): Promise<void> {
 }
 async function resetFilters(): Promise<void> {
   query.value = '';
-  dateRange.value = null;
+  startAt.value = null;
+  endAt.value = null;
   await search();
+}
+
+async function changePage(nextPage: number): Promise<void> {
+  page.value = nextPage;
+  await load();
 }
 </script>
 
@@ -70,52 +77,59 @@ async function resetFilters(): Promise<void> {
     <form
       v-if="!isMobile"
       class="history-toolbar"
-      aria-label="历史记录查询"
+      aria-label="历史记录筛选"
       @submit.prevent="search"
     >
       <el-input v-model="query" clearable maxlength="200" placeholder="搜索会话标题" />
-      <el-date-picker
-        v-model="dateRange"
-        type="datetimerange"
-        start-placeholder="开始时间"
-        end-placeholder="结束时间"
-      />
-      <el-button native-type="submit">查询</el-button>
+      <el-date-picker v-model="startAt" type="datetime" placeholder="开始时间" />
+      <el-date-picker v-model="endAt" type="datetime" placeholder="结束时间" />
+      <el-button native-type="submit">筛选</el-button>
     </form>
-    <template v-else>
+    <div v-else class="history-toolbar">
       <div class="mobile-filter-bar">
         <el-button class="filter-trigger" @click="filtersVisible = true">筛选</el-button>
       </div>
       <el-drawer
         v-model="filtersVisible"
+        class="mobile-filter-drawer"
         direction="btt"
-        size="40%"
+        size="72%"
         title="筛选问答历史"
         append-to-body
         :z-index="4000"
       >
-        <form class="mobile-filter-form" aria-label="历史记录查询" @submit.prevent="search">
+        <form class="mobile-filter-form" aria-label="历史记录筛选" @submit.prevent="search">
           <el-input v-model="query" clearable maxlength="200" placeholder="搜索会话标题" />
           <el-date-picker
-            v-model="dateRange"
-            type="datetimerange"
-            start-placeholder="开始时间"
-            end-placeholder="结束时间"
+            v-model="startAt"
+            type="datetime"
+            :placement="isMobile ? 'top-start' : 'bottom-start'"
+            popper-class="mobile-date-picker-popper"
+            placeholder="开始时间"
+          />
+          <el-date-picker
+            v-model="endAt"
+            type="datetime"
+            :placement="isMobile ? 'top-start' : 'bottom-start'"
+            popper-class="mobile-date-picker-popper"
+            placeholder="结束时间"
           />
           <div class="mobile-filter-actions">
             <el-button native-type="button" @click="resetFilters">重置</el-button>
-            <el-button type="primary" native-type="submit">应用</el-button>
+            <el-button type="primary" native-type="submit">筛选</el-button>
           </div>
         </form>
       </el-drawer>
-    </template>
+    </div>
     <div v-if="errorMessage" class="document-error" role="alert">
       <strong>无法加载历史</strong><span>{{ errorMessage }}</span>
       <el-button @click="load">重试</el-button>
     </div>
     <div v-else class="history-layout" v-loading="loading">
       <section class="history-list-panel">
-        <h2 class="scroll-section-title">会话列表</h2>
+        <div class="heading heading--h2 scroll-section-title" role="heading" aria-level="2">
+          会话列表
+        </div>
         <div class="history-list" role="list" aria-label="问答会话列表">
           <div class="history-list-scroll">
             <div
@@ -158,20 +172,20 @@ async function resetFilters(): Promise<void> {
           <el-pagination
             v-if="conversations.length > 0 && total > 20"
             class="list-pagination history-pagination"
-            v-model:current-page="page"
             layout="prev, pager, next"
+            :current-page="page"
             :page-size="20"
             :total="total"
-            @change="load"
+            @current-change="changePage"
           />
         </div>
       </section>
       <article class="history-detail">
         <template v-if="selected">
-          <h2>{{ selected.title }}</h2>
+          <div class="heading heading--h2" role="heading" aria-level="2">{{ selected.title }}</div>
           <div class="history-detail-body">
             <div v-for="turn in selected.turns" :key="turn.id" class="history-turn">
-              <p class="history-question"><strong>你</strong>{{ turn.question }}</p>
+              <div class="history-question text-block"><strong>你</strong>{{ turn.question }}</div>
               <HistoryAnswer :turn="turn" />
             </div>
           </div>

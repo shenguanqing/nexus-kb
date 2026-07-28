@@ -143,6 +143,6 @@ describe('DocumentsView upload dialog', () => {
     const fileList = wrapper.get('.upload-file-list');
     expect(fileList.attributes('aria-label')).toBe('待上传文件');
     expect(fileList.attributes('tabindex')).toBe('0');
-    expect(fileList.findAll('li')).toHaveLength(3);
+    expect(fileList.findAll('.list-item')).toHaveLength(3);
   });
 });

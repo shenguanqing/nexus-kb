@@ -11,9 +11,9 @@ describe('SafeMarkdown', () => {
       },
     });
 
-    expect(wrapper.get('h2').text()).toBe('结论');
+    expect(wrapper.get('[role="heading"][aria-level="2"]').text()).toBe('结论');
     expect(wrapper.get('strong').text()).toBe('Vue 3');
-    expect(wrapper.findAll('li').map((item) => item.text())).toEqual([
+    expect(wrapper.findAll('.markdown-list-item').map((item) => item.text())).toEqual([
       'Composition API',
       'Proxy [来源1]',
     ]);

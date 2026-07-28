@@ -111,6 +111,11 @@ async function resetFilters(): Promise<void> {
   filters.page = 1;
   await syncAndLoad();
 }
+
+async function changePage(nextPage: number): Promise<void> {
+  filters.page = nextPage;
+  await syncAndLoad();
+}
 async function retry(job: IngestionJob): Promise<void> {
   retryingId.value = job.id;
   try {
@@ -167,11 +172,11 @@ onUnmounted(() => {
   <section class="ingestion-page">
     <div class="task-controls">
       <div class="task-toolbar">
-        <p>共 {{ total }} 个可访问任务</p>
+        <div class="text-block">共 {{ total }} 个可访问任务</div>
         <form
           v-if="!isMobile"
           class="task-filter-form"
-          aria-label="入库任务查询"
+          aria-label="入库任务筛选"
           @submit.prevent="applyFilters"
         >
           <el-select v-model="filters.status" clearable placeholder="全部状态">
@@ -182,7 +187,7 @@ onUnmounted(() => {
               :value="option.value"
             />
           </el-select>
-          <el-button native-type="submit">查询</el-button>
+          <el-button native-type="submit">筛选</el-button>
           <el-button class="reset-button" native-type="button" @click="resetFilters">
             重置
           </el-button>
@@ -193,15 +198,16 @@ onUnmounted(() => {
           </div>
           <el-drawer
             v-model="filtersVisible"
+            class="mobile-filter-drawer"
             direction="btt"
-            size="40%"
+            size="72%"
             title="筛选入库任务"
             append-to-body
             :z-index="4000"
           >
             <form
               class="mobile-filter-form"
-              aria-label="入库任务查询"
+              aria-label="入库任务筛选"
               @submit.prevent="applyFilters"
             >
               <el-select v-model="filters.status" clearable placeholder="全部状态">
@@ -215,7 +221,7 @@ onUnmounted(() => {
               <el-input v-model="filters.documentId" clearable placeholder="文档 ID" />
               <div class="mobile-filter-actions">
                 <el-button native-type="button" @click="resetFilters">重置</el-button>
-                <el-button type="primary" native-type="submit">应用</el-button>
+                <el-button type="primary" native-type="submit">筛选</el-button>
               </div>
             </form>
           </el-drawer>
@@ -294,12 +300,14 @@ onUnmounted(() => {
           </div>
           <div v-if="job.warnings.length" class="task-warning">
             <strong>Warning</strong>
-            <ul>
-              <li v-for="warning in job.warnings" :key="warning">{{ warning }}</li>
-            </ul>
+            <div class="list-block">
+              <div v-for="warning in job.warnings" :key="warning" class="list-item">
+                {{ warning }}
+              </div>
+            </div>
           </div>
           <div v-if="job.errorCode" class="task-error">
-            <p>{{ ingestionErrorMessage(job.errorCode) }}</p>
+            <div class="text-block">{{ ingestionErrorMessage(job.errorCode) }}</div>
             <details>
               <summary>技术详情</summary>
               <code>{{ job.errorCode }}</code>
@@ -318,12 +326,11 @@ onUnmounted(() => {
       </div>
       <div v-if="total > filters.pageSize" class="list-pagination">
         <el-pagination
-          v-model:current-page="filters.page"
-          v-model:page-size="filters.pageSize"
-          :layout="isPhone ? 'prev, pager, next' : 'total, sizes, prev, pager, next'"
+          layout="prev, pager, next"
+          :current-page="filters.page"
+          :page-size="filters.pageSize"
           :total="total"
-          :page-sizes="[20, 50, 100]"
-          @change="syncAndLoad"
+          @current-change="changePage"
         />
       </div>
     </div>

@@ -54,15 +54,15 @@ async function submit(): Promise<void> {
   <main class="login-page">
     <section class="login-brand">
       <span class="brand-mark large">N</span>
-      <p>知枢 NexusKB</p>
-      <h1>让企业知识<br />可信、可查、可追溯</h1>
-      <p>每个回答都有依据，每次访问都经过权限验证。</p>
+      <div class="text-block">知枢 NexusKB</div>
+      <div class="heading heading--h1" role="heading" aria-level="1">让企业知识<br />可信、可查、可追溯</div>
+      <div class="text-block">每个回答都有依据，每次访问都经过权限验证。</div>
     </section>
     <section class="login-panel">
       <div class="login-card">
         <span class="eyebrow">企业知识中心</span>
-        <h2>登录知枢</h2>
-        <p>使用组织批准的身份服务继续访问。</p>
+        <div class="heading heading--h2" role="heading" aria-level="2">登录知枢</div>
+        <div class="text-block">使用组织批准的身份服务继续访问。</div>
         <form v-if="options?.passwordEnabled" class="login-form" @submit.prevent="submit">
           <label>
             账号
@@ -84,13 +84,13 @@ async function submit(): Promise<void> {
               placeholder="输入密码"
             />
           </label>
-          <p v-if="errorMessage" class="login-error" role="alert">{{ errorMessage }}</p>
+          <div v-if="errorMessage" class="login-error text-block" role="alert">{{ errorMessage }}</div>
           <el-button native-type="submit" type="primary" size="large" :loading="loading">
             登录
           </el-button>
         </form>
         <template v-else>
-          <p v-if="errorMessage" class="login-error" role="alert">{{ errorMessage }}</p>
+          <div v-if="errorMessage" class="login-error text-block" role="alert">{{ errorMessage }}</div>
           <el-button type="primary" size="large" disabled>企业 SSO 登录</el-button>
           <small v-if="options?.mode === 'development'">
             本地开发模式会由服务端自动建立受控身份。

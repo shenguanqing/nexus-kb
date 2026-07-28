@@ -19,6 +19,9 @@
   --kb-space-4: 16px;
   --kb-space-6: 24px;
   --kb-space-8: 32px;
+  --kb-layout-gap: var(--kb-space-4);
+  --kb-panel-padding: 20px;
+  --kb-list-row-padding: 12px;
   font-family:
     Inter,
     ui-sans-serif,

@@ -38,9 +38,9 @@ describe('AssistantAnswer', () => {
       '[来源2]',
       '[来源2]',
     ]);
-    expect(wrapper.get('.answer-text h2').text()).toBe('Vue 3');
+    expect(wrapper.get('.answer-text .markdown-heading--h2').text()).toBe('Vue 3');
     expect(wrapper.get('.answer-text strong').text()).toBe('Proxy');
-    expect(wrapper.get('.answer-text li').text()).toBe('支持 Composition API。[来源2]');
+    expect(wrapper.get('.answer-text .markdown-list-item').text()).toBe('支持 Composition API。[来源2]');
     expect(wrapper.get('.answer-sources-label').text()).toBe('回答来源');
     expect(wrapper.findAll('.source-card').map((source) => source.text())).toEqual([
       expect.stringContaining('来源 1'),

@@ -32,10 +32,10 @@ onMounted(load);
 
 <template>
   <section class="system-page">
-    <div class="system-page-intro">
+    <div class="provider-toolbar">
       <div>
         <strong>模型 Provider</strong>
-        <p>只展示服务端脱敏后的运行配置，不读取或回显任何密钥。</p>
+        <div class="text-block">只展示服务端脱敏后的运行配置，不读取或回显任何密钥。</div>
       </div>
       <el-button :loading="loading" @click="load">刷新状态</el-button>
     </div>
@@ -59,7 +59,9 @@ onMounted(load);
               {{ provider.configurationStatus === 'configured' ? '已配置' : '未启用' }}
             </el-tag>
           </div>
-          <h2>{{ providerTitle(provider) }}</h2>
+          <div class="heading heading--h2" role="heading" aria-level="2">
+            {{ providerTitle(provider) }}
+          </div>
           <div class="data-list">
             <div>
               <span>服务域名</span><strong>{{ provider.endpointHost ?? '—' }}</strong>
@@ -68,13 +70,17 @@ onMounted(load);
               <span>区域</span><strong>{{ provider.region ?? '—' }}</strong>
             </div>
             <div>
-              <span>凭据状态</span><strong>{{ credentialLabel(provider.provider, provider.credentialConfigured) }}</strong>
+              <span>凭据状态</span
+              ><strong>{{
+                credentialLabel(provider.provider, provider.credentialConfigured)
+              }}</strong>
             </div>
             <div v-if="provider.dimensions">
               <span>向量维度</span><strong>{{ provider.dimensions }}</strong>
             </div>
             <div v-if="provider.fingerprint" class="provider-fingerprint">
-              <span>索引配置指纹</span><strong>
+              <span>索引配置指纹</span
+              ><strong>
                 <code>{{ provider.fingerprint }}</code>
               </strong>
             </div>
@@ -85,7 +91,7 @@ onMounted(load);
 
       <div v-if="result" class="system-note">
         <strong>合成检查尚未配置</strong>
-        <p>当前页面只确认配置是否完整，不会通过刷新页面触发付费模型调用。</p>
+        <div class="text-block">当前页面只确认配置是否完整，不会通过刷新页面触发付费模型调用。</div>
       </div>
     </div>
   </section>

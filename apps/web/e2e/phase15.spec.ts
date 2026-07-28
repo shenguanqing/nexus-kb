@@ -5,6 +5,7 @@ const session = (
   capabilities = [
     'documents:read',
     'documents:write',
+    'documents:delete',
     'access:read',
     'access:write',
     'system:read',
@@ -239,7 +240,84 @@ test('opens access navigation and displays ACL-authorized document chunks', asyn
   await expect(page).toHaveURL(/\/access\/departments$/);
   await expect(page.getByRole('heading', { name: '部门权限' })).toBeVisible();
 
+  await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto(`/documents/${documentId}`);
+  await expect(page.getByRole('heading', { name: '制度.md' })).toBeVisible();
+  const desktopDetailLayout = await page.evaluate(() => {
+    const summary = document.querySelector<HTMLElement>('.detail-actions > div:first-child');
+    const actionButtons = document.querySelector<HTMLElement>('.detail-action-buttons');
+    const cards = document.querySelectorAll<HTMLElement>('.detail-grid > .detail-card');
+    return {
+      actionsWrapped:
+        (actionButtons?.getBoundingClientRect().top ?? 0) >=
+        (summary?.getBoundingClientRect().bottom ?? Number.POSITIVE_INFINITY),
+      cardsStacked:
+        (cards[1]?.getBoundingClientRect().top ?? 0) > (cards[0]?.getBoundingClientRect().top ?? 0),
+    };
+  });
+  expect(desktopDetailLayout).toEqual({ actionsWrapped: false, cardsStacked: false });
+
+  await page.setViewportSize({ width: 1102, height: 900 });
+  const resizedMetrics = await page.evaluate(() => {
+    const appMain = document.querySelector<HTMLElement>('.app-main');
+    const detailPage = document.querySelector<HTMLElement>('.document-detail-page');
+    const detailGrid = document.querySelector<HTMLElement>('.detail-grid');
+    const actionButtons = document.querySelector<HTMLElement>('.detail-action-buttons');
+    return {
+      viewport: document.documentElement.clientWidth,
+      appMain: appMain?.getBoundingClientRect().width ?? 0,
+      detailPage: detailPage?.getBoundingClientRect().width ?? 0,
+      detailGrid: detailGrid?.getBoundingClientRect().width ?? 0,
+      actionButtons: actionButtons?.getBoundingClientRect().width ?? 0,
+      gridColumns: detailGrid ? getComputedStyle(detailGrid).gridTemplateColumns : '',
+    };
+  });
+  expect(resizedMetrics.detailGrid).toBeLessThanOrEqual(resizedMetrics.detailPage);
+  await expect
+    .poll(() =>
+      page.evaluate(() => {
+        const summary = document.querySelector<HTMLElement>('.detail-actions > div:first-child');
+        const actionButtons = document.querySelector<HTMLElement>('.detail-action-buttons');
+        const cards = document.querySelectorAll<HTMLElement>('.detail-grid > .detail-card');
+        return {
+          actionsWrapped:
+            (actionButtons?.getBoundingClientRect().top ?? 0) >=
+            (summary?.getBoundingClientRect().bottom ?? Number.POSITIVE_INFINITY),
+          cardsStacked:
+            (cards[1]?.getBoundingClientRect().top ?? 0) >
+            (cards[0]?.getBoundingClientRect().top ?? 0),
+        };
+      }),
+    )
+    .toEqual({ actionsWrapped: true, cardsStacked: true });
+  const detailLayout = await page.evaluate(() => {
+    const pageContent = document.querySelector<HTMLElement>(
+      '.document-detail-page > .page-content',
+    );
+    const actions = document.querySelector<HTMLElement>('.detail-actions');
+    const actionButtons = document.querySelector<HTMLElement>('.detail-action-buttons');
+    const detailGrid = document.querySelector<HTMLElement>('.detail-grid');
+    const history = document.querySelector<HTMLElement>(
+      '.document-detail-page > .page-content > .detail-card',
+    );
+    const actionsBounds = actions?.getBoundingClientRect();
+    const gridBounds = detailGrid?.getBoundingClientRect();
+    const historyBounds = history?.getBoundingClientRect();
+    return {
+      actionButtonsScrollWidth: actionButtons?.scrollWidth ?? 0,
+      actionButtonsClientWidth: actionButtons?.clientWidth ?? 0,
+      actionsDirection: actions ? getComputedStyle(actions).flexDirection : '',
+      pageGap: pageContent ? Number.parseFloat(getComputedStyle(pageContent).rowGap) : 0,
+      actionsToGridGap: actionsBounds && gridBounds ? gridBounds.top - actionsBounds.bottom : 0,
+      gridToHistoryGap: gridBounds && historyBounds ? historyBounds.top - gridBounds.bottom : 0,
+    };
+  });
+  expect(detailLayout.actionsDirection).toBe('row');
+  expect(detailLayout.actionButtonsScrollWidth).toBeLessThanOrEqual(
+    detailLayout.actionButtonsClientWidth,
+  );
+  expect(Math.round(detailLayout.actionsToGridGap)).toBe(Math.round(detailLayout.pageGap));
+  expect(Math.round(detailLayout.gridToHistoryGap)).toBe(Math.round(detailLayout.pageGap));
   await page.getByRole('button', { name: '修改权限 metadata' }).click();
   const metadataDialog = page.locator('.metadata-dialog');
   await expect(metadataDialog).toBeVisible();
@@ -330,6 +408,7 @@ test('keeps every authorized page within a 375px mobile viewport', async ({ page
         json: session([
           'documents:read',
           'documents:write',
+          'documents:delete',
           'audit:read',
           'access:read',
           'access:write',
@@ -349,7 +428,7 @@ test('keeps every authorized page within a 375px mobile viewport', async ({ page
           items: [],
           page: 1,
           pageSize: 20,
-          total: 0,
+          total: 120,
         },
       });
     if (path === `/v1/documents/${documentId}`)
@@ -440,6 +519,140 @@ test('keeps every authorized page within a 375px mobile viewport', async ({ page
     expect(bounds.bodyScrollWidth).toBeLessThanOrEqual(375);
     expect(bounds.mainScrollWidth).toBeLessThanOrEqual(bounds.mainClientWidth);
   }
+
+  for (const [path, toolbar] of [
+    ['/history', '.history-toolbar'],
+    ['/audit', '.audit-toolbar'],
+    ['/access/users', '.access-toolbar'],
+  ] as const) {
+    await page.goto(path);
+    await expect(page.locator(toolbar).getByRole('button', { name: '筛选' })).toBeVisible();
+  }
+
+  for (const [path, toolbar] of [
+    ['/ingestion-jobs', '.task-toolbar'],
+    ['/audit', '.audit-toolbar'],
+    ['/settings/providers', '.provider-toolbar'],
+    ['/system/status', '.system-status-toolbar'],
+    ['/system/usage', '.usage-toolbar'],
+  ] as const) {
+    await page.goto(path);
+    await expect(page.locator(toolbar)).toHaveCSS('flex-direction', 'row');
+  }
+
+  await page.goto(`/documents/${documentId}/chunks`);
+  await expect(page.locator('.document-pagination .el-pagination__total')).toHaveCount(0);
+  await expect(page.locator('.document-pagination .el-pager')).toBeVisible();
+  const chunksPagination = await page.evaluate(() => {
+    const content = document.querySelector<HTMLElement>('.chunks-content');
+    const pagination = document.querySelector<HTMLElement>('.document-pagination');
+    return {
+      contentBottom: content?.getBoundingClientRect().bottom ?? Number.NEGATIVE_INFINITY,
+      paginationBottom: pagination?.getBoundingClientRect().bottom ?? Number.POSITIVE_INFINITY,
+      paginationBackground: pagination ? getComputedStyle(pagination).backgroundColor : '',
+    };
+  });
+  expect(chunksPagination.paginationBottom).toBeLessThanOrEqual(chunksPagination.contentBottom);
+  expect(chunksPagination.paginationBackground).not.toBe('rgba(0, 0, 0, 0)');
+
+  await page.goto('/system/usage');
+  await expect(page.locator('.usage-filter-form')).toHaveCount(0);
+  await page.locator('.usage-filter-bar').getByRole('button', { name: '筛选' }).click();
+  await expect(page.locator('.usage-filter-drawer')).toBeVisible();
+  await expect(page.locator('.usage-filter-drawer').getByPlaceholder('开始时间')).toBeVisible();
+  await expect(page.locator('.usage-filter-drawer').getByPlaceholder('结束时间')).toBeVisible();
+
+  await page.goto('/settings/providers');
+  await expect(page.locator('.provider-toolbar')).toHaveCSS('flex-direction', 'row');
+  await expect(
+    page.locator('.provider-toolbar').getByRole('button', { name: '刷新状态' }),
+  ).toBeVisible();
+  expect(
+    await page.locator('.provider-toolbar').evaluate((element) => element.clientHeight),
+  ).toBeLessThanOrEqual(60);
+
+  await page.goto('/system/status');
+  await expect(page.locator('.system-status-toolbar')).toHaveCSS('flex-direction', 'row');
+  await expect(
+    page.locator('.system-status-toolbar').getByRole('button', { name: '重新检查' }),
+  ).toBeVisible();
+  expect(
+    await page.locator('.system-status-toolbar').evaluate((element) => element.clientHeight),
+  ).toBeLessThanOrEqual(60);
+
+  await page.goto('/history');
+  await page.getByRole('button', { name: '筛选' }).click();
+  await expect(page.locator('.mobile-filter-drawer')).toBeVisible();
+  await expect(page.getByPlaceholder('开始时间')).toBeVisible();
+  await expect(page.getByPlaceholder('结束时间')).toBeVisible();
+  await page.getByPlaceholder('开始时间').click();
+  await expect(page.locator('.mobile-date-picker-popper:visible')).toBeVisible();
+  const mobileOverlayBounds = await page.evaluate(() => {
+    const drawer = document.querySelector<HTMLElement>('.mobile-filter-drawer');
+    const popper = document.querySelector<HTMLElement>(
+      '.mobile-date-picker-popper:not([aria-hidden="true"])',
+    );
+    return {
+      drawerHeight: drawer?.getBoundingClientRect().height ?? 0,
+      popperLeft: popper?.getBoundingClientRect().left ?? -1,
+      popperRight: popper?.getBoundingClientRect().right ?? Number.POSITIVE_INFINITY,
+    };
+  });
+  expect(mobileOverlayBounds.drawerHeight).toBeGreaterThanOrEqual(630);
+  expect(mobileOverlayBounds.popperLeft).toBeGreaterThanOrEqual(0);
+  expect(mobileOverlayBounds.popperRight).toBeLessThanOrEqual(375);
+  const historyFilterBounds = await page.evaluate(() => {
+    const drawer = document.querySelector<HTMLElement>('.mobile-filter-drawer');
+    const dateEditors = document.querySelectorAll<HTMLElement>(
+      '.mobile-filter-form .el-date-editor',
+    );
+    return {
+      drawerRight: drawer?.getBoundingClientRect().right ?? Number.NEGATIVE_INFINITY,
+      dateEditorsRight: [...dateEditors].map(
+        (dateEditor) => dateEditor.getBoundingClientRect().right,
+      ),
+    };
+  });
+  expect(historyFilterBounds.dateEditorsRight).toHaveLength(2);
+  for (const right of historyFilterBounds.dateEditorsRight) {
+    expect(right).toBeLessThanOrEqual(historyFilterBounds.drawerRight);
+  }
+
+  await page.setViewportSize({ width: 620, height: 985 });
+  await page.goto(`/documents/${documentId}`);
+  await expect(page.getByRole('heading', { name: '制度.md' })).toBeVisible();
+  const detailMobileLayout = await page.evaluate(() => {
+    const actions = document.querySelector<HTMLElement>('.detail-actions');
+    const summary = document.querySelector<HTMLElement>('.detail-actions > div:first-child');
+    const actionButtons = document.querySelector<HTMLElement>('.detail-action-buttons');
+    return {
+      actionsHeight: actions?.getBoundingClientRect().height ?? Number.POSITIVE_INFINITY,
+      buttonsTop: actionButtons?.getBoundingClientRect().top ?? Number.POSITIVE_INFINITY,
+      summaryBottom: summary?.getBoundingClientRect().bottom ?? Number.NEGATIVE_INFINITY,
+    };
+  });
+  expect(detailMobileLayout.actionsHeight).toBeLessThan(260);
+  expect(detailMobileLayout.buttonsTop - detailMobileLayout.summaryBottom).toBeLessThanOrEqual(24);
+
+  await page.goto('/settings/providers');
+  await expect(page.getByRole('heading', { name: '模型 Provider' }).first()).toBeVisible();
+  await expect(page.locator('.provider-toolbar')).toHaveCSS('flex-direction', 'row');
+
+  await page.setViewportSize({ width: 852, height: 393 });
+  for (const [path, title] of pages) {
+    await page.goto(path);
+    await expect(page.getByRole('heading', { name: title }).first()).toBeVisible();
+    const bounds = await page.evaluate(() => ({
+      bodyScrollWidth: document.body.scrollWidth,
+      mainScrollWidth: document.querySelector<HTMLElement>('.app-main')?.scrollWidth ?? 0,
+      mainClientWidth: document.querySelector<HTMLElement>('.app-main')?.clientWidth ?? 0,
+      headerHeight: document.querySelector<HTMLElement>('.app-header')?.clientHeight ?? 0,
+    }));
+    expect(bounds.bodyScrollWidth).toBeLessThanOrEqual(852);
+    expect(bounds.mainScrollWidth).toBeLessThanOrEqual(bounds.mainClientWidth);
+    expect(bounds.headerHeight).toBeGreaterThanOrEqual(44);
+    expect(bounds.headerHeight).toBeLessThanOrEqual(48);
+  }
 });
 
 test('keeps phone task steps compact and department cards grouped', async ({ page }) => {
@@ -515,6 +728,204 @@ test('keeps phone task steps compact and department cards grouped', async ({ pag
   expect(departmentHeaders.every((height) => height < 110)).toBe(true);
 });
 
+test('keeps landscape mobile controls aligned and management content scrollable', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 852, height: 393 });
+  await mockSession(page, ['access:read', 'access:write', 'audit:read', 'system:read']);
+  const departments = Array.from({ length: 12 }, (_, index) => ({
+    department: `department-${index + 1}`,
+    allowedSensitivities: ['public', 'internal'],
+    userCount: index + 1,
+    documentCount: index + 2,
+    managed: true,
+    updatedAt: '2026-07-22T09:00:00.000Z',
+  }));
+  await page.route('**/v1/access/users**', (route) =>
+    route.fulfill({
+      json: {
+        users: Array.from({ length: 12 }, (_, index) => ({
+          userId: `user-${index + 1}`,
+          department: `department-${index + 1}`,
+          roles: ['user'],
+          roleSource: 'managed',
+          status: 'observed',
+          lastAuthenticatedAt: '2026-07-22T09:00:00.000Z',
+        })),
+        total: 12,
+        offset: 0,
+        limit: 25,
+        scope: 'tenant',
+      },
+    }),
+  );
+  await page.route('**/v1/access/departments', (route) =>
+    route.fulfill({ json: { scope: 'tenant', departments } }),
+  );
+  await page.route('**/v1/history/conversations**', (route) =>
+    route.fulfill({ json: { conversations: [], total: 0, offset: 0, limit: 20 } }),
+  );
+  await page.route('**/v1/system/usage**', (route) =>
+    route.fulfill({
+      json: {
+        from: '2026-06-22T00:00:00.000Z',
+        to: '2026-07-22T00:00:00.000Z',
+        totalQueries: 138,
+        failureRate: 0.13,
+        queryP95Ms: 5388,
+        providers: [
+          {
+            kind: 'embedding',
+            provider: 'ollama',
+            model: 'bge-m3:latest',
+            requests: 123,
+            failures: 0,
+            inputTokens: null,
+            outputTokens: null,
+            estimatedCostUsd: null,
+          },
+          {
+            kind: 'llm',
+            provider: 'deepseek',
+            model: 'deepseek-v4-flash',
+            requests: 2,
+            failures: 0,
+            inputTokens: null,
+            outputTokens: null,
+            estimatedCostUsd: null,
+          },
+        ],
+        departments: departments.map((department) => ({
+          department: department.department,
+          requests: department.userCount,
+        })),
+        usageCompleteness: 'request_only',
+      },
+    }),
+  );
+  await page.route('**/v1/system/providers', (route) =>
+    route.fulfill({
+      json: {
+        providers: [],
+        syntheticCheck: { status: 'not_configured', checkedAt: null },
+      },
+    }),
+  );
+  await page.route('**/v1/system/status', (route) =>
+    route.fulfill({
+      json: {
+        status: 'ready',
+        checkedAt: '2026-07-22T09:00:00.000Z',
+        rawDocsDiskUsageRatio: 0,
+        components: [],
+        ingestionQueue: {
+          status: 'up',
+          waiting: null,
+          active: null,
+          delayed: null,
+          failed: null,
+          oldestWaitSeconds: null,
+        },
+      },
+    }),
+  );
+  await page.route('**/v1/audit/events', (route) =>
+    route.fulfill({ json: { events: [], nextBefore: null } }),
+  );
+
+  await page.goto('/access/users');
+  await expect(page.getByText('user-1', { exact: true })).toBeVisible();
+  const userScroll = await page.locator('.access-content').evaluate((element) => {
+    const canScroll = element.scrollHeight > element.clientHeight;
+    element.scrollTop = 160;
+    return { canScroll, scrollTop: element.scrollTop };
+  });
+  expect(userScroll.canScroll).toBe(true);
+  expect(userScroll.scrollTop).toBeGreaterThan(0);
+
+  await page.goto('/access/departments');
+  await expect(page.getByText('department-1', { exact: true })).toBeVisible();
+  const departmentScroll = await page.locator('.department-layout').evaluate((element) => {
+    const canScroll = element.scrollHeight > element.clientHeight;
+    element.scrollTop = 160;
+    return { canScroll, scrollTop: element.scrollTop };
+  });
+  expect(departmentScroll.canScroll).toBe(true);
+  expect(departmentScroll.scrollTop).toBeGreaterThan(0);
+
+  await page.goto('/history');
+  const historyFilterPosition = await page.locator('.history-toolbar').evaluate((element) => {
+    const button = element.querySelector<HTMLElement>('.filter-trigger');
+    const toolbarBounds = element.getBoundingClientRect();
+    const buttonBounds = button?.getBoundingClientRect();
+    return {
+      toolbarRight: toolbarBounds.right,
+      buttonRight: buttonBounds?.right ?? Number.NEGATIVE_INFINITY,
+      buttonTop: buttonBounds?.top ?? Number.NEGATIVE_INFINITY,
+      toolbarTop: toolbarBounds.top,
+    };
+  });
+  expect(historyFilterPosition.buttonRight).toBeGreaterThan(
+    historyFilterPosition.toolbarRight - 20,
+  );
+  expect(historyFilterPosition.buttonTop).toBeGreaterThanOrEqual(historyFilterPosition.toolbarTop);
+
+  await page.getByRole('button', { name: '打开导航菜单' }).click();
+  const drawerHeader = await page.locator('.mobile-drawer-header').evaluate((element) => {
+    const header = document.querySelector<HTMLElement>('.app-header');
+    return {
+      drawerHeight: element.getBoundingClientRect().height,
+      appHeaderHeight: header?.getBoundingClientRect().height ?? 0,
+    };
+  });
+  expect(drawerHeader.drawerHeight).toBe(drawerHeader.appHeaderHeight);
+  await page.getByRole('button', { name: '关闭导航菜单' }).click();
+
+  await page.goto('/system/usage');
+  await expect(page.getByText('ollama / bge-m3:latest')).toBeVisible();
+  const usageLayout = await page.evaluate(() => {
+    const intro = document.querySelector<HTMLElement>('.usage-toolbar');
+    const filter = document.querySelector<HTMLElement>('.usage-filter-bar');
+    const content = document.querySelector<HTMLElement>('.usage-page > .page-content');
+    const introBounds = intro?.getBoundingClientRect();
+    const filterBounds = filter?.getBoundingClientRect();
+    if (content) content.scrollTop = 160;
+    return {
+      introHeight: introBounds?.height ?? Number.POSITIVE_INFINITY,
+      filterRight: filterBounds?.right ?? Number.NEGATIVE_INFINITY,
+      introRight: introBounds?.right ?? Number.POSITIVE_INFINITY,
+      canScroll: (content?.scrollHeight ?? 0) > (content?.clientHeight ?? 0),
+      scrollTop: content?.scrollTop ?? 0,
+    };
+  });
+  expect(usageLayout.introHeight).toBeLessThanOrEqual(56);
+  expect(usageLayout.filterRight).toBeGreaterThan(usageLayout.introRight - 20);
+  expect(usageLayout.canScroll).toBe(true);
+  expect(usageLayout.scrollTop).toBeGreaterThan(0);
+
+  for (const [path, intro, actionName] of [
+    ['/settings/providers', '.provider-toolbar', '刷新状态'],
+    ['/system/status', '.system-status-toolbar', '重新检查'],
+    ['/audit', '.audit-toolbar', '筛选'],
+  ] as const) {
+    await page.goto(path);
+    const introLayout = await page.locator(intro).evaluate((element, name) => {
+      const action = Array.from(element.querySelectorAll<HTMLElement>('button')).find(
+        (button) => button.textContent?.trim() === name,
+      );
+      const introBounds = element.getBoundingClientRect();
+      const actionBounds = action?.getBoundingClientRect();
+      return {
+        height: introBounds.height,
+        actionRight: actionBounds?.right ?? Number.NEGATIVE_INFINITY,
+        introRight: introBounds.right,
+      };
+    }, actionName);
+    expect(introLayout.height).toBeLessThanOrEqual(60);
+    expect(introLayout.actionRight).toBeGreaterThan(introLayout.introRight - 20);
+  }
+});
+
 test('renders document rows as touch-friendly cards at 375px', async ({ page }) => {
   await page.setViewportSize({ width: 375, height: 900 });
   await mockSession(page, ['documents:read', 'documents:write']);
@@ -577,7 +988,7 @@ test('renders document rows as touch-friendly cards at 375px', async ({ page }) 
   await filterButton.click();
   const filterDrawer = page.locator('.el-drawer').filter({ hasText: '筛选文档' });
   await expect(filterDrawer).toBeVisible();
-  await expect(filterDrawer).toHaveCSS('height', '360px');
+  await expect(filterDrawer).toHaveCSS('height', '648px');
   await filterDrawer.getByText('状态', { exact: true }).click();
   const filterPopper = page.locator('.el-select__popper').filter({ visible: true });
   await expect(filterPopper).toBeVisible();
@@ -623,6 +1034,21 @@ test('keeps the complete desktop navigation and document table at 1280px', async
   await expect(page.getByRole('button', { name: '折叠侧栏' })).toBeVisible();
   await expect(page.locator('.desktop-data-table')).toBeVisible();
   await expect(page.locator('.document-card-list')).toHaveCount(0);
+});
+
+test('keeps document filters within the reduced desktop content width', async ({ page }) => {
+  await page.setViewportSize({ width: 1326, height: 985 });
+  await mockSession(page, ['documents:read', 'documents:write']);
+  await page.route('**/v1/documents?**', (route) =>
+    route.fulfill({ json: { items: [], page: 1, pageSize: 20, total: 0 } }),
+  );
+  await page.goto('/documents');
+  await expect(page.locator('.document-filters')).toBeVisible();
+  const filterBounds = await page.locator('.document-filters').evaluate((element) => ({
+    scrollWidth: element.scrollWidth,
+    clientWidth: element.clientWidth,
+  }));
+  expect(filterBounds.scrollWidth).toBeLessThanOrEqual(filterBounds.clientWidth);
 });
 
 test('meets automated WCAG AA checks on the core ask page', async ({ page }) => {
@@ -789,17 +1215,19 @@ test('keeps shell chrome fixed and confines management-page scrolling below cont
   await page.goto('/system/usage');
   await expect(page.getByRole('heading', { name: '用量与成本' })).toBeVisible();
   const usageLayout = await page.evaluate(() => {
-    const actions = document.querySelector<HTMLElement>('.usage-actions');
-    const toolbar = document.querySelector<HTMLElement>('.usage-intro');
+    const actions = document.querySelector<HTMLElement>('.usage-filter-form');
+    const toolbar = document.querySelector<HTMLElement>('.usage-toolbar');
     const section = document.querySelector<HTMLElement>('.app-main > section');
     return {
       actionsGap: actions ? getComputedStyle(actions).columnGap : '',
+      toolbarDirection: toolbar ? getComputedStyle(toolbar).flexDirection : '',
       toolbarPosition: toolbar ? getComputedStyle(toolbar).position : '',
       sectionLeft: section?.getBoundingClientRect().left ?? 0,
       sectionRight: section?.getBoundingClientRect().right ?? 0,
     };
   });
   expect(usageLayout.actionsGap).toBe('10px');
+  expect(usageLayout.toolbarDirection).toBe('column');
   expect(usageLayout.toolbarPosition).toBe('static');
   expect(usageLayout.sectionLeft).toBe(ingestionLayout.headingLeft);
   expect(usageLayout.sectionRight).toBe(ingestionLayout.headingRight);
@@ -831,6 +1259,7 @@ test('keeps shell chrome fixed and confines management-page scrolling below cont
   await expect(page.getByRole('heading', { name: '用户与角色' })).toBeVisible();
   await expect(page.locator('.access-toolbar')).toBeVisible();
   await expect(page.locator('.access-toolbar')).toHaveCSS('position', 'static');
+  await expect(page.locator('.access-intro')).toHaveCount(0);
   await expect(page.locator('.access-filters')).toHaveCount(0);
   await expect(page.locator('.access-table-wrap .el-empty')).toHaveCount(0);
   await page.getByRole('button', { name: '编辑角色' }).click();

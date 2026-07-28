@@ -27,13 +27,13 @@ const displayAnswer = computed(() =>
       <div class="answer-label">知枢助手</div>
       <div v-if="response.noAnswer" class="no-answer">
         <strong>暂时没有找到足够依据</strong>
-        <p>
+        <div class="text-block">
           {{
             response.reason === 'authorization_changed'
               ? '可用来源已发生变化，请重试。'
               : '您可以换一种问法，或联系管理员补充资料。'
           }}
-        </p>
+        </div>
       </div>
       <template v-else>
         <div v-if="response.answerMode === 'general'" class="general-answer-notice">

@@ -32,10 +32,10 @@ onMounted(load);
 
 <template>
   <section class="system-page">
-    <div class="system-page-intro">
+    <div class="system-status-toolbar">
       <div>
         <strong>系统运行状态</strong>
-        <p>展示安全摘要，不包含内部地址、凭据或异常堆栈。</p>
+        <div class="text-block">展示安全摘要，不包含内部地址、凭据或异常堆栈。</div>
       </div>
       <el-button :loading="loading" @click="load">重新检查</el-button>
     </div>
@@ -75,20 +75,22 @@ onMounted(load);
             </span>
             <div>
               <strong>{{ systemComponentLabels[component.id] }}</strong>
-              <p>
+              <div class="text-block">
                 {{
                   component.status === 'up'
                     ? '正常'
                     : healthReasonLabels[component.reason ?? 'unavailable']
                 }}
-              </p>
+              </div>
             </div>
           </article>
         </div>
 
         <section class="queue-summary" aria-labelledby="queue-title">
           <div>
-            <h2 id="queue-title">入库队列</h2>
+            <div id="queue-title" class="heading heading--h2" role="heading" aria-level="2">
+              入库队列
+            </div>
             <el-tag :type="result.ingestionQueue.status === 'up' ? 'success' : 'danger'">
               {{ result.ingestionQueue.status === 'up' ? '可用' : '不可用' }}
             </el-tag>
@@ -107,7 +109,8 @@ onMounted(load);
               <span>失败</span><strong>{{ result.ingestionQueue.failed ?? '—' }}</strong>
             </div>
             <div>
-              <span>最老等待任务</span><strong>{{ formatDuration(result.ingestionQueue.oldestWaitSeconds) }}</strong>
+              <span>最老等待任务</span
+              ><strong>{{ formatDuration(result.ingestionQueue.oldestWaitSeconds) }}</strong>
             </div>
           </div>
         </section>

@@ -91,12 +91,12 @@ onMounted(() => load());
     <div class="audit-toolbar">
       <div>
         <strong>租户审计事件</strong>
-        <p>仅展示当前租户内经过最小披露处理的结构化记录。</p>
+        <div class="text-block">仅展示当前租户内经过最小披露处理的结构化记录。</div>
       </div>
       <form
         v-if="!isMobile"
         class="audit-filter-form"
-        aria-label="审计事件查询"
+        aria-label="审计事件筛选"
         @submit.prevent="applyFilter"
       >
         <label>
@@ -110,7 +110,7 @@ onMounted(() => load());
             />
           </el-select>
         </label>
-        <el-button native-type="submit">查询</el-button>
+        <el-button native-type="submit">筛选</el-button>
         <el-button class="reset-button" native-type="button" @click="resetFilter">重置</el-button>
       </form>
       <template v-else>
@@ -119,13 +119,14 @@ onMounted(() => load());
         </div>
         <el-drawer
           v-model="filtersVisible"
+          class="mobile-filter-drawer"
           direction="btt"
-          size="40%"
+          size="72%"
           title="筛选审计事件"
           append-to-body
           :z-index="4000"
         >
-          <form class="mobile-filter-form" aria-label="审计事件查询" @submit.prevent="applyFilter">
+          <form class="mobile-filter-form" aria-label="审计事件筛选" @submit.prevent="applyFilter">
             <el-select v-model="selectedType" clearable placeholder="全部事件类型">
               <el-option
                 v-for="[value, label] in typeOptions"
@@ -136,7 +137,7 @@ onMounted(() => load());
             </el-select>
             <div class="mobile-filter-actions">
               <el-button native-type="button" @click="resetFilter">重置</el-button>
-              <el-button type="primary" native-type="submit">应用</el-button>
+              <el-button type="primary" native-type="submit">筛选</el-button>
             </div>
           </form>
         </el-drawer>
@@ -250,7 +251,7 @@ onMounted(() => load());
             </article>
           </div>
         </template>
-        <el-empty v-else-if="!loading" description="当前查询条件下暂无审计事件" />
+        <el-empty v-else-if="!loading" description="当前筛选条件下暂无审计事件" />
       </div>
 
       <div v-if="errorMessage && hasEvents" class="audit-inline-error" role="alert">

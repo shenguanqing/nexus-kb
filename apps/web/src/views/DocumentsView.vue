@@ -101,6 +101,11 @@ async function resetFilters(): Promise<void> {
   await syncQueryAndLoad();
 }
 
+async function changePage(nextPage: number): Promise<void> {
+  filters.page = nextPage;
+  await syncQueryAndLoad();
+}
+
 async function openUpload(): Promise<void> {
   resetUploadDialog();
   uploadVisible.value = true;
@@ -189,7 +194,7 @@ onMounted(load);
   <section class="documents-page">
     <div class="documents-toolbar">
       <div class="documents-toolbar-heading">
-        <p>共 {{ total }} 份可访问文档</p>
+        <div class="text-block">共 {{ total }} 份可访问文档</div>
         <div class="documents-toolbar-actions">
           <el-button v-if="canUpload" type="primary" @click="openUpload">上传文档</el-button>
           <el-button v-if="isMobile" class="filter-trigger" @click="filtersVisible = true">
@@ -248,7 +253,7 @@ onMounted(load);
           />
         </el-select>
         <div class="toolbar-actions">
-          <el-button native-type="submit">查询</el-button>
+          <el-button native-type="submit">筛选</el-button>
           <el-button class="reset-button" native-type="button" @click="resetFilters"
             >重置</el-button
           >
@@ -257,8 +262,9 @@ onMounted(load);
       <template v-else>
         <el-drawer
           v-model="filtersVisible"
+          class="mobile-filter-drawer"
           direction="btt"
-          size="40%"
+          size="72%"
           title="筛选文档"
           append-to-body
           :z-index="4000"
@@ -288,7 +294,7 @@ onMounted(load);
             </el-select>
             <div class="mobile-filter-actions">
               <el-button native-type="button" @click="resetFilters">重置</el-button>
-              <el-button type="primary" native-type="submit">应用</el-button>
+              <el-button type="primary" native-type="submit">筛选</el-button>
             </div>
           </form>
         </el-drawer>
@@ -306,6 +312,7 @@ onMounted(load);
           class="desktop-data-table"
           :data="items"
           row-key="id"
+          height="100%"
           empty-text="暂无符合条件的文档"
         >
           <el-table-column prop="sourceName" label="文件名" min-width="300" fixed="left">
@@ -344,14 +351,13 @@ onMounted(load);
         />
       </div>
 
-      <div v-if="total > filters.pageSize" class="list-pagination document-pagination">
+      <div v-if="total > filters.pageSize" class="list-pagination">
         <el-pagination
-          v-model:current-page="filters.page"
-          v-model:page-size="filters.pageSize"
-          :layout="isPhone ? 'prev, pager, next' : 'total, sizes, prev, pager, next'"
+          layout="prev, pager, next"
+          :current-page="filters.page"
+          :page-size="filters.pageSize"
           :total="total"
-          :page-sizes="[20, 50, 100]"
-          @change="syncQueryAndLoad"
+          @current-change="changePage"
         />
       </div>
     </div>
@@ -389,23 +395,35 @@ onMounted(load);
           <span>{{ isPhone ? '选择文件' : '选择或拖入文件' }}</span>
           <template #tip>文件只会在确认“开始上传”后发送到服务端。</template>
         </el-upload>
-        <p>
+        <div class="text-block">
           支持
           {{
             uploadOptions.acceptedExtensions.map((item) => item.toUpperCase()).join(' / ')
           }}，单文件最大 {{ Math.ceil(uploadOptions.maxUploadBytes / 1024 / 1024) }} MB。
-        </p>
+        </div>
         <el-descriptions class="upload-options" :column="1" border size="small">
           <el-descriptions-item label="部门">{{ uploadOptions.department }}</el-descriptions-item>
           <el-descriptions-item label="敏感度">
             {{ uploadOptions.defaultSensitivity }}（由服务端身份确定）
           </el-descriptions-item>
         </el-descriptions>
-        <p v-if="uploadOptions.defaultSensitivity === 'confidential'" class="upload-warning">
+        <div
+          v-if="uploadOptions.defaultSensitivity === 'confidential'"
+          class="upload-warning text-block"
+        >
           机密内容默认不会发送到云端 Embedding 服务。
-        </p>
-        <ul v-if="uploadRows.length" class="upload-file-list" aria-label="待上传文件" tabindex="0">
-          <li v-for="row in uploadRows" :key="`${row.file.name}-${row.file.lastModified}`">
+        </div>
+        <div
+          v-if="uploadRows.length"
+          class="upload-file-list list-block"
+          aria-label="待上传文件"
+          tabindex="0"
+        >
+          <div
+            v-for="row in uploadRows"
+            :key="`${row.file.name}-${row.file.lastModified}`"
+            class="list-item"
+          >
             <span class="upload-file-summary">
               <strong>{{ row.file.name }}</strong>
               <small>{{ Math.ceil(row.file.size / 1024) }} KB</small>
@@ -427,8 +445,8 @@ onMounted(load);
             >
               重试
             </el-button>
-          </li>
-        </ul>
+          </div>
+        </div>
       </div>
       <template #footer>
         <el-button @click="uploadVisible = false">取消</el-button>

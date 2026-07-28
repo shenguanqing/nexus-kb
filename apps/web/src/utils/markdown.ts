@@ -23,6 +23,20 @@ markdown.renderer.rules.text = (tokens, index, options, environment, renderer): 
     '<small class="answer-citation">$&</small>',
   );
 
+markdown.renderer.rules.paragraph_open = () => '<div class="markdown-paragraph">';
+markdown.renderer.rules.paragraph_close = () => '</div>';
+markdown.renderer.rules.bullet_list_open = () => '<div class="markdown-list">';
+markdown.renderer.rules.bullet_list_close = () => '</div>';
+markdown.renderer.rules.ordered_list_open = () => '<div class="markdown-list markdown-list--ordered">';
+markdown.renderer.rules.ordered_list_close = () => '</div>';
+markdown.renderer.rules.list_item_open = () => '<div class="markdown-list-item">';
+markdown.renderer.rules.list_item_close = () => '</div>';
+markdown.renderer.rules.heading_open = (tokens, index): string => {
+  const level = tokens[index]?.tag.replace('h', '') ?? '2';
+  return `<div class="markdown-heading markdown-heading--h${level}" role="heading" aria-level="${level}">`;
+};
+markdown.renderer.rules.heading_close = () => '</div>';
+
 export function renderSafeMarkdown(source: string): string {
   const sanitized = DOMPurify.sanitize(markdown.render(source), {
     ALLOWED_TAGS: [
@@ -31,17 +45,9 @@ export function renderSafeMarkdown(source: string): string {
       'br',
       'code',
       'del',
+      'div',
       'em',
-      'h1',
-      'h2',
-      'h3',
-      'h4',
-      'h5',
-      'h6',
       'hr',
-      'li',
-      'ol',
-      'p',
       'pre',
       's',
       'small',
@@ -52,9 +58,8 @@ export function renderSafeMarkdown(source: string): string {
       'th',
       'thead',
       'tr',
-      'ul',
     ],
-    ALLOWED_ATTR: ['class', 'href', 'title'],
+    ALLOWED_ATTR: ['aria-level', 'class', 'href', 'role', 'title'],
     ALLOWED_URI_REGEXP: SAFE_LINK_PATTERN,
     ALLOW_UNKNOWN_PROTOCOLS: false,
     FORBID_TAGS: ['embed', 'form', 'iframe', 'img', 'object', 'script', 'style', 'svg'],

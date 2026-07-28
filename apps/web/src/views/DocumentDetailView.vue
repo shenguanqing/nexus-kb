@@ -167,8 +167,8 @@ onMounted(load);
       <template v-else-if="document">
         <header class="detail-actions">
           <div>
-            <h2>{{ document.sourceName }}</h2>
-            <p>{{ document.mimeType }}</p>
+            <div class="heading heading--h2" role="heading" aria-level="2">{{ document.sourceName }}</div>
+            <div class="text-block">{{ document.mimeType }}</div>
           </div>
           <div class="detail-action-buttons">
             <el-button
@@ -200,7 +200,7 @@ onMounted(load);
 
         <div class="detail-grid">
           <article class="detail-card">
-            <h3>基本信息</h3>
+            <div class="heading heading--h3" role="heading" aria-level="3">基本信息</div>
             <div class="data-list">
               <div>
                 <span>状态</span><strong>{{ documentStatusLabel(document.status) }}</strong>
@@ -228,7 +228,7 @@ onMounted(load);
           </article>
           <article class="detail-card">
             <div class="card-title">
-              <h3>当前向量索引</h3>
+              <div class="heading heading--h3" role="heading" aria-level="3">当前向量索引</div>
               <RouterLink v-if="activeVersion?.chunkCount" :to="chunksTarget">
                 查看全部分块
               </RouterLink>
@@ -267,15 +267,15 @@ onMounted(load);
                 </strong>
               </div>
             </div>
-            <ul v-if="activeVersion?.warnings.length">
-              <li v-for="warning in activeVersion.warnings" :key="warning">{{ warning }}</li>
-            </ul>
+            <div v-if="activeVersion?.warnings.length" class="list-block">
+              <div v-for="warning in activeVersion.warnings" :key="warning" class="list-item">{{ warning }}</div>
+            </div>
           </article>
         </div>
 
         <article class="detail-card">
           <div class="card-title">
-            <h3>版本历史</h3>
+            <div class="heading heading--h3" role="heading" aria-level="3">版本历史</div>
             <RouterLink :to="allTasksTarget">查看全部任务</RouterLink>
           </div>
           <el-table
@@ -354,9 +354,9 @@ onMounted(load);
               </el-select>
             </el-form-item>
           </el-form>
-          <p class="upload-warning">
+          <div class="upload-warning text-block">
             修改后会创建新版本并重建索引；旧向量在激活前仍受 PostgreSQL 最新 ACL 二次鉴权。
-          </p>
+          </div>
           <template #footer>
             <el-button @click="metadataVisible = false">取消</el-button>
             <el-button type="primary" :loading="mutating" @click="saveMetadata">
@@ -386,9 +386,9 @@ onMounted(load);
               </el-select>
             </el-form-item>
           </el-form>
-          <p class="upload-warning">
+          <div class="upload-warning text-block">
             修改后会创建新版本并重建索引；旧向量在激活前仍受 PostgreSQL 最新 ACL 二次鉴权。
-          </p>
+          </div>
           <template #footer>
             <el-button @click="metadataVisible = false">取消</el-button>
             <el-button type="primary" :loading="mutating" @click="saveMetadata">
@@ -412,15 +412,15 @@ onMounted(load);
           "
         >
           <template v-if="document && dangerAction">
-            <p v-if="dangerAction === 'delete'" class="danger-confirmation-copy">
+            <div v-if="dangerAction === 'delete'" class="danger-confirmation-copy text-block">
               删除将永久移除原文件、全部版本向量和可识别缓存，且无法撤销。
-            </p>
-            <p v-else class="danger-confirmation-copy">
+            </div>
+            <div v-else class="danger-confirmation-copy text-block">
               将创建新的索引版本；旧版本会持续服务，直至新版本通过验证并原子激活。
-            </p>
-            <p>
+            </div>
+            <div class="text-block">
               请输入文档名 <strong>{{ document.sourceName }}</strong> 以确认。
-            </p>
+            </div>
             <el-input v-model="confirmationName" aria-label="输入文档名确认" />
           </template>
           <template #footer>
@@ -437,15 +437,15 @@ onMounted(load);
         </component>
 
         <article v-if="jobs.length" class="detail-card">
-          <h3>最近任务</h3>
-          <ul class="recent-jobs">
-            <li v-for="job in jobs.slice(0, 5)" :key="job.id">
+          <div class="heading heading--h3" role="heading" aria-level="3">最近任务</div>
+          <div class="recent-jobs list-block">
+            <div v-for="job in jobs.slice(0, 5)" :key="job.id" class="list-item">
               <RouterLink :to="allTasksTarget">
                 v{{ job.version }} · {{ job.status }} · {{ job.step }}
               </RouterLink>
               <time>{{ new Date(job.updatedAt).toLocaleString() }}</time>
-            </li>
-          </ul>
+            </div>
+          </div>
         </article>
       </template>
     </div>

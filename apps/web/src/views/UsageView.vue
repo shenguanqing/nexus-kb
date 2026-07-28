@@ -9,21 +9,29 @@ const usage = ref<UsageResponse | null>(null);
 const { isMobile } = useBreakpoint();
 const loading = ref(false);
 const errorMessage = ref('');
+const filtersVisible = ref(false);
 const now = new Date();
-const dateRange = ref<[Date, Date]>([new Date(now.getTime() - 30 * 86400000), now]);
+const startAt = ref(new Date(now.getTime() - 30 * 86400000));
+const endAt = ref(now);
 async function load(): Promise<void> {
   loading.value = true;
   errorMessage.value = '';
   try {
-    usage.value = await fetchUsage(
-      dateRange.value[0].toISOString(),
-      dateRange.value[1].toISOString(),
-    );
+    usage.value = await fetchUsage(startAt.value.toISOString(), endAt.value.toISOString());
   } catch (error) {
     errorMessage.value = error instanceof ApiError ? error.message : '用量加载失败';
   } finally {
     loading.value = false;
   }
+}
+async function applyFilters(): Promise<void> {
+  await load();
+  filtersVisible.value = false;
+}
+function resetFilters(): void {
+  const current = new Date();
+  startAt.value = new Date(current.getTime() - 30 * 86400000);
+  endAt.value = current;
 }
 function percent(value: number | null): string {
   return value === null ? '暂无数据' : `${(value * 100).toFixed(1)}%`;
@@ -32,20 +40,67 @@ onMounted(load);
 </script>
 <template>
   <section class="usage-page" v-loading="loading">
-    <div class="usage-intro">
-      <div>
+    <div class="usage-toolbar">
+      <div class="usage-toolbar-intro">
         <strong>近 30 天用量事实</strong>
-        <p>基于当前租户查询审计聚合；Provider 未回传 token 或未配置价格时保持“暂无数据”。</p>
+        <div class="text-block">
+          基于当前租户查询审计聚合；Provider 未回传 token 或未配置价格时保持“暂无数据”。
+        </div>
       </div>
-      <div class="usage-actions">
+      <form
+        v-if="!isMobile"
+        class="usage-filter-form"
+        aria-label="用量时间范围筛选"
+        @submit.prevent="load"
+      >
         <el-date-picker
-          v-model="dateRange"
-          type="datetimerange"
-          start-placeholder="开始时间"
-          end-placeholder="结束时间"
+          v-model="startAt"
+          type="datetime"
+          :clearable="false"
+          placeholder="开始时间"
         />
-        <el-button @click="load">查询</el-button>
-      </div>
+        <el-date-picker v-model="endAt" type="datetime" :clearable="false" placeholder="结束时间" />
+        <el-button native-type="submit">筛选</el-button>
+      </form>
+      <template v-else>
+        <div class="mobile-filter-bar usage-filter-bar">
+          <el-button class="filter-trigger" @click="filtersVisible = true">筛选</el-button>
+        </div>
+        <el-drawer
+          v-model="filtersVisible"
+          class="mobile-filter-drawer usage-filter-drawer"
+          direction="btt"
+          size="72%"
+          title="筛选用量与成本"
+          append-to-body
+          :z-index="4000"
+        >
+          <form
+            class="mobile-filter-form"
+            aria-label="用量时间范围筛选"
+            @submit.prevent="applyFilters"
+          >
+            <el-date-picker
+              v-model="startAt"
+              type="datetime"
+              :clearable="false"
+              :teleported="false"
+              placeholder="开始时间"
+            />
+            <el-date-picker
+              v-model="endAt"
+              type="datetime"
+              :clearable="false"
+              :teleported="false"
+              placeholder="结束时间"
+            />
+            <div class="mobile-filter-actions">
+              <el-button native-type="button" @click="resetFilters">重置</el-button>
+              <el-button type="primary" native-type="submit">筛选</el-button>
+            </div>
+          </form>
+        </el-drawer>
+      </template>
     </div>
     <div class="page-content">
       <div v-if="errorMessage" class="document-error" role="alert">
@@ -65,7 +120,7 @@ onMounted(load);
           </article>
         </div>
         <article class="usage-table-card">
-          <h2>Provider / 模型</h2>
+          <div class="heading heading--h2" role="heading" aria-level="2">Provider / 模型</div>
           <el-table
             v-if="!isMobile"
             class="desktop-data-table"
@@ -89,7 +144,11 @@ onMounted(load);
               </template>
             </el-table-column>
           </el-table>
-          <div v-else-if="usage.providers.length" class="mobile-data-list" aria-label="Provider 用量">
+          <div
+            v-else-if="usage.providers.length"
+            class="mobile-data-list"
+            aria-label="Provider 用量"
+          >
             <article
               v-for="provider in usage.providers"
               :key="`${provider.kind}-${provider.provider}-${provider.model}`"
@@ -107,7 +166,8 @@ onMounted(load);
                   <span>Token</span><strong>{{ provider.inputTokens ?? '暂无数据' }}</strong>
                 </div>
                 <div>
-                  <span>估算成本</span><strong>
+                  <span>估算成本</span
+                  ><strong>
                     {{
                       provider.estimatedCostUsd === null
                         ? '暂无数据'
@@ -120,7 +180,7 @@ onMounted(load);
           </div>
         </article>
         <article class="usage-table-card">
-          <h2>部门请求分布</h2>
+          <div class="heading heading--h2" role="heading" aria-level="2">部门请求分布</div>
           <el-table
             v-if="!isMobile"
             class="desktop-data-table"
@@ -130,7 +190,11 @@ onMounted(load);
             <el-table-column prop="department" label="部门" fixed="left" />
             <el-table-column prop="requests" label="查询次数" />
           </el-table>
-          <div v-else-if="usage.departments.length" class="mobile-data-list" aria-label="部门请求分布">
+          <div
+            v-else-if="usage.departments.length"
+            class="mobile-data-list"
+            aria-label="部门请求分布"
+          >
             <article
               v-for="department in usage.departments"
               :key="department.department"

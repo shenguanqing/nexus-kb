@@ -81,10 +81,12 @@ onMounted(load);
   <section v-loading="loading" class="document-chunks-page">
     <header class="chunks-toolbar">
       <div>
-        <h2>{{ chunks?.sourceName ?? detail?.sourceName ?? '文档分块' }}</h2>
-        <p>
+        <div class="heading heading--h2" role="heading" aria-level="2">
+          {{ chunks?.sourceName ?? detail?.sourceName ?? '文档分块' }}
+        </div>
+        <div class="text-block">
           显示原始分块和写入向量库的脱敏文本；不展示向量值。每次读取都会按当前文档权限重新鉴权。
-        </p>
+        </div>
       </div>
       <div v-if="detail && chunks" class="chunks-summary">
         <el-select
@@ -118,8 +120,12 @@ onMounted(load);
             <article v-for="chunk in chunks.items" :key="chunk.id" class="chunk-card">
               <header>
                 <div>
-                  <h3>分块 {{ chunk.ordinal + 1 }}</h3>
-                  <p>{{ chunkLocation(chunk) }} · {{ chunk.tokenCount }} tokens</p>
+                  <div class="heading heading--h3" role="heading" aria-level="3">
+                    分块 {{ chunk.ordinal + 1 }}
+                  </div>
+                  <div class="text-block">
+                    {{ chunkLocation(chunk) }} · {{ chunk.tokenCount }} tokens
+                  </div>
                 </div>
                 <span class="fingerprint">{{ chunk.id }}</span>
               </header>
@@ -158,11 +164,13 @@ onMounted(load);
               </div>
               <div class="chunk-text-grid">
                 <section>
-                  <h4>原始内容</h4>
+                  <div class="heading heading--h4" role="heading" aria-level="4">原始内容</div>
                   <pre>{{ chunk.originalText }}</pre>
                 </section>
                 <section>
-                  <h4>写入向量库的内容（脱敏后）</h4>
+                  <div class="heading heading--h4" role="heading" aria-level="4">
+                    写入向量库的内容（脱敏后）
+                  </div>
                   <pre>{{ chunk.redactedText }}</pre>
                 </section>
               </div>
@@ -171,10 +179,9 @@ onMounted(load);
           <el-empty v-else description="该版本尚未产生分块" />
         </template>
       </div>
-      <div v-if="chunks && chunks.total > pageSize" class="list-pagination document-pagination">
+      <div v-if="chunks && chunks.total > pageSize" class="list-pagination">
         <el-pagination
-          background
-          layout="total, prev, pager, next"
+          layout="prev, pager, next"
           :current-page="chunks.page"
           :page-size="chunks.pageSize"
           :total="chunks.total"

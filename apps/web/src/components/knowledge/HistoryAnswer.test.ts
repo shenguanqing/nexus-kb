@@ -19,7 +19,7 @@ describe('HistoryAnswer', () => {
   it('renders a stored answer as safe Markdown', () => {
     const wrapper = mount(HistoryAnswer, { props: { turn } });
 
-    expect(wrapper.get('.history-answer h3').text()).toBe('主要特性');
+    expect(wrapper.get('.history-answer .markdown-heading--h3').text()).toBe('主要特性');
     expect(wrapper.get('.markdown-content strong').text()).toBe('Composition API');
     expect(wrapper.get('.answer-citation').text()).toBe('[来源1]');
     expect(wrapper.get('.history-answer-meta').text()).toContain('1 个历史来源');

@@ -121,59 +121,61 @@ onMounted(() => load());
 
 <template>
   <section class="access-page">
-    <div class="access-intro">
-      <div>
+    <div class="access-toolbar">
+      <div class="access-toolbar-intro">
         <strong>已验证身份目录</strong>
-        <p>展示 {{ scopeText }} 内已完成认证的用户摘要，角色来自受验证身份声明。</p>
+        <div class="text-block">
+          展示 {{ scopeText }} 内已完成认证的用户摘要，角色来自受验证身份声明。
+        </div>
+        <el-tag type="info" effect="plain">身份源 + 托管角色</el-tag>
       </div>
-      <el-tag type="info" effect="plain">身份源 + 托管角色</el-tag>
-    </div>
-
-    <form
-      v-if="!isMobile"
-      class="access-toolbar"
-      aria-label="用户目录查询"
-      @submit.prevent="applyFilters"
-    >
-      <el-input v-model="search" clearable maxlength="128" placeholder="搜索企业用户 ID" />
-      <el-input
-        v-if="isAdmin"
-        v-model="department"
-        clearable
-        maxlength="128"
-        placeholder="查询部门"
-      />
-      <el-button native-type="submit">查询</el-button>
-      <el-button class="reset-button" native-type="button" @click="resetFilters">重置</el-button>
-    </form>
-    <template v-else>
-      <div class="mobile-filter-bar">
-        <el-button class="filter-trigger" @click="filtersVisible = true">筛选</el-button>
-      </div>
-      <el-drawer
-        v-model="filtersVisible"
-        direction="btt"
-        size="40%"
-        title="筛选用户目录"
-        append-to-body
-        :z-index="4000"
+      <form
+        v-if="!isMobile"
+        class="access-filter-form"
+        aria-label="用户目录筛选"
+        @submit.prevent="applyFilters"
       >
-        <form class="mobile-filter-form" aria-label="用户目录查询" @submit.prevent="applyFilters">
-          <el-input v-model="search" clearable maxlength="128" placeholder="搜索企业用户 ID" />
-          <el-input
-            v-if="isAdmin"
-            v-model="department"
-            clearable
-            maxlength="128"
-            placeholder="查询部门"
-          />
-          <div class="mobile-filter-actions">
-            <el-button native-type="button" @click="resetFilters">重置</el-button>
-            <el-button type="primary" native-type="submit">应用</el-button>
-          </div>
-        </form>
-      </el-drawer>
-    </template>
+        <el-input v-model="search" clearable maxlength="128" placeholder="搜索企业用户 ID" />
+        <el-input
+          v-if="isAdmin"
+          v-model="department"
+          clearable
+          maxlength="128"
+          placeholder="筛选部门"
+        />
+        <el-button native-type="submit">筛选</el-button>
+        <el-button class="reset-button" native-type="button" @click="resetFilters">重置</el-button>
+      </form>
+      <template v-else>
+        <div class="mobile-filter-bar">
+          <el-button class="filter-trigger" @click="filtersVisible = true">筛选</el-button>
+        </div>
+        <el-drawer
+          v-model="filtersVisible"
+          class="mobile-filter-drawer"
+          direction="btt"
+          size="72%"
+          title="筛选用户目录"
+          append-to-body
+          :z-index="4000"
+        >
+          <form class="mobile-filter-form" aria-label="用户目录筛选" @submit.prevent="applyFilters">
+            <el-input v-model="search" clearable maxlength="128" placeholder="搜索企业用户 ID" />
+            <el-input
+              v-if="isAdmin"
+              v-model="department"
+              clearable
+              maxlength="128"
+              placeholder="筛选部门"
+            />
+            <div class="mobile-filter-actions">
+              <el-button native-type="button" @click="resetFilters">重置</el-button>
+              <el-button type="primary" native-type="submit">筛选</el-button>
+            </div>
+          </form>
+        </el-drawer>
+      </template>
+    </div>
 
     <div class="access-content">
       <div v-if="errorMessage && users.length === 0" class="document-error" role="alert">
@@ -269,22 +271,21 @@ onMounted(() => load());
       <div v-if="errorMessage && users.length > 0" class="audit-inline-error" role="alert">
         {{ errorMessage }}
       </div>
-      <div v-if="total > pageSize" class="list-pagination access-pagination">
+      <div v-if="total > pageSize" class="list-pagination">
         <el-pagination
-          background
           layout="prev, pager, next"
           :current-page="page"
           :page-size="pageSize"
+          :total="total"
           @current-change="changePage"
         />
       </div>
 
       <aside class="access-boundary-note">
         <strong>权限边界</strong>
-        <p>
-          已验证的认证身份源负责确认用户身份，主服务托管角色覆盖负责应用内授权范围。所有变更写入审计，并禁止移除
-          租户内最后一个管理员。
-        </p>
+        <div class="text-block">
+          已验证的认证身份源负责确认用户身份，主服务托管角色覆盖负责应用内授权范围。所有变更写入审计，并禁止移除租户内最后一个管理员。
+        </div>
       </aside>
     </div>
     <el-dialog
@@ -296,7 +297,9 @@ onMounted(() => load());
       :z-index="4000"
       @closed="selectedUser = null"
     >
-      <p v-if="selectedUser">{{ selectedUser.userId }} · {{ selectedUser.department }}</p>
+      <div v-if="selectedUser" class="text-block">
+        {{ selectedUser.userId }} · {{ selectedUser.department }}
+      </div>
       <el-radio-group v-model="selectedRole" class="role-editor">
         <el-radio value="user">普通用户</el-radio>
         <el-radio value="admin">管理员</el-radio>
