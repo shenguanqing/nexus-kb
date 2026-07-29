@@ -8,12 +8,9 @@
 
 ## 1. 背景
 
-阶段 14 的可重复评测框架已经完成，但正式真实数据运行仍等待业务方批准的脱敏标注集。用户于
-2026-07-18 明确授权保留阶段 14 未完成并先进入阶段 15；不得将前端推进视为质量验收通过，也不得默认启用
-Rerank。
+阶段 14 的可重复评测框架已经完成，但正式真实数据运行仍等待业务方批准的脱敏标注集。用户于 2026-07-18 明确授权保留阶段 14 未完成并先进入阶段 15；不得将前端推进视为质量验收通过，也不得默认启用 Rerank。
 
-真实问题、标准答案和目标来源可能包含业务信息。仓库当前没有经过批准的真实评测集；按 confidential
-零出网和日志无正文约束，不读取本地业务文档来自动编造问题，也不把合成 fixture 计为真实验收结果。
+真实问题、标准答案和目标来源可能包含业务信息。仓库当前没有经过批准的真实评测集；按 confidential 零出网和日志无正文约束，不读取本地业务文档来自动编造问题，也不把合成 fixture 计为真实验收结果。
 
 ---
 
@@ -82,8 +79,7 @@ Vue 3 + TypeScript + Vite
 ### 3.7 F4 用户目录切片
 
 - [x] 新增 `UserDirectoryEntry` migration，在会话接口只同步经过验证的 tenant、用户、部门、角色和认证时间。
-- [x] 新增独立 `access:read` capability 与 `GET /v1/access/users` 正式契约；管理员限当前 tenant，其他调用者
-      固定到自身部门。
+- [x] 新增独立 `access:read` capability 与 `GET /v1/access/users` 正式契约；管理员限当前 tenant，其他调用者固定到自身部门。
 - [x] 实现用户 ID 搜索、管理员部门筛选、分页、空态、错误重试与响应式用户目录页面。
 - [x] 角色 mutation 使用应用托管覆盖，并在认证 guard 中参与真实授权；capability 仍来自已验证身份，不能通过角色编辑扩权。
 - [x] 角色和部门策略变更写入独立访问审计，并保护最后一个有效管理员。
@@ -99,89 +95,57 @@ Vue 3 + TypeScript + Vite
 
 ### 3.9 阶段 15 后续登录与布局收尾
 
-- [x] 新增受控账号密码认证模式、服务端 session migration、登录限速、HttpOnly Cookie、退出登录和共享
-      Zod/OpenAPI 契约；密码、原始 token 和账号配置不进入浏览器持久化、日志或数据库明文。
+- [x] 新增受控账号密码认证模式、服务端 session migration、登录限速、HttpOnly Cookie、退出登录和共享 Zod/OpenAPI 契约；密码、原始 token 和账号配置不进入浏览器持久化、日志或数据库明文。
 - [x] 登录页根据公开的登录方式摘要显示账号密码表单，密码提交后立即清空；OIDC/JWT 与 development 身份模式保留。
-- [x] `app-main` 与所有 `xxxx-page` 填满可用视口；页面标题与工具栏位于非滚动区，文档、入库、审计、用户、
-      历史和系统页面的正文在各自内容块内滚动，移除 toolbar sticky 定位。
-- [x] 移动端布局回归：移除页面标题中的重复“知枢 NexusKB”文案，来源路由返回操作统一置于 `h1` 最右侧；375px
-      下底部导航、日期范围、Provider、系统说明与用量布局保持在容器内。表格与可滚动列表仅在内容块内滚动，并冻结表头或标题；`page-content` 与文档详情不再整体横向滚动。
+- [x] `app-main` 与所有 `xxxx-page` 填满可用视口；页面标题与工具栏位于非滚动区，文档、入库、审计、用户、历史和系统页面的正文在各自内容块内滚动，移除 toolbar sticky 定位。
+- [x] 移动端布局回归：移除页面标题中的重复“知枢 NexusKB”文案，来源路由返回操作统一置于 `h1` 最右侧；375px下底部导航、日期范围、Provider、系统说明与用量布局保持在容器内。表格与可滚动列表仅在内容块内滚动，并冻结表头或标题；`page-content` 与文档详情不再整体横向滚动。
 - [x] 前端信息架构与移动端收尾：桌面端采用分组侧边栏、顶部面包屑和高密度卡片内容区；移动端改为完整权限入口的 Drawer、44px 触控控件和单列卡片表格。`document-detail-page` 按侧栏后的实际内容宽度连续重排操作区与信息卡，所有页面标题统一为分类、标题、说明和返回操作结构。
 - [x] 响应式细节收尾：文档管理在 901–1279px 使用弹性筛选 Grid 且内容块内固定表头；375px Drawer/弹框遮罩覆盖 shell、顶部高度统一，工具栏查询与重置保持成组。详情信息改用 Element 描述组件或 `div + Flex/Grid`，详情操作区使用独立卡片外观。
 - [x] 截图回归修复：全断点弹框遮罩覆盖侧栏，审计表由表格自身滚动以固定表头；375px 下历史、文档与审计筛选均保持可读的紧凑网格，移动断点切换不保留桌面侧栏折叠状态。
 - [x] 窄屏导航回归：768–900px 统一使用 Drawer，删除难以操作的图标侧栏；所有 Dialog 通过 body Teleport 全局遮罩，并在移动端限制为安全视口宽高。
 - [x] 上传体验回归：文本文件使用流式 UTF-8 校验，避免多字节字符跨 8 KiB 边界时误报；上传弹窗每次打开清空上次选择，整批成功进入队列后自动关闭。
-- [x] 入库体验与复杂 CAD 回归：上传状态标签列对齐，进行中任务耗时每秒刷新并在结束后冻结；实测
-      `E-一区一层照明平面图.dwg` 遍历 348,256 个实体、输出 3,321 个元素后，将受 schema 硬上限保护的
-      `MAX_CAD_ENTITIES` 默认值从 200,000 调整为 500,000；手动重试重新计算本轮耗时。
-- [x] 实测 `2、2#教学楼弱电平面图20200530.dwg` 遍历 774,303 个实体、输出 989 个元素，将默认
-      `MAX_CAD_ENTITIES` 受控提高至 1,000,000（schema 硬上限仍为 2,000,000）；Worker 资源限制错误通过
-      allowlist 稳定码传至 API 和任务详情，不再全部显示为 `PARSER_INVALID_REQUEST`。
+- [x] 入库体验与复杂 CAD 回归：上传状态标签列对齐，进行中任务耗时每秒刷新并在结束后冻结；实测 `E-一区一层照明平面图.dwg` 遍历 348,256 个实体、输出 3,321 个元素后，将受 schema 硬上限保护的 `MAX_CAD_ENTITIES` 默认值从 200,000 调整为 500,000；手动重试重新计算本轮耗时。
+- [x] 实测 `2、2#教学楼弱电平面图20200530.dwg` 遍历 774,303 个实体、输出 989 个元素，将默认 `MAX_CAD_ENTITIES` 受控提高至 1,000,000（schema 硬上限仍为 2,000,000）；Worker 资源限制错误通过 allowlist 稳定码传至 API 和任务详情，不再全部显示为 `PARSER_INVALID_REQUEST`。
 
 ### 3.10 本地 Provider 与待建立索引恢复
 
-- [x] 新增受控本机 Ollama Embedding Provider，支持 `bge-m3:latest` / 1024 维度，无需 API Key；容器仅可访问
-      `host.docker.internal:11434` 或内部 `ollama:11434`，并有配置、Provider、云策略和 Factory 测试。
+- [x] 新增受控本机 Ollama Embedding Provider，支持 `bge-m3:latest` / 1024 维度，无需 API Key；容器仅可访问 `host.docker.internal:11434` 或内部 `ollama:11434`，并有配置、Provider、云策略和 Factory 测试。
 - [x] Google `gemini-3.5-flash-lite` 请求省略该模型已废弃的 `temperature` 参数。
 - [x] `prepared` 文档可在配置 Embedding 后通过“继续建立索引”恢复为 `local_prepared`，复用本地分块而不重新上传或解析。
 - [x] 文档状态由容易误解的“待激活”调整为“待建立索引”，并补充本地启动、Ollama、Gemini、DWG、数据存储与 Vetur/Volar 指南。
 
 ### 3.11 DWG 本地优先验证
 
-- [x] 新增 `compose.dwg.yaml` 与受控 ODA 派生 Parser Worker：仅从本地忽略目录安装经批准的 Linux x64 Debian 包，
-      Apple Silicon Mac 通过 Docker Desktop 的 `linux/amd64` 兼容层运行；不会将 ODA 二进制、许可证或凭据纳入 Git。
-- [x] 已从 ODA 官方页面取得 Linux x64 Debian 包（`odafileconverter` `27.1.0.0`，SHA-256
-      `c71363cd54758177af47a365154f180dc50a1e2b52a131994fda541c13a36766`），并在 `linux/amd64`
-      派生镜像中验证启动器、运行库和 Worker readiness；本地 `.env` 已使用该实际版本启用转换。
-- [x] 已在最终只读 Worker 中实际转换并解析已上传的 `Drawing1.dwg`：得到 9 个元素，parser version 为
-      `oda-27.1.0.0+ezdxf-1.4.4`；ODA 使用私有 tmpfs 源副本和官方 `*.dwg` 过滤器，不扫描其他上传文件。
-- [x] 已以 `compose.yaml + compose.dwg.yaml` 重建本地 API 与 Worker；Worker `/health/ready` 报告
-      `dwgConverter.status=up`，修复了仅使用基础 Compose 镜像导致的 `PARSER_UNAVAILABLE`。
-- [x] DWG 转换改为本地默认启动路径：`.env.example`、配置默认值、Compose fallback 与 README 均要求使用
-      `compose.yaml + compose.dwg.yaml` 的 ODA 派生 Worker；没有 ODA 时默认失败关闭，不能静默降级。
-- [ ] 在已登录的本地 Web 页面为失败任务点击“重试”，完成 `Drawing1.dwg` 的索引与 Gemini 问答端到端冒烟验证
-      （服务端鉴权保持启用，Gemini 仅在检索到来源后调用）。
-- [x] 无有效 `[来源N]` 的知识库 LLM 文本不再作为 Provider 502 返回；严格模式安全拒答，混合模式切换为不携带
-      文档上下文、明确标记的通用知识补充。
-- [x] 若 Gemini 已调用但因“资料不足”或缺少有效引用而安全拒答，`QueryAudit` 仍保留实际 LLM Provider/model；
-      未进入 LLM 的检索拒答仅显示 Embedding Provider。
-- [x] 修复 `vue2` / `vue 2` 等语义等价问法结果不一致：查询链路统一产品版本号空格，引用不可核验时使用
-      相同授权上下文受控修复一次，仍失败则记录 `LLM_ANSWER_UNVERIFIABLE` 并安全拒答。
+- [x] 新增 `compose.dwg.yaml` 与受控 ODA 派生 Parser Worker：仅从本地忽略目录安装经批准的 Linux x64 Debian 包，Apple Silicon Mac 通过 Docker Desktop 的 `linux/amd64` 兼容层运行；不会将 ODA 二进制、许可证或凭据纳入 Git。
+- [x] 已从 ODA 官方页面取得 Linux x64 Debian 包（`odafileconverter` `27.1.0.0`，SHA-256 `c71363cd54758177af47a365154f180dc50a1e2b52a131994fda541c13a36766`），并在 `linux/amd64` 派生镜像中验证启动器、运行库和 Worker readiness；本地 `.env` 已使用该实际版本启用转换。
+- [x] 已在最终只读 Worker 中实际转换并解析已上传的 `Drawing1.dwg`：得到 9 个元素，parser version 为 `oda-27.1.0.0+ezdxf-1.4.4`；ODA 使用私有 tmpfs 源副本和官方 `*.dwg` 过滤器，不扫描其他上传文件。
+- [x] 已以 `compose.yaml + compose.dwg.yaml` 重建本地 API 与 Worker；Worker `/health/ready` 报告 `dwgConverter.status=up`，修复了仅使用基础 Compose 镜像导致的 `PARSER_UNAVAILABLE`。
+- [x] DWG 转换改为本地默认启动路径：`.env.example`、配置默认值、Compose fallback 与 README 均要求使用 `compose.yaml + compose.dwg.yaml` 的 ODA 派生 Worker；没有 ODA 时默认失败关闭，不能静默降级。
+- [ ] 在已登录的本地 Web 页面为失败任务点击“重试”，完成 `Drawing1.dwg` 的索引与 Gemini 问答端到端冒烟验证（服务端鉴权保持启用，Gemini 仅在检索到来源后调用）。
+- [x] 无有效 `[来源N]` 的知识库 LLM 文本不再作为 Provider 502 返回；严格模式安全拒答，混合模式切换为不携带文档上下文、明确标记的通用知识补充。
+- [x] 若 Gemini 已调用但因“资料不足”或缺少有效引用而安全拒答，`QueryAudit` 仍保留实际 LLM Provider/model；未进入 LLM 的检索拒答仅显示 Embedding Provider。
+- [x] 修复 `vue2` / `vue 2` 等语义等价问法结果不一致：查询链路统一产品版本号空格，引用不可核验时使用相同授权上下文受控修复一次，仍失败则记录 `LLM_ANSWER_UNVERIFIABLE` 并安全拒答。
 - [x] 上传多文件时限制 `upload-file-list` 高度并在弹框块内独立滚动，避免撑高页面产生 Y 轴滚动。
 - [x] 问答正文中的 `[来源N]` 改为小号次要色行内标记，与正文建立清晰视觉层级。
-- [x] `answer-text` 与 `history-answer` 统一使用严格清洗的 Markdown 渲染：支持标题、段落、列表、引用、代码、
-      表格、强调和安全链接；禁用原始 HTML、图片、脚本、iframe、事件属性、内联样式和危险协议，外链统一增加
-      `noopener noreferrer`，并保留 `[来源N]` 行内标记。
-- [x] 查询默认改为混合回答模式：有知识库依据时保持来源强校验；无充分依据或引用修复仍失败时，只发送经过
-      出网策略检查的问题并返回 `answerMode=general`。实时回答、历史和审计明确标记“通用知识补充”，权限变化、
-      confidential 阻止与正式质量评测仍保持严格模式。
+- [x] `answer-text` 与 `history-answer` 统一使用严格清洗的 Markdown 渲染：支持标题、段落、列表、引用、代码、表格、强调和安全链接；禁用原始 HTML、图片、脚本、iframe、事件属性、内联样式和危险协议，外链统一增加 `noopener noreferrer`，并保留 `[来源N]` 行内标记。
+- [x] 查询默认改为混合回答模式：有知识库依据时保持来源强校验；无充分依据或引用修复仍失败时，只发送经过出网策略检查的问题并返回 `answerMode=general`。实时回答、历史和审计明确标记“通用知识补充”，权限变化、confidential 阻止与正式质量评测仍保持严格模式。
 
 ### 3.12 本地启动与数据库调试文档
 
-- [x] README 与部署运维手册明确：执行 DWG Worker 的 `docker compose build` 前必须启动 Docker Desktop，并先
-      通过 `docker info` / `docker compose version` 验证 Docker Engine；两处均补齐专用 Worker 构建、合并
-      配置校验、整套服务启动和状态检查的完整命令序列。
-- [x] 明确 `.env` 变更按实际读取服务重建：主服务配置重建 `api`，解析/CAD 配置重建 `parser-worker`，
-      `PARSER_INTERNAL_TOKEN` 同时重建两端；普通运行配置变化不要求重新构建镜像。
-- [x] 明确 PostgreSQL 初始化账号、数据库和密码在已有 volume 上不会因重建容器自动变更，禁止使用
-      `down -v` 作为配置重载方式。
-- [x] 新增仅绑定 `127.0.0.1:15432` 的 `compose.db-gui.yaml` 和 DBeaver 只读查看说明；生产环境仍不暴露
-      PostgreSQL。
-- [x] README 补全基础、DWG、DBeaver 及组合模式的固定 Compose 文件前缀，完善依赖健康分项诊断、已有 volume
-      的数据库密码同步流程、URL 密码编码提示和 PostgreSQL/Chroma 数据归属说明。
+- [x] README 与部署运维手册明确：执行 DWG Worker 的 `docker compose build` 前必须启动 Docker Desktop，并先通过 `docker info` / `docker compose version` 验证 Docker Engine；两处均补齐专用 Worker 构建、合并配置校验、整套服务启动和状态检查的完整命令序列。
+- [x] 明确 `.env` 变更按实际读取服务重建：主服务配置重建 `api`，解析/CAD 配置重建 `parser-worker`， `PARSER_INTERNAL_TOKEN` 同时重建两端；普通运行配置变化不要求重新构建镜像。
+- [x] 明确 PostgreSQL 初始化账号、数据库和密码在已有 volume 上不会因重建容器自动变更，禁止使用 `down -v` 作为配置重载方式。
+- [x] 新增仅绑定 `127.0.0.1:15432` 的 `compose.db-gui.yaml` 和 DBeaver 只读查看说明；生产环境仍不暴露 PostgreSQL。
+- [x] README 补全基础、DWG、DBeaver 及组合模式的固定 Compose 文件前缀，完善依赖健康分项诊断、已有 volume 的数据库密码同步流程、URL 密码编码提示和 PostgreSQL/Chroma 数据归属说明。
 
 ### 3.13 API 使用说明
 
-- [x] 新增 `docs/07-API使用说明.md`，将 README 的接口调用清单迁入，并补全认证模式、trace ID、错误结构、
-      capability/ACL、全部公开端点、分页、状态语义、重试规则和安全调用示例。
+- [x] 新增 `docs/07-API使用说明.md`，将 README 的接口调用清单迁入，并补全认证模式、trace ID、错误结构、capability/ACL、全部公开端点、分页、状态语义、重试规则和安全调用示例。
 - [x] README 收敛为 API 文档与 OpenAPI 契约入口，不再维护重复的 curl 端点清单。
-- [x] 修正 OpenAPI 文档漂移：补充 live/ready 健康端点、密码会话 Cookie security scheme，以及知识问答和
-      历史轮次的 `answerMode` 字段。
+- [x] 修正 OpenAPI 文档漂移：补充 live/ready 健康端点、密码会话 Cookie security scheme，以及知识问答和历史轮次的 `answerMode` 字段。
 - [x] 同步 AGENTS、实施规格、技术设计、前端设计、开发规范、任务清单和运维手册中的 API 文档索引。
-- [x] 重构 README 的信息层级，新增零模型/零 ODA 的新手基础模式、分步骤启动流程和常见问题 FAQ，并将
-      Ollama、完整 RAG、DWG 与数据库调试下沉为按需章节。
-- [x] 新增 `apps/README.md` 及 API、Web、Parser Worker 目录级 README，集中说明模块入口、调用关系、开发命令、
-      安全边界和当前解析算法，避免为每个源文件维护易漂移的独立说明。
+- [x] 重构 README 的信息层级，新增零模型/零 ODA 的新手基础模式、分步骤启动流程和常见问题 FAQ，并将 Ollama、完整 RAG、DWG 与数据库调试下沉为按需章节。
+- [x] 新增 `apps/README.md` 及 API、Web、Parser Worker 目录级 README，集中说明模块入口、调用关系、开发命令、安全边界和当前解析算法，避免为每个源文件维护易漂移的独立说明。
 
 ---
 
@@ -195,21 +159,16 @@ Vue 3 + TypeScript + Vite
 
 ## 5. 阶段 14 保留未完成
 
-仍需业务方提供 30–100 条真实脱敏标注集、实际 ACL identity profile、两轮受控 Provider 运行和成本归属。
-Rerank 继续默认关闭；后续取得数据时返回阶段 14 完成正式验收。
+仍需业务方提供 30–100 条真实脱敏标注集、实际 ACL identity profile、两轮受控 Provider 运行和成本归属。Rerank 继续默认关闭；后续取得数据时返回阶段 14 完成正式验收。
 
 ---
 
 ## 6. 下一开发入口
 
-阶段 15 已完成。本地 Ollama / Gemini 配置与待建立索引恢复已补齐。当前优先入口为第 3.11 节的真实
-`Drawing1.dwg` Web 端到端验证：ODA Linux x64 包和转换器已就绪，但服务端鉴权保持启用，需要已登录的本地
-会话完成上传。阶段 14 的真实数据质量验收仍按第 5 节保留；完成 DWG 验证后再进入阶段 16 服务器上线准备。
+阶段 15 已完成。本地 Ollama / Gemini 配置与待建立索引恢复已补齐。当前优先入口为第 3.11 节的真实 `Drawing1.dwg` Web 端到端验证：ODA Linux x64 包和转换器已就绪，但服务端鉴权保持启用，需要已登录的本地会话完成上传。阶段 14 的真实数据质量验收仍按第 5 节保留；完成 DWG 验证后再进入阶段 16 服务器上线准备。
 
-- [x] 新增 Stylelint CSS 声明语义排序配置及独立检查/自动修复命令，覆盖 CSS、SCSS 和 Vue SFC；
-      现有大文件样式不在本次配置变更中批量重排。
-- [x] 为 Playwright E2E 增加独立 TypeScript project reference，修复编辑器 ESLint Project Service
-      无法解析 `apps/web/e2e` 测试文件的问题。
+- [x] 新增 Stylelint CSS 声明语义排序配置及独立检查/自动修复命令，覆盖 CSS、SCSS 和 Vue SFC；现有大文件样式不在本次配置变更中批量重排。
+- [x] 为 Playwright E2E 增加独立 TypeScript project reference，修复编辑器 ESLint Project Service 无法解析 `apps/web/e2e` 测试文件的问题。
 
 ### 6.1 Web 与移动端兼容规范收敛（2026-07-26）
 
@@ -220,8 +179,7 @@ Rerank 继续默认关闭；后续取得数据时返回阶段 14 完成正式验
 - [x] Playwright 回归：375px、768px、900px、1280px，覆盖无横向溢出、Drawer 导航、卡片/表格结构切换和可访问性。
 - [x] 截图显示回归：修复审计/用户桌面表格与空状态并存、历史列表分页未固定、文档/Provider 受限宽度换行、手机纵向步骤条撑高和部门卡片自动行拉伸；430px 回归断言步骤条紧凑、部门卡片间距固定。
   - [x] 分页与筛选体验收敛：文档、分块、入库、审计、用户和历史共用底部 `list-pagination` 样式与位置，并统一使用 `prev, pager, next` 分页格式；审计 cursor 记录通过受控游标页栈呈现页码翻页。手机端筛选统一置于工具栏右侧，筛选 Drawer 统一为 `72%` 视口高度；用户与部门摘要改为折叠卡片。
-  - [x] 审计分页总数修复：接口按 tenant 与事件类型返回准确 `total`，前端分页绑定真实记录总数，同时保留
-        cursor 页栈的顺序翻页约束。
+  - [x] 审计分页总数修复：接口按 tenant 与事件类型返回准确 `total`，前端分页绑定真实记录总数，同时保留 cursor 页栈的顺序翻页约束。
   - [x] 权限编辑体验收敛：手机端“编辑角色”和“编辑权限”在已展开的用户/部门卡片内直接编辑并保存，不再额外打开 Drawer；桌面端角色编辑使用标准 `el-dialog`。空问答历史不渲染分页，审计表与底部分页合并为同一内容卡片，避免表格列与分页背景被裁切。
   - [x] 移动端浮层层级：`el-config-provider` 将 Element Plus 浮层基线设为 `5000`，移除覆盖组件层级的全局 Overlay 强制值；确保筛选 Drawer、文档权限 metadata 弹框中的 Select、日期选择器等 `el-popper` 位于所属 Overlay 之上。
   - [x] 弹框基础样式回归：动态 `ElDialog/ElDrawer` 显式引入 Element Plus Dialog/Drawer CSS；上传与权限 metadata 弹框恢复桌面居中限宽、手机安全高度、正文独立滚动和固定 footer，手机上传入口不显示拖放文案。

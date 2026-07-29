@@ -2,8 +2,7 @@
 
 知枢 NexusKB 是一套企业级知识库系统，提供文档入库、权限过滤、向量检索、知识问答、来源引用和审计能力。
 
-当前 Vue 前端与本地 RAG 主链路已经完成；真实业务数据质量评测仍等待获批的脱敏数据集。详细进度见
-[`TASK.md`](./TASK.md)。
+当前 Vue 前端与本地 RAG 主链路已经完成；真实业务数据质量评测仍等待获批的脱敏数据集。详细进度见 [`TASK.md`](./TASK.md)。
 
 ## 快速导航
 
@@ -41,18 +40,16 @@ Parser Worker、PostgreSQL、Redis 和 Chroma 默认不向宿主机或公网开�
 
 ## 选择运行模式
 
-第一次接触本项目，建议先使用“新手基础模式”。确认页面和基础链路正常后，再按需启用 Ollama、云端 LLM 或
-DWG。
+第一次接触本项目，建议先使用“新手基础模式”。确认页面和基础链路正常后，再按需启用 Ollama、云端 LLM 或DWG。
 
-| 模式                 | 需要额外准备                | 可以验证                                    | 暂时不能做                |
-| -------------------- | --------------------------- | ------------------------------------------- | ------------------------- |
-| 新手基础模式（推荐） | 无                          | 前端、API、数据库、队列、常规文档解析与脱敏 | 向量检索和问答            |
-| 本机向量索引         | Ollama + `bge-m3`           | 文档向量化与本地检索                        | 未配置 LLM 时不能生成回答 |
-| 完整 RAG             | Embedding + 获批的云端 LLM  | 检索、回答和来源引用                        | 取决于已启用的文档格式    |
-| DWG 解析             | 经许可的 ODA File Converter | DWG 转 DXF 后解析                           | 不会自动启用模型          |
+| 模式 | 需要额外准备 | 可以验证 | 暂时不能做 |
+| --- | --- | --- | --- |
+| 新手基础模式（推荐） | 无 | 前端、API、数据库、队列、常规文档解析与脱敏 | 向量检索和问答 |
+| 本机向量索引 | Ollama + `bge-m3` | 文档向量化与本地检索 | 未配置 LLM 时不能生成回答 |
+| 完整 RAG | Embedding + 获批的云端 LLM | 检索、回答和来源引用 | 取决于已启用的文档格式 |
+| DWG 解析 | 经许可的 ODA File Converter | DWG 转 DXF 后解析 | 不会自动启用模型 |
 
-> [!NOTE]
-> `EMBEDDING_PROVIDER=none` 和 `LLM_PROVIDER=none` 时，文档显示“待建立索引”是正常状态，不代表处理失败。
+> [!NOTE] `EMBEDDING_PROVIDER=none` 和 `LLM_PROVIDER=none` 时，文档显示“待建立索引”是正常状态，不代表处理失败。
 
 ## 环境要求
 
@@ -91,8 +88,7 @@ pnpm --version
 
 ## 第一次启动
 
-本节不需要模型 API Key、Ollama 或 ODA。完成后可以进入管理界面，上传 TXT、Markdown、DOCX、XLSX 或 DXF
-测试文件，验证本地解析、分块和脱敏流程。
+本节不需要模型 API Key、Ollama 或 ODA。完成后可以进入管理界面，上传 TXT、Markdown、DOCX、XLSX 或 DXF 测试文件，验证本地解析、分块和脱敏流程。
 
 除特别说明外，所有命令都在仓库根目录执行。
 
@@ -142,11 +138,9 @@ POSTGRES_PASSWORD=<第一个随机值>
 DATABASE_URL=postgresql://kb:<第一个随机值>@postgres:5432/kb
 ```
 
-这里显式关闭 DWG，表示本次启动不提供 DWG 上传能力；其他已支持格式不受影响。`DEV_ROLES_JSON=["admin"]`
-只用于本地开发身份，便于访问文档管理页面，不能用于生产环境。
+这里显式关闭 DWG，表示本次启动不提供 DWG 上传能力；其他已支持格式不受影响。`DEV_ROLES_JSON=["admin"]` 只用于本地开发身份，便于访问文档管理页面，不能用于生产环境。
 
-> [!IMPORTANT]
-> `.env` 包含密码和可能的 API Key，已被 Git 忽略。不要提交、发送或截图分享该文件。
+> [!IMPORTANT] `.env` 包含密码和可能的 API Key，已被 Git 忽略。不要提交、发送或截图分享该文件。
 
 ### 3. 启动后端服务
 
@@ -158,8 +152,7 @@ docker compose up -d --build
 docker compose ps
 ```
 
-首次启动需要拉取镜像和构建服务，耗时通常比后续启动长。`docker compose ps` 最终应显示 `api`、
-`parser-worker`、`postgres`、`redis` 和 `chroma` 正常运行。
+首次启动需要拉取镜像和构建服务，耗时通常比后续启动长。`docker compose ps` 最终应显示 `api`、 `parser-worker`、`postgres`、`redis` 和 `chroma` 正常运行。
 
 ### 4. 检查服务状态
 
@@ -185,8 +178,7 @@ docker compose logs --tail=100 api parser-worker
 pnpm --filter @nexus-kb/web dev
 ```
 
-浏览器打开 [http://127.0.0.1:5173](http://127.0.0.1:5173)。开发模式会使用 `.env` 中的服务端固定身份，
-不需要输入账号密码。
+浏览器打开 [http://127.0.0.1:5173](http://127.0.0.1:5173)。开发模式会使用 `.env` 中的服务端固定身份，不需要输入账号密码。
 
 ### 6. 完成第一次验证
 
@@ -224,13 +216,11 @@ EMBEDDING_REGION=local
 OLLAMA_BASE_URL=http://host.docker.internal:11434
 ```
 
-Ollama 不需要 API Key。`host.docker.internal` 是 API 容器访问 Mac 宿主机的地址，不要改成任意公网 HTTP
-地址。
+Ollama 不需要 API Key。`host.docker.internal` 是 API 容器访问 Mac 宿主机的地址，不要改成任意公网 HTTP 地址。
 
 ### 3. 重建 API 容器
 
-下面以新手基础模式为例。如果已经启用 DWG 或 DBeaver，必须使用
-[日常使用](#选择固定的-compose-文件组合)中当前模式对应的完整 Compose 文件组合，不能临时切回基础配置。
+下面以新手基础模式为例。如果已经启用 DWG 或 DBeaver，必须使用 [日常使用](#日常使用)中当前模式对应的完整 Compose 文件组合，不能临时切回基础配置。
 
 ```bash
 docker compose up -d --force-recreate api
@@ -239,9 +229,7 @@ curl --fail-with-body http://127.0.0.1:3000/health/ready
 
 之前处于“待建立索引”的文档，可在文档详情点击“继续建立索引”，系统会复用已完成的解析、分块和脱敏结果。
 
-> [!WARNING]
-> 文档与查询必须使用相同的 Embedding Provider、模型和维度。更换这些配置后不能继续写入旧 collection，
-> 必须创建新索引并执行迁移。
+> [!WARNING] 文档与查询必须使用相同的 Embedding Provider、模型和维度。更换这些配置后不能继续写入旧 collection，必须创建新索引并执行迁移。
 
 ## 启用完整 RAG 问答
 
@@ -251,8 +239,7 @@ curl --fail-with-body http://127.0.0.1:3000/health/ready
 2. 已配置组织批准的云端 LLM Provider。
 3. 文档状态已经变为“已生效”。
 
-在 `.env` 中将 `LLM_PROVIDER` 改为 `openai`、`google`、`deepseek`、`alibaba` 或 `custom`，并填写该平台
-控制台当前可用的模型 ID、HTTPS Base URL 和 API Key。例如使用 Google 时需要填写：
+在 `.env` 中将 `LLM_PROVIDER` 改为 `openai`、`google`、`deepseek`、`alibaba` 或 `custom`，并填写该平台控制台当前可用的模型 ID、HTTPS Base URL 和 API Key。例如使用 Google 时需要填写：
 
 ```dotenv
 LLM_PROVIDER=google
@@ -263,8 +250,7 @@ GEMINI_BASE_URL=https://generativelanguage.googleapis.com/v1beta
 
 修改后只需重建 API：
 
-下面以新手基础模式为例。如果已经启用 DWG 或 DBeaver，必须使用
-[日常使用](#选择固定的-compose-文件组合)中当前模式对应的完整 Compose 文件组合。
+下面以新手基础模式为例。如果已经启用 DWG 或 DBeaver，必须使用 [日常使用](#选择固定的-compose-文件组合)中当前模式对应的完整 Compose 文件组合。
 
 ```bash
 docker compose up -d --force-recreate api
@@ -277,23 +263,19 @@ curl --fail-with-body http://127.0.0.1:3000/health/ready
 - Rerank 默认保持 `none`，是否启用应由正式质量评测决定。
 - `confidential` 内容默认禁止发送到云端 LLM 或 Rerank。
 
-Provider 的完整配置项见 [技术设计：配置](./docs/02-技术设计.md#4-配置)，运行检查、数据出网和密钥安全规则见
-[部署运维手册：健康检查](./docs/06-部署运维手册.md#6-健康检查)。
+Provider 的完整配置项见 [技术设计：配置](./docs/02-技术设计.md#4-配置)，运行检查、数据出网和密钥安全规则见 [部署运维手册：健康检查](./docs/06-部署运维手册.md#6-健康检查)。
 
 ## 启用 DWG 解析（按需）
 
 DWG 转换依赖独立授权的 ODA File Converter。仓库与基础镜像不包含安装包、许可证或二进制。
 
-从 [ODA 官方下载页](https://www.opendesign.com/guestfiles/oda_File_Converter) 获取经组织许可的
-**Linux x64 Debian (`.deb`)** 安装包，并将它放到：
+从 [ODA 官方下载页](https://www.opendesign.com/guestfiles/oda_File_Converter) 获取经组织许可的 **Linux x64 Debian (`.deb`)** 安装包，并将它放到：
 
 ```text
 apps/parser-worker/vendor/oda/oda-file-converter.deb
 ```
 
-该文件已被 Git 忽略，禁止提交到仓库。随后按照
-[部署运维手册：CAD / DWG 转换流程](./docs/06-部署运维手册.md#91-cad--dwg-转换流程)读取实际安装版本、填写
-`DWG_CONVERTER_RELEASE`。
+该文件已被 Git 忽略，禁止提交到仓库。随后按照 [部署运维手册：CAD / DWG 转换流程](./docs/06-部署运维手册.md#91-cad--dwg-转换流程)读取实际安装版本、填写 `DWG_CONVERTER_RELEASE`。
 
 构建前先打开 Docker Desktop，等待 Docker Engine 完全启动，并确认下面两条命令均成功：
 
@@ -311,28 +293,22 @@ docker compose -f compose.yaml -f compose.dwg.yaml up -d --build
 docker compose -f compose.yaml -f compose.dwg.yaml ps
 ```
 
-单独执行第一条 `build parser-worker` 可以提前暴露 ODA 安装包、版本或 Worker 镜像构建问题；后续
-`up -d --build` 会复用已有构建缓存，并确保 API 等其他需要构建的服务也与当前源码一致。`ps` 中的 `api`、
-`parser-worker`、`postgres`、`redis` 和 `chroma` 应正常运行，随后再检查：
+单独执行第一条 `build parser-worker` 可以提前暴露 ODA 安装包、版本或 Worker 镜像构建问题；后续 `up -d --build` 会复用已有构建缓存，并确保 API 等其他需要构建的服务也与当前源码一致。`ps` 中的 `api`、 `parser-worker`、`postgres`、`redis` 和 `chroma` 应正常运行，随后再检查：
 
 ```bash
 curl --fail-with-body http://127.0.0.1:3000/health/live
 curl --fail-with-body http://127.0.0.1:3000/health/ready
 ```
 
-如果还需要通过 DBeaver 访问 PostgreSQL，应在 `config`、`build`、`up`、`ps`、`logs`、`down` 和
-`--force-recreate` 命令中保持同一文件组合，并追加 `-f compose.db-gui.yaml`；该覆盖文件仅限本地调试，
-生产环境不得加载。
+如果还需要通过 DBeaver 访问 PostgreSQL，应在 `config`、`build`、`up`、`ps`、`logs`、`down` 和 `--force-recreate` 命令中保持同一文件组合，并追加 `-f compose.db-gui.yaml`；该覆盖文件仅限本地调试，生产环境不得加载。
 
-缺少或未获许可的 ODA 安装包时，请保持 `DWG_CONVERSION_ENABLED=false`；不要绕过转换器就绪检查，也不要暴露
-Worker 端口。
+缺少或未获许可的 ODA 安装包时，请保持 `DWG_CONVERSION_ENABLED=false`；不要绕过转换器就绪检查，也不要暴露 Worker 端口。
 
 ## 日常使用
 
 ### 选择固定的 Compose 文件组合
 
-先根据当前运行模式选择一组命令前缀，后续所有 `config`、`build`、`up`、`ps`、`logs`、`exec`、`down` 和
-`--force-recreate` 命令都使用同一组文件，避免 DWG Worker 被切回基础镜像或 DBeaver 端口映射被移除。
+先根据当前运行模式选择一组命令前缀，后续所有 `config`、`build`、`up`、`ps`、`logs`、`exec`、`down` 和 `--force-recreate` 命令都使用同一组文件，避免 DWG Worker 被切回基础镜像或 DBeaver 端口映射被移除。
 
 | 当前模式           | Compose 命令前缀                                                            |
 | ------------------ | --------------------------------------------------------------------------- |
@@ -341,8 +317,7 @@ Worker 端口。
 | DWG                | `docker compose -f compose.yaml -f compose.dwg.yaml`                        |
 | DWG + DBeaver      | `docker compose -f compose.yaml -f compose.dwg.yaml -f compose.db-gui.yaml` |
 
-切换文件组合前先执行对应的 `config --quiet`。如果只是修改某个服务的运行配置，继续使用当前前缀并定向重建该服务，
-不要为了缩短命令而省略已经启用的覆盖文件。
+切换文件组合前先执行对应的 `config --quiet`。如果只是修改某个服务的运行配置，继续使用当前前缀并定向重建该服务，不要为了缩短命令而省略已经启用的覆盖文件。
 
 ### 停止与再次启动
 
@@ -358,9 +333,7 @@ docker compose down
 docker compose up -d
 ```
 
-> [!CAUTION]
-> 不要把 `docker compose down -v` 当作日常停止命令。`-v` 会删除 PostgreSQL、Chroma、Redis 和上传文件
-> 使用的本地 volume。
+> [!CAUTION] 不要把 `docker compose down -v` 当作日常停止命令。`-v` 会删除 PostgreSQL、Chroma、Redis 和上传文件使用的本地 volume。
 
 ### 修改 `.env` 后让配置生效
 
@@ -368,16 +341,13 @@ docker compose up -d
 
 下表以基础模式前缀为例；DWG 或 DBeaver 模式必须替换为上表中的完整前缀。
 
-| 修改内容                                    | 重建服务                                                  |
-| ------------------------------------------- | --------------------------------------------------------- |
-| LLM、Embedding、Rerank、认证、ACL、查询配置 | `docker compose up -d --force-recreate api`               |
-| Parser、CAD、DWG 和资源限制                 | `docker compose up -d --force-recreate parser-worker`     |
-| `PARSER_INTERNAL_TOKEN`                     | `docker compose up -d --force-recreate api parser-worker` |
+| 修改内容 | 重建服务 |
+| --- | --- |
+| LLM、Embedding、Rerank、认证、ACL、查询配置 | `docker compose up -d --force-recreate api` |
+| Parser、CAD、DWG 和资源限制 | `docker compose up -d --force-recreate parser-worker` |
+| `PARSER_INTERNAL_TOKEN` | `docker compose up -d --force-recreate api parser-worker` |
 
-`POSTGRES_USER`、`POSTGRES_DB` 和 `POSTGRES_PASSWORD` 只在空数据卷首次初始化时生效。已有 volume 时，重建
-PostgreSQL 不会自动修改数据库内的账号或密码；出现认证失败时按下方 FAQ 同步密码，不要通过删除 volume
-来“刷新配置”。README 生成的十六进制随机密码可直接写入 `DATABASE_URL`；自行使用包含 `@`、`:`、`/`、`#`
-或 `%` 的密码时，必须对 URL 中的密码部分进行百分号编码。
+`POSTGRES_USER`、`POSTGRES_DB` 和 `POSTGRES_PASSWORD` 只在空数据卷首次初始化时生效。已有 volume 时，重建 PostgreSQL 不会自动修改数据库内的账号或密码；出现认证失败时按下方 FAQ 同步密码，不要通过删除 volume 来“刷新配置”。README 生成的十六进制随机密码可直接写入 `DATABASE_URL`；自行使用包含 `@`、`:`、`/`、`#` 或 `%` 的密码时，必须对 URL 中的密码部分进行百分号编码。
 
 ### 数据存放位置
 
@@ -388,8 +358,7 @@ PostgreSQL 不会自动修改数据库内的账号或密码；出现认证失败
 | 向量、脱敏检索文本和标量 ACL metadata     | Docker `chroma_data` volume   |
 | 队列状态                                  | Docker `redis_data` volume    |
 
-需要使用 DBeaver 只读查看 PostgreSQL 时，见
-[部署运维手册：使用 DBeaver](./docs/06-部署运维手册.md#54-使用-dbeaver-只读查看-postgresql)。
+需要使用 DBeaver 只读查看 PostgreSQL 时，见 [部署运维手册：使用 DBeaver](./docs/06-部署运维手册.md#54-使用-dbeaver-只读查看-postgresql)。
 
 ## 常见问题 FAQ
 
@@ -425,17 +394,13 @@ docker compose logs --tail=100 api
 | `parserWorker` | Worker 日志、内部 token、ODA/DWG 配置、解析资源限制                       |
 | `rawDocs`      | `raw_docs` volume 是否挂载，以及 API 对目录的读写权限                     |
 
-不需要 DWG 时，明确设置 `DWG_CONVERSION_ENABLED=false` 并使用基础 `compose.yaml`；需要 DWG 时，按本文的
-DWG 章节加载 `compose.dwg.yaml`。`PARSER_INTERNAL_TOKEN` 必须至少 16 个字符且两端一致；修改配置后需要
-`--force-recreate` 实际读取该配置的服务。
+不需要 DWG 时，明确设置 `DWG_CONVERSION_ENABLED=false` 并使用基础 `compose.yaml`；需要 DWG 时，按本文的 DWG 章节加载 `compose.dwg.yaml`。`PARSER_INTERNAL_TOKEN` 必须至少 16 个字符且两端一致；修改配置后需要 `--force-recreate` 实际读取该配置的服务。
 
 ### 3. PostgreSQL 或 API 报密码认证失败
 
-典型错误包括 DBeaver 的 `FATAL: password authentication failed` 和 Prisma `P1000`。这通常发生在已有
-`postgres_data` volume 后修改了 `.env`：容器环境变量已经变化，但数据库角色仍保留旧密码。
+典型错误包括 DBeaver 的 `FATAL: password authentication failed` 和 Prisma `P1000`。这通常发生在已有 `postgres_data` volume 后修改了 `.env`：容器环境变量已经变化，但数据库角色仍保留旧密码。
 
-以下恢复流程假设 `POSTGRES_USER` 和 `POSTGRES_DB` 没有改名；它们同样只在空 volume 首次初始化时生效。
-如果误改了这两项，先恢复为该 volume 初始化时使用的角色和数据库名称。
+以下恢复流程假设 `POSTGRES_USER` 和 `POSTGRES_DB` 没有改名；它们同样只在空 volume 首次初始化时生效。如果误改了这两项，先恢复为该 volume 初始化时使用的角色和数据库名称。
 
 使用当前模式的固定 Compose 文件组合进入 PostgreSQL；下面以基础模式为例：
 
@@ -450,17 +415,14 @@ docker compose exec postgres sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"'
 \q
 ```
 
-随后把同一密码同步写入 `.env` 的 `POSTGRES_PASSWORD` 和 `DATABASE_URL`，再使用同一 Compose 文件组合重建
-PostgreSQL 与 API，并验证 ready：
+随后把同一密码同步写入 `.env` 的 `POSTGRES_PASSWORD` 和 `DATABASE_URL`，再使用同一 Compose 文件组合重建 PostgreSQL 与 API，并验证 ready：
 
 ```bash
 docker compose up -d --force-recreate postgres api
 curl --fail-with-body http://127.0.0.1:3000/health/ready
 ```
 
-DBeaver 使用 `127.0.0.1:15432`，数据库和用户名读取 `.env` 的 `POSTGRES_DB`、`POSTGRES_USER`（默认均为
-`kb`），密码使用 `POSTGRES_PASSWORD`。不得使用 `docker compose down -v` 处理认证失败，该命令会删除数据
-volume。
+DBeaver 使用 `127.0.0.1:15432`，数据库和用户名读取 `.env` 的 `POSTGRES_DB`、`POSTGRES_USER`（默认均为 `kb`），密码使用 `POSTGRES_PASSWORD`。不得使用 `docker compose down -v` 处理认证失败，该命令会删除数据volume。
 
 ### 4. 文档显示“待建立索引”，或问答没有返回答案
 
@@ -470,8 +432,7 @@ volume。
 - 已配置 Embedding，但 `LLM_PROVIDER=none`：可以建立向量索引，但不能生成最终回答。
 - 修改 Provider 后没有重建 API：容器仍在使用旧配置。
 
-按顺序检查 `.env`，使用当前模式的固定 Compose 文件组合执行 `up -d --force-recreate api`，再访问
-`/health/ready`。已有“待建立索引”文档可在详情页点击“继续建立索引”，无需重新上传。
+按顺序检查 `.env`，使用当前模式的固定 Compose 文件组合执行 `up -d --force-recreate api`，再访问 `/health/ready`。已有“待建立索引”文档可在详情页点击“继续建立索引”，无需重新上传。
 
 ## 开发与测试
 
@@ -493,20 +454,20 @@ pnpm --filter @nexus-kb/web test:e2e
 
 ## 文档索引
 
-| 文档                                                               | 内容                               |
-| ------------------------------------------------------------------ | ---------------------------------- |
-| [`TASK.md`](./TASK.md)                                             | 当前阶段、完成状态与下一步         |
-| [`docs/01-项目实施规格.md`](./docs/01-项目实施规格.md)             | 项目范围、安全边界与验收标准       |
-| [`docs/02-技术设计.md`](./docs/02-技术设计.md)                     | 架构、模块、数据结构与关键实现     |
-| [`docs/03-前端产品与界面设计.md`](./docs/03-前端产品与界面设计.md) | 页面、交互、权限与响应式规范       |
-| [`docs/04-开发规范.md`](./docs/04-开发规范.md)                     | 编码、测试、Git 与协作规范         |
-| [`docs/05-开发任务清单.md`](./docs/05-开发任务清单.md)             | 完整阶段任务                       |
-| [`docs/06-部署运维手册.md`](./docs/06-部署运维手册.md)             | 部署、配置、备份、监控与故障处理   |
-| [`docs/07-API使用说明.md`](./docs/07-API使用说明.md)               | 认证、权限、端点、错误码与调用示例 |
-| [`apps/README.md`](./apps/README.md)                               | Web、API 与 Parser Worker 应用索引 |
-| [`apps/api/README.md`](./apps/api/README.md)                       | NestJS API 模块、链路与安全边界    |
-| [`apps/web/README.md`](./apps/web/README.md)                       | Vue 页面、目录、响应式与前端边界   |
-| [`apps/parser-worker/README.md`](./apps/parser-worker/README.md)   | 文档解析算法、限制与开发方式       |
+| 文档 | 内容 |
+| --- | --- |
+| [`TASK.md`](./TASK.md) | 当前阶段、完成状态与下一步 |
+| [`docs/01-项目实施规格.md`](./docs/01-项目实施规格.md) | 项目范围、安全边界与验收标准 |
+| [`docs/02-技术设计.md`](./docs/02-技术设计.md) | 架构、模块、数据结构与关键实现 |
+| [`docs/03-前端产品与界面设计.md`](./docs/03-前端产品与界面设计.md) | 页面、交互、权限与响应式规范 |
+| [`docs/04-开发规范.md`](./docs/04-开发规范.md) | 编码、测试、Git 与协作规范 |
+| [`docs/05-开发任务清单.md`](./docs/05-开发任务清单.md) | 完整阶段任务 |
+| [`docs/06-部署运维手册.md`](./docs/06-部署运维手册.md) | 部署、配置、备份、监控与故障处理 |
+| [`docs/07-API使用说明.md`](./docs/07-API使用说明.md) | 认证、权限、端点、错误码与调用示例 |
+| [`apps/README.md`](./apps/README.md) | Web、API 与 Parser Worker 应用索引 |
+| [`apps/api/README.md`](./apps/api/README.md) | NestJS API 模块、链路与安全边界 |
+| [`apps/web/README.md`](./apps/web/README.md) | Vue 页面、目录、响应式与前端边界 |
+| [`apps/parser-worker/README.md`](./apps/parser-worker/README.md) | 文档解析算法、限制与开发方式 |
 
 机器可读契约：
 

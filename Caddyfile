@@ -1,0 +1,45 @@
+# Generic local production entrypoint. TLS may terminate at this proxy or at an
+# upstream load balancer; this instance only accepts HTTP on the loopback address.
+{
+	admin off
+	auto_https off
+}
+
+# Set NEXUS_KB_PUBLIC_HOST to the hostname accepted from the upstream proxy.
+# Binding to loopback keeps the origin private.
+http://{$NEXUS_KB_PUBLIC_HOST:localhost}:8080 {
+	bind 127.0.0.1
+	# Override NEXUS_KB_WEB_DIST for a service installation; the default supports
+	# starting Caddy from the repository root on a development Mac.
+	root * {$NEXUS_KB_WEB_DIST:./apps/web/dist}
+	encode zstd gzip
+
+	header {
+		X-Content-Type-Options nosniff
+		X-Frame-Options DENY
+		Referrer-Policy strict-origin-when-cross-origin
+	}
+
+	# Keep all public API traffic same-origin and forward it only to the local API.
+	@api path /v1 /v1/*
+	handle @api {
+		header Cache-Control "no-store"
+		reverse_proxy 127.0.0.1:3000
+	}
+
+	@health path /health /health/*
+	handle @health {
+		header Cache-Control "no-store"
+		reverse_proxy 127.0.0.1:3000
+	}
+
+	# Vite fingerprints assets, so they may be cached indefinitely.
+	@assets path /assets/*
+	header @assets Cache-Control "public, max-age=31536000, immutable"
+
+	# Vue Router history-mode routes must fall back to the SPA entry document.
+	handle {
+		try_files {path} /index.html
+		file_server
+	}
+}

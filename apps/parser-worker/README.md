@@ -1,10 +1,8 @@
 # Parser Worker 应用说明
 
-`apps/parser-worker` 是仅供 NestJS API 内部调用的 Python/FastAPI 文档解析服务。它负责验证受控文件引用、
-识别允许的格式、提取结构化元素以及返回解析器版本和 warning。
+`apps/parser-worker` 是仅供 NestJS API 内部调用的 Python/FastAPI 文档解析服务。它负责验证受控文件引用、识别允许的格式、提取结构化元素以及返回解析器版本和 warning。
 
-Worker 不负责认证业务、tenant/ACL、分块、脱敏、Embedding、Rerank、LLM 或 Chroma 写入，也不持有模型
-API Key。
+Worker 不负责认证业务、tenant/ACL、分块、脱敏、Embedding、Rerank、LLM 或 Chroma 写入，也不持有模型 API Key。
 
 ## 关键入口与文件
 
@@ -21,9 +19,7 @@ API Key。
 | [`tests/test_parse.py`](./tests/test_parse.py)                               | 格式、契约、路径和资源限制测试                        |
 | [`tests/test_health.py`](./tests/test_health.py)                             | live/ready 测试                                       |
 
-内部接口字段以
-[`packages/contracts/openapi/parser-worker.v1.yaml`](../../packages/contracts/openapi/parser-worker.v1.yaml)
-为事实源。
+内部接口字段以 [`packages/contracts/openapi/parser-worker.v1.yaml`](../../packages/contracts/openapi/parser-worker.v1.yaml) 为事实源。
 
 ## 解析请求流程
 
@@ -74,8 +70,7 @@ TXT 和 Markdown 共用 UTF-8 行扫描算法：
 - 随后逐表、逐行抽取 `table_row`，单元格用制表符连接。
 - metadata 保存 `tableIndex` 和 `rowIndex`。
 
-当前实现先处理全部段落、再处理全部表格，因此不保留正文和表格的原始交错顺序；表格还会继承段落遍历结束时
-的标题路径。需要保持精确文档顺序时，应改为遍历 DOCX body XML 中的 block item。
+当前实现先处理全部段落、再处理全部表格，因此不保留正文和表格的原始交错顺序；表格还会继承段落遍历结束时的标题路径。需要保持精确文档顺序时，应改为遍历 DOCX body XML 中的 block item。
 
 ### `parsers/xlsx.py`
 
@@ -108,8 +103,7 @@ TXT 和 Markdown 共用 UTF-8 行扫描算法：
 Model → 块:TITLE_BLOCK → 图层:ANNOTATION
 ```
 
-该算法面向 CAD 知识文本抽取，不是完整几何还原：重复块文本可能被合并，块引用的几何变换也不会转换成最终
-世界坐标。
+该算法面向 CAD 知识文本抽取，不是完整几何还原：重复块文本可能被合并，块引用的几何变换也不会转换成最终世界坐标。
 
 ### `parsers/dwg.py`
 
@@ -153,8 +147,7 @@ DWG 使用“受控转换后复用 DXF”：
 - `DWG_CONVERSION_TIMEOUT_SECONDS`
 - `MAX_DWG_CONVERTED_BYTES`
 
-请求不能指定解析器可执行文件、临时目录或任意转换参数。日志只记录 trace、job、document、parser 和安全错误
-类型，不记录完整正文或内部文件路径。
+请求不能指定解析器可执行文件、临时目录或任意转换参数。日志只记录 trace、job、document、parser 和安全错误类型，不记录完整正文或内部文件路径。
 
 ## 开发与验证
 

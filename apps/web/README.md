@@ -36,8 +36,7 @@ Web 只负责用户体验。真正的身份、tenant、ACL、敏感度和 capabi
 | `src/test`                 | Vitest 公共测试环境                   |
 | `e2e`                      | Playwright 完整流程和响应式回归       |
 
-同目录的 `*.test.ts` 是对应模块的单元或组件测试；展示层数据整理通常放在
-`*-presentation.ts`，避免把复杂转换散落在 Vue 模板中。
+同目录的 `*.test.ts` 是对应模块的单元或组件测试；展示层数据整理通常放在 `*-presentation.ts`，避免把复杂转换散落在 Vue 模板中。
 
 ## 页面范围
 

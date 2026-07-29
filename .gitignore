@@ -1,28 +1,44 @@
+# Operating system and editor artifacts
 .DS_Store
 .history/
+
+# Local configuration and credentials
 .env
 .env.*
 !.env.example
+
+# JavaScript dependencies and build artifacts
 node_modules/
-dist/
-coverage/
-*.log
 .pnpm-store/
+dist/
+*.tsbuildinfo
+
+# JavaScript test artifacts
+coverage/
+apps/web/test-results/
+apps/web/playwright-report/
+apps/web/blob-report/
+
+# Python dependencies, bytecode, and tool caches
+.venv/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
 __pycache__/
 *.py[cod]
-.venv/
+
+# Runtime data and private evaluation results
 data/raw-docs/*
 !data/raw-docs/.gitkeep
 data/chroma/*
 !data/chroma/.gitkeep
-logs/*
-!logs/.gitkeep
 evaluation/private/
 evaluation/results/
-apps/web/test-results/
-apps/web/playwright-report/
-apps/web/blob-report/
+
+# Runtime logs
+*.log
+logs/*
+!logs/.gitkeep
+
+# Locally supplied third-party binaries
 apps/parser-worker/vendor/oda/*.deb

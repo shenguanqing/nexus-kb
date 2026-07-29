@@ -55,8 +55,7 @@
 }
 ```
 
-上述阈值仅演示结构，不是系统默认值。项目规格未规定绝对质量阈值，因此 `decisionPolicy` 必须由业务、产品和
-技术负责人在正式运行前显式批准，契约不会静默补默认值。
+上述阈值仅演示结构，不是系统默认值。项目规格未规定绝对质量阈值，因此 `decisionPolicy` 必须由业务、产品和技术负责人在正式运行前显式批准，契约不会静默补默认值。
 
 ## 2. 双策略运行
 
@@ -78,8 +77,7 @@ RERANK_PROVIDER=alibaba
 RERANK_TOP_K=5
 ```
 
-每条 observation 只保存 caseId、noAnswer、向量排序来源、最终 Top 5、引用来源、durationMs、costUsd 和
-errorCode，不保存模型回答正文。`costUsd` 必须来自本次调用的实际 Provider 用量与当期价格；无法归属时写
+每条 observation 只保存 caseId、noAnswer、向量排序来源、最终 Top 5、引用来源、durationMs、costUsd 和 errorCode，不保存模型回答正文。`costUsd` 必须来自本次调用的实际 Provider 用量与当期价格；无法归属时写
 null，最终 Rerank 建议会保持 `inconclusive`，不得用平均猜测值补齐。
 
 普通 CI 禁止执行付费评测。只有设置专用测试 Key、完成数据出网审批并显式启用
@@ -116,8 +114,7 @@ chmod 600 evaluation/private/dataset.json evaluation/private/identities.json
 ### 2.2 采集真实查询链路
 
 采集命令串行调用正式 `KnowledgeQueryService`，保留向量排序、最终来源和引用的 ID/页码/工作表/分块 ID，
-不保存问题、回答或片段正文。命令内部禁用入库消费者，但仍依赖评测环境的 PostgreSQL、Redis、Chroma 和
-已批准的云端 Provider。运行前应保证用户与租户每分钟查询限额不小于对应 case 数量。
+不保存问题、回答或片段正文。命令内部禁用入库消费者，但仍依赖评测环境的 PostgreSQL、Redis、Chroma 和已批准的云端 Provider。运行前应保证用户与租户每分钟查询限额不小于对应 case 数量。
 
 ```bash
 RUN_PAID_PROVIDER_TESTS=true pnpm --filter @nexus-kb/api quality:capture -- \
@@ -134,9 +131,7 @@ RUN_PAID_PROVIDER_TESTS=true pnpm --filter @nexus-kb/api quality:capture -- \
 ```
 
 CLI 会记录 Chroma collection 名称和 Embedding 配置指纹、校验 Top K/Rerank 配置与所选 variant 一致，
-并拒绝覆盖现有文件。聚合器会拒绝比较 collection 或指纹不同的两轮结果。采集结果初始将
-`costUsd` 写为 null；应使用每条 observation 的 `traceId` 对照本次 Provider 用量与当期价格，在私有运行文件
-中补入实际单次成本。费用未完整归属时聚合结论会保持 `inconclusive`。
+并拒绝覆盖现有文件。聚合器会拒绝比较 collection 或指纹不同的两轮结果。采集结果初始将 `costUsd` 写为 null；应使用每条 observation 的 `traceId` 对照本次 Provider 用量与当期价格，在私有运行文件中补入实际单次成本。费用未完整归属时聚合结论会保持 `inconclusive`。
 
 ## 3. 生成聚合报告
 
