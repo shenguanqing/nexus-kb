@@ -1,10 +1,16 @@
 <script setup lang="ts">
 import type { KnowledgeSource } from '@nexus-kb/contracts';
+import { computed } from 'vue';
 import { useBreakpoint } from '@/composables/useBreakpoint';
 
-defineProps<{ modelValue: boolean; source: KnowledgeSource | null }>();
+const props = defineProps<{ modelValue: boolean; source: KnowledgeSource | null }>();
 defineEmits<{ 'update:modelValue': [value: boolean] }>();
 const { isPhone } = useBreakpoint();
+const sourceLocation = computed(() => {
+  if (props.source?.page) return `第 ${props.source.page} 页`;
+  if (props.source?.sheet) return `工作表 ${props.source.sheet}`;
+  return null;
+});
 </script>
 
 <template>
@@ -12,33 +18,39 @@ const { isPhone } = useBreakpoint();
     :model-value="modelValue"
     :size="isPhone ? '100%' : '420px'"
     title="来源详情"
+    class="source-drawer"
     append-to-body
     @update:model-value="$emit('update:modelValue', $event)"
   >
     <div v-if="source" class="source-detail">
-      <span class="source-index">来源 {{ source.index }}</span>
-      <div class="heading heading--h2" role="heading" aria-level="2">{{ source.sourceName }}</div>
-      <el-descriptions :column="1" border size="small">
-        <el-descriptions-item label="版本">v{{ source.documentVersion }}</el-descriptions-item>
-        <el-descriptions-item label="位置">
-          {{
-            source.page
-              ? `第 ${source.page} 页`
-              : source.sheet
-                ? `工作表 ${source.sheet}`
-                : '未标注位置'
-          }}
-        </el-descriptions-item>
-        <el-descriptions-item label="章节">
-          {{ source.sectionPath.join(' / ') || '未标注章节' }}
-        </el-descriptions-item>
-      </el-descriptions>
-      <div class="security-note text-block">
+      <header class="source-detail__header">
+        <span class="source-index">来源 {{ source.index }}</span>
+        <div class="heading heading--h2" role="heading" aria-level="2">{{ source.sourceName }}</div>
+      </header>
+
+      <div v-if="sourceLocation || source.sectionPath.length" class="source-reference">
+        <div v-if="sourceLocation" class="source-reference__item">
+          <span>位置</span>
+          <strong>{{ sourceLocation }}</strong>
+        </div>
+        <div v-if="source.sectionPath.length" class="source-reference__item">
+          <span>章节</span>
+          <strong>{{ source.sectionPath.join(' / ') }}</strong>
+        </div>
+      </div>
+
+      <div class="source-detail__notice text-block">
         这里只显示本次回答中后端已授权返回的来源信息。查看内容时会重新验证权限。
       </div>
-      <RouterLink :to="`/documents/${source.documentId}`">
-        <el-button>查看文档详情</el-button>
-      </RouterLink>
     </div>
+    <template #footer>
+      <RouterLink
+        v-if="source"
+        class="source-drawer__document-link"
+        :to="`/documents/${source.documentId}`"
+      >
+        <el-button type="primary">查看文档详情</el-button>
+      </RouterLink>
+    </template>
   </el-drawer>
 </template>

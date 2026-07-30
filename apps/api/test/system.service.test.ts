@@ -129,12 +129,12 @@ describe('SystemService', () => {
     });
   });
 
-  it('reports the local BGE reranker without exposing its internal token', () => {
+  it('reports the local BGE reranker as configured without a cloud credential', () => {
     const { service } = fixture({
       RERANK_PROVIDER: 'local_bge',
       RERANK_MODEL: 'BAAI/bge-reranker-v2-m3',
       LOCAL_RERANK_BASE_URL: 'http://host.docker.internal:8100',
-      RERANK_INTERNAL_TOKEN: 'local-rerank-internal-token',
+      PARSER_INTERNAL_TOKEN: 'reused-internal-service-token',
     });
 
     const rerank = service.providers(identity).providers.find((provider) => provider.kind === 'rerank');
@@ -145,7 +145,7 @@ describe('SystemService', () => {
       region: 'local',
       credentialConfigured: true,
     });
-    expect(JSON.stringify(rerank)).not.toContain('local-rerank-internal-token');
+    expect(JSON.stringify(rerank)).not.toContain('reused-internal-service-token');
   });
 
   it('returns dependency, queue, and bounded disk summaries', async () => {

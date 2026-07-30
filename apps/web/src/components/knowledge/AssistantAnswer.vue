@@ -55,10 +55,10 @@ const displayAnswer = computed(() =>
             <span>来源 {{ source.index }}</span>
             <strong :title="source.sourceName">{{ source.sourceName }}</strong>
             <small>
-              {{
-                source.page ? `第 ${source.page} 页` : source.sheet ? source.sheet : '位置未标注'
-              }}
-              · v{{ source.documentVersion }}
+              <template v-if="source.page || source.sheet">
+                {{ source.page ? `第 ${source.page} 页` : `工作表 ${source.sheet}` }} ·
+              </template>
+              v{{ source.documentVersion }}
             </small>
           </button>
         </div>

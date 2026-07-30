@@ -4,16 +4,11 @@ import { onMounted, ref } from 'vue';
 
 import { ApiError } from '@/api/client';
 import { getProviderStatuses } from '@/api/system';
-import { providerKindLabels, providerTitle } from './system-presentation';
+import { credentialLabel, providerKindLabels, providerTitle } from './system-presentation';
 
 const result = ref<ProviderStatusResponse | null>(null);
 const loading = ref(false);
 const errorMessage = ref('');
-
-function credentialLabel(provider: string | null, configured: boolean): string {
-  if (provider === 'ollama') return '本地无需凭据';
-  return configured ? '已配置' : '未配置';
-}
 
 async function load(): Promise<void> {
   loading.value = true;

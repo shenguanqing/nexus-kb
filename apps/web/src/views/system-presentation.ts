@@ -28,6 +28,11 @@ export function providerTitle(status: ProviderStatus): string {
     : `${status.provider ?? '未知'} / ${status.model ?? '未指定模型'}`;
 }
 
+export function credentialLabel(provider: string | null, configured: boolean): string {
+  if (provider === 'ollama' || provider === 'local_bge') return '本地无需凭据';
+  return configured ? '已配置' : '未配置';
+}
+
 export function formatDuration(seconds: number | null): string {
   if (seconds === null) return '暂无数据';
   if (seconds < 60) return `${Math.round(seconds)} 秒`;

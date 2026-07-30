@@ -111,6 +111,46 @@ test('asks a grounded question and renders an authorized source', async ({ page 
   await expect(page.getByText('付款周期是多久？', { exact: true })).not.toBeVisible();
 });
 
+test('omits unavailable source location metadata', async ({ page }) => {
+  await mockSession(page, ['documents:read'], 'user');
+  await page.route('**/v1/knowledge/query', (route) =>
+    route.fulfill({
+      json: {
+        conversationId: '11111111-1111-4111-8111-111111111111',
+        answer: 'Vue 的响应式原理。[来源1]',
+        noAnswer: false,
+        reason: null,
+        answerMode: 'grounded',
+        traceId: '21111111-1111-4111-8111-111111111111',
+        sources: [
+          {
+            index: 1,
+            documentId: '31111111-1111-4111-8111-111111111111',
+            documentVersion: 1,
+            chunkIds: ['a'.repeat(64)],
+            sourceName: 'vue.md',
+            page: null,
+            sheet: null,
+            sectionPath: [],
+          },
+        ],
+        model: { provider: 'fixture', model: 'fixture-model', fallbackUsed: false },
+        rerankDegraded: false,
+      },
+    }),
+  );
+
+  await page.goto('/ask');
+  await page.getByLabel('输入知识库问题').fill('Vue 的响应式原理是什么？');
+  await page.getByRole('button', { name: '发送' }).click();
+  await page.getByRole('button', { name: /来源 1 vue\.md/ }).click();
+
+  await expect(page.getByRole('heading', { name: 'vue.md', level: 2 })).toBeVisible();
+  await expect(page.locator('.source-reference')).toHaveCount(0);
+  await expect(page.getByText('位置未标注')).toHaveCount(0);
+  await expect(page.getByRole('link', { name: '查看文档详情' })).toBeVisible();
+});
+
 test('renders explicit no-answer and blocks unauthorized management routes', async ({ page }) => {
   await mockSession(page, ['documents:read'], 'user');
   await page.route('**/v1/knowledge/query', (route) =>

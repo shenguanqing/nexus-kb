@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { ProviderStatus } from '@nexus-kb/contracts';
 
-import { formatDiskUsage, formatDuration, providerTitle } from './system-presentation';
+import { credentialLabel, formatDiskUsage, formatDuration, providerTitle } from './system-presentation';
 
 const disabledProvider: ProviderStatus = {
   kind: 'rerank',
@@ -16,6 +16,11 @@ const disabledProvider: ProviderStatus = {
 };
 
 describe('system presentation', () => {
+  it('labels local providers as not requiring a cloud credential', () => {
+    expect(credentialLabel('ollama', false)).toBe('本地无需凭据');
+    expect(credentialLabel('local_bge', false)).toBe('本地无需凭据');
+  });
+
   it('presents disabled providers without inventing models', () => {
     expect(providerTitle(disabledProvider)).toBe('未启用');
   });

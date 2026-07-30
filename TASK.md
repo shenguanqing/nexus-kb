@@ -171,6 +171,8 @@ Vue 3 + TypeScript + Vite
 - [x] 为 Playwright E2E 增加独立 TypeScript project reference，修复编辑器 ESLint Project Service 无法解析 `apps/web/e2e` 测试文件的问题。
 - [x] 修复 LLM 响应正文读取期间的超时分类：主模型故障切换备用模型后，备用模型的 `AbortError` 现返回可重试的 `LLM_TIMEOUT`，不再误报 `LLM_INVALID_RESPONSE`；Google 与 OpenAI-compatible adapter 均覆盖回归测试。
 - [x] 新增默认关闭的本地 BGE Rerank：独立内网 `reranker-worker` 运行 `BAAI/bge-reranker-v2-m3`，主服务经 ACL/策略检查后仅发送有限候选文本，Worker 仅返回原始索引与相关度分数；本机与云端配置/Provider 测试覆盖，失败安全降级为向量排序。
+- [x] Provider 页面将本地 BGE Rerank 的凭据状态与本机 Ollama Embedding 对齐，显示“本地无需凭据”；内部 Worker token 仍只用于服务间认证且不回显。
+- [x] 回答来源卡片与来源详情抽屉仅展示服务端实际返回的位置和章节 metadata；无位置时保留文档名与版本，移除“位置未标注”等无效占位，并将查看文档操作固定在抽屉底部以预留后续预览区域。
 
 ### 6.1 Web 与移动端兼容规范收敛（2026-07-26）
 
