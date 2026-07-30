@@ -169,6 +169,8 @@ Vue 3 + TypeScript + Vite
 
 - [x] 新增 Stylelint CSS 声明语义排序配置及独立检查/自动修复命令，覆盖 CSS、SCSS 和 Vue SFC；现有大文件样式不在本次配置变更中批量重排。
 - [x] 为 Playwright E2E 增加独立 TypeScript project reference，修复编辑器 ESLint Project Service 无法解析 `apps/web/e2e` 测试文件的问题。
+- [x] 修复 LLM 响应正文读取期间的超时分类：主模型故障切换备用模型后，备用模型的 `AbortError` 现返回可重试的 `LLM_TIMEOUT`，不再误报 `LLM_INVALID_RESPONSE`；Google 与 OpenAI-compatible adapter 均覆盖回归测试。
+- [x] 新增默认关闭的本地 BGE Rerank：独立内网 `reranker-worker` 运行 `BAAI/bge-reranker-v2-m3`，主服务经 ACL/策略检查后仅发送有限候选文本，Worker 仅返回原始索引与相关度分数；本机与云端配置/Provider 测试覆盖，失败安全降级为向量排序。
 
 ### 6.1 Web 与移动端兼容规范收敛（2026-07-26）
 

@@ -49,7 +49,8 @@ Parser Worker、PostgreSQL、Redis 和 Chroma 默认不向宿主机或公网开�
 | 完整 RAG | Embedding + 获批的云端 LLM | 检索、回答和来源引用 | 取决于已启用的文档格式 |
 | DWG 解析 | 经许可的 ODA File Converter | DWG 转 DXF 后解析 | 不会自动启用模型 |
 
-> [!NOTE] `EMBEDDING_PROVIDER=none` 和 `LLM_PROVIDER=none` 时，文档显示“待建立索引”是正常状态，不代表处理失败。
+> [!NOTE]
+>  `EMBEDDING_PROVIDER=none` 和 `LLM_PROVIDER=none` 时，文档显示“待建立索引”是正常状态，不代表处理失败。
 
 ## 环境要求
 
@@ -140,7 +141,8 @@ DATABASE_URL=postgresql://kb:<第一个随机值>@postgres:5432/kb
 
 这里显式关闭 DWG，表示本次启动不提供 DWG 上传能力；其他已支持格式不受影响。`DEV_ROLES_JSON=["admin"]` 只用于本地开发身份，便于访问文档管理页面，不能用于生产环境。
 
-> [!IMPORTANT] `.env` 包含密码和可能的 API Key，已被 Git 忽略。不要提交、发送或截图分享该文件。
+> [!IMPORTANT]
+>  `.env` 包含密码和可能的 API Key，已被 Git 忽略。不要提交、发送或截图分享该文件。
 
 ### 3. 启动后端服务
 
@@ -229,7 +231,8 @@ curl --fail-with-body http://127.0.0.1:3000/health/ready
 
 之前处于“待建立索引”的文档，可在文档详情点击“继续建立索引”，系统会复用已完成的解析、分块和脱敏结果。
 
-> [!WARNING] 文档与查询必须使用相同的 Embedding Provider、模型和维度。更换这些配置后不能继续写入旧 collection，必须创建新索引并执行迁移。
+> [!WARNING]
+>  文档与查询必须使用相同的 Embedding Provider、模型和维度。更换这些配置后不能继续写入旧 collection，必须创建新索引并执行迁移。
 
 ## 启用完整 RAG 问答
 
@@ -263,6 +266,32 @@ curl --fail-with-body http://127.0.0.1:3000/health/ready
 - Rerank 默认保持 `none`，是否启用应由正式质量评测决定。
 - `confidential` 内容默认禁止发送到云端 LLM 或 Rerank。
 
+### 启用本地 BGE Rerank（按需）
+
+本地 Rerank 使用独立、仅 Compose 内网可访问的 `reranker-worker`，模型为 `BAAI/bge-reranker-v2-m3`；它不复用 Ollama，也不属于 Parser Worker。主服务在 tenant、ACL、敏感度与出网策略检查后，才向它发送有限候选分块；该服务仅返回输入下标与分数。
+
+在 Git 忽略的 `.env` 中配置：
+
+```dotenv
+RERANK_PROVIDER=local_bge
+RERANK_MODEL=BAAI/bge-reranker-v2-m3
+LOCAL_RERANK_ENABLED=true
+LOCAL_RERANK_BASE_URL=http://reranker-worker:8100
+# 可选；留空时本地开发复用 PARSER_INTERNAL_TOKEN。
+RERANK_INTERNAL_TOKEN=
+```
+
+然后执行：
+
+```bash
+# 当前已启用 DWG 时，保留 compose.dwg.yaml；未启用 DWG 则去掉该 -f 参数。
+docker compose -f compose.yaml -f compose.dwg.yaml --profile model-init run --rm reranker-model-init
+docker compose -f compose.yaml -f compose.dwg.yaml up -d --build api reranker-worker
+docker compose -f compose.yaml -f compose.dwg.yaml ps api reranker-worker
+```
+
+首条命令是一次性模型预下载：它只连接专用的下载网络并将模型写入 Docker named volume。常驻 Reranker 仍只有内部网络、没有公网端口。Apple Silicon Docker Desktop 默认使用 Linux CPU 推理；先通过受控评测确认延迟与质量，再让它参与日常问答；任何失败都会安全回退到原向量排序。完整服务边界和运行说明见 [reranker-worker README](./apps/reranker-worker/README.md)。
+
 Provider 的完整配置项见 [技术设计：配置](./docs/02-技术设计.md#4-配置)，运行检查、数据出网和密钥安全规则见 [部署运维手册：健康检查](./docs/06-部署运维手册.md#6-健康检查)。
 
 ## 启用 DWG 解析（按需）
@@ -294,6 +323,9 @@ docker compose -f compose.yaml -f compose.dwg.yaml ps
 ```
 
 单独执行第一条 `build parser-worker` 可以提前暴露 ODA 安装包、版本或 Worker 镜像构建问题；后续 `up -d --build` 会复用已有构建缓存，并确保 API 等其他需要构建的服务也与当前源码一致。`ps` 中的 `api`、 `parser-worker`、`postgres`、`redis` 和 `chroma` 应正常运行，随后再检查：
+
+> [!IMPORTANT]
+> 从此处开始即进入 **DWG 模式**。后续不能再单独使用 `docker compose …`；每一次 `up`、`build`、`ps`、`logs`、`exec`、`down` 和 `--force-recreate` 都必须携带 `-f compose.yaml -f compose.dwg.yaml`。省略该覆盖文件会将 Parser 切回不含 ODA 的基础镜像，`Parser Worker` 的严格健康检查会失败。
 
 ```bash
 curl --fail-with-body http://127.0.0.1:3000/health/live
@@ -333,19 +365,37 @@ docker compose down
 docker compose up -d
 ```
 
-> [!CAUTION] 不要把 `docker compose down -v` 当作日常停止命令。`-v` 会删除 PostgreSQL、Chroma、Redis 和上传文件使用的本地 volume。
+> [!CAUTION]
+>  不要把 `docker compose down -v` 当作日常停止命令。`-v` 会删除 PostgreSQL、Chroma、Redis 和上传文件使用的本地 volume。
 
-### 修改 `.env` 后让配置生效
+### 改动后执行什么命令
 
-环境变量在容器创建时读取。普通配置变化不需要重新构建镜像，但需要重建读取该配置的服务：
+先区分两条开发链路：Vue 前端不在 Compose 中，使用 Vite；API、Parser 和 Reranker 才通过 Compose 启动。以下命令按当前的 **DWG 模式** 写出；不使用 DWG 时，删除每条命令中的 `-f compose.dwg.yaml`。不要混用两种前缀。
 
-下表以基础模式前缀为例；DWG 或 DBeaver 模式必须替换为上表中的完整前缀。
+| 改动内容 | 是否需要 build | 让改动生效的命令 |
+| --- | --- | --- |
+| Vue 页面、组件、样式、前端测试 | 否 | Vite 正在运行时自动热更新；未启动则执行 `pnpm --filter @nexus-kb/web dev`。 |
+| `apps/web/vite.config.ts` 或前端 `VITE_*` 环境变量 | 否 | 停止并重新执行 `pnpm --filter @nexus-kb/web dev`，然后刷新浏览器。 |
+| API TypeScript 源码 | 是 | `docker compose -f compose.yaml -f compose.dwg.yaml up -d --build --force-recreate api` |
+| API 的 `.env`：LLM、Embedding、查询、认证、ACL、限流 | 否 | `docker compose -f compose.yaml -f compose.dwg.yaml up -d --force-recreate api` |
+| Parser Python 源码、`Dockerfile`、ODA 安装包 | 是 | `docker compose -f compose.yaml -f compose.dwg.yaml up -d --build --force-recreate parser-worker` |
+| Parser 的 `.env`：解析限制、CAD/DWG、临时目录 | 否 | `docker compose -f compose.yaml -f compose.dwg.yaml up -d --force-recreate parser-worker` |
+| Reranker Python 源码、`Dockerfile` 或依赖锁文件 | 是 | `docker compose -f compose.yaml -f compose.dwg.yaml up -d --build --force-recreate reranker-worker` |
+| Rerank 的 `.env`：Provider、模型、batch、内部令牌 | 否 | `docker compose -f compose.yaml -f compose.dwg.yaml up -d --force-recreate api reranker-worker` |
+| 首次启用 `local_bge`，或更换本地 BGE 模型 revision | 否 | 先执行 `docker compose -f compose.yaml -f compose.dwg.yaml --profile model-init run --rm reranker-model-init` 下载模型，再执行 `docker compose -f compose.yaml -f compose.dwg.yaml up -d --force-recreate api reranker-worker`。 |
+| `PARSER_INTERNAL_TOKEN` | 否 | `docker compose -f compose.yaml -f compose.dwg.yaml up -d --force-recreate api parser-worker reranker-worker`；当 `RERANK_INTERNAL_TOKEN` 留空时，Reranker 也复用此令牌。 |
+| 共享契约或 API 字段，同时改了前后端 | 通常是 | 执行 `pnpm build`，然后重建 API；Vite 会热更新前端。 |
+| Prisma migration / API 数据库 schema | 是 | 新增 migration 后执行 `docker compose -f compose.yaml -f compose.dwg.yaml up -d --build --force-recreate api`；不要重建或删除 PostgreSQL volume。 |
+| `compose.yaml`、`compose.dwg.yaml` 或服务网络/挂载 | 视改动而定 | 先执行 `docker compose -f compose.yaml -f compose.dwg.yaml config --quiet`，再定向 `up -d --force-recreate <service>`；Dockerfile 变化时加 `--build`。 |
 
-| 修改内容 | 重建服务 |
-| --- | --- |
-| LLM、Embedding、Rerank、认证、ACL、查询配置 | `docker compose up -d --force-recreate api` |
-| Parser、CAD、DWG 和资源限制 | `docker compose up -d --force-recreate parser-worker` |
-| `PARSER_INTERNAL_TOKEN` | `docker compose up -d --force-recreate api parser-worker` |
+若不确定改动范围，可使用下面的保守命令；它会重建三个后端服务，但不会启动或重启 Vite 前端：
+
+```bash
+docker compose -f compose.yaml -f compose.dwg.yaml up -d --build --force-recreate api parser-worker reranker-worker
+curl --fail-with-body http://127.0.0.1:3000/health/ready
+```
+
+每次改动完成后，按影响范围运行 `pnpm lint`、`pnpm typecheck`、`pnpm test`；Docker 服务再检查 `ps`、`/health/ready` 和相关日志。完整部署场景与数据库密码变更规则见 [部署运维手册](./docs/06-部署运维手册.md#53-env-配置重载)。
 
 `POSTGRES_USER`、`POSTGRES_DB` 和 `POSTGRES_PASSWORD` 只在空数据卷首次初始化时生效。已有 volume 时，重建 PostgreSQL 不会自动修改数据库内的账号或密码；出现认证失败时按下方 FAQ 同步密码，不要通过删除 volume 来“刷新配置”。README 生成的十六进制随机密码可直接写入 `DATABASE_URL`；自行使用包含 `@`、`:`、`/`、`#` 或 `%` 的密码时，必须对 URL 中的密码部分进行百分号编码。
 

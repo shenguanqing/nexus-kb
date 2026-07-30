@@ -128,6 +128,22 @@ describe('OpenAiCompatibleLlmProvider', () => {
     ).rejects.toMatchObject({ kind: 'invalid_response' });
   });
 
+  it('classifies an aborted response body as a retryable timeout', async () => {
+    const abortedResponse = {
+      ok: true,
+      headers: new Headers(),
+      json: vi.fn().mockRejectedValue(new DOMException('This operation was aborted', 'AbortError')),
+    } as unknown as Response;
+    const instance = provider({
+      fetchFunction: vi.fn<typeof fetch>().mockResolvedValue(abortedResponse),
+      maxAttempts: 1,
+    });
+
+    await expect(
+      instance.answer({ mode: 'grounded', question: '问题', contexts, traceId: 'trace-a' }),
+    ).rejects.toMatchObject({ kind: 'timeout', retryable: true });
+  });
+
   it('uses the general-knowledge prompt without source contexts', async () => {
     const fetchFunction = vi.fn<typeof fetch>().mockResolvedValue(
       new Response(

@@ -76,6 +76,8 @@ function fixture(environmentOverrides: Record<string, unknown> = {}) {
       RERANK_MODEL: 'qwen3-rerank',
       RERANK_BASE_URL: '',
       RERANK_REGION: 'cn-beijing',
+      LOCAL_RERANK_BASE_URL: 'http://host.docker.internal:8100',
+      RERANK_INTERNAL_TOKEN: '',
       ...environmentOverrides,
     },
   } as unknown as AppConfig;
@@ -125,6 +127,25 @@ describe('SystemService', () => {
       region: 'local',
       credentialConfigured: true,
     });
+  });
+
+  it('reports the local BGE reranker without exposing its internal token', () => {
+    const { service } = fixture({
+      RERANK_PROVIDER: 'local_bge',
+      RERANK_MODEL: 'BAAI/bge-reranker-v2-m3',
+      LOCAL_RERANK_BASE_URL: 'http://host.docker.internal:8100',
+      RERANK_INTERNAL_TOKEN: 'local-rerank-internal-token',
+    });
+
+    const rerank = service.providers(identity).providers.find((provider) => provider.kind === 'rerank');
+    expect(rerank).toMatchObject({
+      provider: 'local_bge',
+      model: 'BAAI/bge-reranker-v2-m3',
+      endpointHost: 'host.docker.internal:8100',
+      region: 'local',
+      credentialConfigured: true,
+    });
+    expect(JSON.stringify(rerank)).not.toContain('local-rerank-internal-token');
   });
 
   it('returns dependency, queue, and bounded disk summaries', async () => {

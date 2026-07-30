@@ -1,0 +1,69 @@
+openapi: 3.1.0
+info:
+  title: NexusKB Local Reranker Worker Internal API
+  version: 1.0.0
+paths:
+  /health/live:
+    get:
+      responses:
+        '200': { description: Process is live }
+  /health/ready:
+    get:
+      responses:
+        '200': { description: Model is ready or worker is disabled }
+        '503': { description: Model is unavailable }
+  /internal/v1/rerank:
+    post:
+      security:
+        - internalToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RerankRequest'
+      responses:
+        '200':
+          description: Ranked candidate indexes and relevance scores
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RerankResponse'
+        '401': { description: Invalid internal token }
+        '422': { description: Invalid bounded request }
+        '502': { description: Invalid model response }
+        '503': { description: Reranker is disabled or unavailable }
+components:
+  securitySchemes:
+    internalToken:
+      type: apiKey
+      in: header
+      name: X-Rerank-Internal-Token
+  schemas:
+    RerankRequest:
+      type: object
+      additionalProperties: false
+      required: [query, documents, topK]
+      properties:
+        query: { type: string, minLength: 1, maxLength: 4000 }
+        documents:
+          type: array
+          minItems: 1
+          maxItems: 100
+          items: { type: string, minLength: 1, maxLength: 120000 }
+        topK: { type: integer, minimum: 1, maximum: 100 }
+    RerankResponse:
+      type: object
+      additionalProperties: false
+      required: [model, results]
+      properties:
+        model: { type: string }
+        results:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [index, relevanceScore]
+            properties:
+              index: { type: integer, minimum: 0 }
+              relevanceScore: { type: number }

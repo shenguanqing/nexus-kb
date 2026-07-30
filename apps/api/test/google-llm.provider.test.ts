@@ -90,6 +90,22 @@ describe('GoogleLlmProvider', () => {
     expect(sleepFunction).toHaveBeenCalledWith(10);
   });
 
+  it('classifies an aborted response body as a retryable timeout', async () => {
+    const abortedResponse = {
+      ok: true,
+      headers: new Headers(),
+      json: vi.fn().mockRejectedValue(new DOMException('This operation was aborted', 'AbortError')),
+    } as unknown as Response;
+    const instance = provider({
+      fetchFunction: vi.fn<typeof fetch>().mockResolvedValue(abortedResponse),
+      maxAttempts: 1,
+    });
+
+    await expect(
+      instance.answer({ mode: 'grounded', question: '问题', contexts, traceId: 'trace-a' }),
+    ).rejects.toMatchObject({ kind: 'timeout', retryable: true });
+  });
+
   it('omits deprecated sampling parameters for Gemini 3.5 Flash-Lite', async () => {
     const fetchFunction = vi
       .fn<typeof fetch>()

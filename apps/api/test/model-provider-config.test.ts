@@ -109,6 +109,35 @@ describe('model provider configuration', () => {
     ).toThrow('Invalid application configuration: RERANK_MODEL');
   });
 
+  it('requires the fixed local BGE model and approved internal endpoint', () => {
+    expect(
+      parseEnvironment({
+        ...baseEnvironment,
+        RERANK_PROVIDER: 'local_bge',
+        RERANK_MODEL: 'BAAI/bge-reranker-v2-m3',
+      }),
+    ).toMatchObject({ RERANK_PROVIDER: 'local_bge' });
+
+    expect(() =>
+      parseEnvironment({
+        ...baseEnvironment,
+        RERANK_PROVIDER: 'local_bge',
+        RERANK_MODEL: 'other-model',
+        LOCAL_RERANK_BASE_URL: 'https://reranker.example.test',
+      }),
+    ).toThrow('Invalid application configuration: LOCAL_RERANK_BASE_URL, RERANK_MODEL');
+
+    expect(
+      parseEnvironment({
+        ...baseEnvironment,
+        RERANK_PROVIDER: 'local_bge',
+        RERANK_MODEL: 'BAAI/bge-reranker-v2-m3',
+        RERANK_INTERNAL_TOKEN: 'test-internal-token',
+        LOCAL_RERANK_BASE_URL: 'http://host.docker.internal:8100',
+      }),
+    ).toMatchObject({ RERANK_PROVIDER: 'local_bge' });
+  });
+
   it('does not expose model credentials in the safe summary', () => {
     const environment = parseEnvironment({
       ...baseEnvironment,

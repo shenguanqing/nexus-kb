@@ -122,6 +122,9 @@ export class OpenAiCompatibleLlmProvider implements LlmProvider {
         try {
           responseBody = await response.json();
         } catch (error) {
+          if (controller.signal.aborted || (error instanceof Error && error.name === 'AbortError')) {
+            throw new LlmProviderError('timeout', true, { cause: error });
+          }
           throw new LlmProviderError('invalid_response', false, { cause: error });
         }
         const parsed = responseSchema.safeParse(responseBody);

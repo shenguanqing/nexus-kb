@@ -49,6 +49,12 @@ export {
   type ParseResponse,
 } from './parse';
 export {
+  localRerankRequestSchema,
+  localRerankResponseSchema,
+  type LocalRerankRequest,
+  type LocalRerankResponse,
+} from './rerank';
+export {
   ingestionJobListRequestSchema,
   ingestionJobListResponseSchema,
   ingestionJobSchema,

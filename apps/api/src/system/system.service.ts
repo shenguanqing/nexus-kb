@@ -62,10 +62,26 @@ export class SystemService {
           provider: rerankEnabled ? environment.RERANK_PROVIDER : null,
           model: rerankEnabled ? environment.RERANK_MODEL : null,
           configurationStatus: rerankEnabled ? 'configured' : 'disabled',
-          endpointHost: rerankEnabled ? this.endpointHost(environment.RERANK_BASE_URL) : null,
-          region: rerankEnabled ? environment.RERANK_REGION : null,
+          endpointHost: rerankEnabled
+            ? this.endpointHost(
+                environment.RERANK_PROVIDER === 'local_bge'
+                  ? environment.LOCAL_RERANK_BASE_URL
+                  : environment.RERANK_BASE_URL,
+              )
+            : null,
+          region: rerankEnabled
+            ? environment.RERANK_PROVIDER === 'local_bge'
+              ? 'local'
+              : environment.RERANK_REGION
+            : null,
           dimensions: null,
-          credentialConfigured: rerankEnabled && Boolean(environment.DASHSCOPE_API_KEY),
+          credentialConfigured:
+            rerankEnabled &&
+            Boolean(
+              environment.RERANK_PROVIDER === 'local_bge'
+                ? environment.RERANK_INTERNAL_TOKEN
+                : environment.DASHSCOPE_API_KEY,
+            ),
           fingerprint: null,
         },
       ],

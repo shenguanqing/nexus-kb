@@ -112,7 +112,9 @@ const passwordAuthUsersSchema = z
   });
 const jwtAlgorithmSchema = z.enum(['RS256', 'RS384', 'RS512', 'ES256', 'ES384', 'ES512']);
 const llmProviderSchema = z.enum(['none', 'openai', 'google', 'deepseek', 'alibaba', 'custom']);
+const rerankProviderSchema = z.enum(['none', 'alibaba', 'local_bge']);
 const ollamaEmbeddingHosts = new Set(['host.docker.internal', 'ollama']);
+const localRerankHosts = new Set(['host.docker.internal', 'reranker-worker']);
 
 function isApprovedOllamaEndpoint(value: string): boolean {
   try {
@@ -121,6 +123,24 @@ function isApprovedOllamaEndpoint(value: string): boolean {
       url.protocol === 'http:' &&
       ollamaEmbeddingHosts.has(url.hostname.toLowerCase()) &&
       url.port === '11434' &&
+      (url.pathname === '' || url.pathname === '/') &&
+      !url.username &&
+      !url.password &&
+      !url.search &&
+      !url.hash
+    );
+  } catch {
+    return false;
+  }
+}
+
+function isApprovedLocalRerankEndpoint(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return (
+      url.protocol === 'http:' &&
+      localRerankHosts.has(url.hostname.toLowerCase()) &&
+      url.port === '8100' &&
       (url.pathname === '' || url.pathname === '/') &&
       !url.username &&
       !url.password &&
@@ -260,10 +280,12 @@ const environmentSchema = z
     CUSTOM_API_KEY: z.string().trim().default(''),
     CUSTOM_BASE_URL: z.string().trim().default(''),
     CUSTOM_REGION: z.string().trim().max(64).default(''),
-    RERANK_PROVIDER: z.enum(['none', 'alibaba']).default('none'),
+    RERANK_PROVIDER: rerankProviderSchema.default('none'),
     RERANK_MODEL: z.string().trim().max(128).default('qwen3-rerank'),
     RERANK_BASE_URL: z.string().trim().default(''),
     RERANK_REGION: z.string().trim().max(64).default('cn-beijing'),
+    LOCAL_RERANK_BASE_URL: z.string().trim().default('http://reranker-worker:8100'),
+    RERANK_INTERNAL_TOKEN: z.string().trim().default(''),
     RERANK_TOP_K: z.coerce.number().int().min(1).max(100).default(5),
     RERANK_REQUEST_TIMEOUT_MS: z.coerce.number().int().min(100).max(300_000).default(60_000),
     MODEL_PRICING_USD_PER_MILLION_TOKENS_JSON: jsonEnvironmentValue(modelPricingSchema, '{}'),
@@ -411,6 +433,29 @@ const environmentSchema = z
           code: 'custom',
           path: ['RERANK_MODEL'],
           message: 'must be qwen3-rerank for the current Alibaba adapter',
+        });
+      }
+    }
+    if (environment.RERANK_PROVIDER === 'local_bge') {
+      if (!environment.RERANK_INTERNAL_TOKEN && !environment.PARSER_INTERNAL_TOKEN) {
+        context.addIssue({
+          code: 'custom',
+          path: ['RERANK_INTERNAL_TOKEN'],
+          message: 'or PARSER_INTERNAL_TOKEN is required',
+        });
+      }
+      if (!isApprovedLocalRerankEndpoint(environment.LOCAL_RERANK_BASE_URL)) {
+        context.addIssue({
+          code: 'custom',
+          path: ['LOCAL_RERANK_BASE_URL'],
+          message: 'must be an approved local HTTP endpoint on port 8100',
+        });
+      }
+      if (environment.RERANK_MODEL !== 'BAAI/bge-reranker-v2-m3') {
+        context.addIssue({
+          code: 'custom',
+          path: ['RERANK_MODEL'],
+          message: 'must be BAAI/bge-reranker-v2-m3 for the local_bge provider',
         });
       }
     }
@@ -582,7 +627,11 @@ export function safeConfigurationSummary(environment: Environment): Record<strin
     rerankProvider: environment.RERANK_PROVIDER,
     rerankModel: environment.RERANK_PROVIDER === 'none' ? null : environment.RERANK_MODEL,
     rerankKeyConfigured:
-      environment.RERANK_PROVIDER === 'none' ? false : Boolean(environment.DASHSCOPE_API_KEY),
+      environment.RERANK_PROVIDER === 'none'
+        ? false
+        : environment.RERANK_PROVIDER === 'alibaba'
+          ? Boolean(environment.DASHSCOPE_API_KEY)
+          : Boolean(environment.RERANK_INTERNAL_TOKEN || environment.PARSER_INTERNAL_TOKEN),
   };
 }
 

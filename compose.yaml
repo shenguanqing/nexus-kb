@@ -82,6 +82,66 @@ services:
     networks:
       - backend
 
+  reranker-worker:
+    build:
+      context: .
+      dockerfile: apps/reranker-worker/Dockerfile
+    restart: unless-stopped
+    environment:
+      HF_HUB_OFFLINE: '1'
+      TRANSFORMERS_OFFLINE: '1'
+      LOCAL_RERANK_ENABLED: ${LOCAL_RERANK_ENABLED:-false}
+      RERANK_INTERNAL_TOKEN: ${RERANK_INTERNAL_TOKEN:-}
+      PARSER_INTERNAL_TOKEN: ${PARSER_INTERNAL_TOKEN}
+      RERANK_MODEL: ${RERANK_MODEL:-BAAI/bge-reranker-v2-m3}
+      LOCAL_RERANK_MODEL_REVISION: ${LOCAL_RERANK_MODEL_REVISION:-main}
+      LOCAL_RERANK_BATCH_SIZE: ${LOCAL_RERANK_BATCH_SIZE:-8}
+    expose:
+      - '8100'
+    volumes:
+      - reranker_models:/models
+    tmpfs:
+      - /tmp:size=256m,mode=1777,uid=10003,gid=10003
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - import urllib.request; urllib.request.urlopen('http://127.0.0.1:8100/health/ready', timeout=3)
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - backend
+
+  reranker-model-init:
+    profiles:
+      - model-init
+    build:
+      context: .
+      dockerfile: apps/reranker-worker/Dockerfile
+    restart: 'no'
+    environment:
+      HF_HOME: /models/cache
+      RERANK_MODEL: ${RERANK_MODEL:-BAAI/bge-reranker-v2-m3}
+      LOCAL_RERANK_MODEL_REVISION: ${LOCAL_RERANK_MODEL_REVISION:-main}
+    command:
+      - python
+      - -c
+      - from sentence_transformers import CrossEncoder; import os; CrossEncoder(os.environ['RERANK_MODEL'], revision=os.environ['LOCAL_RERANK_MODEL_REVISION'], trust_remote_code=False)
+    volumes:
+      - reranker_models:/models
+    tmpfs:
+      - /tmp:size=256m,mode=1777,uid=10003,gid=10003
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - model-download
+
   postgres:
     image: postgres:17.6-bookworm
     restart: unless-stopped
@@ -147,9 +207,11 @@ networks:
   edge: {}
   backend:
     internal: true
+  model-download: {}
 
 volumes:
   raw_docs: {}
   postgres_data: {}
   redis_data: {}
   chroma_data: {}
+  reranker_models: {}
