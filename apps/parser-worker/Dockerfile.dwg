@@ -52,9 +52,14 @@ RUN --mount=type=cache,target=/root/.cache/pip \
         --index-url https://download.pytorch.org/whl/cpu \
         torch==2.8.0 \
         torchvision==0.23.0 \
-    && pip install -r requirements.lock \
-    && mkdir -p /opt/easyocr-models \
-    && python -c "import easyocr; easyocr.Reader(['ch_sim','en'], gpu=False, model_storage_directory='/opt/easyocr-models', download_enabled=True, verbose=False)" \
+    && pip install \
+        --index-url https://pypi.org/simple \
+        --retries 10 \
+        --timeout 60 \
+        -r requirements.lock
+COPY --chmod=0755 apps/parser-worker/bin/nexus-download-easyocr-models /usr/local/bin/nexus-download-easyocr-models
+RUN mkdir -p /opt/easyocr-models \
+    && nexus-download-easyocr-models \
     && useradd --uid 10002 --create-home worker \
     && mkdir -p /data/raw-docs /tmp/parser \
     && chown -R worker:worker /app /tmp/parser /opt/easyocr-models

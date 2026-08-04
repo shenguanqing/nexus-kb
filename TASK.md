@@ -172,6 +172,7 @@ Vue 3 + TypeScript + Vite
 阶段 15 已完成。本地 Ollama / Gemini 配置与待建立索引恢复已补齐。当前优先入口为第 3.11 节的真实 `Drawing1.dwg` Web 端到端验证：ODA Linux x64 包和转换器已就绪，但服务端鉴权保持启用，需要已登录的本地会话完成上传。阶段 14 的真实数据质量验收仍按第 5 节保留；完成 DWG 验证后再进入阶段 16 服务器上线准备。
 
 - [x] P0 解析能力补齐第一批：API/契约/Web 已接受 PDF、PNG、JPG、JPEG；Worker 使用本地 Unstructured 与 EasyOCR，增加 PDF 页数、图片像素、离线模型和 OCR 置信度限制，并通过 ARM64 镜像内真实 PDF/OCR 冒烟验证。EasyOCR 用户网络目录固定为 Parser tmpfs，避免最终只读 Worker 写入 `~/.EasyOCR` 导致图片任务失败。
+- [x] Parser Worker 首次构建加固：常规依赖显式使用官方 PyPI 并配置有限重试/超时；EasyOCR 模型下载与依赖层分离，断流时清理残包并有限重试。ARM64 与 ODA `linux/amd64` 镜像均完成重建，`pnpm docker:up:all` 与 API readiness 验证通过。
 - [x] Apple Silicon 本地 DWG/OCR Worker 拆分：常规文件由原生 `parser-worker` 处理，API 仅把 DWG 路由到 `linux/amd64` 的 ODA `parser-worker-dwg`；两个内部 Worker 都通过独立 readiness 验证，避免 x86 模拟拖慢图片 OCR。
 - [x] P0 受控 Tika 兜底：固定版本服务只连接内网；Unstructured 非安全校验失败或空结果时 fallback，含 readiness、超时、返回体上限、warning 和真实 PDF 冒烟验证。
 - [ ] P0 解析能力后续：提交固定 PDF/图片测试样本，并完成上传到索引的容器集成测试。
