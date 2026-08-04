@@ -1,6 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { getProviderStatuses, getSystemStatus } from './system';
+import {
+  createSystemConfiguration,
+  getProviderStatuses,
+  getSystemConfiguration,
+  getSystemStatus,
+} from './system';
 
 afterEach(() => vi.restoreAllMocks());
 
@@ -52,5 +57,65 @@ describe('system API', () => {
     );
 
     await expect(getSystemStatus()).rejects.toMatchObject({ code: 'INVALID_API_RESPONSE' });
+  });
+
+  it('submits only the configuration patch and write-only secret fields', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          id: '00000000-0000-4000-8000-000000000001',
+          version: 1,
+          status: 'draft',
+          values: {},
+          secretConfigured: {},
+          changedKeys: ['LLM_MODEL'],
+          changeReason: '更新模型',
+          createdBy: 'admin-a',
+          createdAt: '2026-08-04T08:00:00.000Z',
+          activatedAt: null,
+        }),
+        { status: 200 },
+      ),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    await createSystemConfiguration({
+      values: { LLM_MODEL: 'model-b' },
+      secrets: { OPENAI_API_KEY: 'write-only-key' },
+      changeReason: '更新模型',
+    }).catch(() => undefined);
+
+    const request = fetchMock.mock.calls[0]?.[1] as RequestInit;
+    expect(typeof request.body).toBe('string');
+    const requestBody = typeof request.body === 'string' ? request.body : '';
+    expect(JSON.parse(requestBody)).toEqual({
+      values: { LLM_MODEL: 'model-b' },
+      secrets: { OPENAI_API_KEY: 'write-only-key' },
+      changeReason: '更新模型',
+    });
+    expect(requestBody).not.toContain('tenantId');
+    expect(requestBody).not.toContain('services');
+  });
+
+  it('rejects a configuration response that accidentally returns a secret', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            deploymentAgentAvailable: true,
+            embeddingManagedSeparately: true,
+            effectiveValues: {},
+            secretConfigured: {},
+            current: null,
+            versions: [],
+            OPENAI_API_KEY: 'must-not-be-returned',
+          }),
+          { status: 200 },
+        ),
+      ),
+    );
+
+    await expect(getSystemConfiguration()).rejects.toMatchObject({ code: 'INVALID_API_RESPONSE' });
   });
 });

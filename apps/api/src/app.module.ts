@@ -45,6 +45,11 @@ import { MetricsController } from './observability/metrics.controller';
 import { MetricsService } from './observability/metrics.service';
 import { SystemController } from './system/system.controller';
 import { SystemService } from './system/system.service';
+import {
+  DeploymentAgentCallbackController,
+  SystemConfigurationController,
+} from './system/system-configuration.controller';
+import { SystemConfigurationService } from './system/system-configuration.service';
 import { AccessController } from './access/access.controller';
 import { UserDirectoryService } from './access/user-directory.service';
 import { HistoryController } from './history/history.controller';
@@ -61,6 +66,8 @@ import { UsageService } from './usage/usage.service';
     KnowledgeController,
     AuditController,
     SystemController,
+    SystemConfigurationController,
+    DeploymentAgentCallbackController,
     AccessController,
     HistoryController,
     UsageController,
@@ -103,6 +110,7 @@ import { UsageService } from './usage/usage.service';
     DocumentsService,
     AuditService,
     SystemService,
+    SystemConfigurationService,
     UserDirectoryService,
     KnowledgeHistoryService,
     UsageService,

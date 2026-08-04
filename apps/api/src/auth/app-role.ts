@@ -6,6 +6,8 @@ export const ADMIN_CAPABILITIES = [
   'documents:delete',
   'audit:read',
   'system:read',
+  'system:configure',
+  'system:deploy',
   'access:read',
   'access:write',
 ] as const;

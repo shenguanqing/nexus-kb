@@ -86,6 +86,7 @@ Vue 3 + TypeScript + Vite
 - [x] 应用角色收敛为 `user`/`admin`，保留 capability 与 ACL 独立校验，并提供旧角色的降权迁移。
 - [x] `user` 侧栏与前端路由只保留知识问答、问答历史；管理页面同时要求 `admin` 和对应 capability。
 - [x] 管理员全权账号管理：`admin` 自动获得当前 tenant 的全部应用 capability 与敏感度范围；本地密码账号在数据库以 scrypt 摘要保存，首次仅从受保护的 `PASSWORD_AUTH_USERS_JSON` 引导，之后可在“用户与角色”页面创建、编辑、禁用、重置密码和删除。所有变更撤销必要会话并写入访问审计；最后一个管理员不可删除、禁用或降级，管理员也不能删除、禁用或降级自己；tenant 隔离与 confidential 数据出网策略保持强制执行。
+- [x] 管理员配置发布：Provider/问答/Parser 运行参数由前端创建加密的不可变配置版本，密钥只写入不回显；独立 `deployment-agent` 仅按服务端计算的 `api`、`parser-worker`、`reranker-worker` 白名单执行 Compose 重建，readiness 失败自动恢复上一版本，页面显示结果并支持受控回滚。Embedding 向量空间配置不进入普通重启流程。
 
 ### 3.8 F2–F5 收尾
 

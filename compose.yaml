@@ -6,7 +6,10 @@ services:
       context: .
       dockerfile: apps/api/Dockerfile
     restart: unless-stopped
-    env_file: .env
+    env_file:
+      - path: .env
+      - path: ./config/runtime.env
+        required: false
     ports:
       - '127.0.0.1:3000:3000'
     volumes:
@@ -43,19 +46,17 @@ services:
       context: .
       dockerfile: apps/parser-worker/Dockerfile
     restart: unless-stopped
+    env_file:
+      - path: .env
+      - path: ./config/runtime.env
+        required: false
     environment:
       PARSER_INTERNAL_TOKEN: ${PARSER_INTERNAL_TOKEN}
       RAW_DOCS_PATH: /data/raw-docs
-      MAX_PARSE_BYTES: ${MAX_PARSE_BYTES:-52428800}
-      MAX_ELEMENTS: ${MAX_ELEMENTS:-100000}
-      MAX_SPREADSHEET_ROWS: ${MAX_SPREADSHEET_ROWS:-100000}
-      MAX_CAD_ENTITIES: ${MAX_CAD_ENTITIES:-1000000}
-      MAX_CAD_INSERT_DEPTH: ${MAX_CAD_INSERT_DEPTH:-8}
       DWG_CONVERSION_ENABLED: ${DWG_CONVERSION_ENABLED:-true}
       DWG_CONVERTER_EXECUTABLE: ${DWG_CONVERTER_EXECUTABLE:-/usr/local/bin/nexus-oda-file-converter}
       DWG_CONVERTER_RELEASE: ${DWG_CONVERTER_RELEASE:-not-installed}
       DWG_OUTPUT_VERSION: ${DWG_OUTPUT_VERSION:-ACAD2018}
-      DWG_CONVERSION_TIMEOUT_SECONDS: ${DWG_CONVERSION_TIMEOUT_SECONDS:-180}
       PARSER_TEMP_PATH: ${PARSER_TEMP_PATH:-/tmp/parser}
       MAX_DWG_CONVERTED_BYTES: ${MAX_DWG_CONVERTED_BYTES:-209715200}
       MAX_ARCHIVE_ENTRIES: ${MAX_ARCHIVE_ENTRIES:-10000}
@@ -87,15 +88,17 @@ services:
       context: .
       dockerfile: apps/reranker-worker/Dockerfile
     restart: unless-stopped
+    env_file:
+      - path: .env
+      - path: ./config/runtime.env
+        required: false
     environment:
       HF_HUB_OFFLINE: '1'
       TRANSFORMERS_OFFLINE: '1'
       LOCAL_RERANK_ENABLED: ${LOCAL_RERANK_ENABLED:-false}
       RERANK_INTERNAL_TOKEN: ${RERANK_INTERNAL_TOKEN:-}
       PARSER_INTERNAL_TOKEN: ${PARSER_INTERNAL_TOKEN}
-      RERANK_MODEL: ${RERANK_MODEL:-BAAI/bge-reranker-v2-m3}
       LOCAL_RERANK_MODEL_REVISION: ${LOCAL_RERANK_MODEL_REVISION:-main}
-      LOCAL_RERANK_BATCH_SIZE: ${LOCAL_RERANK_BATCH_SIZE:-8}
     expose:
       - '8100'
     volumes:
@@ -113,6 +116,42 @@ services:
       retries: 12
       start_period: 20s
     read_only: true
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - backend
+
+  deployment-agent:
+    profiles:
+      - configuration
+    build:
+      context: .
+      dockerfile: apps/deployment-agent/Dockerfile
+    restart: unless-stopped
+    environment:
+      DEPLOYMENT_AGENT_PORT: 8200
+      DEPLOYMENT_AGENT_TOKEN: ${DEPLOYMENT_AGENT_TOKEN:-}
+      DEPLOYMENT_WORKSPACE: ${PWD}
+    working_dir: ${PWD}
+    expose:
+      - '8200'
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      # Host and container paths must match because Compose talks to the host daemon.
+      - .:${PWD}:ro
+      - ./config:${PWD}/config:rw
+    read_only: true
+    tmpfs:
+      - /tmp:size=32m,mode=1777
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - fetch('http://127.0.0.1:8200/health/ready').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))
+      interval: 10s
+      timeout: 5s
+      retries: 6
     security_opt:
       - no-new-privileges:true
     networks:

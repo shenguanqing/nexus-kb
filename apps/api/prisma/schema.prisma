@@ -291,6 +291,45 @@ model AccessAudit {
   @@index([tenantId, targetType, targetId, createdAt])
 }
 
+model SystemConfigVersion {
+  id              String             @id @db.Uuid
+  tenantId        String
+  version         Int
+  status          String             @default("draft")
+  encryptedConfig String             @db.Text
+  summary         Json
+  changedKeys     Json
+  changeReason    String             @db.VarChar(500)
+  createdBy       String
+  createdAt       DateTime           @default(now()) @db.Timestamptz(3)
+  activatedAt     DateTime?          @db.Timestamptz(3)
+  deployments     SystemDeployment[] @relation("DeploymentConfigVersion")
+  previousFor     SystemDeployment[] @relation("DeploymentPreviousVersion")
+
+  @@unique([tenantId, version])
+  @@index([tenantId, status, createdAt])
+}
+
+model SystemDeployment {
+  id                      String               @id @db.Uuid
+  tenantId                String
+  configVersionId         String               @db.Uuid
+  previousConfigVersionId String?              @db.Uuid
+  status                  String               @default("queued")
+  services                Json
+  requestedBy             String
+  traceId                 String               @db.Uuid
+  errorCode               String?
+  createdAt               DateTime             @default(now()) @db.Timestamptz(3)
+  startedAt               DateTime?            @db.Timestamptz(3)
+  completedAt             DateTime?            @db.Timestamptz(3)
+  configVersion           SystemConfigVersion  @relation("DeploymentConfigVersion", fields: [configVersionId], references: [id])
+  previousConfigVersion   SystemConfigVersion? @relation("DeploymentPreviousVersion", fields: [previousConfigVersionId], references: [id])
+
+  @@index([tenantId, createdAt])
+  @@index([tenantId, status])
+}
+
 model KnowledgeConversation {
   id        String          @id @db.Uuid
   tenantId  String

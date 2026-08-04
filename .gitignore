@@ -6,6 +6,8 @@
 .env
 .env.*
 !.env.example
+config/runtime.env
+config/runtime.env.tmp
 
 # JavaScript dependencies and build artifacts
 node_modules/

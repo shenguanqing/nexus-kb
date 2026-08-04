@@ -181,6 +181,8 @@ unset NEXUSKB_ACCESS_TOKEN
 | 删除文档                             | `documents:delete`                      |
 | 审计事件                             | `audit:read`                            |
 | Provider 与系统状态                  | `system:read`                           |
+| 创建运行配置版本                     | `admin` + `system:configure`            |
+| 发布与回滚运行配置                   | `admin` + `system:deploy`               |
 | 用量与成本                           | `admin` + `system:read`                 |
 | 用户与部门读取                       | `admin` 全范围；普通用户仍固定为自身部门 |
 | 本地后台账号创建、编辑、禁用、删除    | `admin`                                 |
@@ -263,10 +265,18 @@ unset NEXUSKB_ACCESS_TOKEN
 | `GET` | `/v1/system/providers` | `system:read` | 脱敏 Provider、模型、区域和指纹摘要 |
 | `GET` | `/v1/system/status` | `system:read` | 脱敏依赖、队列和磁盘状态 |
 | `GET` | `/v1/system/usage` | `admin` + `system:read` | 指定时间范围内的用量事实 |
+| `GET` | `/v1/system/configuration` | `system:read` | 当前脱敏运行配置、密钥状态与最近版本 |
+| `POST` | `/v1/system/configurations` | `admin` + `system:configure` | 校验并创建加密的不可变配置版本 |
+| `POST` | `/v1/system/configurations/{configurationId}/deploy` | `admin` + `system:deploy` | 异步发布并定向重建受影响服务 |
+| `GET` | `/v1/system/deployments` | `system:read` | 最近发布、readiness 与回滚结果 |
+| `GET` | `/v1/system/deployments/{deploymentId}` | `system:read` | 轮询单个发布任务 |
+| `POST` | `/v1/system/deployments/{deploymentId}/rollback` | `admin` + `system:deploy` | 受控发布上一配置版本 |
 
 审计接口支持 `type=query|document_lifecycle|cloud_policy|access_change`、`before` 和 `limit`，返回 `nextBefore` 时间游标及当前 tenant、事件类型筛选范围内的 `total`。下一页继续传递 `before=<nextBefore>`；`before` 不改变 `total`，游标不是权限凭据。
 
 用户目录使用 `offset`/`limit` 分页，支持 `query` 和 `department`。管理员可以管理本地密码账号；外部 OIDC 身份账号仅可查看，应在身份源中增删。普通用户即使有 `access:read`，也不能通过 `department` 查看其他部门。用量接口要求同时提供 `from` 和 `to`。
+
+配置版本请求只接受共享契约列出的 LLM、Rerank、问答和 Parser 字段。API Key 位于 `secrets` 写入字段，响应永不回显，只返回 `secretConfigured`。客户端不能提交 tenant、服务名、Docker 命令、Compose 文件、callback URL 或 Embedding Provider/模型/维度。发布返回 HTTP 202；客户端轮询 deployment，终态为 `succeeded|rolled_back|failed`。`rolled_back` 表示目标 readiness 失败但上一配置已自动恢复；`failed` 需要运维介入。
 
 ---
 
@@ -446,6 +456,17 @@ curl --fail-with-body \
 
 删除接口设计为幂等，但调用方仍应在界面明确展示文档名和影响范围，并要求强确认。不得把自动重试策略无差别应用到上传、重建、metadata 修改、角色修改或删除。
 
+### 6.8 创建并发布运行配置
+
+推荐由管理页调用。若做集成测试，必须交互取得密钥，使用临时 JSON 文件或 stdin，不能把 Key 写入 shell 历史。流程固定为：
+
+1. `POST /v1/system/configurations` 创建版本，保存返回的配置版本 ID。
+2. `POST /v1/system/configurations/{id}/deploy` 创建发布任务。
+3. 轮询 `GET /v1/system/deployments/{deploymentId}`，直到终态。
+4. 只有 `succeeded` 表示目标配置已通过 readiness 并成为 active；`rolled_back` 表示系统已恢复上一版本。
+
+密钥字段留空表示保持上一 active 版本的值；页面提交后必须立即清空输入。成功发布且 `rollbackAvailable=true` 时，可在明确确认后调用 rollback 端点。发布接口不是普通幂等 mutation，客户端不得因网络错误自动重复创建版本或任务；应先刷新版本/发布列表确认状态。
+
 ---
 
 ## 7. 分页、筛选与重试
@@ -471,7 +492,7 @@ curl --fail-with-body \
 
 ## 8. 安全与数据处理要求
 
-1. API Key 只存在主服务配置中，不能由前端或 API 调用方提交。
+1. API Key 只允许管理员通过同源配置 API 的 write-only `secrets` 字段提交，由主服务加密保存并交给内部部署代理；不得出现在其他业务 API、响应、前端构建配置、浏览器持久化或日志中。
 2. Cookie、JWT、密码和 Provider Key 不得进入 URL、Git、截图、普通日志或错误上报。
 3. 问题、回答、分块原文和脱敏正文默认不写入客户端持久化或普通日志。
 4. `confidential` 默认不能发送任何云端模型；本机 Ollama Embedding 不代表允许云端 LLM/Rerank。
@@ -479,6 +500,7 @@ curl --fail-with-body \
 6. 分块详情、审计和系统状态返回均为最小披露；不得尝试从 403/404、筛选结果或计数推断无权资源。
 7. 业务删除、后台账号、角色修改和部门策略修改必须通过 API，使状态机、tenant/ACL、审计和补偿逻辑生效；不得直接用 DBeaver 修改业务表。最后一个管理员不能删除、禁用或降级。
 8. Embedding Provider、模型、维度、关键分块或脱敏规则变化需要新 collection 和索引迁移，不能只重启 API 后继续写旧索引。
+9. 配置发布请求不能指定 Docker 服务、命令、路径或 callback；这些由服务端差异计算和部署代理固定白名单决定。`deployment-agent` 内部 callback 不属于公开 API，外部客户端不得调用。
 
 ---
 

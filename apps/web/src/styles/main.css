@@ -968,6 +968,78 @@ a {
   border-radius: var(--kb-radius-md);
   background: var(--kb-color-surface);
 }
+.configuration-panel,
+.deployment-panel {
+  padding: 20px;
+  border: 1px solid var(--kb-color-border);
+  border-radius: var(--kb-radius-md);
+  background: var(--kb-color-surface);
+}
+.configuration-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+.configuration-heading > div {
+  display: grid;
+  gap: 5px;
+}
+.configuration-heading span {
+  color: var(--kb-color-text-secondary);
+  font-size: 13px;
+}
+.configuration-form,
+.configuration-section {
+  display: grid;
+  gap: 16px;
+}
+.configuration-section {
+  padding-top: 18px;
+  border-top: 1px solid var(--kb-color-border);
+}
+.configuration-fields {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.configuration-fields .el-form-item,
+.configuration-actions .el-form-item {
+  margin: 0;
+}
+.configuration-fields .el-input-number,
+.configuration-fields .el-select {
+  width: 100%;
+}
+.configuration-actions {
+  display: grid;
+  align-items: end;
+  gap: 16px;
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+.deployment-card-list {
+  display: grid;
+  gap: 12px;
+}
+.deployment-card {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid var(--kb-color-border);
+  border-radius: var(--kb-radius-sm);
+}
+.deployment-card > div {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+.deployment-card > span {
+  overflow-wrap: anywhere;
+  color: var(--kb-color-text-secondary);
+  font-size: 13px;
+}
 .system-page {
   display: flex;
   flex-direction: column;
@@ -981,6 +1053,10 @@ a {
 }
 .system-page > .page-content .provider-grid {
   flex: 0 0 auto;
+}
+.provider-settings-page .embedding-migration-alert {
+  flex: 0 0 auto;
+  min-height: 52px;
 }
 .provider-grid,
 .component-grid {
@@ -2456,6 +2532,9 @@ a {
   .component-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+  .configuration-fields {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
   .queue-summary .data-list {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
@@ -2481,6 +2560,24 @@ a {
   .el-select__selected-item,
   .el-range-input {
     font-size: 16px !important;
+  }
+  .configuration-panel,
+  .deployment-panel {
+    padding: 12px;
+  }
+  .configuration-heading,
+  .configuration-actions {
+    grid-template-columns: 1fr;
+  }
+  .configuration-heading {
+    flex-direction: column;
+  }
+  .configuration-fields {
+    grid-template-columns: 1fr;
+  }
+  .configuration-actions .el-button {
+    width: 100%;
+    min-height: 44px;
   }
   .app-shell,
   .app-shell.is-collapsed {

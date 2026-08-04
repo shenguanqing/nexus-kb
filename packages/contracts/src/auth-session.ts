@@ -8,6 +8,8 @@ export const capabilitySchema = z.enum([
   'documents:delete',
   'audit:read',
   'system:read',
+  'system:configure',
+  'system:deploy',
   'access:read',
   'access:write',
 ]);

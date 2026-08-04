@@ -154,6 +154,98 @@ paths:
               schema: { $ref: '#/components/schemas/SystemStatusResponse' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
+  /v1/system/configuration:
+    get:
+      summary: Return the current sanitized runtime configuration and recent immutable versions
+      responses:
+        '200':
+          description: Write-only secret flags, editable values and version history
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SystemConfigurationResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /v1/system/configurations:
+    post:
+      summary: Validate and create an immutable encrypted runtime configuration version
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SystemConfigurationUpdateRequest' }
+      responses:
+        '201':
+          description: Configuration version created but not yet deployed
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SystemConfigurationVersion' }
+        '400': { description: Invalid or incompatible configuration }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '503': { description: Controlled deployment is not configured }
+  /v1/system/configurations/{configurationId}/deploy:
+    post:
+      summary: Ask the internal allowlisted deployment agent to recreate affected services
+      parameters:
+        - name: configurationId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '202':
+          description: Asynchronous deployment accepted
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SystemDeploymentAccepted' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { description: A deployment is already running or the version is not deployable }
+        '503': { description: Internal deployment agent unavailable }
+  /v1/system/deployments:
+    get:
+      summary: List recent controlled configuration deployments
+      responses:
+        '200':
+          description: Deployment status history without command output or secrets
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SystemDeploymentListResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /v1/system/deployments/{deploymentId}:
+    get:
+      summary: Poll one controlled deployment and readiness result
+      parameters:
+        - name: deploymentId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Current deployment state
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SystemDeployment' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /v1/system/deployments/{deploymentId}/rollback:
+    post:
+      summary: Re-deploy the previous successful configuration version
+      parameters:
+        - name: deploymentId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '202':
+          description: Asynchronous rollback accepted
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SystemDeploymentAccepted' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { description: No previous version is available or another deployment is running }
   /v1/access/users:
     get:
       summary: List managed local accounts and observed authenticated users within the caller's tenant or department scope
@@ -669,6 +761,8 @@ components:
                     documents:delete,
                     audit:read,
                     system:read,
+                    system:configure,
+                    system:deploy,
                     access:read,
                     access:write,
                   ]
@@ -996,6 +1090,119 @@ components:
             failed: { type: [integer, 'null'], minimum: 0 }
             oldestWaitSeconds: { type: [number, 'null'], minimum: 0 }
         rawDocsDiskUsageRatio: { type: [number, 'null'], minimum: 0, maximum: 1 }
+    SystemConfigurationUpdateRequest:
+      type: object
+      additionalProperties: false
+      minProperties: 2
+      required: [changeReason]
+      properties:
+        values:
+          type: object
+          additionalProperties: { oneOf: [{ type: string }, { type: number }, { type: boolean }] }
+        secrets:
+          type: object
+          writeOnly: true
+          additionalProperties: { type: string, minLength: 1, maxLength: 4096, format: password }
+        changeReason: { type: string, minLength: 3, maxLength: 500 }
+    SystemConfigurationVersion:
+      type: object
+      additionalProperties: false
+      required:
+        [
+          id,
+          version,
+          status,
+          values,
+          secretConfigured,
+          changedKeys,
+          changeReason,
+          createdBy,
+          createdAt,
+          activatedAt,
+        ]
+      properties:
+        id: { type: string, format: uuid }
+        version: { type: integer, minimum: 1 }
+        status: { type: string, enum: [draft, active, failed, superseded] }
+        values: { type: object, additionalProperties: true }
+        secretConfigured:
+          type: object
+          additionalProperties: { type: boolean }
+        changedKeys: { type: array, items: { type: string } }
+        changeReason: { type: string }
+        createdBy: { type: string }
+        createdAt: { type: string, format: date-time }
+        activatedAt: { type: [string, 'null'], format: date-time }
+    SystemConfigurationResponse:
+      type: object
+      additionalProperties: false
+      required:
+        [
+          deploymentAgentAvailable,
+          embeddingManagedSeparately,
+          effectiveValues,
+          secretConfigured,
+          current,
+          versions,
+        ]
+      properties:
+        deploymentAgentAvailable: { type: boolean }
+        embeddingManagedSeparately: { const: true }
+        effectiveValues: { type: object, additionalProperties: true }
+        secretConfigured: { type: object, additionalProperties: { type: boolean } }
+        current:
+          oneOf:
+            - { $ref: '#/components/schemas/SystemConfigurationVersion' }
+            - { type: 'null' }
+        versions:
+          type: array
+          maxItems: 20
+          items: { $ref: '#/components/schemas/SystemConfigurationVersion' }
+    SystemDeployment:
+      type: object
+      additionalProperties: false
+      required:
+        [
+          id,
+          status,
+          services,
+          configVersion,
+          previousVersion,
+          rollbackAvailable,
+          errorCode,
+          createdAt,
+          startedAt,
+          completedAt,
+        ]
+      properties:
+        id: { type: string, format: uuid }
+        status: { type: string, enum: [queued, running, succeeded, rolled_back, failed] }
+        services:
+          type: array
+          minItems: 1
+          items: { type: string, enum: [api, parser-worker, reranker-worker] }
+        configVersion: { type: integer, minimum: 1 }
+        previousVersion: { type: [integer, 'null'], minimum: 1 }
+        rollbackAvailable: { type: boolean }
+        errorCode: { type: [string, 'null'] }
+        createdAt: { type: string, format: date-time }
+        startedAt: { type: [string, 'null'], format: date-time }
+        completedAt: { type: [string, 'null'], format: date-time }
+    SystemDeploymentAccepted:
+      type: object
+      additionalProperties: false
+      required: [deployment]
+      properties:
+        deployment: { $ref: '#/components/schemas/SystemDeployment' }
+    SystemDeploymentListResponse:
+      type: object
+      additionalProperties: false
+      required: [deployments]
+      properties:
+        deployments:
+          type: array
+          maxItems: 30
+          items: { $ref: '#/components/schemas/SystemDeployment' }
     AuditEventType:
       type: string
       enum: [query, document_lifecycle, cloud_policy, access_change]

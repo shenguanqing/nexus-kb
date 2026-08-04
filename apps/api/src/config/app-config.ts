@@ -69,6 +69,8 @@ const capabilitySchema = z.enum([
   'documents:delete',
   'audit:read',
   'system:read',
+  'system:configure',
+  'system:deploy',
   'access:read',
   'access:write',
 ]);
@@ -211,7 +213,7 @@ const environmentSchema = z
     ),
     DEV_CAPABILITIES_JSON: jsonEnvironmentValue(
       z.array(capabilitySchema).min(1).max(16),
-      '["documents:read","documents:write","documents:delete","audit:read","system:read","access:read","access:write"]',
+      '["documents:read","documents:write","documents:delete","audit:read","system:read","system:configure","system:deploy","access:read","access:write"]',
     ),
     OIDC_ISSUER: z.string().trim().max(512).default(''),
     OIDC_AUDIENCE: z.string().trim().max(256).default(''),
@@ -308,6 +310,9 @@ const environmentSchema = z
     CHROMA_SCHEMA_VERSION: z.coerce.number().int().min(1).max(9999).default(1),
     CHROMA_UPSERT_BATCH_SIZE: z.coerce.number().int().min(1).max(1000).default(100),
     CHROMA_QUERY_MAX_TOP_K: z.coerce.number().int().min(1).max(1000).default(100),
+    SYSTEM_CONFIG_ENCRYPTION_KEY: z.string().trim().default(''),
+    DEPLOYMENT_AGENT_URL: z.string().trim().default(''),
+    DEPLOYMENT_AGENT_TOKEN: z.string().trim().default(''),
   })
   .superRefine((environment, context) => {
     if (!environment.DEV_ALLOWED_SENSITIVITIES_JSON.includes(environment.DEV_SENSITIVITY)) {
@@ -477,6 +482,45 @@ const environmentSchema = z
           code: 'custom',
           path: [field],
           message: 'must be a valid HTTPS URL',
+        });
+      }
+    }
+    const deploymentFields = [
+      environment.SYSTEM_CONFIG_ENCRYPTION_KEY,
+      environment.DEPLOYMENT_AGENT_URL,
+      environment.DEPLOYMENT_AGENT_TOKEN,
+    ];
+    if (deploymentFields.some(Boolean) && !deploymentFields.every(Boolean)) {
+      context.addIssue({
+        code: 'custom',
+        path: ['DEPLOYMENT_AGENT_URL'],
+        message: 'deployment configuration must be complete',
+      });
+    }
+    if (environment.DEPLOYMENT_AGENT_URL) {
+      if (environment.DEPLOYMENT_AGENT_URL !== 'http://deployment-agent:8200') {
+        context.addIssue({
+          code: 'custom',
+          path: ['DEPLOYMENT_AGENT_URL'],
+          message: 'must use the approved Compose deployment-agent endpoint',
+        });
+      }
+      if (environment.DEPLOYMENT_AGENT_TOKEN.length < 32) {
+        context.addIssue({
+          code: 'custom',
+          path: ['DEPLOYMENT_AGENT_TOKEN'],
+          message: 'must contain at least 32 characters',
+        });
+      }
+      try {
+        if (Buffer.from(environment.SYSTEM_CONFIG_ENCRYPTION_KEY, 'base64').length !== 32) {
+          throw new Error('invalid key size');
+        }
+      } catch {
+        context.addIssue({
+          code: 'custom',
+          path: ['SYSTEM_CONFIG_ENCRYPTION_KEY'],
+          message: 'must be a base64 encoded 32-byte key',
         });
       }
     }

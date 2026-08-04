@@ -76,6 +76,14 @@ Python Worker 不得：
 - 直接接受公网请求。
 - 信任主服务传入的任意本地路径。
 
+### 内部部署代理只能负责
+
+- 接收主服务使用独立内部 token 提交的配置发布任务。
+- 原子写入受控、Git 忽略的 runtime env，并仅对 `api`、`parser-worker`、`reranker-worker` 执行固定 Compose 重建。
+- 对目标服务执行 readiness 检查，失败时恢复上一版本并回报稳定结果码。
+
+部署代理是唯一可挂载 Docker socket 的组件。不得接受任意命令、Compose 文件、路径、callback 或客户端指定服务；不得暴露公网。API、Vue、Parser Worker 和知识问答链路不得拥有 Docker socket 或执行型部署权限。
+
 ### 跨服务通信
 
 - 主服务与 Worker 通过版本化 JSON/OpenAPI 契约通信。
@@ -132,6 +140,7 @@ Python Worker 不得：
 apps/api/                 NestJS 主服务
 apps/web/                 Vue 3 前端
 apps/parser-worker/       Python FastAPI Worker
+apps/deployment-agent/    内部白名单配置发布代理
 packages/contracts/       TypeScript 共享 DTO 和事件
 docs/                     项目文档
 ```
