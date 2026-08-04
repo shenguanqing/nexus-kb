@@ -18,8 +18,8 @@ RERANK_INTERNAL_TOKEN=
 Before starting the enabled Worker, pre-download the public model into the named `reranker_models` volume:
 
 ```bash
-docker compose --profile model-init run --rm reranker-model-init
-docker compose up -d --build api reranker-worker
+pnpm docker:base -- --profile model-init run --rm reranker-model-init
+pnpm docker:base -- up -d --build api reranker-worker
 ```
 
 The one-off `reranker-model-init` job has access to a dedicated download network; the long-running Worker is forced to load only this local cache and does not. Pin `LOCAL_RERANK_MODEL_REVISION` to an approved Hugging Face revision before a production deployment. Docker Desktop runs this Linux Worker on CPU; evaluate latency before enabling it for routine use.

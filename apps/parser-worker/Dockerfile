@@ -17,7 +17,12 @@ RUN apt-get update \
       tesseract-ocr-eng \
     && rm -rf /var/lib/apt/lists/*
 COPY apps/parser-worker/requirements.lock ./requirements.lock
-RUN --mount=type=cache,target=/root/.cache/pip pip install -r requirements.lock \
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install \
+        --index-url https://download.pytorch.org/whl/cpu \
+        torch==2.8.0 \
+        torchvision==0.23.0 \
+    && pip install -r requirements.lock \
     && mkdir -p /opt/easyocr-models \
     && python -c "import easyocr; easyocr.Reader(['ch_sim','en'], gpu=False, model_storage_directory='/opt/easyocr-models', download_enabled=True, verbose=False)" \
     && useradd --uid 10002 --create-home worker \

@@ -7,6 +7,7 @@
 ## 快速导航
 
 - [第一次启动](#第一次启动)
+- [一次启动全部 Docker 服务](#一次启动全部-docker-服务)
 - [启用本机向量索引](#启用本机向量索引ollama)
 - [启用完整 RAG 问答](#启用完整-rag-问答)
 - [启用管理员配置发布](#启用管理员配置发布按需)
@@ -28,32 +29,33 @@
 
 主要服务：
 
-| 组件          | 职责                             | 本地运行位置                      |
-| ------------- | -------------------------------- | --------------------------------- |
-| Vue Web       | 知识问答与管理界面               | Mac 宿主机，默认 `127.0.0.1:5173` |
-| NestJS API    | 认证、权限、入库、检索与模型编排 | Docker，默认 `127.0.0.1:3000`     |
-| Deployment Agent | 管理员受控配置发布与自动回滚    | Docker 内网；默认不启动            |
-| Parser Worker | 文档解析与结构提取               | Docker 内网                       |
-| Apache Tika   | PDF 本地解析失败时的受控兜底     | Docker 内网                       |
-| PostgreSQL    | 文档、ACL、版本和任务状态        | Docker 内网                       |
-| Redis         | BullMQ 异步任务队列              | Docker 内网                       |
-| Chroma        | 向量索引                         | Docker 内网                       |
+| 组件             | 职责                             | 本地运行位置                      |
+| ---------------- | -------------------------------- | --------------------------------- |
+| Vue Web          | 知识问答与管理界面               | Mac 宿主机，默认 `127.0.0.1:5173` |
+| NestJS API       | 认证、权限、入库、检索与模型编排 | Docker，默认 `127.0.0.1:3000`     |
+| Deployment Agent | 管理员受控配置发布与自动回滚     | Docker 内网；默认不启动           |
+| Parser Worker    | 文档解析与结构提取               | Docker 内网                       |
+| Apache Tika      | PDF 本地解析失败时的受控兜底     | Docker 内网                       |
+| PostgreSQL       | 文档、ACL、版本和任务状态        | Docker 内网                       |
+| Redis            | BullMQ 异步任务队列              | Docker 内网                       |
+| Chroma           | 向量索引                         | Docker 内网                       |
 
 Deployment Agent、Parser Worker、Apache Tika、PostgreSQL、Redis 和 Chroma 默认不向宿主机或公网开放端口。
 
 ## 选择运行模式
 
-第一次接触本项目，建议先使用“新手基础模式”。确认页面和基础链路正常后，再按需启用 Ollama、云端 LLM 或DWG。
+第一次接触本项目，建议使用“本地开发模式”。它会启用管理端所需的 deployment-agent；模型、DWG 与 DBeaver 仍按需启用。
 
-| 模式 | 需要额外准备 | 可以验证 | 暂时不能做 |
-| --- | --- | --- | --- |
-| 新手基础模式（推荐） | 无 | 前端、API、数据库、队列、常规文档解析与脱敏 | 向量检索和问答 |
-| 本机向量索引 | Ollama + `bge-m3` | 文档向量化与本地检索 | 未配置 LLM 时不能生成回答 |
-| 完整 RAG | Embedding + 获批的云端 LLM | 检索、回答和来源引用 | 取决于已启用的文档格式 |
-| DWG 解析 | 经许可的 ODA File Converter | DWG 转 DXF 后解析 | 不会自动启用模型 |
+| 模式                 | 需要额外准备                | 可以验证                                   | 暂时不能做                 |
+| -------------------- | --------------------------- | ------------------------------------------ | -------------------------- |
+| 本地开发模式（推荐） | 本地 `.env` 的四项随机值    | 管理界面、配置发布、文档解析、数据库和队列 | 未配置模型时不能检索或问答 |
+| 基础自检模式         | 无 deployment-agent 配置    | 容器、数据库、队列和常规文档解析           | 配置发布与模型功能         |
+| 本机向量索引         | Ollama + `bge-m3`           | 文档向量化与本地检索                       | 未配置 LLM 时不能生成回答  |
+| 完整 RAG             | Embedding + 获批的云端 LLM  | 检索、回答和来源引用                       | 取决于已启用的文档格式     |
+| DWG 解析             | 经许可的 ODA File Converter | DWG 转 DXF 后解析                          | 不会自动启用模型           |
 
 > [!NOTE]
->  `EMBEDDING_PROVIDER=none` 和 `LLM_PROVIDER=none` 时，文档显示“待建立索引”是正常状态，不代表处理失败。
+> `EMBEDDING_PROVIDER=none` 和 `LLM_PROVIDER=none` 时，文档显示“待建立索引”是正常状态，不代表处理失败。
 
 ## 环境要求
 
@@ -90,9 +92,22 @@ pnpm --version
 
 `docker info` 必须成功。若提示无法连接 Docker daemon，请先打开 Docker Desktop，并等待 Docker Engine 启动完成。
 
-## 第一次启动
+## Compose 命令入口
 
-本节不需要模型 API Key、Ollama 或 ODA。完成后可以进入管理界面，上传 TXT、Markdown、PDF、DOCX、XLSX、PNG/JPG 或 DXF 测试文件，验证本地解析、分块和脱敏流程。Parser Worker 镜像会在构建阶段预置中文/英文 OCR 模型，首次构建耗时和镜像体积会明显增加，运行时不会下载模型。
+仓库提供以下 pnpm 入口；所有命令都必须从仓库根目录运行：
+
+| 入口                     | 适用范围                               | 示例                                    |
+| ------------------------ | -------------------------------------- | --------------------------------------- |
+| `pnpm docker:base --`    | 基础服务，不含 DWG、部署代理或 DBeaver | `pnpm docker:base -- up -d --build`     |
+| `pnpm docker:dev --`     | 推荐本地开发，不含 DWG 和 DBeaver      | `pnpm docker:dev -- ps`                 |
+| `pnpm docker:full --`    | DWG + deployment-agent 的完整常驻服务  | `pnpm docker:full -- ps`                |
+| `pnpm docker:full:db --` | 完整服务，并临时开放本地 DBeaver 端口  | `pnpm docker:full:db -- up -d postgres` |
+
+`docker:dev` 启用 `configuration` profile；`docker:full` 额外加载 `compose.dwg.yaml`；`docker:full:db` 再额外加载 `compose.db-gui.yaml`。同一运行周期请始终使用同一个入口。一次性 Reranker 模型下载不属于常驻服务，仍使用 `--profile model-init run`。
+
+## 第一次启动（推荐本地开发模式）
+
+本节不需要模型 API Key、Ollama 或 ODA。完成后可进入管理界面、使用 Provider 配置发布、上传 TXT、Markdown、PDF、DOCX、XLSX、PNG/JPG 或 DXF 测试文件，验证本地解析、分块和脱敏流程。问答和向量检索需要在后续配置模型。Parser Worker 镜像会在构建阶段预置中文/英文 OCR 模型，首次构建耗时和镜像体积会明显增加，运行时不会下载模型。
 
 除特别说明外，所有命令都在仓库根目录执行。
 
@@ -110,10 +125,12 @@ pnpm install --frozen-lockfile
 cp .env.example .env
 ```
 
-生成两个不同的随机值：
+生成四个不同的随机值：
 
 ```bash
 openssl rand -hex 32
+openssl rand -hex 32
+openssl rand -base64 32
 openssl rand -hex 32
 ```
 
@@ -121,7 +138,9 @@ openssl rand -hex 32
 
 1. 将第一个随机值同时填入 `POSTGRES_PASSWORD`，并替换 `DATABASE_URL` 中的数据库密码。
 2. 将第二个随机值填入 `PARSER_INTERNAL_TOKEN`。
-3. 使用下面的新手配置：
+3. 将第三个随机值填入 `SYSTEM_CONFIG_ENCRYPTION_KEY`。
+4. 将第四个随机值填入 `DEPLOYMENT_AGENT_TOKEN`，并设置 `DEPLOYMENT_AGENT_URL=http://deployment-agent:8200`。
+5. 使用下面的本地开发配置：
 
 ```dotenv
 DWG_CONVERSION_ENABLED=false
@@ -140,24 +159,25 @@ DEV_ROLES_JSON=["admin"]
 ```dotenv
 POSTGRES_PASSWORD=<第一个随机值>
 DATABASE_URL=postgresql://kb:<第一个随机值>@postgres:5432/kb
+SYSTEM_CONFIG_ENCRYPTION_KEY=<第三个随机值>
+DEPLOYMENT_AGENT_URL=http://deployment-agent:8200
+DEPLOYMENT_AGENT_TOKEN=<第四个随机值>
 ```
 
 这里显式关闭 DWG，表示本次启动不提供 DWG 上传能力；其他已支持格式不受影响。`DEV_ROLES_JSON=["admin"]` 只用于本地开发身份，便于访问文档管理页面，不能用于生产环境。
 
 > [!IMPORTANT]
->  `.env` 包含密码和可能的 API Key，已被 Git 忽略。不要提交、发送或截图分享该文件。
+> `.env` 包含密码和可能的 API Key，已被 Git 忽略。不要提交、发送或截图分享该文件。
 
-### 3. 启动后端服务
+### 3. 启动本地开发服务
 
 确认 Docker Desktop 已运行，然后执行：
 
 ```bash
-docker compose config --quiet
-docker compose up -d --build
-docker compose ps
+pnpm docker:up:dev
 ```
 
-首次启动需要拉取镜像和构建服务，耗时通常比后续启动长。Parser Worker 首次构建还会下载 CPU PyTorch wheel 和中文/英文 OCR 模型。`docker compose ps` 最终应显示 `api`、`parser-worker`、`tika`、`postgres`、`redis` 和 `chroma` 正常运行。
+首次启动需要拉取镜像和构建服务，耗时通常比后续启动长。Parser Worker 首次构建还会下载 CPU PyTorch wheel 和中文/英文 OCR 模型。随后可用 `pnpm docker:dev -- ps` 确认 `api`、`deployment-agent`、`parser-worker`、`tika`、`postgres`、`redis` 和 `chroma` 正常运行。
 
 ### 4. 检查服务状态
 
@@ -172,7 +192,7 @@ curl http://127.0.0.1:3000/health/ready
 如果 `ready` 失败，先查看日志：
 
 ```bash
-docker compose logs --tail=100 api parser-worker tika
+pnpm docker:dev -- logs --tail=100 api deployment-agent parser-worker tika
 ```
 
 ### 5. 启动前端
@@ -192,7 +212,19 @@ pnpm --filter @nexus-kb/web dev
 3. 在“上传与入库任务”查看解析、分块和脱敏状态。
 4. 任务完成后，文档应显示“待建立索引”。
 
-此时基础环境已经跑通。要让文档进入向量索引，请继续启用 Ollama；要生成问答回答，还需要配置云端 LLM。
+此时本地开发环境已经跑通，管理页面不会因配置发布功能未启用而返回 503。要让文档进入向量索引，请继续启用 Ollama；要生成问答回答，还需要配置云端 LLM。
+
+## 启动全部 Docker 服务（按需启用 DWG）
+
+这不是第一次启动后的必做步骤。只有需要 DWG 时，才在已完成 ODA 安装包与 `.env` 配置后使用它；它会在本地开发模式基础上增加 DWG 专用 Worker，并启动全部**常驻** Docker 服务。
+
+```bash
+pnpm docker:up:all
+```
+
+它等同于完整 Compose 文件组合并启用 `configuration` profile；首次使用仍需先按 [启用 DWG 解析](#启用-dwg-解析按需)放置经许可的 ODA 包。缺少 ODA 时继续使用 `pnpm docker:up:dev`，不要用“全部启动”绕过 DWG 的安全检查。
+
+本地 BGE Rerank 的模型下载是有意隔离的短任务，不会由该命令自动执行；首次启用时按下文的 `reranker-model-init` 命令预下载模型。
 
 ## 启用本机向量索引（Ollama）
 
@@ -225,17 +257,17 @@ Ollama 不需要 API Key。`host.docker.internal` 是 API 容器访问 Mac 宿�
 
 ### 3. 重建 API 容器
 
-下面以新手基础模式为例。如果已经启用 DWG 或 DBeaver，必须使用 [日常使用](#日常使用)中当前模式对应的完整 Compose 文件组合，不能临时切回基础配置。
+下面以推荐本地开发模式为例。已启用 DWG 或 DBeaver 时，必须使用 [日常使用](#日常使用)中当前模式对应的入口，不能临时切回开发模式。
 
 ```bash
-docker compose up -d --force-recreate api
+pnpm docker:dev -- up -d --force-recreate api
 curl --fail-with-body http://127.0.0.1:3000/health/ready
 ```
 
 之前处于“待建立索引”的文档，可在文档详情点击“继续建立索引”，系统会复用已完成的解析、分块和脱敏结果。
 
 > [!WARNING]
->  文档与查询必须使用相同的 Embedding Provider、模型和维度。更换这些配置后不能继续写入旧 collection，必须创建新索引并执行迁移。
+> 文档与查询必须使用相同的 Embedding Provider、模型和维度。更换这些配置后不能继续写入旧 collection，必须创建新索引并执行迁移。
 
 ## 启用完整 RAG 问答
 
@@ -256,10 +288,10 @@ GEMINI_BASE_URL=https://generativelanguage.googleapis.com/v1beta
 
 修改后只需重建 API：
 
-下面以新手基础模式为例。如果已经启用 DWG 或 DBeaver，必须使用 [日常使用](#选择固定的-compose-文件组合)中当前模式对应的完整 Compose 文件组合。
+下面以推荐本地开发模式为例。已启用 DWG 或 DBeaver 时，必须使用 [日常使用](#选择固定的-compose-入口)中当前模式对应的入口。
 
 ```bash
-docker compose up -d --force-recreate api
+pnpm docker:dev -- up -d --force-recreate api
 curl --fail-with-body http://127.0.0.1:3000/health/ready
 ```
 
@@ -287,10 +319,10 @@ RERANK_INTERNAL_TOKEN=
 然后执行：
 
 ```bash
-# 当前已启用 DWG 时，保留 compose.dwg.yaml；未启用 DWG 则去掉该 -f 参数。
-docker compose -f compose.yaml -f compose.dwg.yaml --profile model-init run --rm reranker-model-init
-docker compose -f compose.yaml -f compose.dwg.yaml up -d --build api reranker-worker
-docker compose -f compose.yaml -f compose.dwg.yaml ps api reranker-worker
+# 推荐模式用 docker:dev；已启用 DWG 时用 docker:full。
+pnpm docker:dev -- --profile model-init run --rm reranker-model-init
+pnpm docker:dev -- up -d --build api reranker-worker
+pnpm docker:dev -- ps api reranker-worker
 ```
 
 首条命令是一次性模型预下载：它只连接专用的下载网络并将模型写入 Docker named volume。常驻 Reranker 仍只有内部网络、没有公网端口。Apple Silicon Docker Desktop 默认使用 Linux CPU 推理；先通过受控评测确认延迟与质量，再让它参与日常问答；任何失败都会安全回退到原向量排序。完整服务边界和运行说明见 [reranker-worker README](./apps/reranker-worker/README.md)。
@@ -323,16 +355,16 @@ DEPLOYMENT_AGENT_TOKEN=<至少 32 字符的独立随机 token>
 
 ### 2. 启动代理并验证
 
-必须从仓库根目录执行。以下为基础模式命令；已启用 DWG 或 DBeaver 时，将 `docker compose` 替换为 [日常使用](#选择固定的-compose-文件组合)中对应的完整 Compose 前缀，并保留 `--profile configuration`：
+必须从仓库根目录执行。推荐模式使用 `docker:dev`；完整模式的 `docker:full` 同样包含 `configuration` profile：
 
 ```bash
-docker compose config --quiet
-docker compose --profile configuration up -d --build --force-recreate deployment-agent api
-docker compose ps deployment-agent api
+pnpm docker:dev -- config --quiet
+pnpm docker:dev -- up -d --build --force-recreate deployment-agent api
+pnpm docker:dev -- ps deployment-agent api
 curl --fail-with-body http://127.0.0.1:3000/health/ready
 ```
 
-代理容器会以与宿主机相同的仓库绝对路径调用 Docker Compose，因此只能从仓库根目录启动。`deployment-agent` 仅在 Compose 内网的 `8200` 端口监听，健康状态可通过 `docker compose ps` 或 `docker compose logs deployment-agent` 查看，不能从浏览器或公网直接访问。
+代理容器会以与宿主机相同的仓库绝对路径调用 Docker Compose，因此只能从仓库根目录启动。`deployment-agent` 仅在 Compose 内网的 `8200` 端口监听，健康状态可通过 `pnpm docker:dev -- ps` 或 `pnpm docker:dev -- logs deployment-agent` 查看，不能从浏览器或公网直接访问。
 
 ### 3. 使用边界与失败处理
 
@@ -361,19 +393,19 @@ docker info
 docker compose version
 ```
 
-然后使用同一组 Compose 文件构建 DWG 专用 Worker、校验合并配置并启动整套服务：
+然后使用完整入口构建 DWG 专用 Worker、校验合并配置并启动整套服务：
 
 ```bash
-docker compose -f compose.yaml -f compose.dwg.yaml build parser-worker-dwg
-docker compose -f compose.yaml -f compose.dwg.yaml config --quiet
-docker compose -f compose.yaml -f compose.dwg.yaml up -d --build
-docker compose -f compose.yaml -f compose.dwg.yaml ps
+pnpm docker:full -- build parser-worker-dwg
+pnpm docker:full -- config --quiet
+pnpm docker:full -- up -d --build
+pnpm docker:full -- ps
 ```
 
 单独执行第一条 `build parser-worker-dwg` 可以提前暴露 ODA 安装包、版本或 Worker 镜像构建问题；后续 `up -d --build` 会复用已有构建缓存，并确保 API 等其他需要构建的服务也与当前源码一致。DWG 专用镜像会下载 CPU PyTorch wheel 和 EasyOCR 中文/英文模型，耗时数分钟属于正常现象；需要观察详细进度时使用：
 
 ```bash
-docker compose --progress plain -f compose.yaml -f compose.dwg.yaml build parser-worker-dwg
+pnpm docker:full -- --progress plain build parser-worker-dwg
 ```
 
 DWG 派生镜像固定从 PyTorch CPU wheel 源安装 Torch/Torchvision，不应下载名称以 `nvidia_` 开头的 CUDA 运行时包。构建后可执行以下只读冒烟检查；输出中的 `cuda` 应为 `None`：
@@ -386,76 +418,63 @@ docker run --rm --platform linux/amd64 --entrypoint python nexus-kb-parser-worke
 `ps` 中的 `api`、原生 `parser-worker`、`parser-worker-dwg`、`tika`、`postgres`、`redis` 和 `chroma` 应正常运行，随后再检查：
 
 > [!IMPORTANT]
-> 从此处开始即进入 **DWG 模式**。后续不能再单独使用 `docker compose …`；每一次 `up`、`build`、`ps`、`logs`、`exec`、`down` 和 `--force-recreate` 都必须携带 `-f compose.yaml -f compose.dwg.yaml`。该覆盖文件保留原生 `parser-worker` 处理图片/PDF 等常规文件，并额外启动 `linux/amd64` 的 `parser-worker-dwg`；API 仅把 DWG 路由到后者，两个 Worker 的 readiness 都必须通过。
+> 从此处开始即进入 **DWG 模式**。后续统一使用 `pnpm docker:full -- <Compose 子命令>`；该入口保留原生 `parser-worker` 处理图片/PDF 等常规文件，并额外启动 `linux/amd64` 的 `parser-worker-dwg`。API 仅把 DWG 路由到后者，两个 Worker 的 readiness 都必须通过。
 
 ```bash
 curl --fail-with-body http://127.0.0.1:3000/health/live
 curl --fail-with-body http://127.0.0.1:3000/health/ready
 ```
 
-如果还需要通过 DBeaver 访问 PostgreSQL，应在 `config`、`build`、`up`、`ps`、`logs`、`down` 和 `--force-recreate` 命令中保持同一文件组合，并追加 `-f compose.db-gui.yaml`；该覆盖文件仅限本地调试，生产环境不得加载。
+如果还需要通过 DBeaver 访问 PostgreSQL，统一改用 `pnpm docker:full:db -- <Compose 子命令>`；该入口额外加载本地调试覆盖文件，生产环境不得使用。
 
 缺少或未获许可的 ODA 安装包时，请保持 `DWG_CONVERSION_ENABLED=false`；不要绕过转换器就绪检查，也不要暴露 Worker 端口。
 
 ## 日常使用
 
-### 选择固定的 Compose 文件组合
+### 选择固定的 Compose 入口
 
-先根据当前运行模式选择一组命令前缀，后续所有 `config`、`build`、`up`、`ps`、`logs`、`exec`、`down` 和 `--force-recreate` 命令都使用同一组文件，避免 DWG Worker 被切回基础镜像或 DBeaver 端口映射被移除。
+先选择一个入口，后续所有 `config`、`build`、`up`、`ps`、`logs`、`exec`、`down` 和 `--force-recreate` 都使用它，避免 DWG Worker 被切回基础镜像或 DBeaver 端口映射被移除。
 
-| 当前模式           | Compose 命令前缀                                                            |
-| ------------------ | --------------------------------------------------------------------------- |
-| 基础模式           | `docker compose`                                                            |
-| 基础模式 + DBeaver | `docker compose -f compose.yaml -f compose.db-gui.yaml`                     |
-| DWG                | `docker compose -f compose.yaml -f compose.dwg.yaml`                        |
-| DWG + DBeaver      | `docker compose -f compose.yaml -f compose.dwg.yaml -f compose.db-gui.yaml` |
+| 当前模式                         | 统一入口                                  |
+| -------------------------------- | ----------------------------------------- |
+| 本地开发模式（推荐）             | `pnpm docker:dev -- <Compose 子命令>`     |
+| 基础自检模式                     | `pnpm docker:base -- <Compose 子命令>`    |
+| DWG + deployment-agent           | `pnpm docker:full -- <Compose 子命令>`    |
+| DWG + deployment-agent + DBeaver | `pnpm docker:full:db -- <Compose 子命令>` |
 
-切换文件组合前先执行对应的 `config --quiet`。如果只是修改某个服务的运行配置，继续使用当前前缀并定向重建该服务，不要为了缩短命令而省略已经启用的覆盖文件。
+切换入口前先执行对应的 `config --quiet`。如果只是修改某个服务的运行配置，继续使用当前入口并定向重建该服务。
 
 ### 停止与再次启动
 
-以下示例为基础模式。其他模式将 `docker compose` 替换为上表对应的完整前缀。停止服务并保留数据：
+以下示例为推荐本地开发模式。停止服务并保留数据：
 
 ```bash
-docker compose down
+pnpm docker:dev -- down
 ```
 
 再次启动：
 
 ```bash
-docker compose up -d
+pnpm docker:up:dev
 ```
 
 > [!CAUTION]
->  不要把 `docker compose down -v` 当作日常停止命令。`-v` 会删除 PostgreSQL、Chroma、Redis 和上传文件使用的本地 volume。
+> 不要把 `docker compose down -v` 当作日常停止命令。`-v` 会删除 PostgreSQL、Chroma、Redis 和上传文件使用的本地 volume。
 
-### 改动后执行什么命令
+### 修改后如何生效
 
-先区分两条开发链路：Vue 前端不在 Compose 中，使用 Vite；API、Parser 和 Reranker 才通过 Compose 启动。以下命令按当前的 **DWG 模式** 写出；不使用 DWG 时，删除每条命令中的 `-f compose.dwg.yaml`。不要混用两种前缀。
+默认使用 `docker:dev`；已启用 DWG 时，将命令中的 `docker:dev` 换为 `docker:full`，并把 Parser Worker 改为 `parser-worker parser-worker-dwg`。
 
-| 改动内容 | 是否需要 build | 让改动生效的命令 |
-| --- | --- | --- |
-| Vue 页面、组件、样式、前端测试 | 否 | Vite 正在运行时自动热更新；未启动则执行 `pnpm --filter @nexus-kb/web dev`。 |
-| `apps/web/vite.config.ts` 或前端 `VITE_*` 环境变量 | 否 | 停止并重新执行 `pnpm --filter @nexus-kb/web dev`，然后刷新浏览器。 |
-| API TypeScript 源码 | 是 | `docker compose -f compose.yaml -f compose.dwg.yaml up -d --build --force-recreate api` |
-| API 的 `.env`：LLM、Embedding、查询、认证、ACL、限流 | 否 | `docker compose -f compose.yaml -f compose.dwg.yaml up -d --force-recreate api` |
-| 常规 Parser Python 源码、`Dockerfile` | 是 | `docker compose -f compose.yaml -f compose.dwg.yaml up -d --build --force-recreate parser-worker` |
-| DWG Parser 源码、`Dockerfile.dwg`、ODA 安装包 | 是 | `docker compose -f compose.yaml -f compose.dwg.yaml up -d --build --force-recreate parser-worker-dwg` |
-| Parser 的 `.env`：解析限制、CAD/DWG、临时目录 | 否 | `docker compose -f compose.yaml -f compose.dwg.yaml up -d --force-recreate parser-worker parser-worker-dwg` |
-| Reranker Python 源码、`Dockerfile` 或依赖锁文件 | 是 | `docker compose -f compose.yaml -f compose.dwg.yaml up -d --build --force-recreate reranker-worker` |
-| Rerank 的 `.env`：Provider、模型、batch、内部令牌 | 否 | `docker compose -f compose.yaml -f compose.dwg.yaml up -d --force-recreate api reranker-worker` |
-| 首次启用 `local_bge`，或更换本地 BGE 模型 revision | 否 | 先执行 `docker compose -f compose.yaml -f compose.dwg.yaml --profile model-init run --rm reranker-model-init` 下载模型，再执行 `docker compose -f compose.yaml -f compose.dwg.yaml up -d --force-recreate api reranker-worker`。 |
-| `PARSER_INTERNAL_TOKEN` | 否 | `docker compose -f compose.yaml -f compose.dwg.yaml up -d --force-recreate api parser-worker parser-worker-dwg reranker-worker`；当 `RERANK_INTERNAL_TOKEN` 留空时，Reranker 也复用此令牌。 |
-| 共享契约或 API 字段，同时改了前后端 | 通常是 | 执行 `pnpm build`，然后重建 API；Vite 会热更新前端。 |
-| Prisma migration / API 数据库 schema | 是 | 新增 migration 后执行 `docker compose -f compose.yaml -f compose.dwg.yaml up -d --build --force-recreate api`；不要重建或删除 PostgreSQL volume。 |
-| `compose.yaml`、`compose.dwg.yaml` 或服务网络/挂载 | 视改动而定 | 先执行 `docker compose -f compose.yaml -f compose.dwg.yaml config --quiet`，再定向 `up -d --force-recreate <service>`；Dockerfile 变化时加 `--build`。 |
+| 改动                           | 需要做什么                                                                                   |
+| ------------------------------ | -------------------------------------------------------------------------------------------- |
+| Vue 页面、样式                 | Vite 自动更新；若改了 `vite.config.ts` 或 `VITE_*`，重启 `pnpm --filter @nexus-kb/web dev`。 |
+| API 源码或 Dockerfile          | `pnpm docker:dev -- up -d --build --force-recreate api`                                      |
+| API 的 `.env` 配置             | `pnpm docker:dev -- up -d --force-recreate api`                                              |
+| Parser 源码、依赖或 Dockerfile | `pnpm docker:dev -- up -d --build --force-recreate parser-worker`                            |
+| Parser 的 `.env` 解析限制      | `pnpm docker:dev -- up -d --force-recreate parser-worker`                                    |
+| 不确定改了哪些 Docker 服务     | `pnpm docker:up:dev`                                                                         |
 
-若不确定改动范围，可使用下面的保守命令；它会重建三个后端服务，但不会启动或重启 Vite 前端：
-
-```bash
-docker compose -f compose.yaml -f compose.dwg.yaml up -d --build --force-recreate api parser-worker reranker-worker
-curl --fail-with-body http://127.0.0.1:3000/health/ready
-```
+修改后检查：`pnpm docker:dev -- ps`、`curl --fail-with-body http://127.0.0.1:3000/health/ready`。首次启用本地 Rerank、数据库密码轮换和 DWG 的专用重启命令见 [部署运维手册](./docs/06-部署运维手册.md#53-env-配置重载)。
 
 每次改动完成后，按影响范围运行 `pnpm lint`、`pnpm typecheck`、`pnpm test`；Docker 服务再检查 `ps`、`/health/ready` 和相关日志。完整部署场景与数据库密码变更规则见 [部署运维手册](./docs/06-部署运维手册.md#53-env-配置重载)。
 
@@ -483,7 +502,7 @@ curl --fail-with-body http://127.0.0.1:3000/health/ready
 1. 打开 Docker Desktop。
 2. 等待界面显示 Engine 已运行。
 3. 重新执行 `docker info` 和 `docker compose version`。
-4. 两条命令都成功后再运行 `docker compose up`。
+4. 两条命令都成功后再运行 `pnpm docker:base -- up`，或在前置条件齐备时运行 `pnpm docker:up:all`。
 
 ### 2. `/health/ready` 失败，或 `parser-worker` 一直不健康
 
@@ -513,7 +532,7 @@ docker compose logs --tail=100 api parser-worker tika
 首次构建需要下载 Python 依赖、CPU PyTorch wheel 和 EasyOCR 模型，具体耗时取决于网络和 Docker Desktop 分配的资源。先不要反复执行完整的 `up --build --force-recreate`，改用当前运行模式的固定 Compose 文件组合单独观察 Parser 构建。DWG 模式执行：
 
 ```bash
-docker compose --progress plain -f compose.yaml -f compose.dwg.yaml build parser-worker
+pnpm docker:full -- --progress plain build parser-worker
 ```
 
 根据最后持续输出的步骤排查：
@@ -526,9 +545,8 @@ docker compose --progress plain -f compose.yaml -f compose.dwg.yaml build parser
 镜像构建成功后，不需要再次构建所有服务。仅重建实际受影响的运行实例：
 
 ```bash
-docker compose -f compose.yaml -f compose.dwg.yaml \
-  up -d --no-deps --force-recreate tika parser-worker api
-docker compose -f compose.yaml -f compose.dwg.yaml ps tika parser-worker api
+pnpm docker:full -- up -d --no-deps --force-recreate tika parser-worker parser-worker-dwg api
+pnpm docker:full -- ps tika parser-worker parser-worker-dwg api
 ```
 
 ### 4. PostgreSQL 或 API 报密码认证失败
@@ -553,7 +571,7 @@ docker compose exec postgres sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"'
 随后把同一密码同步写入 `.env` 的 `POSTGRES_PASSWORD` 和 `DATABASE_URL`，再使用同一 Compose 文件组合重建 PostgreSQL 与 API，并验证 ready：
 
 ```bash
-docker compose up -d --force-recreate postgres api
+pnpm docker:base -- up -d --force-recreate postgres api
 curl --fail-with-body http://127.0.0.1:3000/health/ready
 ```
 
@@ -589,20 +607,20 @@ pnpm --filter @nexus-kb/web test:e2e
 
 ## 文档索引
 
-| 文档 | 内容 |
-| --- | --- |
-| [`TASK.md`](./TASK.md) | 当前阶段、完成状态与下一步 |
-| [`docs/01-项目实施规格.md`](./docs/01-项目实施规格.md) | 项目范围、安全边界与验收标准 |
-| [`docs/02-技术设计.md`](./docs/02-技术设计.md) | 架构、模块、数据结构与关键实现 |
-| [`docs/03-前端产品与界面设计.md`](./docs/03-前端产品与界面设计.md) | 页面、交互、权限与响应式规范 |
-| [`docs/04-开发规范.md`](./docs/04-开发规范.md) | 编码、测试、Git 与协作规范 |
-| [`docs/05-开发任务清单.md`](./docs/05-开发任务清单.md) | 完整阶段任务 |
-| [`docs/06-部署运维手册.md`](./docs/06-部署运维手册.md) | 部署、配置、备份、监控与故障处理 |
-| [`docs/07-API使用说明.md`](./docs/07-API使用说明.md) | 认证、权限、端点、错误码与调用示例 |
-| [`apps/README.md`](./apps/README.md) | Web、API 与 Parser Worker 应用索引 |
-| [`apps/api/README.md`](./apps/api/README.md) | NestJS API 模块、链路与安全边界 |
-| [`apps/web/README.md`](./apps/web/README.md) | Vue 页面、目录、响应式与前端边界 |
-| [`apps/parser-worker/README.md`](./apps/parser-worker/README.md) | 文档解析算法、限制与开发方式 |
+| 文档                                                               | 内容                               |
+| ------------------------------------------------------------------ | ---------------------------------- |
+| [`TASK.md`](./TASK.md)                                             | 当前阶段、完成状态与下一步         |
+| [`docs/01-项目实施规格.md`](./docs/01-项目实施规格.md)             | 项目范围、安全边界与验收标准       |
+| [`docs/02-技术设计.md`](./docs/02-技术设计.md)                     | 架构、模块、数据结构与关键实现     |
+| [`docs/03-前端产品与界面设计.md`](./docs/03-前端产品与界面设计.md) | 页面、交互、权限与响应式规范       |
+| [`docs/04-开发规范.md`](./docs/04-开发规范.md)                     | 编码、测试、Git 与协作规范         |
+| [`docs/05-开发任务清单.md`](./docs/05-开发任务清单.md)             | 完整阶段任务                       |
+| [`docs/06-部署运维手册.md`](./docs/06-部署运维手册.md)             | 部署、配置、备份、监控与故障处理   |
+| [`docs/07-API使用说明.md`](./docs/07-API使用说明.md)               | 认证、权限、端点、错误码与调用示例 |
+| [`apps/README.md`](./apps/README.md)                               | Web、API 与 Parser Worker 应用索引 |
+| [`apps/api/README.md`](./apps/api/README.md)                       | NestJS API 模块、链路与安全边界    |
+| [`apps/web/README.md`](./apps/web/README.md)                       | Vue 页面、目录、响应式与前端边界   |
+| [`apps/parser-worker/README.md`](./apps/parser-worker/README.md)   | 文档解析算法、限制与开发方式       |
 
 机器可读契约：
 

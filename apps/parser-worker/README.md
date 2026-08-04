@@ -130,16 +130,16 @@ DWG 使用“受控转换后复用 DXF”：
 
 ## 当前支持范围
 
-| 格式                          | 状态                 | 解析器                         |
-| ----------------------------- | -------------------- | ------------------------------ |
-| TXT / Markdown                | 已实现               | 原生 UTF-8 行扫描              |
-| DOCX                          | 已实现               | python-docx                    |
-| XLSX                          | 已实现               | openpyxl                       |
-| DXF                           | 已实现               | ezdxf                          |
-| DWG                           | 已实现，依赖本地 ODA | ODA → DXF → ezdxf              |
+| 格式                          | 状态                 | 解析器                                       |
+| ----------------------------- | -------------------- | -------------------------------------------- |
+| TXT / Markdown                | 已实现               | 原生 UTF-8 行扫描                            |
+| DOCX                          | 已实现               | python-docx                                  |
+| XLSX                          | 已实现               | openpyxl                                     |
+| DXF                           | 已实现               | ezdxf                                        |
+| DWG                           | 已实现，依赖本地 ODA | ODA → DXF → ezdxf                            |
 | PDF                           | 已实现               | Unstructured；失败或空结果时由内网 Tika 兜底 |
-| PNG / JPG / JPEG              | 已实现               | EasyOCR（CPU、离线模型）       |
-| PPTX / HTML / DOC / RTF / EML | 未实现               | 后续阶段                       |
+| PNG / JPG / JPEG              | 已实现               | EasyOCR（CPU、离线模型）                     |
+| PPTX / HTML / DOC / RTF / EML | 未实现               | 后续阶段                                     |
 
 ## 资源与安全限制
 
@@ -183,11 +183,11 @@ mypy app tests
 Python 版本要求为 3.11。宿主机测试适合验证解析契约、限制和安全分支，但 PDF/OCR 的完整运行环境以 Docker 镜像为准：镜像还包含 Poppler、Tesseract 中文/英文语言包、CPU PyTorch，以及构建阶段预载且运行时只读的 EasyOCR 和 NLTK 模型资源。运行时不得为用户文档下载模型或语言资源。涉及 `requirements.lock`、PDF、图片、OCR 或 Dockerfile 的变更，至少还应构建并启动 Parser 镜像，然后从容器内检查 Worker readiness：
 
 ```bash
-docker compose -f compose.yaml -f compose.dwg.yaml exec parser-worker python -c \
+pnpm docker:full -- exec parser-worker python -c \
   "import urllib.request; print(urllib.request.urlopen('http://127.0.0.1:8000/health/ready', timeout=10).read().decode())"
 ```
 
-基础模式应删除 `-f compose.dwg.yaml`。响应必须包含 `rawDocs=up` 和 `tika=up`；DWG 模式还必须包含 `dwgConverter=up`。
+基础模式使用 `pnpm docker:base -- exec ...`。常规 Worker 响应必须包含 `rawDocs=up` 和 `tika=up`；完整模式还应分别检查 `parser-worker-dwg` 的 `dwgConverter=up`。
 
 DWG 派生镜像构建完成后，可确认没有误装 CUDA 运行时：
 
