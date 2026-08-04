@@ -2420,6 +2420,11 @@ a {
   .access-toolbar {
     flex-wrap: nowrap;
   }
+  .access-toolbar-intro{
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
   .access-toolbar-intro .text-block,
   .access-toolbar-intro .el-tag {
     display: none;

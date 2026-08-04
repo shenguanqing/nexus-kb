@@ -126,6 +126,67 @@ describe('UserDirectoryService', () => {
     expect(deps.findMany).not.toHaveBeenCalled();
   });
 
+  it('grants every current capability and sensitivity to an administrator', async () => {
+    const prisma = {
+      userDirectoryEntry: { findUnique: vi.fn().mockResolvedValue({ managedRoles: ['admin'] }) },
+      departmentPolicy: { findUnique: vi.fn().mockResolvedValue(null) },
+    } as unknown as PrismaService;
+    const service = new UserDirectoryService(prisma, new AclPolicy());
+
+    await expect(
+      service.resolve({
+        ...adminIdentity,
+        allowedSensitivities: ['public'],
+        capabilities: ['documents:read'],
+      }),
+    ).resolves.toMatchObject({
+      roles: ['admin'],
+      allowedSensitivities: ['public', 'internal', 'confidential'],
+      capabilities: [
+        'documents:read',
+        'documents:write',
+        'documents:delete',
+        'audit:read',
+        'system:read',
+        'access:read',
+        'access:write',
+      ],
+    });
+  });
+
+  it('creates a local password account without recording its password in audit data', async () => {
+    const create = vi.fn(({ data }: { data: Record<string, unknown> }) => data);
+    const auditCreate = vi.fn().mockResolvedValue({});
+    const transaction = {
+      userDirectoryEntry: { findFirst: vi.fn().mockResolvedValue(null), create },
+      accessAudit: { create: auditCreate },
+    };
+    const prisma = {
+      $transaction: vi.fn((callback: (value: typeof transaction) => unknown) =>
+        Promise.resolve(callback(transaction)),
+      ),
+    } as unknown as PrismaService;
+    const service = new UserDirectoryService(prisma, new AclPolicy());
+
+    const result = await service.createManagedUser(
+      {
+        userId: 'user-a',
+        username: 'alice',
+        password: 'password-for-new-user',
+        department: 'finance',
+        roles: ['user'],
+        allowedSensitivities: ['public', 'internal'],
+        defaultSensitivity: 'internal',
+      },
+      { ...adminIdentity, capabilities: ['access:write'] },
+      '00000000-0000-4000-8000-000000000001',
+    );
+
+    expect(result.user).toMatchObject({ username: 'alice', status: 'active', roles: ['user'] });
+    expect(JSON.stringify(create.mock.calls)).not.toContain('password-for-new-user');
+    expect(JSON.stringify(auditCreate.mock.calls)).not.toContain('password-for-new-user');
+  });
+
   it('protects the final effective administrator, including legacy data', async () => {
     const entries = [
       {
@@ -165,11 +226,57 @@ describe('UserDirectoryService', () => {
       service.updateRoles(
         'admin-a',
         { roles: ['user'] },
-        { ...adminIdentity, capabilities: ['access:read', 'access:write'] },
+        {
+          ...adminIdentity,
+          userId: 'another-admin',
+          capabilities: ['access:read', 'access:write'],
+        },
         'trace-role-update',
       ),
     ).rejects.toMatchObject({ code: 'LAST_ADMIN_REQUIRED' });
     expect(update).not.toHaveBeenCalled();
     expect(create).not.toHaveBeenCalled();
+  });
+
+  it('prevents an administrator from demoting their own account even when another admin exists', async () => {
+    const entries = [
+      {
+        tenantId: 'tenant-a',
+        userId: 'admin-a',
+        department: 'platform',
+        roles: ['admin'],
+        managedRoles: null,
+        lastAuthenticatedAt: new Date('2026-07-18T08:00:00.000Z'),
+      },
+      {
+        tenantId: 'tenant-a',
+        userId: 'admin-b',
+        department: 'platform',
+        roles: ['admin'],
+        managedRoles: null,
+        lastAuthenticatedAt: new Date('2026-07-18T08:00:00.000Z'),
+      },
+    ];
+    const update = vi.fn();
+    const transaction = {
+      userDirectoryEntry: { findMany: vi.fn().mockResolvedValue(entries), update },
+      accessAudit: { create: vi.fn() },
+    };
+    const prisma = {
+      $transaction: vi.fn((callback: (value: typeof transaction) => unknown) =>
+        Promise.resolve(callback(transaction)),
+      ),
+    } as unknown as PrismaService;
+    const service = new UserDirectoryService(prisma, new AclPolicy());
+
+    await expect(
+      service.updateRoles(
+        'admin-a',
+        { roles: ['user'] },
+        { ...adminIdentity, capabilities: ['access:write'] },
+        '00000000-0000-4000-8000-000000000002',
+      ),
+    ).rejects.toMatchObject({ code: 'SELF_ADMIN_MUTATION_FORBIDDEN', status: 409 });
+    expect(update).not.toHaveBeenCalled();
   });
 });

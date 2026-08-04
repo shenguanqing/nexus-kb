@@ -32,12 +32,20 @@ export {
   departmentPolicyUpdateResponseSchema,
   userRoleUpdateRequestSchema,
   userRoleUpdateResponseSchema,
+  managedUserCreateRequestSchema,
+  managedUserUpdateRequestSchema,
+  managedUserMutationResponseSchema,
+  managedUserDeleteResponseSchema,
   type DepartmentPolicy,
   type DepartmentPolicyListResponse,
   type DepartmentPolicyUpdateRequest,
   type DepartmentPolicyUpdateResponse,
   type UserRoleUpdateRequest,
   type UserRoleUpdateResponse,
+  type ManagedUserCreateRequest,
+  type ManagedUserUpdateRequest,
+  type ManagedUserMutationResponse,
+  type ManagedUserDeleteResponse,
 } from './access';
 export { appRoleSchema, appRolesSchema, type AppRole } from './roles';
 export {

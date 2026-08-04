@@ -1,27 +1,19 @@
 import { Injectable, type OnModuleInit } from '@nestjs/common';
-import {
-  createHash,
-  randomBytes,
-  randomUUID,
-  scrypt as scryptCallback,
-  timingSafeEqual,
-} from 'node:crypto';
+import { createHash, randomBytes, randomUUID } from 'node:crypto';
 
 import { ApiException } from '../common/api-exception';
-import { AppConfig, type Environment } from '../config/app-config';
+import { AppConfig } from '../config/app-config';
 import { PrismaService } from '../database/prisma.service';
-import { normalizeAppRoles } from './app-role';
-import type { Identity } from './identity';
+import { ADMIN_CAPABILITIES, isAdmin, normalizeAppRoles } from './app-role';
+import { SENSITIVITIES, type Identity } from './identity';
+import {
+  createPasswordDigest,
+  randomPasswordDigest,
+  verifyPasswordDigest,
+  type PasswordDigest,
+} from './password-digest';
 
 const sessionCookieName = 'nexuskb_session';
-
-interface PasswordDigest {
-  digest: Buffer;
-  salt: Buffer;
-}
-interface PasswordAccount extends PasswordDigest {
-  identity: Identity;
-}
 
 interface LoginAttempt {
   count: number;
@@ -36,8 +28,6 @@ export interface PasswordLoginResult {
 
 @Injectable()
 export class PasswordAuthService implements OnModuleInit {
-  private readonly accounts = new Map<string, PasswordAccount>();
-  private readonly accountsByIdentity = new Map<string, PasswordAccount>();
   private readonly attempts = new Map<string, LoginAttempt>();
   private fallbackPassword: PasswordDigest | null = null;
   private initialization: Promise<void> | null = null;
@@ -59,9 +49,18 @@ export class PasswordAuthService implements OnModuleInit {
       throw new ApiException('LOGIN_RATE_LIMITED', '登录尝试过于频繁，请稍后重试', 429);
     }
 
-    const account = this.accounts.get(this.normalizeUsername(username));
-    const isValid = await this.verifyPassword(password, account ?? this.fallbackPassword!);
-    if (!account || !isValid) {
+    const account = await this.prisma.userDirectoryEntry.findUnique({
+      where: { username: this.normalizeUsername(username) },
+    });
+    const digestSource =
+      account?.authSource === 'password' &&
+      account.enabled &&
+      account.passwordSalt &&
+      account.passwordDigest
+        ? { salt: Buffer.from(account.passwordSalt), digest: Buffer.from(account.passwordDigest) }
+        : this.fallbackPassword!;
+    const isValid = await verifyPasswordDigest(password, digestSource);
+    if (!account || account.authSource !== 'password' || !account.enabled || !isValid) {
       this.recordFailedAttempt(clientIp);
       throw new ApiException('LOGIN_FAILED', '账号或密码错误', 401);
     }
@@ -76,12 +75,12 @@ export class PasswordAuthService implements OnModuleInit {
       data: {
         id: randomUUID(),
         tokenHash: this.tokenHash(token),
-        tenantId: account.identity.tenantId,
-        userId: account.identity.userId,
+        tenantId: account.tenantId,
+        userId: account.userId,
         expiresAt,
       },
     });
-    return { identity: account.identity, token, expiresAt };
+    return { identity: this.identityFromAccount(account), token, expiresAt };
   }
 
   async identityFromCookie(cookieHeader: string | undefined): Promise<Identity> {
@@ -98,11 +97,13 @@ export class PasswordAuthService implements OnModuleInit {
       if (session) await this.prisma.passwordAuthSession.deleteMany({ where: { id: session.id } });
       throw new ApiException('AUTHENTICATION_REQUIRED', '登录已过期，请重新登录', 401);
     }
-    const account = this.accountsByIdentity.get(this.identityKey(session.tenantId, session.userId));
-    if (!account) {
+    const account = await this.prisma.userDirectoryEntry.findUnique({
+      where: { tenantId_userId: { tenantId: session.tenantId, userId: session.userId } },
+    });
+    if (!account || account.authSource !== 'password' || !account.enabled) {
       throw new ApiException('AUTHENTICATION_REQUIRED', '登录已失效，请重新登录', 401);
     }
-    return account.identity;
+    return this.identityFromAccount(account);
   }
 
   async logout(cookieHeader: string | undefined): Promise<void> {
@@ -131,56 +132,85 @@ export class PasswordAuthService implements OnModuleInit {
   }
 
   private async initializeAccounts(): Promise<void> {
-    const fallbackSalt = randomBytes(16);
-    this.fallbackPassword = {
-      salt: fallbackSalt,
-      digest: await this.passwordDigest(randomBytes(32).toString('base64url'), fallbackSalt),
-    };
+    this.fallbackPassword = await randomPasswordDigest();
+    const bootstrap = await this.prisma.passwordAuthBootstrap.findUnique({
+      where: { id: 'password-auth-env-bootstrap-v1' },
+    });
+    if (bootstrap) return;
     for (const user of this.config.values.PASSWORD_AUTH_USERS_JSON) {
-      const salt = randomBytes(16);
-      const digest = await this.passwordDigest(user.password, salt);
-      const account: PasswordAccount = {
-        identity: this.identityFromAccount(user),
-        digest,
-        salt,
-      };
-      this.accounts.set(this.normalizeUsername(user.username), account);
-      this.accountsByIdentity.set(
-        this.identityKey(account.identity.tenantId, account.identity.userId),
-        account,
-      );
+      const existing = await this.prisma.userDirectoryEntry.findUnique({
+        where: { username: this.normalizeUsername(user.username) },
+      });
+      const digest = await createPasswordDigest(user.password);
+      if (existing) continue;
+      const existingIdentity = await this.prisma.userDirectoryEntry.findUnique({
+        where: { tenantId_userId: { tenantId: user.tenantId, userId: user.userId } },
+      });
+      if (existingIdentity) {
+        await this.prisma.userDirectoryEntry.update({
+          where: { tenantId_userId: { tenantId: user.tenantId, userId: user.userId } },
+          data: {
+            username: this.normalizeUsername(user.username),
+            authSource: 'password',
+            passwordSalt: Uint8Array.from(digest.salt),
+            passwordDigest: Uint8Array.from(digest.digest),
+            enabled: true,
+            allowedSensitivities: [...new Set(user.allowedSensitivities)],
+            defaultSensitivity: user.defaultSensitivity,
+          },
+        });
+        continue;
+      }
+      await this.prisma.userDirectoryEntry.create({
+        data: {
+          tenantId: user.tenantId,
+          userId: user.userId,
+          username: this.normalizeUsername(user.username),
+          department: user.department,
+          roles: normalizeAppRoles(user.roles),
+          allowedSensitivities: [...new Set(user.allowedSensitivities)],
+          defaultSensitivity: user.defaultSensitivity,
+          authSource: 'password',
+          passwordSalt: Uint8Array.from(digest.salt),
+          passwordDigest: Uint8Array.from(digest.digest),
+          enabled: true,
+          lastAuthenticatedAt: new Date(),
+        },
+      });
     }
+    await this.prisma.passwordAuthBootstrap.create({
+      data: { id: 'password-auth-env-bootstrap-v1' },
+    });
   }
 
-  private identityFromAccount(account: Environment['PASSWORD_AUTH_USERS_JSON'][number]): Identity {
+  private identityFromAccount(account: {
+    tenantId: string;
+    userId: string;
+    department: string;
+    roles: unknown;
+    managedRoles: unknown;
+    allowedSensitivities: unknown;
+    defaultSensitivity: string | null;
+  }): Identity {
+    const roles = normalizeAppRoles(this.stringArray(account.managedRoles ?? account.roles));
+    const allowedSensitivities = isAdmin(roles)
+      ? [...SENSITIVITIES]
+      : this.sensitivities(account.allowedSensitivities);
     return {
       tenantId: account.tenantId,
       userId: account.userId,
       department: account.department,
-      roles: normalizeAppRoles(account.roles),
-      allowedSensitivities: [...new Set(account.allowedSensitivities)],
-      capabilities: [...new Set(account.capabilities)],
-      defaultSensitivity: account.defaultSensitivity,
+      roles,
+      allowedSensitivities,
+      capabilities: isAdmin(roles)
+        ? [...ADMIN_CAPABILITIES]
+        : ['documents:read', 'documents:write'],
+      defaultSensitivity: allowedSensitivities.includes(
+        account.defaultSensitivity as Identity['defaultSensitivity'],
+      )
+        ? (account.defaultSensitivity as Identity['defaultSensitivity'])
+        : allowedSensitivities[0]!,
     };
-  }
-
-  private async verifyPassword(password: string, digestSource: PasswordDigest): Promise<boolean> {
-    const digest = await this.passwordDigest(password, digestSource.salt);
-    return (
-      digest.length === digestSource.digest.length && timingSafeEqual(digest, digestSource.digest)
-    );
-  }
-
-  private passwordDigest(password: string, salt: Buffer): Promise<Buffer> {
-    return new Promise((resolve, reject) => {
-      scryptCallback(
-        password,
-        salt,
-        64,
-        { N: 16_384, r: 8, p: 1, maxmem: 64 * 1024 * 1024 },
-        (error, derivedKey) => (error ? reject(error) : resolve(derivedKey)),
-      );
-    });
   }
 
   private currentAttempt(clientIp: string): LoginAttempt | undefined {
@@ -211,8 +241,18 @@ export class PasswordAuthService implements OnModuleInit {
     return username.trim().toLowerCase();
   }
 
-  private identityKey(tenantId: string, userId: string): string {
-    return `${tenantId}\u0000${userId}`;
+  private stringArray(value: unknown): string[] {
+    return Array.isArray(value)
+      ? value.filter((item): item is string => typeof item === 'string')
+      : [];
+  }
+
+  private sensitivities(value: unknown): Identity['allowedSensitivities'] {
+    const values = this.stringArray(value).filter(
+      (item): item is Identity['allowedSensitivities'][number] =>
+        (SENSITIVITIES as readonly string[]).includes(item),
+    );
+    return values.length > 0 ? [...new Set(values)] : ['internal'];
   }
 
   private tokenHash(token: string): string {

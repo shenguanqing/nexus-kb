@@ -228,9 +228,16 @@ model QueryAudit {
 model UserDirectoryEntry {
   tenantId            String
   userId              String
+  username            String?  @unique
   department          String
   roles               Json
   managedRoles        Json?
+  allowedSensitivities Json?
+  defaultSensitivity  Sensitivity?
+  authSource          String   @default("identity")
+  passwordSalt        Bytes?
+  passwordDigest      Bytes?
+  enabled             Boolean  @default(true)
   lastAuthenticatedAt DateTime @db.Timestamptz(3)
   createdAt           DateTime @default(now()) @db.Timestamptz(3)
   updatedAt           DateTime @updatedAt @db.Timestamptz(3)
@@ -249,6 +256,11 @@ model PasswordAuthSession {
 
   @@index([expiresAt])
   @@index([tenantId, userId, expiresAt])
+}
+
+model PasswordAuthBootstrap {
+  id          String   @id
+  completedAt DateTime @default(now()) @db.Timestamptz(3)
 }
 
 model DepartmentPolicy {

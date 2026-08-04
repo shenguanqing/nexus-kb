@@ -1,5 +1,15 @@
 import type { AppRole } from '@nexus-kb/contracts';
 
+export const ADMIN_CAPABILITIES = [
+  'documents:read',
+  'documents:write',
+  'documents:delete',
+  'audit:read',
+  'system:read',
+  'access:read',
+  'access:write',
+] as const;
+
 export const IDENTITY_ROLE_INPUTS = [
   'user',
   'admin',

@@ -73,6 +73,7 @@ describe('user directory contract', () => {
       users: [
         {
           userId: 'alice',
+          username: null,
           department: 'finance',
           roles: ['user'],
           roleSource: 'identity',

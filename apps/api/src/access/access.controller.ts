@@ -1,6 +1,19 @@
-import { Body, Controller, Get, Param, Patch, Query, Req } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  HttpCode,
+  Param,
+  Patch,
+  Post,
+  Query,
+  Req,
+} from '@nestjs/common';
 import {
   departmentPolicyUpdateRequestSchema,
+  managedUserCreateRequestSchema,
+  managedUserUpdateRequestSchema,
   userDirectoryQueryRequestSchema,
   userRoleUpdateRequestSchema,
 } from '@nexus-kb/contracts';
@@ -38,6 +51,37 @@ export class AccessController {
       throw new ApiException('USER_ROLE_UPDATE_INVALID', '角色修改参数不合法', 400);
     }
     return this.users.updateRoles(userId, parsed.data, requestIdentity(request), request.id);
+  }
+
+  @Post('users')
+  createUser(@Body() body: unknown, @Req() request: FastifyRequest) {
+    const parsed = managedUserCreateRequestSchema.safeParse(body);
+    if (!parsed.success) {
+      throw new ApiException('USER_ACCOUNT_CREATE_INVALID', '新建账号参数不合法', 400);
+    }
+    return this.users.createManagedUser(parsed.data, requestIdentity(request), request.id);
+  }
+
+  @Patch('users/:userId')
+  updateUser(
+    @Param('userId') userId: string,
+    @Body() body: unknown,
+    @Req() request: FastifyRequest,
+  ) {
+    const parsed = managedUserUpdateRequestSchema.safeParse(body);
+    if (!parsed.success || userId.length < 1 || userId.length > 256) {
+      throw new ApiException('USER_ACCOUNT_UPDATE_INVALID', '账号更新参数不合法', 400);
+    }
+    return this.users.updateManagedUser(userId, parsed.data, requestIdentity(request), request.id);
+  }
+
+  @Delete('users/:userId')
+  @HttpCode(200)
+  deleteUser(@Param('userId') userId: string, @Req() request: FastifyRequest) {
+    if (userId.length < 1 || userId.length > 256) {
+      throw new ApiException('USER_ACCOUNT_DELETE_INVALID', '账号删除参数不合法', 400);
+    }
+    return this.users.deleteManagedUser(userId, requestIdentity(request), request.id);
   }
 
   @Get('departments')

@@ -1,9 +1,14 @@
 import { Injectable } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
+import type { AppRole } from '@nexus-kb/contracts';
 import type {
   DepartmentPolicyListResponse,
   DepartmentPolicyUpdateRequest,
   DepartmentPolicyUpdateResponse,
+  ManagedUserCreateRequest,
+  ManagedUserDeleteResponse,
+  ManagedUserMutationResponse,
+  ManagedUserUpdateRequest,
   UserDirectoryEntry,
   UserDirectoryQueryRequest,
   UserDirectoryQueryResponse,
@@ -13,10 +18,11 @@ import type {
 import { randomUUID } from 'node:crypto';
 
 import { AclPolicy } from '../auth/acl-policy';
-import { isAdmin, normalizeAppRoles } from '../auth/app-role';
-import type { Identity } from '../auth/identity';
+import { ADMIN_CAPABILITIES, isAdmin, normalizeAppRoles } from '../auth/app-role';
+import { SENSITIVITIES, type Identity } from '../auth/identity';
 import { ApiException } from '../common/api-exception';
 import { PrismaService } from '../database/prisma.service';
+import { createPasswordDigest } from '../auth/password-digest';
 
 @Injectable()
 export class UserDirectoryService {
@@ -60,21 +66,23 @@ export class UserDirectoryService {
         select: { allowedSensitivities: true },
       }),
     ]);
+    const roles = entry?.managedRoles
+      ? normalizeAppRoles(this.stringArray(entry.managedRoles))
+      : normalizeAppRoles(identity.roles);
     const policySensitivities = policy
       ? this.sensitivityArray(policy.allowedSensitivities)
       : identity.allowedSensitivities;
-    const allowedSensitivities = identity.allowedSensitivities.filter((item) =>
-      policySensitivities.includes(item),
-    );
+    const allowedSensitivities = isAdmin(roles)
+      ? [...SENSITIVITIES]
+      : identity.allowedSensitivities.filter((item) => policySensitivities.includes(item));
     if (allowedSensitivities.length === 0) {
       throw new ApiException('DEPARTMENT_POLICY_INVALID', '部门权限策略无有效敏感度', 503);
     }
     return {
       ...identity,
-      roles: entry?.managedRoles
-        ? normalizeAppRoles(this.stringArray(entry.managedRoles))
-        : normalizeAppRoles(identity.roles),
+      roles,
       allowedSensitivities,
+      capabilities: isAdmin(roles) ? [...ADMIN_CAPABILITIES] : identity.capabilities,
       defaultSensitivity: allowedSensitivities.includes(identity.defaultSensitivity)
         ? identity.defaultSensitivity
         : allowedSensitivities[0]!,
@@ -109,10 +117,11 @@ export class UserDirectoryService {
     return {
       users: rows.map((row): UserDirectoryEntry => ({
         userId: row.userId,
+        username: row.username,
         department: row.department,
         roles: normalizeAppRoles(this.stringArray(row.managedRoles ?? row.roles)),
         roleSource: row.managedRoles ? 'managed' : 'identity',
-        status: 'observed',
+        status: row.authSource === 'password' ? (row.enabled ? 'active' : 'disabled') : 'observed',
         lastAuthenticatedAt: row.lastAuthenticatedAt.toISOString(),
       })),
       total,
@@ -141,6 +150,7 @@ export class UserDirectoryService {
         const administrators = entries.filter((entry) =>
           isAdmin(normalizeAppRoles(this.stringArray(entry.managedRoles ?? entry.roles))),
         ).length;
+        this.assertAdministratorCannotRemoveSelf(identity, userId, before, roles, false);
         if (isAdmin(before) && !isAdmin(roles) && administrators <= 1) {
           throw new ApiException('LAST_ADMIN_REQUIRED', '不能移除最后一个管理员', 409);
         }
@@ -169,6 +179,191 @@ export class UserDirectoryService {
       user: this.entry(updated),
       traceId,
     };
+  }
+
+  async createManagedUser(
+    request: ManagedUserCreateRequest,
+    identity: Identity,
+    traceId: string,
+  ): Promise<ManagedUserMutationResponse> {
+    this.assertAdminWrite(identity);
+    const digest = await createPasswordDigest(request.password);
+    const roles = normalizeAppRoles(request.roles);
+    const row = await this.prisma.$transaction(async (transaction) => {
+      const duplicate = await transaction.userDirectoryEntry.findFirst({
+        where: {
+          OR: [
+            { username: request.username.toLowerCase() },
+            { tenantId: identity.tenantId, userId: request.userId },
+          ],
+        },
+      });
+      if (duplicate) throw new ApiException('USER_ACCOUNT_CONFLICT', '账号或用户 ID 已存在', 409);
+      const created = await transaction.userDirectoryEntry.create({
+        data: {
+          tenantId: identity.tenantId,
+          userId: request.userId,
+          username: request.username.toLowerCase(),
+          department: request.department,
+          roles,
+          managedRoles: roles,
+          allowedSensitivities: [...new Set(request.allowedSensitivities)],
+          defaultSensitivity: request.defaultSensitivity,
+          authSource: 'password',
+          passwordSalt: Uint8Array.from(digest.salt),
+          passwordDigest: Uint8Array.from(digest.digest),
+          enabled: true,
+          lastAuthenticatedAt: new Date(),
+        },
+      });
+      await transaction.accessAudit.create({
+        data: {
+          id: randomUUID(),
+          tenantId: identity.tenantId,
+          actorUserId: identity.userId,
+          targetType: 'user',
+          targetId: created.userId,
+          eventType: 'user_created',
+          before: {},
+          after: {
+            userId: created.userId,
+            username: created.username,
+            roles,
+            department: created.department,
+          },
+          traceId,
+        },
+      });
+      return created;
+    });
+    return { user: this.entry(row), traceId };
+  }
+
+  async updateManagedUser(
+    userId: string,
+    request: ManagedUserUpdateRequest,
+    identity: Identity,
+    traceId: string,
+  ): Promise<ManagedUserMutationResponse> {
+    this.assertAdminWrite(identity);
+    const password = request.password ? await createPasswordDigest(request.password) : undefined;
+    const row = await this.prisma.$transaction(
+      async (transaction) => {
+        const entries = await transaction.userDirectoryEntry.findMany({
+          where: { tenantId: identity.tenantId },
+        });
+        const target = entries.find((entry) => entry.userId === userId);
+        if (!target) throw new ApiException('USER_DIRECTORY_NOT_FOUND', '用户不存在', 404);
+        if (target.authSource !== 'password') {
+          throw new ApiException('USER_ACCOUNT_NOT_MANAGED', '外部身份账号不能在此管理', 409);
+        }
+        const beforeRole = normalizeAppRoles(this.stringArray(target.managedRoles ?? target.roles));
+        const roles = request.roles ? normalizeAppRoles(request.roles) : beforeRole;
+        const disablesAccount = request.enabled === false;
+        this.assertAdministratorCannotRemoveSelf(
+          identity,
+          userId,
+          beforeRole,
+          roles,
+          disablesAccount,
+        );
+        this.assertAdministratorRemains(entries, beforeRole, roles, disablesAccount);
+        const allowedSensitivities = request.allowedSensitivities
+          ? [...new Set(request.allowedSensitivities)]
+          : this.sensitivityArray(target.allowedSensitivities);
+        const defaultSensitivity = request.defaultSensitivity ?? target.defaultSensitivity;
+        if (!defaultSensitivity || !allowedSensitivities.includes(defaultSensitivity)) {
+          throw new ApiException('USER_ACCOUNT_INVALID', '默认敏感度必须位于允许范围内', 400);
+        }
+        const updated = await transaction.userDirectoryEntry.update({
+          where: { tenantId_userId: { tenantId: identity.tenantId, userId } },
+          data: {
+            department: request.department,
+            managedRoles: request.roles ? roles : undefined,
+            allowedSensitivities: request.allowedSensitivities ? allowedSensitivities : undefined,
+            defaultSensitivity,
+            enabled: request.enabled,
+            passwordSalt: password ? Uint8Array.from(password.salt) : undefined,
+            passwordDigest: password ? Uint8Array.from(password.digest) : undefined,
+          },
+        });
+        if (request.enabled === false || password) {
+          await transaction.passwordAuthSession.deleteMany({
+            where: { tenantId: identity.tenantId, userId },
+          });
+        }
+        await transaction.accessAudit.create({
+          data: {
+            id: randomUUID(),
+            tenantId: identity.tenantId,
+            actorUserId: identity.userId,
+            targetType: 'user',
+            targetId: userId,
+            eventType: 'user_updated',
+            before: this.userAuditSummary(target),
+            after: this.userAuditSummary(updated),
+            traceId,
+          },
+        });
+        return updated;
+      },
+      { isolationLevel: 'Serializable' },
+    );
+    return { user: this.entry(row), traceId };
+  }
+
+  async deleteManagedUser(
+    userId: string,
+    identity: Identity,
+    traceId: string,
+  ): Promise<ManagedUserDeleteResponse> {
+    this.assertAdminWrite(identity);
+    await this.prisma.$transaction(
+      async (transaction) => {
+        const entries = await transaction.userDirectoryEntry.findMany({
+          where: { tenantId: identity.tenantId },
+        });
+        const target = entries.find((entry) => entry.userId === userId);
+        if (!target) throw new ApiException('USER_DIRECTORY_NOT_FOUND', '用户不存在', 404);
+        if (target.authSource !== 'password') {
+          throw new ApiException('USER_ACCOUNT_NOT_MANAGED', '外部身份账号不能在此管理', 409);
+        }
+        if (identity.userId === userId) {
+          throw new ApiException(
+            'SELF_ACCOUNT_DELETE_FORBIDDEN',
+            '管理员不能删除自己的账号，请由另一位管理员操作',
+            409,
+          );
+        }
+        this.assertAdministratorRemains(
+          entries,
+          normalizeAppRoles(this.stringArray(target.managedRoles ?? target.roles)),
+          ['user'],
+          true,
+        );
+        await transaction.passwordAuthSession.deleteMany({
+          where: { tenantId: identity.tenantId, userId },
+        });
+        await transaction.userDirectoryEntry.delete({
+          where: { tenantId_userId: { tenantId: identity.tenantId, userId } },
+        });
+        await transaction.accessAudit.create({
+          data: {
+            id: randomUUID(),
+            tenantId: identity.tenantId,
+            actorUserId: identity.userId,
+            targetType: 'user',
+            targetId: userId,
+            eventType: 'user_deleted',
+            before: this.userAuditSummary(target),
+            after: {},
+            traceId,
+          },
+        });
+      },
+      { isolationLevel: 'Serializable' },
+    );
+    return { deleted: true, traceId };
   }
 
   async listDepartments(identity: Identity): Promise<DepartmentPolicyListResponse> {
@@ -272,18 +467,73 @@ export class UserDirectoryService {
 
   private entry(row: {
     userId: string;
+    username: string | null;
     department: string;
     roles: unknown;
     managedRoles: unknown;
+    authSource: string;
+    enabled: boolean;
     lastAuthenticatedAt: Date;
   }): UserDirectoryEntry {
     return {
       userId: row.userId,
+      username: row.username,
       department: row.department,
       roles: normalizeAppRoles(this.stringArray(row.managedRoles ?? row.roles)),
       roleSource: row.managedRoles ? 'managed' : 'identity',
-      status: 'observed',
+      status: row.authSource === 'password' ? (row.enabled ? 'active' : 'disabled') : 'observed',
       lastAuthenticatedAt: row.lastAuthenticatedAt.toISOString(),
+    };
+  }
+
+  private assertAdministratorRemains(
+    entries: Array<{ roles: unknown; managedRoles: unknown }>,
+    before: readonly AppRole[],
+    after: readonly AppRole[],
+    removesAccount: boolean,
+  ): void {
+    const administrators = entries.filter((entry) =>
+      isAdmin(normalizeAppRoles(this.stringArray(entry.managedRoles ?? entry.roles))),
+    ).length;
+    if (isAdmin(before) && (removesAccount || !isAdmin(after)) && administrators <= 1) {
+      throw new ApiException('LAST_ADMIN_REQUIRED', '不能移除、禁用或降级最后一个管理员', 409);
+    }
+  }
+
+  private assertAdministratorCannotRemoveSelf(
+    identity: Identity,
+    targetUserId: string,
+    before: readonly AppRole[],
+    after: readonly AppRole[],
+    removesAccount: boolean,
+  ): void {
+    if (
+      identity.userId === targetUserId &&
+      isAdmin(before) &&
+      (removesAccount || !isAdmin(after))
+    ) {
+      throw new ApiException(
+        'SELF_ADMIN_MUTATION_FORBIDDEN',
+        '管理员不能禁用自己或将自己降级，请由另一位管理员操作',
+        409,
+      );
+    }
+  }
+
+  private userAuditSummary(row: {
+    userId: string;
+    username: string | null;
+    department: string;
+    roles: unknown;
+    managedRoles: unknown;
+    enabled: boolean;
+  }): Prisma.InputJsonObject {
+    return {
+      userId: row.userId,
+      username: row.username ?? '',
+      department: row.department,
+      roles: normalizeAppRoles(this.stringArray(row.managedRoles ?? row.roles)),
+      enabled: row.enabled,
     };
   }
 

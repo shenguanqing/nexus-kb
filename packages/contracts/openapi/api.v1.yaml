@@ -156,7 +156,7 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
   /v1/access/users:
     get:
-      summary: List observed authenticated users within the caller's tenant or department scope
+      summary: List managed local accounts and observed authenticated users within the caller's tenant or department scope
       parameters:
         - { name: query, in: query, schema: { type: string, minLength: 1, maxLength: 128 } }
         - { name: department, in: query, schema: { type: string, minLength: 1, maxLength: 128 } }
@@ -179,6 +179,54 @@ paths:
               schema: { $ref: '#/components/schemas/ApiError' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      summary: Create a local password account in the current tenant
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ManagedUserCreateRequest' }
+      responses:
+        '200':
+          description: Local account created and audited
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ManagedUserMutationResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { description: Username or user ID already exists }
+  /v1/access/users/{userId}:
+    patch:
+      summary: Update a managed local password account
+      parameters:
+        - { name: userId, in: path, required: true, schema: { type: string, maxLength: 256 } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ManagedUserUpdateRequest' }
+      responses:
+        '200':
+          description: Account updated and audited
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ManagedUserMutationResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { description: External account or final administrator protection }
+    delete:
+      summary: Delete a managed local password account
+      parameters:
+        - { name: userId, in: path, required: true, schema: { type: string, maxLength: 256 } }
+      responses:
+        '200':
+          description: Account deleted and audited
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ManagedUserDeleteResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { description: External account or final administrator protection }
   /v1/access/users/{userId}/roles:
     patch:
       summary: Replace the application role for an observed tenant user
@@ -648,9 +696,10 @@ components:
     UserDirectoryEntry:
       type: object
       additionalProperties: false
-      required: [userId, department, roles, roleSource, status, lastAuthenticatedAt]
+      required: [userId, username, department, roles, roleSource, status, lastAuthenticatedAt]
       properties:
         userId: { type: string, minLength: 1, maxLength: 256 }
+        username: { type: [string, 'null'], minLength: 1, maxLength: 64 }
         department: { type: string, minLength: 1, maxLength: 128 }
         roles:
           type: array
@@ -658,7 +707,7 @@ components:
           maxItems: 1
           items: { type: string, enum: [user, admin] }
         roleSource: { type: string, enum: [identity, managed] }
-        status: { const: observed }
+        status: { type: string, enum: [active, disabled, observed] }
         lastAuthenticatedAt: { type: string, format: date-time }
     UserDirectoryQueryResponse:
       type: object
@@ -692,6 +741,52 @@ components:
       required: [user, traceId]
       properties:
         user: { $ref: '#/components/schemas/UserDirectoryEntry' }
+        traceId: { type: string, format: uuid }
+    ManagedUserCreateRequest:
+      type: object
+      additionalProperties: false
+      required:
+        [userId, username, password, department, roles, allowedSensitivities, defaultSensitivity]
+      properties:
+        userId: { type: string, minLength: 1, maxLength: 256 }
+        username: { type: string, minLength: 1, maxLength: 64 }
+        password: { type: string, minLength: 12, maxLength: 256, format: password }
+        department: { type: string, minLength: 1, maxLength: 128 }
+        roles: { $ref: '#/components/schemas/UserRoleUpdateRequest/properties/roles' }
+        allowedSensitivities:
+          type: array
+          minItems: 1
+          maxItems: 3
+          items: { $ref: '#/components/schemas/Sensitivity' }
+        defaultSensitivity: { $ref: '#/components/schemas/Sensitivity' }
+    ManagedUserUpdateRequest:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        department: { type: string, minLength: 1, maxLength: 128 }
+        roles: { $ref: '#/components/schemas/UserRoleUpdateRequest/properties/roles' }
+        allowedSensitivities:
+          type: array
+          minItems: 1
+          maxItems: 3
+          items: { $ref: '#/components/schemas/Sensitivity' }
+        defaultSensitivity: { $ref: '#/components/schemas/Sensitivity' }
+        password: { type: string, minLength: 12, maxLength: 256, format: password }
+        enabled: { type: boolean }
+    ManagedUserMutationResponse:
+      type: object
+      additionalProperties: false
+      required: [user, traceId]
+      properties:
+        user: { $ref: '#/components/schemas/UserDirectoryEntry' }
+        traceId: { type: string, format: uuid }
+    ManagedUserDeleteResponse:
+      type: object
+      additionalProperties: false
+      required: [deleted, traceId]
+      properties:
+        deleted: { const: true }
         traceId: { type: string, format: uuid }
     DepartmentPolicy:
       type: object

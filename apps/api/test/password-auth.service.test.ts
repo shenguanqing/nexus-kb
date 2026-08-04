@@ -21,8 +21,30 @@ function fixture() {
   const create = vi.fn().mockResolvedValue({});
   const findUnique = vi.fn();
   const remove = vi.fn().mockResolvedValue({});
+  const accounts = new Map<string, Record<string, unknown>>();
+  const bootstrap = {
+    findUnique: vi.fn().mockResolvedValue(null),
+    create: vi.fn().mockResolvedValue({}),
+  };
+  const userDirectoryEntry = {
+    findUnique: vi.fn(({ where }: { where: Record<string, unknown> }) => {
+      if ('username' in where) return accounts.get(String(where.username)) ?? null;
+      const compound = where.tenantId_userId as { tenantId: string; userId: string };
+      return (
+        [...accounts.values()].find(
+          (entry) => entry.tenantId === compound.tenantId && entry.userId === compound.userId,
+        ) ?? null
+      );
+    }),
+    create: vi.fn(({ data }: { data: Record<string, unknown> }) => {
+      accounts.set(String(data.username), data);
+      return data;
+    }),
+  };
   const prisma = {
     passwordAuthSession: { deleteMany, create, findUnique, delete: remove },
+    passwordAuthBootstrap: bootstrap,
+    userDirectoryEntry,
   } as unknown as PrismaService;
   const config = {
     values: {

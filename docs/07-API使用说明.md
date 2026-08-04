@@ -171,7 +171,7 @@ unset NEXUSKB_ACCESS_TOKEN
 
 ## 4. 角色、capability 与 ACL
 
-应用角色只有 `user` 和 `admin`。角色不能替代 capability；管理员也不能跨 tenant、绕过允许敏感度或放宽数据出网策略。
+应用角色只有 `user` 和 `admin`。`admin` 自动获得当前 tenant 的全部 capability 和 `public`、`internal`、`confidential` 访问范围；仍不能跨 tenant，也不能放宽 confidential 数据出网策略。`user` 的具体操作仍由 capability 强制校验。
 
 | 接口范围                             | 最低要求                                |
 | ------------------------------------ | --------------------------------------- |
@@ -182,10 +182,11 @@ unset NEXUSKB_ACCESS_TOKEN
 | 审计事件                             | `audit:read`                            |
 | Provider 与系统状态                  | `system:read`                           |
 | 用量与成本                           | `admin` + `system:read`                 |
-| 用户与部门读取                       | `access:read`；普通用户仍固定为自身部门 |
-| 角色和部门策略修改                   | `admin` + `access:write`                |
+| 用户与部门读取                       | `admin` 全范围；普通用户仍固定为自身部门 |
+| 本地后台账号创建、编辑、禁用、删除    | `admin`                                 |
+| 角色和部门策略修改                   | `admin`                                 |
 
-所有资源请求先强制 tenant 和允许敏感度。普通用户在此基础上只能访问 public、同部门或本人拥有的文档；管理员只获得当前 tenant 内的跨部门范围。资源不存在和 ACL 不可见通常统一为 404，客户端不能据此推断其他 tenant 或部门的数据是否存在。
+所有资源请求先强制 tenant。普通用户还受允许敏感度、public/同部门/本人范围限制；管理员可访问当前 tenant 内的全部敏感度和部门范围。资源不存在和 ACL 不可见通常统一为 404，客户端不能据此推断其他 tenant 的数据是否存在。
 
 客户端不得发送可信身份字段、任意数据库过滤表达式、Chroma `where`、collection 名称或向量值。
 
@@ -252,7 +253,10 @@ unset NEXUSKB_ACCESS_TOKEN
 | 方法 | 路径 | 要求 | 说明 |
 | --- | --- | --- | --- |
 | `GET` | `/v1/audit/events` | `audit:read` | 当前 tenant 的结构化审计事件 |
-| `GET` | `/v1/access/users` | `access:read` | 已验证用户观察目录 |
+| `GET` | `/v1/access/users` | `access:read` | 本地后台账号与已验证身份目录 |
+| `POST` | `/v1/access/users` | `admin` | 创建本地后台账号 |
+| `PATCH` | `/v1/access/users/{userId}` | `admin` | 编辑本地账号、重置密码、启用或禁用 |
+| `DELETE` | `/v1/access/users/{userId}` | `admin` | 删除本地后台账号并撤销会话 |
 | `PATCH` | `/v1/access/users/{userId}/roles` | `admin` + `access:write` | 将应用角色替换为 `user` 或 `admin` |
 | `GET` | `/v1/access/departments` | `access:read` | 有效部门敏感度策略 |
 | `PATCH` | `/v1/access/departments/{department}` | `admin` + `access:write` | 只能收紧部门允许敏感度 |
@@ -262,7 +266,7 @@ unset NEXUSKB_ACCESS_TOKEN
 
 审计接口支持 `type=query|document_lifecycle|cloud_policy|access_change`、`before` 和 `limit`，返回 `nextBefore` 时间游标及当前 tenant、事件类型筛选范围内的 `total`。下一页继续传递 `before=<nextBefore>`；`before` 不改变 `total`，游标不是权限凭据。
 
-用户目录使用 `offset`/`limit` 分页，支持 `query` 和 `department`。普通用户即使有 `access:read`，也不能通过 `department` 查看其他部门。用量接口要求同时提供 `from` 和 `to`。
+用户目录使用 `offset`/`limit` 分页，支持 `query` 和 `department`。管理员可以管理本地密码账号；外部 OIDC 身份账号仅可查看，应在身份源中增删。普通用户即使有 `access:read`，也不能通过 `department` 查看其他部门。用量接口要求同时提供 `from` 和 `to`。
 
 ---
 
@@ -473,7 +477,7 @@ curl --fail-with-body \
 4. `confidential` 默认不能发送任何云端模型；本机 Ollama Embedding 不代表允许云端 LLM/Rerank。
 5. 文档片段是不可信数据，调用方不得把片段内容解释为系统指令或工具调用授权。
 6. 分块详情、审计和系统状态返回均为最小披露；不得尝试从 403/404、筛选结果或计数推断无权资源。
-7. 业务删除、角色修改和部门策略修改必须通过 API，使状态机、tenant/ACL、审计和补偿逻辑生效；不得直接用 DBeaver 修改业务表。
+7. 业务删除、后台账号、角色修改和部门策略修改必须通过 API，使状态机、tenant/ACL、审计和补偿逻辑生效；不得直接用 DBeaver 修改业务表。最后一个管理员不能删除、禁用或降级。
 8. Embedding Provider、模型、维度、关键分块或脱敏规则变化需要新 collection 和索引迁移，不能只重启 API 后继续写旧索引。
 
 ---
