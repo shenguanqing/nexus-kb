@@ -41,10 +41,10 @@ POST /internal/v1/parse
 | ------------- | -------------------------------------------------- |
 | `text`        | 非空文本                                           |
 | `elementType` | `heading`、`paragraph`、`table_row`、`cad_text` 等 |
-| `page`        | 页码；当前已实现格式通常为空                       |
+| `page`        | PDF 页码；图片 OCR 固定为 1                        |
 | `sheet`       | XLSX 工作表名                                      |
 | `sectionPath` | 标题、布局、块和图层等结构路径                     |
-| `bbox`        | 四元坐标框；当前解析器尚未填充                     |
+| `bbox`        | OCR 文字的 `[x1, y1, x2, y2]` 四元坐标框           |
 | `metadata`    | 行号、表头、实体类型、图层等格式特有信息           |
 
 ## 解析器算法
@@ -83,6 +83,14 @@ TXT 和 Markdown 共用 UTF-8 行扫描算法：
 - metadata 保存原始行号和表头数组。
 
 行数限制按整个工作簿累计；空行不输出元素但仍计入扫描行数。公式读取工作簿保存的缓存结果，不负责重新计算。
+
+### `parsers/pdf.py`
+
+PDF 先使用 pypdf 严格检查加密状态和页数上限，再交给固定版本 Unstructured 的本地 `auto` 策略。文本型 PDF 使用直接文本提取；扫描型 PDF 仅使用镜像内的 Poppler/Tesseract 中文与英文语言包，不配置或调用远程推理 URL。输出保留页码，空结果按统一规则失败。Worker 设置 `DO_NOT_TRACK=true`，禁止 Unstructured 遥测。
+
+### `parsers/image.py`
+
+PNG、JPG 和 JPEG 先由 Pillow 校验文件完整性与总像素上限，再使用 CPU 模式 EasyOCR。中文/英文模型在镜像构建阶段写入只读模型目录，运行时设置 `download_enabled=False`，不会因用户文件触发下载。EasyOCR 的用户网络目录固定在 `PARSER_TEMP_PATH/easyocr-user-network`，避免写入只读的 Worker 根文件系统。每个文字元素保存置信度与坐标框，低于阈值的元素只产生数量 warning，不在 warning 中包含正文。
 
 ### `parsers/dxf.py`
 
@@ -129,8 +137,8 @@ DWG 使用“受控转换后复用 DXF”：
 | XLSX                          | 已实现               | openpyxl                       |
 | DXF                           | 已实现               | ezdxf                          |
 | DWG                           | 已实现，依赖本地 ODA | ODA → DXF → ezdxf              |
-| PDF                           | 未实现               | 规划为 Unstructured，Tika 兜底 |
-| PNG / JPG                     | 未实现               | 规划为 OCR                     |
+| PDF                           | 已实现               | Unstructured；失败或空结果时由内网 Tika 兜底 |
+| PNG / JPG / JPEG              | 已实现               | EasyOCR（CPU、离线模型）       |
 | PPTX / HTML / DOC / RTF / EML | 未实现               | 后续阶段                       |
 
 ## 资源与安全限制
@@ -140,6 +148,16 @@ DWG 使用“受控转换后复用 DXF”：
 - `MAX_PARSE_BYTES`
 - `MAX_ELEMENTS`
 - `MAX_SPREADSHEET_ROWS`
+- `MAX_PDF_PAGES`
+- `MAX_IMAGE_PIXELS`
+- `OCR_MODEL_STORAGE_PATH`
+- `OCR_LANGUAGES`
+- `OCR_CONFIDENCE_WARNING_THRESHOLD`
+- `TIKA_ENABLED`
+- `TIKA_BASE_URL`
+- `TIKA_REQUEST_TIMEOUT_SECONDS`
+- `MAX_TIKA_RESPONSE_BYTES`
+- `TIKA_VERSION`
 - `MAX_CAD_ENTITIES`
 - `MAX_CAD_INSERT_DEPTH`
 - `MAX_ARCHIVE_ENTRIES`
@@ -147,7 +165,9 @@ DWG 使用“受控转换后复用 DXF”：
 - `DWG_CONVERSION_TIMEOUT_SECONDS`
 - `MAX_DWG_CONVERTED_BYTES`
 
-请求不能指定解析器可执行文件、临时目录或任意转换参数。日志只记录 trace、job、document、parser 和安全错误类型，不记录完整正文或内部文件路径。
+请求不能指定 Tika 地址、解析器可执行文件、临时目录或任意转换参数。Compose 中的 Tika 只连接
+`backend` 内部网络，不发布宿主机端口；加密、页数超限等安全拒绝不会进入 fallback。日志只记录
+trace、job、document、parser 和安全错误类型，不记录完整正文或内部文件路径。
 
 ## 开发与验证
 
@@ -160,5 +180,21 @@ ruff check .
 mypy app tests
 ```
 
-Python 版本要求为 3.11。Docker 和 DWG 专用 Worker 的启动方式见根目录
+Python 版本要求为 3.11。宿主机测试适合验证解析契约、限制和安全分支，但 PDF/OCR 的完整运行环境以 Docker 镜像为准：镜像还包含 Poppler、Tesseract 中文/英文语言包、CPU PyTorch，以及构建阶段预载且运行时只读的 EasyOCR 和 NLTK 模型资源。运行时不得为用户文档下载模型或语言资源。涉及 `requirements.lock`、PDF、图片、OCR 或 Dockerfile 的变更，至少还应构建并启动 Parser 镜像，然后从容器内检查 Worker readiness：
+
+```bash
+docker compose -f compose.yaml -f compose.dwg.yaml exec parser-worker python -c \
+  "import urllib.request; print(urllib.request.urlopen('http://127.0.0.1:8000/health/ready', timeout=10).read().decode())"
+```
+
+基础模式应删除 `-f compose.dwg.yaml`。响应必须包含 `rawDocs=up` 和 `tika=up`；DWG 模式还必须包含 `dwgConverter=up`。
+
+DWG 派生镜像构建完成后，可确认没有误装 CUDA 运行时：
+
+```bash
+docker run --rm --platform linux/amd64 --entrypoint python nexus-kb-parser-worker \
+  -c "import torch; print({'torch': torch.__version__, 'cuda': torch.version.cuda})"
+```
+
+输出中的 `cuda` 应为 `None`。Docker 和 DWG 专用 Worker 的启动方式见根目录
 [`README.md`](../../README.md) 与 [`docs/06-部署运维手册.md`](../../docs/06-部署运维手册.md)。

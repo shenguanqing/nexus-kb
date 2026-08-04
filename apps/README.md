@@ -40,7 +40,7 @@ Vue Web ──HTTP──▶ NestJS API
 
 - 查 API 启动、模块和安全边界：[`api/README.md`](./api/README.md)。
 - 查前端路由、页面、状态和安全渲染：[`web/README.md`](./web/README.md)。
-- 查 TXT、Markdown、DOCX、XLSX、DXF、DWG 解析算法：[`parser-worker/README.md`](./parser-worker/README.md)。
+- 查 TXT、Markdown、PDF、DOCX、XLSX、PNG/JPG、DXF、DWG 解析算法：[`parser-worker/README.md`](./parser-worker/README.md)。
 - 查本地 BGE 重排模型、启动和安全边界：[`reranker-worker/README.md`](./reranker-worker/README.md)。
 - 查公开接口字段和认证方式：[`docs/07-API使用说明.md`](../docs/07-API使用说明.md)。
 - 查完整架构和数据流：[`docs/02-技术设计.md`](../docs/02-技术设计.md)。

@@ -179,6 +179,10 @@ const environmentSchema = z
     DATABASE_URL: z.url().refine((url) => url.startsWith('postgresql://'), 'must use postgresql'),
     REDIS_URL: z.url().refine((url) => url.startsWith('redis://'), 'must use redis'),
     PARSER_WORKER_URL: z.url(),
+    PARSER_DWG_WORKER_URL: z
+      .string()
+      .trim()
+      .default('http://parser-worker-dwg:8000'),
     PARSER_INTERNAL_TOKEN: z.string().min(16),
     PARSER_REQUEST_TIMEOUT_MS: z.coerce.number().int().min(100).max(900_000).default(240_000),
     RAW_DOCS_PATH: z.string().min(1),
@@ -327,6 +331,23 @@ const environmentSchema = z
         code: 'custom',
         path: ['AUTH_REQUIRED'],
         message: 'must be true when password authentication is enabled',
+      });
+    }
+    if (
+      environment.PARSER_DWG_WORKER_URL &&
+      environment.PARSER_DWG_WORKER_URL !== 'http://parser-worker-dwg:8000'
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['PARSER_DWG_WORKER_URL'],
+        message: 'must use the approved Compose parser-worker-dwg endpoint',
+      });
+    }
+    if (environment.DWG_CONVERSION_ENABLED && !environment.PARSER_DWG_WORKER_URL) {
+      context.addIssue({
+        code: 'custom',
+        path: ['PARSER_DWG_WORKER_URL'],
+        message: 'is required when DWG conversion is enabled',
       });
     }
     if (environment.PASSWORD_AUTH_ENABLED && environment.PASSWORD_AUTH_USERS_JSON.length === 0) {

@@ -53,11 +53,16 @@ services:
     environment:
       PARSER_INTERNAL_TOKEN: ${PARSER_INTERNAL_TOKEN}
       RAW_DOCS_PATH: /data/raw-docs
-      DWG_CONVERSION_ENABLED: ${DWG_CONVERSION_ENABLED:-true}
-      DWG_CONVERTER_EXECUTABLE: ${DWG_CONVERTER_EXECUTABLE:-/usr/local/bin/nexus-oda-file-converter}
-      DWG_CONVERTER_RELEASE: ${DWG_CONVERTER_RELEASE:-not-installed}
-      DWG_OUTPUT_VERSION: ${DWG_OUTPUT_VERSION:-ACAD2018}
+      # 常规解析保持原生架构；DWG 仅交由 compose.dwg.yaml 的专用 x86 Worker。
+      DWG_CONVERSION_ENABLED: 'false'
       PARSER_TEMP_PATH: ${PARSER_TEMP_PATH:-/tmp/parser}
+      XDG_CACHE_HOME: /tmp/parser/.cache
+      MPLCONFIGDIR: /tmp/parser/.cache/matplotlib
+      NLTK_DATA: /opt/nltk_data
+      OCR_MODEL_STORAGE_PATH: /opt/easyocr-models
+      TIKA_ENABLED: ${TIKA_ENABLED:-true}
+      TIKA_BASE_URL: http://tika:9998
+      TIKA_VERSION: '3.2.3.0'
       MAX_DWG_CONVERTED_BYTES: ${MAX_DWG_CONVERTED_BYTES:-209715200}
       MAX_ARCHIVE_ENTRIES: ${MAX_ARCHIVE_ENTRIES:-10000}
       MAX_ARCHIVE_UNCOMPRESSED_BYTES: ${MAX_ARCHIVE_UNCOMPRESSED_BYTES:-524288000}
@@ -78,6 +83,19 @@ services:
       retries: 6
       start_period: 10s
     read_only: true
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - backend
+
+  tika:
+    image: apache/tika:3.2.3.0
+    restart: unless-stopped
+    expose:
+      - '9998'
+    read_only: true
+    tmpfs:
+      - /tmp:size=256m,mode=1777
     security_opt:
       - no-new-privileges:true
     networks:

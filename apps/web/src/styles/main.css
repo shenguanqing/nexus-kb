@@ -2251,6 +2251,11 @@ a {
   color: var(--kb-color-text-secondary);
   line-height: 1.65;
 }
+.access-toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
 .access-filter-form,
 .usage-filter-form {
   display: flex;

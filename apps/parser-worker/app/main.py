@@ -17,7 +17,10 @@ from app.parsers.dwg import (
     parse_dwg,
 )
 from app.parsers.dxf import parse_dxf
+from app.parsers.image import parse_image
+from app.parsers.pdf import parse_pdf
 from app.parsers.text import parse_text
+from app.parsers.tika import TikaUnavailableError, parse_with_tika, tika_is_ready
 from app.parsers.xlsx import parse_xlsx
 from app.schemas import ParseRequest, ParseResponse
 from app.security import validate_storage_path
@@ -28,6 +31,10 @@ SUPPORTED_TYPES = {
     ".md": {"text/markdown", "text/plain"},
     ".docx": {"application/vnd.openxmlformats-officedocument.wordprocessingml.document"},
     ".xlsx": {"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"},
+    ".pdf": {"application/pdf"},
+    ".png": {"image/png"},
+    ".jpg": {"image/jpeg"},
+    ".jpeg": {"image/jpeg"},
     ".dxf": {
         "image/vnd.dxf",
         "application/dxf",
@@ -46,6 +53,11 @@ VALUE_ERROR_CODES = {
     "CAD 实体数量超过限制": "CAD_ENTITY_LIMIT_EXCEEDED",
     "解析结果元素数量超过限制": "PARSER_ELEMENT_LIMIT_EXCEEDED",
     "DXF 文件损坏或格式不受支持": "DXF_INVALID_OR_UNSUPPORTED",
+    "PDF 文件已加密": "PDF_ENCRYPTED",
+    "PDF 页数超过限制": "PDF_PAGE_LIMIT_EXCEEDED",
+    "图片像素数量超过限制": "IMAGE_PIXEL_LIMIT_EXCEEDED",
+    "OCR 返回格式无效": "OCR_INVALID_RESPONSE",
+    "Tika 返回内容超过限制": "TIKA_RESPONSE_LIMIT_EXCEEDED",
 }
 DWG_INVALID_ERROR_CODES = {
     "DWG 版本不受支持或文件签名无效": "DWG_VERSION_UNSUPPORTED",
@@ -94,7 +106,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         converter_status = "disabled"
         if resolved_settings.dwg_conversion_enabled:
             converter_status = "up" if converter_ready else "down"
-        is_ready = raw_docs_ready and converter_ready
+        tika_ready = not resolved_settings.tika_enabled or tika_is_ready(
+            resolved_settings.tika_base_url,
+            min(resolved_settings.tika_request_timeout_seconds, 3),
+        )
+        tika_status = "disabled"
+        if resolved_settings.tika_enabled:
+            tika_status = "up" if tika_ready else "down"
+        is_ready = raw_docs_ready and converter_ready and tika_ready
         if not is_ready:
             response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
         return {
@@ -102,6 +121,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             "checks": {
                 "rawDocs": {"status": "up" if raw_docs_ready else "down"},
                 "dwgConverter": {"status": converter_status},
+                "tika": {"status": tika_status},
             },
         }
 
@@ -148,6 +168,53 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                     resolved_settings.max_elements,
                 )
                 parser = "openpyxl"
+            elif suffix == ".pdf":
+                try:
+                    elements, warnings, parser_version = parse_pdf(
+                        path,
+                        resolved_settings.ocr_languages.split(","),
+                        resolved_settings.max_pdf_pages,
+                        resolved_settings.max_elements,
+                    )
+                except ValueError:
+                    raise
+                except Exception:
+                    if not resolved_settings.tika_enabled:
+                        raise
+                    elements, warnings, parser_version = parse_with_tika(
+                        path,
+                        payload.mime_type,
+                        resolved_settings.tika_base_url,
+                        resolved_settings.tika_request_timeout_seconds,
+                        resolved_settings.max_tika_response_bytes,
+                        resolved_settings.max_elements,
+                        resolved_settings.tika_version,
+                    )
+                    parser = "apache-tika"
+                else:
+                    parser = "unstructured-pdf"
+                    if not elements and resolved_settings.tika_enabled:
+                        elements, warnings, parser_version = parse_with_tika(
+                            path,
+                            payload.mime_type,
+                            resolved_settings.tika_base_url,
+                            resolved_settings.tika_request_timeout_seconds,
+                            resolved_settings.max_tika_response_bytes,
+                            resolved_settings.max_elements,
+                            resolved_settings.tika_version,
+                        )
+                        parser = "apache-tika"
+            elif suffix in {".png", ".jpg", ".jpeg"}:
+                elements, warnings, parser_version = parse_image(
+                    path,
+                    resolved_settings.ocr_model_storage_path,
+                    resolved_settings.parser_temp_path / "easyocr-user-network",
+                    resolved_settings.ocr_languages.split(","),
+                    resolved_settings.max_image_pixels,
+                    resolved_settings.max_elements,
+                    resolved_settings.ocr_confidence_warning_threshold,
+                )
+                parser = "easyocr"
             elif suffix == ".dxf":
                 result = parse_dxf(
                     path,
@@ -185,6 +252,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         except DwgConversionUnavailableError as error:
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(error)
+            ) from error
+        except TikaUnavailableError as error:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=str(error),
+                headers=parser_error_headers("TIKA_UNAVAILABLE"),
             ) from error
         except DwgConversionInvalidError as error:
             raise HTTPException(

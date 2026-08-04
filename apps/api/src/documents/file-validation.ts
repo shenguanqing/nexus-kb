@@ -20,6 +20,22 @@ const types = {
     canonicalMime: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
     acceptedMimes: new Set(['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet']),
   },
+  '.pdf': {
+    canonicalMime: 'application/pdf',
+    acceptedMimes: new Set(['application/pdf']),
+  },
+  '.png': {
+    canonicalMime: 'image/png',
+    acceptedMimes: new Set(['image/png']),
+  },
+  '.jpg': {
+    canonicalMime: 'image/jpeg',
+    acceptedMimes: new Set(['image/jpeg']),
+  },
+  '.jpeg': {
+    canonicalMime: 'image/jpeg',
+    acceptedMimes: new Set(['image/jpeg']),
+  },
   '.dxf': {
     canonicalMime: 'image/vnd.dxf',
     acceptedMimes: new Set([
@@ -84,7 +100,11 @@ export async function validateUploadedFile(
     await validateDwgSignature(path);
   } else {
     const detected = await fileTypeFromFile(path);
-    if (detected?.ext !== extension.slice(1) || detected.mime !== expected.canonicalMime) {
+    const detectedExtension = detected?.ext === 'jpg' ? '.jpg' : `.${detected?.ext ?? ''}`;
+    const extensionMatches =
+      detectedExtension === extension ||
+      (detectedExtension === '.jpg' && (extension === '.jpg' || extension === '.jpeg'));
+    if (!extensionMatches || detected?.mime !== expected.canonicalMime) {
       throw new ApiException('FILE_SIGNATURE_MISMATCH', '文件签名与扩展名不匹配', 415);
     }
   }

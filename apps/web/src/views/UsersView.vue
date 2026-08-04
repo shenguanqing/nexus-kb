@@ -217,8 +217,10 @@ onMounted(() => load());
         <div class="text-block">
           展示 {{ scopeText }} 内已完成认证的用户摘要，角色来自受验证身份声明。
         </div>
-        <el-tag type="info" effect="plain">身份源 + 托管角色</el-tag>
-        <el-button v-if="canWrite" type="primary" @click="openCreateUser">新增后台账号</el-button>
+        <div class="access-toolbar-actions">
+          <el-tag type="info" effect="plain">身份源 + 托管角色</el-tag>
+          <el-button v-if="canWrite" type="primary" @click="openCreateUser">新增后台账号</el-button>
+        </div>
       </div>
       <form
         v-if="!isMobile"

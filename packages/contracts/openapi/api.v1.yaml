@@ -1349,7 +1349,7 @@ components:
       enum: [uploaded, processing, prepared, active, policy_blocked, failed, deleting, deleted]
     DocumentFormat:
       type: string
-      enum: [txt, md, docx, xlsx, dxf, dwg]
+      enum: [txt, md, pdf, docx, xlsx, png, jpg, jpeg, dxf, dwg]
     DocumentListItem:
       type: object
       additionalProperties: false

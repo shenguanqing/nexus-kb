@@ -1,10 +1,14 @@
 import { z } from 'zod';
 
+import { documentFormats } from './documents';
+
+const storageKeyPattern = new RegExp(`^[0-9a-f-]{36}\\.(${documentFormats.join('|')})$`, 'i');
+
 export const ingestionPayloadSchema = z
   .object({
     ingestionJobId: z.uuid(),
     documentId: z.uuid(),
-    storageKey: z.string().regex(/^[0-9a-f-]{36}\.(txt|md|docx|xlsx|dxf|dwg)$/i),
+    storageKey: z.string().regex(storageKeyPattern),
   })
   .strict();
 

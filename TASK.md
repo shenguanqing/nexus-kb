@@ -171,6 +171,11 @@ Vue 3 + TypeScript + Vite
 
 阶段 15 已完成。本地 Ollama / Gemini 配置与待建立索引恢复已补齐。当前优先入口为第 3.11 节的真实 `Drawing1.dwg` Web 端到端验证：ODA Linux x64 包和转换器已就绪，但服务端鉴权保持启用，需要已登录的本地会话完成上传。阶段 14 的真实数据质量验收仍按第 5 节保留；完成 DWG 验证后再进入阶段 16 服务器上线准备。
 
+- [x] P0 解析能力补齐第一批：API/契约/Web 已接受 PDF、PNG、JPG、JPEG；Worker 使用本地 Unstructured 与 EasyOCR，增加 PDF 页数、图片像素、离线模型和 OCR 置信度限制，并通过 ARM64 镜像内真实 PDF/OCR 冒烟验证。EasyOCR 用户网络目录固定为 Parser tmpfs，避免最终只读 Worker 写入 `~/.EasyOCR` 导致图片任务失败。
+- [x] Apple Silicon 本地 DWG/OCR Worker 拆分：常规文件由原生 `parser-worker` 处理，API 仅把 DWG 路由到 `linux/amd64` 的 ODA `parser-worker-dwg`；两个内部 Worker 都通过独立 readiness 验证，避免 x86 模拟拖慢图片 OCR。
+- [x] P0 受控 Tika 兜底：固定版本服务只连接内网；Unstructured 非安全校验失败或空结果时 fallback，含 readiness、超时、返回体上限、warning 和真实 PDF 冒烟验证。
+- [ ] P0 解析能力后续：提交固定 PDF/图片测试样本，并完成上传到索引的容器集成测试。
+
 - [x] 新增 Stylelint CSS 声明语义排序配置及独立检查/自动修复命令，覆盖 CSS、SCSS 和 Vue SFC；现有大文件样式不在本次配置变更中批量重排。
 - [x] 为 Playwright E2E 增加独立 TypeScript project reference，修复编辑器 ESLint Project Service 无法解析 `apps/web/e2e` 测试文件的问题。
 - [x] 修复 LLM 响应正文读取期间的超时分类：主模型故障切换备用模型后，备用模型的 `AbortError` 现返回可重试的 `LLM_TIMEOUT`，不再误报 `LLM_INVALID_RESPONSE`；Google 与 OpenAI-compatible adapter 均覆盖回归测试。

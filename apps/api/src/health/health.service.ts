@@ -19,14 +19,25 @@ export class HealthService {
     status: 'ready' | 'not_ready';
     checks: Record<string, CheckResult>;
   }> {
-    const entries = await Promise.all([
-      this.checkTcp('postgres', this.config.values.DATABASE_URL),
-      this.checkTcp('redis', this.config.values.REDIS_URL),
-      this.checkVectorStore(),
+    const parserChecks: Array<Promise<[string, CheckResult]>> = [
       this.checkHttp(
         'parserWorker',
         new URL('/health/ready', this.config.values.PARSER_WORKER_URL).toString(),
       ),
+    ];
+    if (this.config.values.DWG_CONVERSION_ENABLED) {
+      parserChecks.push(
+        this.checkHttp(
+          'parserDwgWorker',
+          new URL('/health/ready', this.config.values.PARSER_DWG_WORKER_URL).toString(),
+        ),
+      );
+    }
+    const entries = await Promise.all([
+      this.checkTcp('postgres', this.config.values.DATABASE_URL),
+      this.checkTcp('redis', this.config.values.REDIS_URL),
+      this.checkVectorStore(),
+      ...parserChecks,
       this.checkDirectory('rawDocs', this.config.values.RAW_DOCS_PATH),
     ]);
     const checks = Object.fromEntries(entries);

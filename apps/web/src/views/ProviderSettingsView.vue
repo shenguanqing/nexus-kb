@@ -42,6 +42,9 @@ const numericFields = [
   'MAX_PARSE_BYTES',
   'MAX_ELEMENTS',
   'MAX_SPREADSHEET_ROWS',
+  'MAX_PDF_PAGES',
+  'MAX_IMAGE_PIXELS',
+  'OCR_CONFIDENCE_WARNING_THRESHOLD',
   'MAX_CAD_ENTITIES',
   'MAX_CAD_INSERT_DEPTH',
   'DWG_CONVERSION_TIMEOUT_SECONDS',
@@ -481,6 +484,25 @@ onUnmounted(stopPolling);
                     v-model="numericForm.MAX_SPREADSHEET_ROWS"
                     :min="1"
                     :max="1000000"
+                /></el-form-item>
+                <el-form-item label="PDF 最大页数"
+                  ><el-input-number v-model="numericForm.MAX_PDF_PAGES" :min="1" :max="5000"
+                /></el-form-item>
+                <el-form-item label="图片最大像素数"
+                  ><el-input-number
+                    v-model="numericForm.MAX_IMAGE_PIXELS"
+                    :min="1"
+                    :max="250000000"
+                /></el-form-item>
+                <el-form-item label="OCR 语言"
+                  ><el-input v-model="form.OCR_LANGUAGES" maxlength="128"
+                /></el-form-item>
+                <el-form-item label="OCR 低置信度阈值"
+                  ><el-input-number
+                    v-model="numericForm.OCR_CONFIDENCE_WARNING_THRESHOLD"
+                    :min="0"
+                    :max="1"
+                    :step="0.05"
                 /></el-form-item>
                 <el-form-item label="CAD 最大实体数"
                   ><el-input-number v-model="numericForm.MAX_CAD_ENTITIES" :min="1" :max="2000000"

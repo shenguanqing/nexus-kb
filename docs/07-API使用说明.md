@@ -231,7 +231,7 @@ unset NEXUSKB_ACCESS_TOKEN
 - `department`
 - `sensitivity=public|internal|confidential`
 - `status`
-- `format=txt|md|docx|xlsx|dxf|dwg`
+- `format=txt|md|docx|xlsx|pdf|png|jpg|jpeg|dxf|dwg`
 - `page`，默认 1
 - `pageSize`，默认 20，最大 100
 

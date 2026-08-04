@@ -5,4 +5,8 @@ parser_temp_path="${PARSER_TEMP_PATH:-/tmp/parser}"
 mkdir -p "$parser_temp_path"
 chmod 700 "$parser_temp_path"
 
+easyocr_user_network_directory="$parser_temp_path/easyocr-user-network"
+mkdir -p "$easyocr_user_network_directory"
+chmod 700 "$easyocr_user_network_directory"
+
 exec "$@"

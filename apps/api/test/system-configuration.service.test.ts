@@ -1,4 +1,4 @@
-import { randomBytes } from 'node:crypto';
+import { createCipheriv, randomBytes } from 'node:crypto';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AclPolicy } from '../src/auth/acl-policy';
@@ -63,6 +63,19 @@ function fixture(prisma: PrismaService, enabled = true): SystemConfigurationServ
   return new SystemConfigurationService({ values }, prisma, new AclPolicy(), logger);
 }
 
+function encryptLegacyConfiguration(configuration: Record<string, string>): string {
+  const key = Buffer.from(baseEnvironment.SYSTEM_CONFIG_ENCRYPTION_KEY, 'base64');
+  const iv = randomBytes(12);
+  const cipher = createCipheriv('aes-256-gcm', key, iv);
+  const encrypted = Buffer.concat([
+    cipher.update(JSON.stringify(configuration), 'utf8'),
+    cipher.final(),
+  ]);
+  return [iv, cipher.getAuthTag(), encrypted]
+    .map((value) => value.toString('base64'))
+    .join('.');
+}
+
 beforeEach(() => {
   Object.assign(process.env, baseEnvironment);
 });
@@ -72,6 +85,39 @@ afterEach(() => {
 });
 
 describe('SystemConfigurationService', () => {
+  it('hydrates newly managed fields in legacy active configuration responses', async () => {
+    const active = version({
+      status: 'active',
+      encryptedConfig: encryptLegacyConfiguration({
+        LLM_PROVIDER: 'none',
+        LLM_MODEL: '',
+      }),
+      summary: {
+        values: { LLM_PROVIDER: 'none', LLM_MODEL: '' },
+        secretConfigured: {},
+      },
+      activatedAt: new Date('2026-08-04T08:05:00.000Z'),
+    });
+    const prisma = {
+      systemConfigVersion: { findMany: vi.fn().mockResolvedValue([active]) },
+    } as unknown as PrismaService;
+    const service = fixture(prisma);
+
+    const response = await service.configuration(identity);
+
+    expect(response.effectiveValues).toMatchObject({
+      MAX_PDF_PAGES: '500',
+      MAX_IMAGE_PIXELS: '40000000',
+      OCR_LANGUAGES: 'ch_sim,en',
+      OCR_CONFIDENCE_WARNING_THRESHOLD: '0.5',
+    });
+    expect(response.current?.values).toMatchObject({
+      MAX_PDF_PAGES: '500',
+      OCR_LANGUAGES: 'ch_sim,en',
+    });
+    expect(response.current?.secretConfigured).toHaveProperty('OPENAI_API_KEY', false);
+  });
+
   it('requires the administrator role even with deployment capabilities', async () => {
     const service = fixture({} as PrismaService);
     const capabilityOnlyIdentity: Identity = { ...identity, roles: ['user'] };

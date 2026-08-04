@@ -13,7 +13,20 @@ export const documentStatusSchema = z.enum([
   'deleted',
 ]);
 
-export const documentFormatSchema = z.enum(['txt', 'md', 'docx', 'xlsx', 'dxf', 'dwg']);
+export const documentFormats = [
+  'txt',
+  'md',
+  'pdf',
+  'docx',
+  'xlsx',
+  'png',
+  'jpg',
+  'jpeg',
+  'dxf',
+  'dwg',
+] as const;
+
+export const documentFormatSchema = z.enum(documentFormats);
 
 export const documentListRequestSchema = z
   .object({

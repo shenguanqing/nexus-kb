@@ -24,6 +24,7 @@ describe('ParserClient contract validation', () => {
     const config = {
       values: {
         PARSER_WORKER_URL: 'http://parser-worker:8000',
+        PARSER_DWG_WORKER_URL: 'http://parser-worker-dwg:8000',
         PARSER_INTERNAL_TOKEN: 'internal-test-token',
         PARSER_REQUEST_TIMEOUT_MS: 1_000,
       },
@@ -36,6 +37,7 @@ describe('ParserClient contract validation', () => {
     expect(result.elements[0]?.text).toBe('hello');
     const init = fetchMock.mock.calls[0]?.[1] as RequestInit;
     expect(new Headers(init.headers).get('x-internal-token')).toBe('internal-test-token');
+    expect(String(fetchMock.mock.calls[0]?.[0])).toBe('http://parser-worker:8000/internal/v1/parse');
   });
 
   it('rejects an invalid Worker response at runtime', async () => {
@@ -50,6 +52,7 @@ describe('ParserClient contract validation', () => {
     const config = {
       values: {
         PARSER_WORKER_URL: 'http://parser-worker:8000',
+        PARSER_DWG_WORKER_URL: 'http://parser-worker-dwg:8000',
         PARSER_INTERNAL_TOKEN: 'internal-test-token',
         PARSER_REQUEST_TIMEOUT_MS: 1_000,
       },
@@ -67,6 +70,7 @@ describe('ParserClient contract validation', () => {
     const config = {
       values: {
         PARSER_WORKER_URL: 'http://parser-worker:8000',
+        PARSER_DWG_WORKER_URL: 'http://parser-worker-dwg:8000',
         PARSER_INTERNAL_TOKEN: 'internal-test-token',
         PARSER_REQUEST_TIMEOUT_MS: 1_000,
       },
@@ -84,10 +88,12 @@ describe('ParserClient contract validation', () => {
   });
 
   it('classifies a DWG conversion gateway timeout as retryable timeout', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(null, { status: 504 })));
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 504 }));
+    vi.stubGlobal('fetch', fetchMock);
     const config = {
       values: {
         PARSER_WORKER_URL: 'http://parser-worker:8000',
+        PARSER_DWG_WORKER_URL: 'http://parser-worker-dwg:8000',
         PARSER_INTERNAL_TOKEN: 'internal-test-token',
         PARSER_REQUEST_TIMEOUT_MS: 1_000,
       },
@@ -107,6 +113,9 @@ describe('ParserClient contract validation', () => {
       code: 'PARSER_TIMEOUT',
       retryable: true,
     } satisfies Partial<ParserError>);
+    expect(String(fetchMock.mock.calls[0]?.[0])).toBe(
+      'http://parser-worker-dwg:8000/internal/v1/parse',
+    );
   });
 
   it('preserves allowlisted safe Worker error codes', async () => {
@@ -122,6 +131,7 @@ describe('ParserClient contract validation', () => {
     const config = {
       values: {
         PARSER_WORKER_URL: 'http://parser-worker:8000',
+        PARSER_DWG_WORKER_URL: 'http://parser-worker-dwg:8000',
         PARSER_INTERNAL_TOKEN: 'internal-test-token',
         PARSER_REQUEST_TIMEOUT_MS: 1_000,
       },
@@ -148,6 +158,7 @@ describe('ParserClient contract validation', () => {
     const config = {
       values: {
         PARSER_WORKER_URL: 'http://parser-worker:8000',
+        PARSER_DWG_WORKER_URL: 'http://parser-worker-dwg:8000',
         PARSER_INTERNAL_TOKEN: 'internal-test-token',
         PARSER_REQUEST_TIMEOUT_MS: 1_000,
       },

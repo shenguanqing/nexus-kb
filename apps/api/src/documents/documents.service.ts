@@ -123,6 +123,10 @@ export class DocumentsService {
         'md',
         'docx',
         'xlsx',
+        'pdf',
+        'png',
+        'jpg',
+        'jpeg',
         'dxf',
         ...(this.config.values.DWG_CONVERSION_ENABLED ? (['dwg'] as const) : []),
       ],
@@ -243,6 +247,8 @@ export class DocumentsService {
             status: 'failed',
             step: 'failed',
             errorCode: 'QUEUE_UNAVAILABLE',
+            errorCategory: 'queue',
+            retryable: true,
             completedAt: new Date(),
           },
         });
@@ -462,7 +468,7 @@ export class DocumentsService {
         errorCategory: true,
         retryable: true,
         completedAt: true,
-        document: { select: { activeVersion: true, status: true } },
+        document: { select: { activeVersion: true, status: true, storageKey: true } },
       },
     });
     if (!job) throw new ApiException('INGESTION_JOB_NOT_FOUND', '入库任务不存在', 404);
@@ -514,7 +520,11 @@ export class DocumentsService {
       });
     });
     try {
-      await this.queue.retry(job.id);
+      await this.queue.retry(job.id, {
+        ingestionJobId: job.id,
+        documentId: job.documentId,
+        storageKey: job.document.storageKey,
+      });
     } catch {
       await this.prisma.$transaction([
         this.prisma.ingestionJob.update({

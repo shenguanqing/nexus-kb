@@ -239,18 +239,18 @@ describe('ingestion queue contract', () => {
       storageKey: '6769af9a-a4d0-4dc2-a97d-942584a9c826.txt',
     };
     expect(ingestionPayloadSchema.parse(reference)).toEqual(reference);
-    expect(
+    for (const extension of ['pdf', 'png', 'jpg', 'jpeg', 'dxf', 'dwg']) {
+      const storageKey = `6769af9a-a4d0-4dc2-a97d-942584a9c826.${extension}`;
+      expect(ingestionPayloadSchema.parse({ ...reference, storageKey })).toMatchObject({
+        storageKey,
+      });
+    }
+    expect(() =>
       ingestionPayloadSchema.parse({
         ...reference,
-        storageKey: '6769af9a-a4d0-4dc2-a97d-942584a9c826.dxf',
+        storageKey: '6769af9a-a4d0-4dc2-a97d-942584a9c826.exe',
       }),
-    ).toMatchObject({ storageKey: '6769af9a-a4d0-4dc2-a97d-942584a9c826.dxf' });
-    expect(
-      ingestionPayloadSchema.parse({
-        ...reference,
-        storageKey: '6769af9a-a4d0-4dc2-a97d-942584a9c826.dwg',
-      }),
-    ).toMatchObject({ storageKey: '6769af9a-a4d0-4dc2-a97d-942584a9c826.dwg' });
+    ).toThrow();
     expect(() => ingestionPayloadSchema.parse({ ...reference, content: 'secret' })).toThrow();
     expect(() => ingestionPayloadSchema.parse({ ...reference, tenantId: 'forged' })).toThrow();
   });

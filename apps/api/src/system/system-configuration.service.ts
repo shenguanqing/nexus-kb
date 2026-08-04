@@ -54,6 +54,10 @@ const VALUE_FIELDS = [
   'MAX_PARSE_BYTES',
   'MAX_ELEMENTS',
   'MAX_SPREADSHEET_ROWS',
+  'MAX_PDF_PAGES',
+  'MAX_IMAGE_PIXELS',
+  'OCR_LANGUAGES',
+  'OCR_CONFIDENCE_WARNING_THRESHOLD',
   'MAX_CAD_ENTITIES',
   'MAX_CAD_INSERT_DEPTH',
   'DWG_CONVERSION_TIMEOUT_SECONDS',
@@ -79,6 +83,8 @@ const INTEGER_LIMITS: Partial<Record<ManagedConfigurationField, readonly [number
   MAX_PARSE_BYTES: [1, 1_073_741_824],
   MAX_ELEMENTS: [1, 1_000_000],
   MAX_SPREADSHEET_ROWS: [1, 1_000_000],
+  MAX_PDF_PAGES: [1, 5_000],
+  MAX_IMAGE_PIXELS: [1, 250_000_000],
   MAX_CAD_ENTITIES: [1, 2_000_000],
   MAX_CAD_INSERT_DEPTH: [1, 32],
   DWG_CONVERSION_TIMEOUT_SECONDS: [1, 1800],
@@ -104,7 +110,9 @@ export class SystemConfigurationService {
       take: 20,
     });
     const active = versions.find((version) => version.status === 'active') ?? null;
-    const effective = active ? this.decrypt(active.encryptedConfig) : this.initialEnvironment();
+    const effective = active
+      ? this.hydratedEnvironment(active.encryptedConfig)
+      : this.initialEnvironment();
     return {
       deploymentAgentAvailable: this.isAvailable(),
       embeddingManagedSeparately: true,
@@ -124,7 +132,9 @@ export class SystemConfigurationService {
     this.assertAdministrator(identity);
     this.assertAvailable();
     const active = await this.activeVersion(identity.tenantId);
-    const base = active ? this.decrypt(active.encryptedConfig) : this.initialEnvironment();
+    const base = active
+      ? this.hydratedEnvironment(active.encryptedConfig)
+      : this.initialEnvironment();
     const candidate = { ...base };
     for (const [field, value] of Object.entries(request.values)) {
       candidate[field] = this.validateValue(field as ManagedConfigurationField, value);
@@ -291,9 +301,9 @@ export class SystemConfigurationService {
       where: { tenantId: identity.tenantId, status: { in: ['queued', 'running'] } },
     });
     if (running) throw new ApiException('DEPLOYMENT_ALREADY_RUNNING', '已有配置正在发布', 409);
-    const environment = this.decrypt(target.encryptedConfig);
+    const environment = this.hydratedEnvironment(target.encryptedConfig);
     const previousEnvironment = previous
-      ? this.decrypt(previous.encryptedConfig)
+      ? this.hydratedEnvironment(previous.encryptedConfig)
       : this.initialEnvironment();
     const services = this.affectedServices(
       Object.keys(environment).filter((key) => environment[key] !== previousEnvironment[key]),
@@ -394,6 +404,10 @@ export class SystemConfigurationService {
       MAX_PARSE_BYTES: '52428800',
       MAX_ELEMENTS: '100000',
       MAX_SPREADSHEET_ROWS: '100000',
+      MAX_PDF_PAGES: '500',
+      MAX_IMAGE_PIXELS: '40000000',
+      OCR_LANGUAGES: 'ch_sim,en',
+      OCR_CONFIDENCE_WARNING_THRESHOLD: '0.5',
       MAX_CAD_ENTITIES: '1000000',
       MAX_CAD_INSERT_DEPTH: '8',
       DWG_CONVERSION_TIMEOUT_SECONDS: '180',
@@ -420,7 +434,17 @@ export class SystemConfigurationService {
       }
       return String(numeric);
     }
+    if (field === 'OCR_CONFIDENCE_WARNING_THRESHOLD') {
+      const numeric = Number(value);
+      if (!Number.isFinite(numeric) || numeric < 0 || numeric > 1) {
+        throw new ApiException('SYSTEM_CONFIG_INVALID', `配置字段 ${field} 不合法`, 400);
+      }
+      return String(numeric);
+    }
     const text = String(value).trim();
+    if (field === 'OCR_LANGUAGES' && !/^[a-z_]{2,16}(,[a-z_]{2,16}){0,7}$/.test(text)) {
+      throw new ApiException('SYSTEM_CONFIG_INVALID', `配置字段 ${field} 不合法`, 400);
+    }
     if (text.length > 2048 || /[\r\n\0]/.test(text)) {
       throw new ApiException('SYSTEM_CONFIG_INVALID', `配置字段 ${field} 不合法`, 400);
     }
@@ -447,6 +471,10 @@ export class SystemConfigurationService {
           'MAX_PARSE_BYTES',
           'MAX_ELEMENTS',
           'MAX_SPREADSHEET_ROWS',
+          'MAX_PDF_PAGES',
+          'MAX_IMAGE_PIXELS',
+          'OCR_LANGUAGES',
+          'OCR_CONFIDENCE_WARNING_THRESHOLD',
           'MAX_CAD_ENTITIES',
           'MAX_CAD_INSERT_DEPTH',
           'DWG_CONVERSION_TIMEOUT_SECONDS',
@@ -485,13 +513,15 @@ export class SystemConfigurationService {
       values?: Record<ManagedConfigurationField, string>;
       secretConfigured?: Record<ManagedConfigurationSecret, boolean>;
     };
+    const environment = this.hydratedEnvironment(row.encryptedConfig);
+    const values = this.publicValues(environment);
+    const secretConfigured = this.secretSummary(environment);
     return {
       id: row.id,
       version: row.version,
       status: row.status as ConfigurationVersionResponse['status'],
-      values: summary.values ?? this.publicValues(this.decrypt(row.encryptedConfig)),
-      secretConfigured:
-        summary.secretConfigured ?? this.secretSummary(this.decrypt(row.encryptedConfig)),
+      values: { ...values, ...summary.values },
+      secretConfigured: { ...secretConfigured, ...summary.secretConfigured },
       changedKeys: this.jsonArray(row.changedKeys),
       changeReason: row.changeReason,
       createdBy: row.createdBy,
@@ -551,6 +581,10 @@ export class SystemConfigurationService {
     } catch {
       throw new ApiException('SYSTEM_CONFIG_DECRYPT_FAILED', '配置版本无法读取', 500);
     }
+  }
+
+  private hydratedEnvironment(payload: string): ManagedEnvironment {
+    return { ...this.initialEnvironment(), ...this.decrypt(payload) };
   }
 
   private encryptionKey(): Buffer {

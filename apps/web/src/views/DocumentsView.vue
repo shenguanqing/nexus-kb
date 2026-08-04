@@ -246,7 +246,7 @@ onMounted(load);
           placeholder="格式"
         >
           <el-option
-            v-for="format in ['txt', 'md', 'docx', 'xlsx', 'dxf', 'dwg']"
+            v-for="format in ['txt', 'md', 'pdf', 'docx', 'xlsx', 'png', 'jpg', 'jpeg', 'dxf', 'dwg']"
             :key="format"
             :label="format.toUpperCase()"
             :value="format"
@@ -286,7 +286,7 @@ onMounted(load);
             </el-select>
             <el-select v-model="filters.format" clearable placeholder="格式">
               <el-option
-                v-for="format in ['txt', 'md', 'docx', 'xlsx', 'dxf', 'dwg']"
+                v-for="format in ['txt', 'md', 'pdf', 'docx', 'xlsx', 'png', 'jpg', 'jpeg', 'dxf', 'dwg']"
                 :key="format"
                 :label="format.toUpperCase()"
                 :value="format"

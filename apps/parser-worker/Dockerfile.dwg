@@ -4,14 +4,15 @@ ARG ODA_DEB=apps/parser-worker/vendor/oda/oda-file-converter.deb
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    PYTHONPATH=/app
+    PYTHONPATH=/app \
+    DO_NOT_TRACK=true \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
 
 WORKDIR /app
 
 # The ODA package is obtained by the deployment owner under its own licence.  It
 # is intentionally ignored by Git and installed only in this derived DWG image.
 COPY ${ODA_DEB} /tmp/oda-file-converter.deb
-COPY apps/parser-worker/requirements.lock ./requirements.lock
 # ODA's Debian package currently expects the older SONAME; Debian 12 ships
 # the compatible libxcb-util.so.1 implementation.
 RUN apt-get update \
@@ -19,8 +20,10 @@ RUN apt-get update \
         /tmp/oda-file-converter.deb \
         fontconfig \
         libfreetype6 \
+        libglib2.0-0 \
         libgl1 \
         libpng16-16 \
+        libxcb1 \
         libxcb-util1 \
         libxcb-icccm4 \
         libxcb-image0 \
@@ -31,14 +34,36 @@ RUN apt-get update \
         libxcb-xkb1 \
         libxkbcommon0 \
         libxkbcommon-x11-0 \
+        poppler-utils \
+        tesseract-ocr \
+        tesseract-ocr-chi-sim \
+        tesseract-ocr-eng \
         xauth \
         xvfb \
     && ln -s /usr/lib/x86_64-linux-gnu/libxcb-util.so.1 /usr/lib/x86_64-linux-gnu/libxcb-util.so.0 \
-    && rm -rf /var/lib/apt/lists/* /tmp/oda-file-converter.deb \
-    && pip install --no-cache-dir -r requirements.lock \
+    && rm -rf /var/lib/apt/lists/* /tmp/oda-file-converter.deb
+
+COPY apps/parser-worker/requirements.lock ./requirements.lock
+# The ODA image is linux/amd64 even on Apple Silicon. Install the explicit CPU
+# PyTorch wheels first so the regular resolver cannot pull multi-gigabyte CUDA
+# runtime packages from PyPI.
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install \
+        --index-url https://download.pytorch.org/whl/cpu \
+        torch==2.8.0 \
+        torchvision==0.23.0 \
+    && pip install -r requirements.lock \
+    && mkdir -p /opt/easyocr-models \
+    && python -c "import easyocr; easyocr.Reader(['ch_sim','en'], gpu=False, model_storage_directory='/opt/easyocr-models', download_enabled=True, verbose=False)" \
     && useradd --uid 10002 --create-home worker \
     && mkdir -p /data/raw-docs /tmp/parser \
-    && chown -R worker:worker /app /tmp/parser
+    && chown -R worker:worker /app /tmp/parser /opt/easyocr-models
+
+# Unstructured uses NLTK for PDF text classification. Keep runtime network-free
+# by downloading the exact tokenizer/tagger resources into the image.
+RUN mkdir -p /opt/nltk_data \
+    && NLTK_DATA=/opt/nltk_data python -c "import nltk; [nltk.download(package, download_dir='/opt/nltk_data', quiet=True, raise_on_error=True) for package in ('punkt_tab', 'averaged_perceptron_tagger_eng')]" \
+    && chmod -R a-w /opt/nltk_data
 
 COPY --chmod=0755 apps/parser-worker/bin/nexus-oda-file-converter /usr/local/bin/nexus-oda-file-converter
 COPY --chmod=0755 apps/parser-worker/bin/nexus-parser-worker-entrypoint /usr/local/bin/nexus-parser-worker-entrypoint

@@ -19,6 +19,47 @@ class Settings(BaseSettings):
     max_spreadsheet_rows: int = Field(
         default=100_000, ge=1, le=1_000_000, validation_alias="MAX_SPREADSHEET_ROWS"
     )
+    max_pdf_pages: int = Field(default=500, ge=1, le=5_000, validation_alias="MAX_PDF_PAGES")
+    max_image_pixels: int = Field(
+        default=40_000_000, ge=1, le=250_000_000, validation_alias="MAX_IMAGE_PIXELS"
+    )
+    ocr_model_storage_path: Path = Field(
+        default=Path("/opt/easyocr-models"), validation_alias="OCR_MODEL_STORAGE_PATH"
+    )
+    ocr_languages: str = Field(
+        default="ch_sim,en",
+        pattern=r"^[a-z_]{2,16}(,[a-z_]{2,16}){0,7}$",
+        validation_alias="OCR_LANGUAGES",
+    )
+    ocr_confidence_warning_threshold: float = Field(
+        default=0.5,
+        ge=0,
+        le=1,
+        validation_alias="OCR_CONFIDENCE_WARNING_THRESHOLD",
+    )
+    tika_enabled: bool = Field(default=False, validation_alias="TIKA_ENABLED")
+    tika_base_url: str = Field(
+        default="http://tika:9998",
+        pattern=r"^https?://[A-Za-z0-9.-]+(?::[0-9]{1,5})?$",
+        validation_alias="TIKA_BASE_URL",
+    )
+    tika_request_timeout_seconds: float = Field(
+        default=120,
+        ge=1,
+        le=600,
+        validation_alias="TIKA_REQUEST_TIMEOUT_SECONDS",
+    )
+    max_tika_response_bytes: int = Field(
+        default=52_428_800,
+        ge=1,
+        le=268_435_456,
+        validation_alias="MAX_TIKA_RESPONSE_BYTES",
+    )
+    tika_version: str = Field(
+        default="3.2.3.0",
+        pattern=r"^[0-9]+(?:\.[0-9]+){2,3}$",
+        validation_alias="TIKA_VERSION",
+    )
     max_cad_entities: int = Field(
         default=1_000_000, ge=1, le=2_000_000, validation_alias="MAX_CAD_ENTITIES"
     )

@@ -1,8 +1,60 @@
 services:
-  parser-worker:
+  api:
+    environment:
+      DWG_CONVERSION_ENABLED: 'true'
+      PARSER_DWG_WORKER_URL: http://parser-worker-dwg:8000
+    depends_on:
+      parser-worker-dwg:
+        condition: service_healthy
+
+  parser-worker-dwg:
     # ODA currently provides its Linux File Converter package for x64. Docker
     # Desktop runs it under emulation on Apple Silicon Macs.
     platform: linux/amd64
     build:
       context: .
       dockerfile: apps/parser-worker/Dockerfile.dwg
+    restart: unless-stopped
+    env_file:
+      - path: .env
+      - path: ./config/runtime.env
+        required: false
+    environment:
+      PARSER_INTERNAL_TOKEN: ${PARSER_INTERNAL_TOKEN}
+      RAW_DOCS_PATH: /data/raw-docs
+      DWG_CONVERSION_ENABLED: 'true'
+      DWG_CONVERTER_EXECUTABLE: ${DWG_CONVERTER_EXECUTABLE:-/usr/local/bin/nexus-oda-file-converter}
+      DWG_CONVERTER_RELEASE: ${DWG_CONVERTER_RELEASE:-not-installed}
+      DWG_OUTPUT_VERSION: ${DWG_OUTPUT_VERSION:-ACAD2018}
+      PARSER_TEMP_PATH: ${PARSER_TEMP_PATH:-/tmp/parser}
+      XDG_CACHE_HOME: /tmp/parser/.cache
+      MPLCONFIGDIR: /tmp/parser/.cache/matplotlib
+      NLTK_DATA: /opt/nltk_data
+      OCR_MODEL_STORAGE_PATH: /opt/easyocr-models
+      TIKA_ENABLED: ${TIKA_ENABLED:-true}
+      TIKA_BASE_URL: http://tika:9998
+      TIKA_VERSION: '3.2.3.0'
+      MAX_DWG_CONVERTED_BYTES: ${MAX_DWG_CONVERTED_BYTES:-209715200}
+      MAX_ARCHIVE_ENTRIES: ${MAX_ARCHIVE_ENTRIES:-10000}
+      MAX_ARCHIVE_UNCOMPRESSED_BYTES: ${MAX_ARCHIVE_UNCOMPRESSED_BYTES:-524288000}
+    expose:
+      - '8000'
+    volumes:
+      - raw_docs:/data/raw-docs:ro
+    tmpfs:
+      - /tmp:size=1g,mode=1777,uid=10002,gid=10002
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/ready', timeout=3)
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 10s
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - backend

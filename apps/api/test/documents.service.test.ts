@@ -79,7 +79,11 @@ describe('DocumentsService tenant isolation', () => {
             errorCategory: 'embedding',
             retryable: true,
             completedAt: new Date(),
-            document: { activeVersion: null, status: 'failed' },
+            document: {
+              activeVersion: null,
+              status: 'failed',
+              storageKey: '6769af9a-a4d0-4dc2-a97d-942584a9c826.pdf',
+            },
           }),
         },
         $transaction: (operation: (tx: typeof transactionClient) => Promise<unknown>) =>
@@ -98,7 +102,11 @@ describe('DocumentsService tenant isolation', () => {
         'd26720b3-1f78-40df-868d-8ca8510dca26',
       ),
     ).resolves.toMatchObject({ status: 'queued' });
-    expect(retry).toHaveBeenCalledWith('a5427e4a-b9db-4750-8dfd-02d601a41473');
+    expect(retry).toHaveBeenCalledWith('a5427e4a-b9db-4750-8dfd-02d601a41473', {
+      ingestionJobId: 'a5427e4a-b9db-4750-8dfd-02d601a41473',
+      documentId: '6769af9a-a4d0-4dc2-a97d-942584a9c826',
+      storageKey: '6769af9a-a4d0-4dc2-a97d-942584a9c826.pdf',
+    });
     const [updateInput] = claimJob.mock.calls[0] as unknown as [
       { data: { status: string; startedAt: Date | null } },
     ];
@@ -179,7 +187,7 @@ describe('DocumentsService tenant isolation', () => {
 
     expect(service.getUploadOptions(identity)).toEqual({
       maxUploadBytes: 4096,
-      acceptedExtensions: ['txt', 'md', 'docx', 'xlsx', 'dxf'],
+      acceptedExtensions: ['txt', 'md', 'docx', 'xlsx', 'pdf', 'png', 'jpg', 'jpeg', 'dxf'],
       department: 'finance',
       allowedSensitivities: ['public', 'internal'],
       defaultSensitivity: 'internal',

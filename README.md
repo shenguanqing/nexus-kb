@@ -9,6 +9,7 @@
 - [第一次启动](#第一次启动)
 - [启用本机向量索引](#启用本机向量索引ollama)
 - [启用完整 RAG 问答](#启用完整-rag-问答)
+- [启用管理员配置发布](#启用管理员配置发布按需)
 - [启用 DWG 解析](#启用-dwg-解析按需)
 - [常见问题 FAQ](#常见问题-faq)
 - [开发与测试](#开发与测试)
@@ -31,12 +32,14 @@
 | ------------- | -------------------------------- | --------------------------------- |
 | Vue Web       | 知识问答与管理界面               | Mac 宿主机，默认 `127.0.0.1:5173` |
 | NestJS API    | 认证、权限、入库、检索与模型编排 | Docker，默认 `127.0.0.1:3000`     |
+| Deployment Agent | 管理员受控配置发布与自动回滚    | Docker 内网；默认不启动            |
 | Parser Worker | 文档解析与结构提取               | Docker 内网                       |
+| Apache Tika   | PDF 本地解析失败时的受控兜底     | Docker 内网                       |
 | PostgreSQL    | 文档、ACL、版本和任务状态        | Docker 内网                       |
 | Redis         | BullMQ 异步任务队列              | Docker 内网                       |
 | Chroma        | 向量索引                         | Docker 内网                       |
 
-Parser Worker、PostgreSQL、Redis 和 Chroma 默认不向宿主机或公网开放端口。
+Deployment Agent、Parser Worker、Apache Tika、PostgreSQL、Redis 和 Chroma 默认不向宿主机或公网开放端口。
 
 ## 选择运行模式
 
@@ -89,7 +92,7 @@ pnpm --version
 
 ## 第一次启动
 
-本节不需要模型 API Key、Ollama 或 ODA。完成后可以进入管理界面，上传 TXT、Markdown、DOCX、XLSX 或 DXF 测试文件，验证本地解析、分块和脱敏流程。
+本节不需要模型 API Key、Ollama 或 ODA。完成后可以进入管理界面，上传 TXT、Markdown、PDF、DOCX、XLSX、PNG/JPG 或 DXF 测试文件，验证本地解析、分块和脱敏流程。Parser Worker 镜像会在构建阶段预置中文/英文 OCR 模型，首次构建耗时和镜像体积会明显增加，运行时不会下载模型。
 
 除特别说明外，所有命令都在仓库根目录执行。
 
@@ -154,7 +157,7 @@ docker compose up -d --build
 docker compose ps
 ```
 
-首次启动需要拉取镜像和构建服务，耗时通常比后续启动长。`docker compose ps` 最终应显示 `api`、 `parser-worker`、`postgres`、`redis` 和 `chroma` 正常运行。
+首次启动需要拉取镜像和构建服务，耗时通常比后续启动长。Parser Worker 首次构建还会下载 CPU PyTorch wheel 和中文/英文 OCR 模型。`docker compose ps` 最终应显示 `api`、`parser-worker`、`tika`、`postgres`、`redis` 和 `chroma` 正常运行。
 
 ### 4. 检查服务状态
 
@@ -169,7 +172,7 @@ curl http://127.0.0.1:3000/health/ready
 如果 `ready` 失败，先查看日志：
 
 ```bash
-docker compose logs --tail=100 api parser-worker
+docker compose logs --tail=100 api parser-worker tika
 ```
 
 ### 5. 启动前端
@@ -185,7 +188,7 @@ pnpm --filter @nexus-kb/web dev
 ### 6. 完成第一次验证
 
 1. 进入“文档管理”。
-2. 上传一份不含敏感信息的 TXT、Markdown、DOCX、XLSX 或 DXF 文件。
+2. 上传一份不含敏感信息的 TXT、Markdown、PDF、DOCX、XLSX、PNG/JPG 或 DXF 文件。
 3. 在“上传与入库任务”查看解析、分块和脱敏状态。
 4. 任务完成后，文档应显示“待建立索引”。
 
@@ -294,6 +297,51 @@ docker compose -f compose.yaml -f compose.dwg.yaml ps api reranker-worker
 
 Provider 的完整配置项见 [技术设计：配置](./docs/02-技术设计.md#4-配置)，运行检查、数据出网和密钥安全规则见 [部署运维手册：健康检查](./docs/06-部署运维手册.md#6-健康检查)。
 
+## 启用管理员配置发布（按需）
+
+默认不启用。启用后，管理员可以在“Provider 与系统状态”页面创建加密的运行配置版本，并发布 LLM、Rerank、问答参数与 Parser 资源限制。独立的 `deployment-agent` 只接受 API 的内部请求，只能按服务端计算结果重建 `api`、`parser-worker` 或 `reranker-worker`；readiness 失败时会自动恢复上一版配置。
+
+> [!WARNING]
+> `deployment-agent` 是唯一挂载 Docker socket 的组件。它不暴露宿主机端口，不能执行任意命令或重建任意服务。不要为 API、Web 或 Parser Worker 挂载 Docker socket，也不要手工编辑 `config/runtime.env`。
+
+### 1. 配置独立密钥与内部令牌
+
+在受保护的本地 `.env` 或 Secret Manager 中配置以下三个值；不要提交、复制到工单或打印到日志：
+
+```bash
+openssl rand -base64 32  # SYSTEM_CONFIG_ENCRYPTION_KEY
+openssl rand -hex 32     # DEPLOYMENT_AGENT_TOKEN
+```
+
+```dotenv
+SYSTEM_CONFIG_ENCRYPTION_KEY=<base64 编码的 32 字节密钥>
+DEPLOYMENT_AGENT_URL=http://deployment-agent:8200
+DEPLOYMENT_AGENT_TOKEN=<至少 32 字符的独立随机 token>
+```
+
+这三个值必须同时存在；任一值留空时配置发布保持禁用。请备份 `SYSTEM_CONFIG_ENCRYPTION_KEY`：直接替换它会导致历史配置版本无法解密。
+
+### 2. 启动代理并验证
+
+必须从仓库根目录执行。以下为基础模式命令；已启用 DWG 或 DBeaver 时，将 `docker compose` 替换为 [日常使用](#选择固定的-compose-文件组合)中对应的完整 Compose 前缀，并保留 `--profile configuration`：
+
+```bash
+docker compose config --quiet
+docker compose --profile configuration up -d --build --force-recreate deployment-agent api
+docker compose ps deployment-agent api
+curl --fail-with-body http://127.0.0.1:3000/health/ready
+```
+
+代理容器会以与宿主机相同的仓库绝对路径调用 Docker Compose，因此只能从仓库根目录启动。`deployment-agent` 仅在 Compose 内网的 `8200` 端口监听，健康状态可通过 `docker compose ps` 或 `docker compose logs deployment-agent` 查看，不能从浏览器或公网直接访问。
+
+### 3. 使用边界与失败处理
+
+- 进入版本化发布流程的仅限 LLM、Rerank、问答与 Parser 资源限制；Embedding Provider、模型、维度、分块/脱敏规则必须走索引迁移，数据库、认证根配置、网络、volume 和内部 token 仍由运维流程管理。
+- 发布时代理会原子写入 Git 忽略、权限为 `0600` 的 `config/runtime.env`，然后以固定参数重建受影响服务，并连续两次检查 readiness。
+- 发布失败会自动还原上一份 `runtime.env` 并再次验证；页面显示“已自动回滚”。若出现 `ROLLBACK_FAILED`，停止进一步发布，查看代理与目标服务日志，并按备份恢复。
+
+完整的密钥轮换、运行时配置与故障处置说明见 [部署运维手册：启用前端配置发布](./docs/06-部署运维手册.md#55-启用前端配置发布)。
+
 ## 启用 DWG 解析（按需）
 
 DWG 转换依赖独立授权的 ODA File Converter。仓库与基础镜像不包含安装包、许可证或二进制。
@@ -316,16 +364,29 @@ docker compose version
 然后使用同一组 Compose 文件构建 DWG 专用 Worker、校验合并配置并启动整套服务：
 
 ```bash
-docker compose -f compose.yaml -f compose.dwg.yaml build parser-worker
+docker compose -f compose.yaml -f compose.dwg.yaml build parser-worker-dwg
 docker compose -f compose.yaml -f compose.dwg.yaml config --quiet
 docker compose -f compose.yaml -f compose.dwg.yaml up -d --build
 docker compose -f compose.yaml -f compose.dwg.yaml ps
 ```
 
-单独执行第一条 `build parser-worker` 可以提前暴露 ODA 安装包、版本或 Worker 镜像构建问题；后续 `up -d --build` 会复用已有构建缓存，并确保 API 等其他需要构建的服务也与当前源码一致。`ps` 中的 `api`、 `parser-worker`、`postgres`、`redis` 和 `chroma` 应正常运行，随后再检查：
+单独执行第一条 `build parser-worker-dwg` 可以提前暴露 ODA 安装包、版本或 Worker 镜像构建问题；后续 `up -d --build` 会复用已有构建缓存，并确保 API 等其他需要构建的服务也与当前源码一致。DWG 专用镜像会下载 CPU PyTorch wheel 和 EasyOCR 中文/英文模型，耗时数分钟属于正常现象；需要观察详细进度时使用：
+
+```bash
+docker compose --progress plain -f compose.yaml -f compose.dwg.yaml build parser-worker-dwg
+```
+
+DWG 派生镜像固定从 PyTorch CPU wheel 源安装 Torch/Torchvision，不应下载名称以 `nvidia_` 开头的 CUDA 运行时包。构建后可执行以下只读冒烟检查；输出中的 `cuda` 应为 `None`：
+
+```bash
+docker run --rm --platform linux/amd64 --entrypoint python nexus-kb-parser-worker \
+  -c "import torch; print({'torch': torch.__version__, 'cuda': torch.version.cuda})"
+```
+
+`ps` 中的 `api`、原生 `parser-worker`、`parser-worker-dwg`、`tika`、`postgres`、`redis` 和 `chroma` 应正常运行，随后再检查：
 
 > [!IMPORTANT]
-> 从此处开始即进入 **DWG 模式**。后续不能再单独使用 `docker compose …`；每一次 `up`、`build`、`ps`、`logs`、`exec`、`down` 和 `--force-recreate` 都必须携带 `-f compose.yaml -f compose.dwg.yaml`。省略该覆盖文件会将 Parser 切回不含 ODA 的基础镜像，`Parser Worker` 的严格健康检查会失败。
+> 从此处开始即进入 **DWG 模式**。后续不能再单独使用 `docker compose …`；每一次 `up`、`build`、`ps`、`logs`、`exec`、`down` 和 `--force-recreate` 都必须携带 `-f compose.yaml -f compose.dwg.yaml`。该覆盖文件保留原生 `parser-worker` 处理图片/PDF 等常规文件，并额外启动 `linux/amd64` 的 `parser-worker-dwg`；API 仅把 DWG 路由到后者，两个 Worker 的 readiness 都必须通过。
 
 ```bash
 curl --fail-with-body http://127.0.0.1:3000/health/live
@@ -378,12 +439,13 @@ docker compose up -d
 | `apps/web/vite.config.ts` 或前端 `VITE_*` 环境变量 | 否 | 停止并重新执行 `pnpm --filter @nexus-kb/web dev`，然后刷新浏览器。 |
 | API TypeScript 源码 | 是 | `docker compose -f compose.yaml -f compose.dwg.yaml up -d --build --force-recreate api` |
 | API 的 `.env`：LLM、Embedding、查询、认证、ACL、限流 | 否 | `docker compose -f compose.yaml -f compose.dwg.yaml up -d --force-recreate api` |
-| Parser Python 源码、`Dockerfile`、ODA 安装包 | 是 | `docker compose -f compose.yaml -f compose.dwg.yaml up -d --build --force-recreate parser-worker` |
-| Parser 的 `.env`：解析限制、CAD/DWG、临时目录 | 否 | `docker compose -f compose.yaml -f compose.dwg.yaml up -d --force-recreate parser-worker` |
+| 常规 Parser Python 源码、`Dockerfile` | 是 | `docker compose -f compose.yaml -f compose.dwg.yaml up -d --build --force-recreate parser-worker` |
+| DWG Parser 源码、`Dockerfile.dwg`、ODA 安装包 | 是 | `docker compose -f compose.yaml -f compose.dwg.yaml up -d --build --force-recreate parser-worker-dwg` |
+| Parser 的 `.env`：解析限制、CAD/DWG、临时目录 | 否 | `docker compose -f compose.yaml -f compose.dwg.yaml up -d --force-recreate parser-worker parser-worker-dwg` |
 | Reranker Python 源码、`Dockerfile` 或依赖锁文件 | 是 | `docker compose -f compose.yaml -f compose.dwg.yaml up -d --build --force-recreate reranker-worker` |
 | Rerank 的 `.env`：Provider、模型、batch、内部令牌 | 否 | `docker compose -f compose.yaml -f compose.dwg.yaml up -d --force-recreate api reranker-worker` |
 | 首次启用 `local_bge`，或更换本地 BGE 模型 revision | 否 | 先执行 `docker compose -f compose.yaml -f compose.dwg.yaml --profile model-init run --rm reranker-model-init` 下载模型，再执行 `docker compose -f compose.yaml -f compose.dwg.yaml up -d --force-recreate api reranker-worker`。 |
-| `PARSER_INTERNAL_TOKEN` | 否 | `docker compose -f compose.yaml -f compose.dwg.yaml up -d --force-recreate api parser-worker reranker-worker`；当 `RERANK_INTERNAL_TOKEN` 留空时，Reranker 也复用此令牌。 |
+| `PARSER_INTERNAL_TOKEN` | 否 | `docker compose -f compose.yaml -f compose.dwg.yaml up -d --force-recreate api parser-worker parser-worker-dwg reranker-worker`；当 `RERANK_INTERNAL_TOKEN` 留空时，Reranker 也复用此令牌。 |
 | 共享契约或 API 字段，同时改了前后端 | 通常是 | 执行 `pnpm build`，然后重建 API；Vite 会热更新前端。 |
 | Prisma migration / API 数据库 schema | 是 | 新增 migration 后执行 `docker compose -f compose.yaml -f compose.dwg.yaml up -d --build --force-recreate api`；不要重建或删除 PostgreSQL volume。 |
 | `compose.yaml`、`compose.dwg.yaml` 或服务网络/挂载 | 视改动而定 | 先执行 `docker compose -f compose.yaml -f compose.dwg.yaml config --quiet`，再定向 `up -d --force-recreate <service>`；Dockerfile 变化时加 `--build`。 |
@@ -431,7 +493,7 @@ curl --fail-with-body http://127.0.0.1:3000/health/ready
 curl --fail-with-body -i http://127.0.0.1:3000/health/live
 curl --fail-with-body -i http://127.0.0.1:3000/health/ready
 docker compose ps
-docker compose logs --tail=100 api
+docker compose logs --tail=100 api parser-worker tika
 ```
 
 `live` 失败通常表示 API 没有启动或正在重启；`live` 成功但 `ready` 返回 503 时，查看响应中的 `checks`：
@@ -441,12 +503,35 @@ docker compose logs --tail=100 api
 | `postgres`     | `DATABASE_URL`、数据库角色密码、`docker compose logs --tail=100 postgres` |
 | `redis`        | Redis 容器状态和 `docker compose logs --tail=100 redis`                   |
 | `chroma`       | Chroma 容器、磁盘和 collection 指纹兼容性                                 |
-| `parserWorker` | Worker 日志、内部 token、ODA/DWG 配置、解析资源限制                       |
+| `parserWorker` | Worker/Tika 日志、内部 token、ODA/DWG 配置、解析资源限制                  |
 | `rawDocs`      | `raw_docs` volume 是否挂载，以及 API 对目录的读写权限                     |
 
 不需要 DWG 时，明确设置 `DWG_CONVERSION_ENABLED=false` 并使用基础 `compose.yaml`；需要 DWG 时，按本文的 DWG 章节加载 `compose.dwg.yaml`。`PARSER_INTERNAL_TOKEN` 必须至少 16 个字符且两端一致；修改配置后需要 `--force-recreate` 实际读取该配置的服务。
 
-### 3. PostgreSQL 或 API 报密码认证失败
+### 3. Parser Worker 镜像构建十几分钟仍未完成
+
+首次构建需要下载 Python 依赖、CPU PyTorch wheel 和 EasyOCR 模型，具体耗时取决于网络和 Docker Desktop 分配的资源。先不要反复执行完整的 `up --build --force-recreate`，改用当前运行模式的固定 Compose 文件组合单独观察 Parser 构建。DWG 模式执行：
+
+```bash
+docker compose --progress plain -f compose.yaml -f compose.dwg.yaml build parser-worker
+```
+
+根据最后持续输出的步骤排查：
+
+- 正在下载 `torch`、`torchvision` 或 OCR 模型：首次构建的正常下载，后续会复用 BuildKit 缓存。
+- 正在下载 `nvidia_cublas_cu*`、`nvidia_cudnn_cu*` 等包：依赖解析异常，不要继续等待；当前 `Dockerfile.dwg` 应固定使用 CPU wheel。
+- 长时间停在拉取基础镜像或 wheel：检查网络、Docker Desktop 磁盘空间和代理设置。
+- 构建进程无输出且 Docker Desktop 内存或磁盘占用已满：先释放 Docker 资源或增加资源配额，不要删除项目数据 volume。
+
+镜像构建成功后，不需要再次构建所有服务。仅重建实际受影响的运行实例：
+
+```bash
+docker compose -f compose.yaml -f compose.dwg.yaml \
+  up -d --no-deps --force-recreate tika parser-worker api
+docker compose -f compose.yaml -f compose.dwg.yaml ps tika parser-worker api
+```
+
+### 4. PostgreSQL 或 API 报密码认证失败
 
 典型错误包括 DBeaver 的 `FATAL: password authentication failed` 和 Prisma `P1000`。这通常发生在已有 `postgres_data` volume 后修改了 `.env`：容器环境变量已经变化，但数据库角色仍保留旧密码。
 
@@ -474,7 +559,7 @@ curl --fail-with-body http://127.0.0.1:3000/health/ready
 
 DBeaver 使用 `127.0.0.1:15432`，数据库和用户名读取 `.env` 的 `POSTGRES_DB`、`POSTGRES_USER`（默认均为 `kb`），密码使用 `POSTGRES_PASSWORD`。不得使用 `docker compose down -v` 处理认证失败，该命令会删除数据volume。
 
-### 4. 文档显示“待建立索引”，或问答没有返回答案
+### 5. 文档显示“待建立索引”，或问答没有返回答案
 
 这通常不是解析失败：
 

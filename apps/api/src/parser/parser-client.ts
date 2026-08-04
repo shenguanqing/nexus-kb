@@ -1,4 +1,5 @@
 import { Injectable, Optional } from '@nestjs/common';
+import { extname } from 'node:path';
 import { parseRequestSchema, parseResponseSchema } from '@nexus-kb/contracts';
 import type { ParseRequest, ParseResponse } from '@nexus-kb/contracts';
 
@@ -14,6 +15,7 @@ const SAFE_WORKER_ERROR_CODES = new Set([
   'DWG_CONVERTED_SIZE_LIMIT_EXCEEDED',
   'DWG_CONVERSION_FAILED',
   'PARSER_EMPTY_RESULT',
+  'TIKA_RESPONSE_LIMIT_EXCEEDED',
 ]);
 
 @Injectable()
@@ -35,7 +37,7 @@ export class ParserClient {
       let response: Response;
       try {
         response = await fetch(
-          new URL('/internal/v1/parse', this.config.values.PARSER_WORKER_URL),
+          new URL('/internal/v1/parse', this.workerUrl(validatedRequest)),
           {
             method: 'POST',
             headers: {
@@ -86,5 +88,11 @@ export class ParserClient {
     if (status === 408 || status === 504) return new ParserError('timeout', true);
     if (status === 429 || status >= 500) return new ParserError('unavailable', true);
     return new ParserError('invalid_response', false);
+  }
+
+  private workerUrl(request: ParseRequest): string {
+    return extname(request.storagePath).toLowerCase() === '.dwg'
+      ? this.config.values.PARSER_DWG_WORKER_URL
+      : this.config.values.PARSER_WORKER_URL;
   }
 }

@@ -78,6 +78,62 @@ describe('validateUploadedFile', () => {
     });
   });
 
+  it('accepts signed PDF, PNG, JPG and JPEG files', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'nexus-upload-'));
+    directories.push(directory);
+    const fixtures = [
+      {
+        name: 'policy.pdf',
+        mime: 'application/pdf',
+        bytes: Buffer.from('%PDF-1.4\n%%EOF\n', 'ascii'),
+        canonicalMime: 'application/pdf',
+      },
+      {
+        name: 'scan.png',
+        mime: 'image/png',
+        bytes: Buffer.from(
+          'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
+          'base64',
+        ),
+        canonicalMime: 'image/png',
+      },
+      {
+        name: 'scan.jpg',
+        mime: 'image/jpeg',
+        bytes: Buffer.from('/9j/4AAQSkZJRgABAQAAAQABAAD/2Q==', 'base64'),
+        canonicalMime: 'image/jpeg',
+      },
+      {
+        name: 'scan.jpeg',
+        mime: 'image/jpeg',
+        bytes: Buffer.from('/9j/4AAQSkZJRgABAQAAAQABAAD/2Q==', 'base64'),
+        canonicalMime: 'image/jpeg',
+      },
+    ];
+
+    for (const fixture of fixtures) {
+      const path = join(directory, fixture.name);
+      await writeFile(path, fixture.bytes);
+      await expect(validateUploadedFile(path, fixture.name, fixture.mime)).resolves.toMatchObject({
+        mimeType: fixture.canonicalMime,
+      });
+    }
+  });
+
+  it('rejects forged PDF and image signatures', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'nexus-upload-'));
+    directories.push(directory);
+    const path = join(directory, 'upload');
+    await writeFile(path, 'not a document', 'utf8');
+
+    await expect(validateUploadedFile(path, 'policy.pdf', 'application/pdf')).rejects.toMatchObject({
+      code: 'FILE_SIGNATURE_MISMATCH',
+    } satisfies Partial<ApiException>);
+    await expect(validateUploadedFile(path, 'scan.png', 'image/png')).rejects.toMatchObject({
+      code: 'FILE_SIGNATURE_MISMATCH',
+    } satisfies Partial<ApiException>);
+  });
+
   it('rejects a forged DXF file', async () => {
     const directory = await mkdtemp(join(tmpdir(), 'nexus-upload-'));
     directories.push(directory);
