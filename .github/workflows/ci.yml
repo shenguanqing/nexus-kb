@@ -75,8 +75,6 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-          cache: pip
-          cache-dependency-path: apps/parser-worker/requirements.lock
       - run: >-
           python -m pip install --index-url https://download.pytorch.org/whl/cpu
           torch==2.8.0 torchvision==0.23.0
