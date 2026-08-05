@@ -255,19 +255,19 @@ onUnmounted(stopPolling);
                 <span>区域</span><strong>{{ provider.region ?? '—' }}</strong>
               </div>
               <div>
-                <span>凭据状态</span
-                ><strong>{{
-                  credentialLabel(provider.provider, provider.credentialConfigured)
-                }}</strong>
+                <span>凭据状态</span>
+                <strong>
+                  {{ credentialLabel(provider.provider, provider.credentialConfigured) }}
+                </strong>
               </div>
               <div v-if="provider.dimensions">
                 <span>向量维度</span><strong>{{ provider.dimensions }}</strong>
               </div>
               <div v-if="provider.fingerprint" class="provider-fingerprint">
-                <span>索引配置指纹</span
-                ><strong
-                  ><code>{{ provider.fingerprint }}</code></strong
-                >
+                <span>索引配置指纹</span>
+                <strong>
+                  <code>{{ provider.fingerprint }}</code>
+                </strong>
               </div>
             </div>
           </article>
@@ -285,8 +285,8 @@ onUnmounted(stopPolling);
         <div v-if="configuration" class="configuration-panel">
           <div class="configuration-heading">
             <div>
-              <strong>编辑运行配置</strong
-              ><span>保存后会创建不可变版本，并仅重建受影响的白名单服务。</span>
+              <strong>编辑运行配置</strong>
+              <span>保存后会创建不可变版本，并仅重建受影响的白名单服务。</span>
             </div>
             <el-tag :type="configuration.deploymentAgentAvailable ? 'success' : 'danger'">
               {{ configuration.deploymentAgentAvailable ? '部署代理就绪' : '部署代理未启用' }}
@@ -297,236 +297,258 @@ onUnmounted(stopPolling);
             <div class="configuration-section">
               <div class="heading heading--h3" role="heading" aria-level="3">LLM</div>
               <div class="configuration-fields">
-                <el-form-item label="主 Provider"
-                  ><el-select v-model="form.LLM_PROVIDER"
-                    ><el-option
+                <el-form-item label="主 Provider">
+                  <el-select v-model="form.LLM_PROVIDER">
+                    <el-option
                       v-for="provider in llmProviders"
                       :key="provider"
                       :label="provider"
-                      :value="provider" /></el-select
-                ></el-form-item>
-                <el-form-item label="主模型"
-                  ><el-input v-model="form.LLM_MODEL" maxlength="128"
-                /></el-form-item>
-                <el-form-item label="备用 Provider"
-                  ><el-select v-model="form.LLM_FALLBACK_PROVIDER"
-                    ><el-option
+                      :value="provider"
+                    />
+                  </el-select>
+                </el-form-item>
+                <el-form-item label="主模型">
+                  <el-input v-model="form.LLM_MODEL" maxlength="128" />
+                </el-form-item>
+                <el-form-item label="备用 Provider">
+                  <el-select v-model="form.LLM_FALLBACK_PROVIDER">
+                    <el-option
                       v-for="provider in llmProviders"
                       :key="provider"
                       :label="provider"
-                      :value="provider" /></el-select
-                ></el-form-item>
-                <el-form-item label="备用模型"
-                  ><el-input v-model="form.LLM_FALLBACK_MODEL" maxlength="128"
-                /></el-form-item>
-                <el-form-item label="温度"
-                  ><el-input-number
+                      :value="provider"
+                    />
+                  </el-select>
+                </el-form-item>
+                <el-form-item label="备用模型">
+                  <el-input v-model="form.LLM_FALLBACK_MODEL" maxlength="128" />
+                </el-form-item>
+                <el-form-item label="温度">
+                  <el-input-number
                     v-model="numericForm.LLM_TEMPERATURE"
                     :min="0"
                     :max="2"
                     :step="0.1"
-                /></el-form-item>
-                <el-form-item label="最大输出 Token"
-                  ><el-input-number
+                  />
+                </el-form-item>
+                <el-form-item label="最大输出 Token">
+                  <el-input-number
                     v-model="numericForm.LLM_MAX_OUTPUT_TOKENS"
                     :min="1"
                     :max="65536"
-                /></el-form-item>
-                <el-form-item label="请求超时（ms）"
-                  ><el-input-number
+                  />
+                </el-form-item>
+                <el-form-item label="请求超时（ms）">
+                  <el-input-number
                     v-model="numericForm.LLM_REQUEST_TIMEOUT_MS"
                     :min="100"
                     :max="300000"
-                /></el-form-item>
+                  />
+                </el-form-item>
               </div>
               <div class="configuration-fields">
-                <el-form-item label="OpenAI Base URL"
-                  ><el-input v-model="form.OPENAI_BASE_URL" maxlength="2048"
-                /></el-form-item>
-                <el-form-item label="OpenAI 区域"
-                  ><el-input v-model="form.OPENAI_REGION" maxlength="64"
-                /></el-form-item>
-                <el-form-item label="Gemini Base URL"
-                  ><el-input v-model="form.GEMINI_BASE_URL" maxlength="2048"
-                /></el-form-item>
-                <el-form-item label="Gemini 区域"
-                  ><el-input v-model="form.GEMINI_REGION" maxlength="64"
-                /></el-form-item>
-                <el-form-item label="DeepSeek Base URL"
-                  ><el-input v-model="form.DEEPSEEK_BASE_URL" maxlength="2048"
-                /></el-form-item>
-                <el-form-item label="DeepSeek 区域"
-                  ><el-input v-model="form.DEEPSEEK_REGION" maxlength="64"
-                /></el-form-item>
-                <el-form-item label="阿里云 Base URL"
-                  ><el-input v-model="form.ALIBABA_BASE_URL" maxlength="2048"
-                /></el-form-item>
-                <el-form-item label="阿里云区域"
-                  ><el-input v-model="form.ALIBABA_REGION" maxlength="64"
-                /></el-form-item>
-                <el-form-item label="自定义 Base URL"
-                  ><el-input v-model="form.CUSTOM_BASE_URL" maxlength="2048"
-                /></el-form-item>
-                <el-form-item label="自定义区域"
-                  ><el-input v-model="form.CUSTOM_REGION" maxlength="64"
-                /></el-form-item>
+                <el-form-item label="OpenAI Base URL">
+                  <el-input v-model="form.OPENAI_BASE_URL" maxlength="2048" />
+                </el-form-item>
+                <el-form-item label="OpenAI 区域">
+                  <el-input v-model="form.OPENAI_REGION" maxlength="64" />
+                </el-form-item>
+                <el-form-item label="Gemini Base URL">
+                  <el-input v-model="form.GEMINI_BASE_URL" maxlength="2048" />
+                </el-form-item>
+                <el-form-item label="Gemini 区域">
+                  <el-input v-model="form.GEMINI_REGION" maxlength="64" />
+                </el-form-item>
+                <el-form-item label="DeepSeek Base URL">
+                  <el-input v-model="form.DEEPSEEK_BASE_URL" maxlength="2048" />
+                </el-form-item>
+                <el-form-item label="DeepSeek 区域">
+                  <el-input v-model="form.DEEPSEEK_REGION" maxlength="64" />
+                </el-form-item>
+                <el-form-item label="阿里云 Base URL">
+                  <el-input v-model="form.ALIBABA_BASE_URL" maxlength="2048" />
+                </el-form-item>
+                <el-form-item label="阿里云区域">
+                  <el-input v-model="form.ALIBABA_REGION" maxlength="64" />
+                </el-form-item>
+                <el-form-item label="自定义 Base URL">
+                  <el-input v-model="form.CUSTOM_BASE_URL" maxlength="2048" />
+                </el-form-item>
+                <el-form-item label="自定义区域">
+                  <el-input v-model="form.CUSTOM_REGION" maxlength="64" />
+                </el-form-item>
               </div>
               <div class="configuration-fields">
-                <el-form-item label="OpenAI Key"
-                  ><el-input
+                <el-form-item label="OpenAI Key">
+                  <el-input
                     v-model="secrets.OPENAI_API_KEY"
                     type="password"
                     show-password
                     autocomplete="new-password"
                     :placeholder="secretPlaceholder('OPENAI_API_KEY')"
-                /></el-form-item>
-                <el-form-item label="Gemini Key"
-                  ><el-input
+                  />
+                </el-form-item>
+                <el-form-item label="Gemini Key">
+                  <el-input
                     v-model="secrets.GEMINI_API_KEY"
                     type="password"
                     show-password
                     autocomplete="new-password"
                     :placeholder="secretPlaceholder('GEMINI_API_KEY')"
-                /></el-form-item>
-                <el-form-item label="DeepSeek Key"
-                  ><el-input
+                  />
+                </el-form-item>
+                <el-form-item label="DeepSeek Key">
+                  <el-input
                     v-model="secrets.DEEPSEEK_API_KEY"
                     type="password"
                     show-password
                     autocomplete="new-password"
                     :placeholder="secretPlaceholder('DEEPSEEK_API_KEY')"
-                /></el-form-item>
-                <el-form-item label="阿里云 Key"
-                  ><el-input
+                  />
+                </el-form-item>
+                <el-form-item label="阿里云 Key">
+                  <el-input
                     v-model="secrets.DASHSCOPE_API_KEY"
                     type="password"
                     show-password
                     autocomplete="new-password"
                     :placeholder="secretPlaceholder('DASHSCOPE_API_KEY')"
-                /></el-form-item>
-                <el-form-item label="自定义 Provider Key"
-                  ><el-input
+                  />
+                </el-form-item>
+                <el-form-item label="自定义 Provider Key">
+                  <el-input
                     v-model="secrets.CUSTOM_API_KEY"
                     type="password"
                     show-password
                     autocomplete="new-password"
                     :placeholder="secretPlaceholder('CUSTOM_API_KEY')"
-                /></el-form-item>
+                  />
+                </el-form-item>
               </div>
             </div>
 
             <div class="configuration-section">
               <div class="heading heading--h3" role="heading" aria-level="3">Rerank 与问答</div>
               <div class="configuration-fields">
-                <el-form-item label="Rerank Provider"
-                  ><el-select v-model="form.RERANK_PROVIDER"
-                    ><el-option label="none" value="none" /><el-option
-                      label="alibaba"
-                      value="alibaba" /><el-option label="local_bge" value="local_bge" /></el-select
-                ></el-form-item>
-                <el-form-item label="Rerank 模型"
-                  ><el-input v-model="form.RERANK_MODEL" maxlength="128"
-                /></el-form-item>
-                <el-form-item label="Rerank Base URL"
-                  ><el-input v-model="form.RERANK_BASE_URL" maxlength="2048"
-                /></el-form-item>
-                <el-form-item label="Rerank 区域"
-                  ><el-input v-model="form.RERANK_REGION" maxlength="64"
-                /></el-form-item>
-                <el-form-item label="保留候选数"
-                  ><el-input-number v-model="numericForm.RERANK_TOP_K" :min="1" :max="100"
-                /></el-form-item>
-                <el-form-item label="Rerank 超时（ms）"
-                  ><el-input-number
+                <el-form-item label="Rerank Provider">
+                  <el-select v-model="form.RERANK_PROVIDER">
+                    <el-option label="none" value="none" />
+                    <el-option label="alibaba" value="alibaba" />
+                    <el-option label="local_bge" value="local_bge" />
+                  </el-select>
+                </el-form-item>
+                <el-form-item label="Rerank 模型">
+                  <el-input v-model="form.RERANK_MODEL" maxlength="128" />
+                </el-form-item>
+                <el-form-item label="Rerank Base URL">
+                  <el-input v-model="form.RERANK_BASE_URL" maxlength="2048" />
+                </el-form-item>
+                <el-form-item label="Rerank 区域">
+                  <el-input v-model="form.RERANK_REGION" maxlength="64" />
+                </el-form-item>
+                <el-form-item label="保留候选数">
+                  <el-input-number v-model="numericForm.RERANK_TOP_K" :min="1" :max="100" />
+                </el-form-item>
+                <el-form-item label="Rerank 超时（ms）">
+                  <el-input-number
                     v-model="numericForm.RERANK_REQUEST_TIMEOUT_MS"
                     :min="100"
                     :max="300000"
-                /></el-form-item>
-                <el-form-item label="回答模式"
-                  ><el-select v-model="form.QUERY_ANSWER_MODE"
-                    ><el-option label="hybrid" value="hybrid" /><el-option
-                      label="strict"
-                      value="strict" /></el-select
-                ></el-form-item>
-                <el-form-item label="召回数量"
-                  ><el-input-number v-model="numericForm.QUERY_RECALL_TOP_K" :min="1" :max="100"
-                /></el-form-item>
-                <el-form-item label="距离阈值"
-                  ><el-input-number
+                  />
+                </el-form-item>
+                <el-form-item label="回答模式">
+                  <el-select v-model="form.QUERY_ANSWER_MODE">
+                    <el-option label="hybrid" value="hybrid" />
+                    <el-option label="strict" value="strict" />
+                  </el-select>
+                </el-form-item>
+                <el-form-item label="召回数量">
+                  <el-input-number v-model="numericForm.QUERY_RECALL_TOP_K" :min="1" :max="100" />
+                </el-form-item>
+                <el-form-item label="距离阈值">
+                  <el-input-number
                     v-model="numericForm.QUERY_MAX_DISTANCE"
                     :min="0"
                     :max="2"
                     :step="0.01"
-                /></el-form-item>
+                  />
+                </el-form-item>
               </div>
             </div>
 
             <div class="configuration-section">
               <div class="heading heading--h3" role="heading" aria-level="3">Parser 资源限制</div>
               <div class="configuration-fields">
-                <el-form-item label="API 等待超时（ms）"
-                  ><el-input-number
+                <el-form-item label="API 等待超时（ms）">
+                  <el-input-number
                     v-model="numericForm.PARSER_REQUEST_TIMEOUT_MS"
                     :min="100"
                     :max="900000"
-                /></el-form-item>
-                <el-form-item label="单文件最大字节"
-                  ><el-input-number
+                  />
+                </el-form-item>
+                <el-form-item label="单文件最大字节">
+                  <el-input-number
                     v-model="numericForm.MAX_PARSE_BYTES"
                     :min="1"
                     :max="1073741824"
-                /></el-form-item>
-                <el-form-item label="最大元素数"
-                  ><el-input-number v-model="numericForm.MAX_ELEMENTS" :min="1" :max="1000000"
-                /></el-form-item>
-                <el-form-item label="表格最大行数"
-                  ><el-input-number
+                  />
+                </el-form-item>
+                <el-form-item label="最大元素数">
+                  <el-input-number v-model="numericForm.MAX_ELEMENTS" :min="1" :max="1000000" />
+                </el-form-item>
+                <el-form-item label="表格最大行数">
+                  <el-input-number
                     v-model="numericForm.MAX_SPREADSHEET_ROWS"
                     :min="1"
                     :max="1000000"
-                /></el-form-item>
-                <el-form-item label="PDF 最大页数"
-                  ><el-input-number v-model="numericForm.MAX_PDF_PAGES" :min="1" :max="5000"
-                /></el-form-item>
-                <el-form-item label="图片最大像素数"
-                  ><el-input-number
+                  />
+                </el-form-item>
+                <el-form-item label="PDF 最大页数">
+                  <el-input-number v-model="numericForm.MAX_PDF_PAGES" :min="1" :max="5000" />
+                </el-form-item>
+                <el-form-item label="图片最大像素数">
+                  <el-input-number
                     v-model="numericForm.MAX_IMAGE_PIXELS"
                     :min="1"
                     :max="250000000"
-                /></el-form-item>
-                <el-form-item label="OCR 语言"
-                  ><el-input v-model="form.OCR_LANGUAGES" maxlength="128"
-                /></el-form-item>
-                <el-form-item label="OCR 低置信度阈值"
-                  ><el-input-number
+                  />
+                </el-form-item>
+                <el-form-item label="OCR 语言">
+                  <el-input v-model="form.OCR_LANGUAGES" maxlength="128" />
+                </el-form-item>
+                <el-form-item label="OCR 低置信度阈值">
+                  <el-input-number
                     v-model="numericForm.OCR_CONFIDENCE_WARNING_THRESHOLD"
                     :min="0"
                     :max="1"
                     :step="0.05"
-                /></el-form-item>
-                <el-form-item label="CAD 最大实体数"
-                  ><el-input-number v-model="numericForm.MAX_CAD_ENTITIES" :min="1" :max="2000000"
-                /></el-form-item>
-                <el-form-item label="CAD 最大嵌套深度"
-                  ><el-input-number v-model="numericForm.MAX_CAD_INSERT_DEPTH" :min="1" :max="32"
-                /></el-form-item>
-                <el-form-item label="DWG 转换超时（秒）"
-                  ><el-input-number
+                  />
+                </el-form-item>
+                <el-form-item label="CAD 最大实体数">
+                  <el-input-number v-model="numericForm.MAX_CAD_ENTITIES" :min="1" :max="2000000" />
+                </el-form-item>
+                <el-form-item label="CAD 最大嵌套深度">
+                  <el-input-number v-model="numericForm.MAX_CAD_INSERT_DEPTH" :min="1" :max="32" />
+                </el-form-item>
+                <el-form-item label="DWG 转换超时（秒）">
+                  <el-input-number
                     v-model="numericForm.DWG_CONVERSION_TIMEOUT_SECONDS"
                     :min="1"
                     :max="1800"
-                /></el-form-item>
+                  />
+                </el-form-item>
               </div>
             </div>
 
             <div class="configuration-actions">
-              <el-form-item label="变更原因" required
-                ><el-input
+              <el-form-item label="变更原因" required>
+                <el-input
                   v-model="changeReason"
                   maxlength="500"
                   show-word-limit
                   placeholder="说明为什么修改本次配置"
-              /></el-form-item>
+                />
+              </el-form-item>
               <el-button
                 type="primary"
                 :loading="saving"
@@ -536,8 +558,9 @@ onUnmounted(stopPolling);
                   Boolean(activeDeployment)
                 "
                 @click="saveAndDeploy"
-                >保存并发布</el-button
               >
+                保存并发布
+              </el-button>
             </div>
           </el-form>
         </div>
@@ -549,45 +572,44 @@ onUnmounted(stopPolling);
             </div>
           </div>
           <el-table v-if="!isMobile" :data="deployments" empty-text="暂无发布记录">
-            <el-table-column prop="configVersion" label="版本" width="90"
-              ><template #default="scope">v{{ scope.row.configVersion }}</template></el-table-column
-            >
-            <el-table-column label="状态" width="130"
-              ><template #default="scope"
-                ><el-tag :type="deploymentTag(deploymentRow(scope.row).status)">{{
-                  deploymentStatus(deploymentRow(scope.row).status)
-                }}</el-tag></template
-              ></el-table-column
-            >
-            <el-table-column label="服务" min-width="180"
-              ><template #default="scope">{{
-                scope.row.services.join('、')
-              }}</template></el-table-column
-            >
-            <el-table-column prop="errorCode" label="结果码" min-width="160"
-              ><template #default="scope">{{
-                scope.row.errorCode ?? '—'
-              }}</template></el-table-column
-            >
-            <el-table-column label="操作" width="110"
-              ><template #default="scope"
-                ><el-button
+            <el-table-column prop="configVersion" label="版本" width="90">
+              <template #default="scope">v{{ scope.row.configVersion }}</template>
+            </el-table-column>
+            <el-table-column label="状态" width="130">
+              <template #default="scope">
+                <el-tag :type="deploymentTag(deploymentRow(scope.row).status)">
+                  {{ deploymentStatus(deploymentRow(scope.row).status) }}
+                </el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column label="服务" min-width="180">
+              <template #default="scope">
+                {{ scope.row.services.join('、') }}
+              </template>
+            </el-table-column>
+            <el-table-column prop="errorCode" label="结果码" min-width="160">
+              <template #default="scope"> {{ scope.row.errorCode ?? '—' }}</template>
+            </el-table-column>
+            <el-table-column label="操作" width="110">
+              <template #default="scope">
+                <el-button
                   v-if="deploymentRow(scope.row).rollbackAvailable && !activeDeployment"
                   text
                   type="warning"
                   @click="rollback(deploymentRow(scope.row))"
-                  >回滚</el-button
-                ></template
-              ></el-table-column
-            >
+                >
+                  回滚
+                </el-button>
+              </template>
+            </el-table-column>
           </el-table>
           <div v-else class="deployment-card-list">
             <article v-for="deployment in deployments" :key="deployment.id" class="deployment-card">
               <div>
-                <strong>v{{ deployment.configVersion }}</strong
-                ><el-tag :type="deploymentTag(deployment.status)">{{
-                  deploymentStatus(deployment.status)
-                }}</el-tag>
+                <strong>v{{ deployment.configVersion }}</strong>
+                <el-tag :type="deploymentTag(deployment.status)">
+                  {{ deploymentStatus(deployment.status) }}
+                </el-tag>
               </div>
               <span>服务：{{ deployment.services.join('、') }}</span>
               <span>结果码：{{ deployment.errorCode ?? '—' }}</span>
@@ -596,8 +618,9 @@ onUnmounted(stopPolling);
                 text
                 type="warning"
                 @click="rollback(deployment)"
-                >回滚</el-button
               >
+                回滚
+              </el-button>
             </article>
             <el-empty v-if="deployments.length === 0" description="暂无发布记录" />
           </div>

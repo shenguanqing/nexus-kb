@@ -868,7 +868,6 @@ a {
   background: var(--kb-color-surface);
 }
 .audit-toolbar,
-.access-toolbar,
 .usage-toolbar,
 .provider-toolbar,
 .system-status-toolbar {
@@ -877,7 +876,6 @@ a {
   align-items: center;
 }
 .audit-toolbar strong,
-.access-toolbar strong,
 .provider-toolbar strong,
 .system-status-toolbar strong {
   font-size: 17px;
@@ -1002,7 +1000,7 @@ a {
 .configuration-fields {
   display: grid;
   gap: 14px;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 .configuration-fields .el-form-item,
 .configuration-actions .el-form-item {
@@ -2241,7 +2239,19 @@ a {
 .access-boundary-note strong {
   font-size: 17px;
 }
-.access-toolbar-intro .text-block,
+.access-toolbar {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+.access-toolbar-left {
+  display: grid;
+  min-width: 0;
+}
+.access-toolbar-left strong {
+  font-size: 17px;
+}
+.access-toolbar-left .text-block,
 .access-boundary-note .text-block,
 .audit-toolbar .text-block,
 .provider-toolbar .text-block,
@@ -2266,6 +2276,12 @@ a {
 }
 .access-filter-form .el-input {
   width: min(220px, 100%);
+}
+.access-toolbar-right {
+  display: grid;
+  justify-items: end;
+  gap: 10px;
+  min-width: 0;
 }
 .access-table-wrap {
   display: flex;
@@ -2498,21 +2514,11 @@ a {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     padding-inline: 28px;
   }
-  .access-toolbar {
-    flex-wrap: nowrap;
-  }
-  .access-toolbar-intro{
-    display: flex;
-    align-items: center;
-    gap: 10px;
-  }
-  .access-toolbar-intro .text-block,
-  .access-toolbar-intro .el-tag {
-    display: none;
+  .access-toolbar-actions {
+    flex: 0 0 auto;
   }
   .access-toolbar .mobile-filter-bar {
     flex: 0 0 auto;
-    margin-left: auto;
   }
   .history-toolbar {
     flex-direction: column;
@@ -2582,7 +2588,6 @@ a {
   }
   .configuration-actions .el-button {
     width: 100%;
-    min-height: 44px;
   }
   .app-shell,
   .app-shell.is-collapsed {
@@ -2662,11 +2667,7 @@ a {
   .page-heading-eyebrow {
     margin-bottom: 4px;
   }
-  .page-heading-actions {
-    min-height: 44px;
-  }
   .page-return-link {
-    min-height: 44px;
     padding-inline: 9px;
     font-size: 12px;
   }
@@ -2717,7 +2718,8 @@ a {
   .audit-table-wrap {
     display: block;
     overflow: auto;
-    background: transparent;
+    border: none;
+    background: transparent
   }
   .mobile-data-list {
     display: grid;
@@ -3079,7 +3081,7 @@ a {
     padding: 8px 12px;
   }
   .audit-toolbar .text-block,
-  .access-toolbar-intro .text-block,
+  .access-toolbar-left .text-block,
   .usage-toolbar .text-block,
   .provider-toolbar .text-block,
   .system-status-toolbar .text-block {
@@ -3093,20 +3095,14 @@ a {
   }
   .audit-toolbar,
   .history-toolbar,
-  .access-toolbar,
   .usage-toolbar,
   .provider-toolbar,
   .system-status-toolbar {
     flex-direction: row;
     align-items: center;
   }
-  .access-toolbar {
-    display: flex;
-    justify-content: flex-end;
-  }
   .audit-toolbar .mobile-filter-bar,
   .history-toolbar .mobile-filter-bar,
-  .access-toolbar .mobile-filter-bar,
   .usage-toolbar .usage-filter-bar {
     flex: 0 0 auto;
     width: auto;
@@ -3114,7 +3110,6 @@ a {
   }
   .audit-toolbar .filter-trigger,
   .history-toolbar .filter-trigger,
-  .access-toolbar .filter-trigger,
   .usage-toolbar .filter-trigger {
     width: auto;
   }

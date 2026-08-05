@@ -1316,10 +1316,39 @@ test('keeps shell chrome fixed and confines management-page scrolling below cont
   await page.goto('/access/users');
   await expect(page.getByRole('heading', { name: '用户与角色' })).toBeVisible();
   await expect(page.locator('.access-toolbar')).toBeVisible();
+  await expect(page.locator('.access-toolbar-left')).toBeVisible();
+  await expect(page.locator('.access-toolbar-right')).toBeVisible();
+  await expect(page.locator('.access-toolbar-left')).toContainText('已验证身份目录');
+  await expect(page.locator('.access-toolbar-left')).not.toContainText('身份源 + 托管角色');
   await expect(page.locator('.access-toolbar')).toHaveCSS('position', 'static');
   await expect(page.locator('.access-intro')).toHaveCount(0);
   await expect(page.locator('.access-filters')).toHaveCount(0);
   await expect(page.locator('.access-table-wrap .el-empty')).toHaveCount(0);
+  const accessToolbarLayout = await page.evaluate(() => {
+    const toolbar = document.querySelector<HTMLElement>('.access-toolbar');
+    const left = document.querySelector<HTMLElement>('.access-toolbar-left');
+    const right = document.querySelector<HTMLElement>('.access-toolbar-right');
+    const filters = document.querySelector<HTMLElement>('.access-filter-form');
+    const description = left?.querySelector<HTMLElement>('.text-block');
+    const createAccount = Array.from(document.querySelectorAll<HTMLButtonElement>('button')).find(
+      (button) => button.textContent?.trim() === '新增后台账号',
+    );
+    return {
+      toolbarRight: toolbar?.getBoundingClientRect().right ?? 0,
+      leftRight: left?.getBoundingClientRect().right ?? 0,
+      rightLeft: right?.getBoundingClientRect().left ?? 0,
+      filtersTop: filters?.getBoundingClientRect().top ?? 0,
+      filtersBottom: filters?.getBoundingClientRect().bottom ?? 0,
+      descriptionTop: description?.getBoundingClientRect().top ?? 0,
+      descriptionBottom: description?.getBoundingClientRect().bottom ?? 0,
+      createRight: createAccount?.getBoundingClientRect().right ?? 0,
+    };
+  });
+  expect(accessToolbarLayout.rightLeft).toBeGreaterThan(accessToolbarLayout.leftRight);
+  expect(accessToolbarLayout.filtersTop).toBeLessThan(accessToolbarLayout.descriptionBottom);
+  expect(accessToolbarLayout.filtersBottom).toBeGreaterThan(accessToolbarLayout.descriptionTop);
+  expect(accessToolbarLayout.createRight).toBeLessThanOrEqual(accessToolbarLayout.toolbarRight);
+  expect(accessToolbarLayout.createRight).toBeGreaterThan(accessToolbarLayout.toolbarRight - 180);
   await page.getByRole('button', { name: '编辑角色' }).click();
   await expect(page.locator('.role-dialog')).toBeVisible();
   await expect(page.locator('.role-dialog')).not.toHaveClass(/el-drawer/);

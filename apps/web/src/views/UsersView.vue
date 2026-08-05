@@ -212,37 +212,38 @@ onMounted(() => load());
 <template>
   <section class="access-page">
     <div class="access-toolbar">
-      <div class="access-toolbar-intro">
+      <div class="access-toolbar-left">
         <strong>已验证身份目录</strong>
         <div class="text-block">
           展示 {{ scopeText }} 内已完成认证的用户摘要，角色来自受验证身份声明。
         </div>
-        <div class="access-toolbar-actions">
-          <el-tag type="info" effect="plain">身份源 + 托管角色</el-tag>
-          <el-button v-if="canWrite" type="primary" @click="openCreateUser">新增后台账号</el-button>
-        </div>
       </div>
-      <form
-        v-if="!isMobile"
-        class="access-filter-form"
-        aria-label="用户目录筛选"
-        @submit.prevent="applyFilters"
-      >
-        <el-input v-model="search" clearable maxlength="128" placeholder="搜索企业用户 ID" />
-        <el-input
-          v-if="isAdmin"
-          v-model="department"
-          clearable
-          maxlength="128"
-          placeholder="筛选部门"
-        />
-        <el-button native-type="submit">筛选</el-button>
-        <el-button class="reset-button" native-type="button" @click="resetFilters">重置</el-button>
-      </form>
-      <template v-else>
-        <div class="mobile-filter-bar">
-          <el-button class="filter-trigger" @click="filtersVisible = true">筛选</el-button>
+      <div class="access-toolbar-right">
+        <div class="access-toolbar-actions">
+          <el-button v-if="canWrite" type="primary" @click="openCreateUser">新增后台账号</el-button>
+          <div v-if="isMobile" class="mobile-filter-bar">
+            <el-button class="filter-trigger" @click="filtersVisible = true">筛选</el-button>
+          </div>
         </div>
+        <form
+          v-if="!isMobile"
+          class="access-filter-form"
+          aria-label="用户目录筛选"
+          @submit.prevent="applyFilters"
+        >
+          <el-input v-model="search" clearable maxlength="128" placeholder="搜索企业用户 ID" />
+          <el-input
+            v-if="isAdmin"
+            v-model="department"
+            clearable
+            maxlength="128"
+            placeholder="筛选部门"
+          />
+          <el-button native-type="submit">筛选</el-button>
+          <el-button class="reset-button" native-type="button" @click="resetFilters">重置</el-button>
+        </form>
+      </div>
+      <template v-if="isMobile">
         <el-drawer
           v-model="filtersVisible"
           class="mobile-filter-drawer"
