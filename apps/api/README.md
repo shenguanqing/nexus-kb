@@ -1,6 +1,5 @@
 # NestJS API 应用说明
 
-`apps/api` 是 NexusKB 的主服务，也是唯一公网业务入口。它负责认证、租户隔离、ACL、文档生命周期、
 异步入库、分块脱敏、Provider 编排、向量检索、回答生成、审计和指标。
 
 Parser Worker 只返回结构化元素；分块、脱敏、云端出网策略和向量写入均由本应用完成。
@@ -15,8 +14,7 @@ Parser Worker 只返回结构化元素；分块、脱敏、云端出网策略和
 | [`prisma/schema.prisma`](./prisma/schema.prisma)             | PostgreSQL 数据模型                               |
 | [`src/index-migration.cli.ts`](./src/index-migration.cli.ts) | 向量索引迁移命令入口                              |
 
-公开接口统一使用 `/v1`；接口字段以
-[`packages/contracts/openapi/api.v1.yaml`](../../packages/contracts/openapi/api.v1.yaml) 为事实源。
+公开接口统一使用 `/v1`；接口字段以 [`packages/contracts/openapi/api.v1.yaml`](../../packages/contracts/openapi/api.v1.yaml) 为事实源。
 
 ## 模块目录
 
@@ -96,5 +94,4 @@ pnpm --filter @nexus-kb/api build
 pnpm --filter @nexus-kb/api test:integration
 ```
 
-数据库 schema 变更必须新增 Prisma migration，不直接修改已发布迁移。完整启动、配置和迁移方式见
-[`docs/06-部署运维手册.md`](../../docs/06-部署运维手册.md)。
+数据库 schema 变更必须新增 Prisma migration，不直接修改已发布迁移。完整启动、配置和迁移方式见 [`docs/06-部署运维手册.md`](../../docs/06-部署运维手册.md)。

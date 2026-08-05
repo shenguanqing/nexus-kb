@@ -1,7 +1,6 @@
 # 应用目录说明
 
-`apps/` 保存 NexusKB 可以独立运行的四个应用。跨应用 DTO、运行时校验和 OpenAPI 契约不放在这里，
-统一维护在 [`packages/contracts`](../packages/contracts)。
+`apps/` 保存 NexusKB 可以独立运行的四个应用。跨应用 DTO、运行时校验和 OpenAPI 契约不放在这里，统一维护在 [`packages/contracts`](../packages/contracts)。
 
 ## 应用索引
 
@@ -58,5 +57,4 @@ pnpm test
 pnpm build
 ```
 
-单个应用的开发与测试命令见各自 README。Docker Compose 启动、配置和排障见根目录
-[`README.md`](../README.md) 与 [`docs/06-部署运维手册.md`](../docs/06-部署运维手册.md)。
+单个应用的开发与测试命令见各自 README。Docker Compose 启动、配置和排障见根目录 [`README.md`](../README.md) 与 [`docs/06-部署运维手册.md`](../docs/06-部署运维手册.md)。

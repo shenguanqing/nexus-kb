@@ -1,11 +1,11 @@
-# ODA File Converter package (local only)
+# ODA File Converter 安装包（仅本地）
 
-Place the approved official Linux x64 Debian package in this folder with this exact name:
+将已获组织批准的官方 Linux x64 Debian 安装包放入此目录，并使用以下固定文件名：
 
 ```text
 oda-file-converter.deb
 ```
 
-The package is ignored by Git and is only copied into the locally built DWG Parser Worker image. Do not add the package, a licence file, or credentials to Git.
+该文件已被 Git 忽略，只会复制到本地构建的 DWG Parser Worker 镜像中。不要将安装包、许可证或凭据提交到 Git。
 
-基础模式默认关闭 DWG。完成 ODA 包放置与 `.env` 配置后，使用 `pnpm docker:full -- up -d --build` 启动专用 DWG Worker；首次成功构建后，在容器内确认真实可执行文件路径与版本，再将实际 `DWG_CONVERTER_RELEASE` 写入 `.env`。
+基础模式默认关闭 DWG。放置安装包并完成 `.env` 配置后，使用 `pnpm docker:full -- up -d --build` 启动专用 DWG Worker。首次成功构建后，在容器内确认实际可执行文件路径和版本，再将实际版本填写到 `DWG_CONVERTER_RELEASE`。完整步骤见根目录 [README](../../../../README.md#启用-dwg-解析按需)。

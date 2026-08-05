@@ -1,7 +1,7 @@
 # NexusKB API 使用说明
 
-> 适用范围：NestJS 主服务公开 API、认证方式、权限边界、调用约定和安全示例  
-> 本地 Base URL：`http://127.0.0.1:3000`  
+> 适用范围：NestJS 主服务公开 API、认证方式、权限边界、调用约定和安全示例
+> 本地 Base URL：`http://127.0.0.1:3000`
 > 机器可读契约：[api.v1.yaml](../packages/contracts/openapi/api.v1.yaml)
 
 ---
@@ -198,32 +198,32 @@ unset NEXUSKB_ACCESS_TOKEN
 
 ### 5.1 健康、认证和指标
 
-| 方法 | 路径 | 说明 |
-| --- | --- | --- |
-| `GET` | `/health/live` | 仅确认 API 进程存活 |
-| `GET` | `/health/ready` | 检查 PostgreSQL、Redis、Chroma、Parser Worker 和原始文档目录 |
-| `GET` | `/metrics` | Prometheus 指标；生产必须限制监控网段 |
-| `GET` | `/v1/auth/login-options` | 返回登录模式摘要，不返回账号配置 |
-| `POST` | `/v1/auth/password/login` | 创建服务端密码会话并设置 HttpOnly Cookie |
-| `POST` | `/v1/auth/logout` | 撤销当前密码会话并清除 Cookie |
-| `GET` | `/v1/auth/session` | 返回当前服务端身份、角色和 capability 摘要 |
+| 方法   | 路径                      | 说明                                                         |
+| ------ | ------------------------- | ------------------------------------------------------------ |
+| `GET`  | `/health/live`            | 仅确认 API 进程存活                                          |
+| `GET`  | `/health/ready`           | 检查 PostgreSQL、Redis、Chroma、Parser Worker 和原始文档目录 |
+| `GET`  | `/metrics`                | Prometheus 指标；生产必须限制监控网段                        |
+| `GET`  | `/v1/auth/login-options`  | 返回登录模式摘要，不返回账号配置                             |
+| `POST` | `/v1/auth/password/login` | 创建服务端密码会话并设置 HttpOnly Cookie                     |
+| `POST` | `/v1/auth/logout`         | 撤销当前密码会话并清除 Cookie                                |
+| `GET`  | `/v1/auth/session`        | 返回当前服务端身份、角色和 capability 摘要                   |
 
 ### 5.2 文档与入库任务
 
-| 方法 | 路径 | capability | 说明 |
-| --- | --- | --- | --- |
-| `GET` | `/v1/documents` | `documents:read` | ACL 文档列表、筛选和分页 |
-| `GET` | `/v1/documents/upload-options` | `documents:write` | 上传限制及当前身份可用 metadata |
-| `POST` | `/v1/documents` | `documents:write` | 单文件上传并创建异步入库任务 |
-| `GET` | `/v1/documents/{documentId}` | `documents:read` | 文档摘要、版本和索引状态 |
-| `GET` | `/v1/documents/{documentId}/chunks` | `documents:read` | 按版本分页查看原始/脱敏分块，不返回向量 |
-| `POST` | `/v1/documents/{documentId}/reindex` | `documents:write` | 继续建立索引或创建安全的新版本 |
-| `PATCH` | `/v1/documents/{documentId}/metadata` | `documents:write` | 修改允许的部门/敏感度并触发新版本 |
-| `DELETE` | `/v1/documents/{documentId}` | `documents:delete` | 幂等永久删除原文件、向量和可识别缓存 |
-| `GET` | `/v1/ingestion-jobs` | `documents:read` | ACL 入库任务列表 |
-| `GET` | `/v1/ingestion-jobs/failed` | `documents:read` | 最近最多 50 个失败任务 |
-| `GET` | `/v1/ingestion-jobs/{jobId}` | `documents:read` | 单个任务详情 |
-| `POST` | `/v1/ingestion-jobs/{jobId}/retry` | `documents:write` | 只重试失败且 `retryable=true` 的任务 |
+| 方法     | 路径                                  | capability         | 说明                                    |
+| -------- | ------------------------------------- | ------------------ | --------------------------------------- |
+| `GET`    | `/v1/documents`                       | `documents:read`   | ACL 文档列表、筛选和分页                |
+| `GET`    | `/v1/documents/upload-options`        | `documents:write`  | 上传限制及当前身份可用 metadata         |
+| `POST`   | `/v1/documents`                       | `documents:write`  | 单文件上传并创建异步入库任务            |
+| `GET`    | `/v1/documents/{documentId}`          | `documents:read`   | 文档摘要、版本和索引状态                |
+| `GET`    | `/v1/documents/{documentId}/chunks`   | `documents:read`   | 按版本分页查看原始/脱敏分块，不返回向量 |
+| `POST`   | `/v1/documents/{documentId}/reindex`  | `documents:write`  | 继续建立索引或创建安全的新版本          |
+| `PATCH`  | `/v1/documents/{documentId}/metadata` | `documents:write`  | 修改允许的部门/敏感度并触发新版本       |
+| `DELETE` | `/v1/documents/{documentId}`          | `documents:delete` | 幂等永久删除原文件、向量和可识别缓存    |
+| `GET`    | `/v1/ingestion-jobs`                  | `documents:read`   | ACL 入库任务列表                        |
+| `GET`    | `/v1/ingestion-jobs/failed`           | `documents:read`   | 最近最多 50 个失败任务                  |
+| `GET`    | `/v1/ingestion-jobs/{jobId}`          | `documents:read`   | 单个任务详情                            |
+| `POST`   | `/v1/ingestion-jobs/{jobId}/retry`    | `documents:write`  | 只重试失败且 `retryable=true` 的任务    |
 
 `GET /v1/documents` 支持：
 
@@ -241,36 +241,36 @@ unset NEXUSKB_ACCESS_TOKEN
 
 ### 5.3 知识问答与个人历史
 
-| 方法 | 路径 | 要求 | 说明 |
-| --- | --- | --- | --- |
-| `POST` | `/v1/knowledge/query` | `documents:read` | ACL 检索、可选 Rerank、回答和引用 |
-| `GET` | `/v1/history/conversations` | 已认证 | 仅当前 tenant + user 的会话列表 |
-| `GET` | `/v1/history/conversations/{conversationId}` | 会话所有者 | 会话与问答轮次 |
-| `DELETE` | `/v1/history/conversations/{conversationId}` | 会话所有者 | 幂等删除个人会话 |
+| 方法     | 路径                                         | 要求             | 说明                              |
+| -------- | -------------------------------------------- | ---------------- | --------------------------------- |
+| `POST`   | `/v1/knowledge/query`                        | `documents:read` | ACL 检索、可选 Rerank、回答和引用 |
+| `GET`    | `/v1/history/conversations`                  | 已认证           | 仅当前 tenant + user 的会话列表   |
+| `GET`    | `/v1/history/conversations/{conversationId}` | 会话所有者       | 会话与问答轮次                    |
+| `DELETE` | `/v1/history/conversations/{conversationId}` | 会话所有者       | 幂等删除个人会话                  |
 
 历史列表支持 `query`、`from`、`to`、`offset` 和 `limit`。`from` 必须早于或等于 `to`，`limit` 最大 100。
 
 ### 5.4 审计、访问和系统管理
 
-| 方法 | 路径 | 要求 | 说明 |
-| --- | --- | --- | --- |
-| `GET` | `/v1/audit/events` | `audit:read` | 当前 tenant 的结构化审计事件 |
-| `GET` | `/v1/access/users` | `access:read` | 本地后台账号与已验证身份目录 |
-| `POST` | `/v1/access/users` | `admin` | 创建本地后台账号 |
-| `PATCH` | `/v1/access/users/{userId}` | `admin` | 编辑本地账号、重置密码、启用或禁用 |
-| `DELETE` | `/v1/access/users/{userId}` | `admin` | 删除本地后台账号并撤销会话 |
-| `PATCH` | `/v1/access/users/{userId}/roles` | `admin` + `access:write` | 将应用角色替换为 `user` 或 `admin` |
-| `GET` | `/v1/access/departments` | `access:read` | 有效部门敏感度策略 |
-| `PATCH` | `/v1/access/departments/{department}` | `admin` + `access:write` | 只能收紧部门允许敏感度 |
-| `GET` | `/v1/system/providers` | `system:read` | 脱敏 Provider、模型、区域和指纹摘要 |
-| `GET` | `/v1/system/status` | `system:read` | 脱敏依赖、队列和磁盘状态 |
-| `GET` | `/v1/system/usage` | `admin` + `system:read` | 指定时间范围内的用量事实 |
-| `GET` | `/v1/system/configuration` | `system:read` | 当前脱敏运行配置、密钥状态与最近版本 |
-| `POST` | `/v1/system/configurations` | `admin` + `system:configure` | 校验并创建加密的不可变配置版本 |
-| `POST` | `/v1/system/configurations/{configurationId}/deploy` | `admin` + `system:deploy` | 异步发布并定向重建受影响服务 |
-| `GET` | `/v1/system/deployments` | `system:read` | 最近发布、readiness 与回滚结果 |
-| `GET` | `/v1/system/deployments/{deploymentId}` | `system:read` | 轮询单个发布任务 |
-| `POST` | `/v1/system/deployments/{deploymentId}/rollback` | `admin` + `system:deploy` | 受控发布上一配置版本 |
+| 方法     | 路径                                                 | 要求                         | 说明                                 |
+| -------- | ---------------------------------------------------- | ---------------------------- | ------------------------------------ |
+| `GET`    | `/v1/audit/events`                                   | `audit:read`                 | 当前 tenant 的结构化审计事件         |
+| `GET`    | `/v1/access/users`                                   | `access:read`                | 本地后台账号与已验证身份目录         |
+| `POST`   | `/v1/access/users`                                   | `admin`                      | 创建本地后台账号                     |
+| `PATCH`  | `/v1/access/users/{userId}`                          | `admin`                      | 编辑本地账号、重置密码、启用或禁用   |
+| `DELETE` | `/v1/access/users/{userId}`                          | `admin`                      | 删除本地后台账号并撤销会话           |
+| `PATCH`  | `/v1/access/users/{userId}/roles`                    | `admin` + `access:write`     | 将应用角色替换为 `user` 或 `admin`   |
+| `GET`    | `/v1/access/departments`                             | `access:read`                | 有效部门敏感度策略                   |
+| `PATCH`  | `/v1/access/departments/{department}`                | `admin` + `access:write`     | 只能收紧部门允许敏感度               |
+| `GET`    | `/v1/system/providers`                               | `system:read`                | 脱敏 Provider、模型、区域和指纹摘要  |
+| `GET`    | `/v1/system/status`                                  | `system:read`                | 脱敏依赖、队列和磁盘状态             |
+| `GET`    | `/v1/system/usage`                                   | `admin` + `system:read`      | 指定时间范围内的用量事实             |
+| `GET`    | `/v1/system/configuration`                           | `system:read`                | 当前脱敏运行配置、密钥状态与最近版本 |
+| `POST`   | `/v1/system/configurations`                          | `admin` + `system:configure` | 校验并创建加密的不可变配置版本       |
+| `POST`   | `/v1/system/configurations/{configurationId}/deploy` | `admin` + `system:deploy`    | 异步发布并定向重建受影响服务         |
+| `GET`    | `/v1/system/deployments`                             | `system:read`                | 最近发布、readiness 与回滚结果       |
+| `GET`    | `/v1/system/deployments/{deploymentId}`              | `system:read`                | 轮询单个发布任务                     |
+| `POST`   | `/v1/system/deployments/{deploymentId}/rollback`     | `admin` + `system:deploy`    | 受控发布上一配置版本                 |
 
 审计接口支持 `type=query|document_lifecycle|cloud_policy|access_change`、`before` 和 `limit`，返回 `nextBefore` 时间游标及当前 tenant、事件类型筛选范围内的 `total`。下一页继续传递 `before=<nextBefore>`；`before` 不改变 `total`，游标不是权限凭据。
 

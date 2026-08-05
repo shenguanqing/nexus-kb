@@ -6,12 +6,12 @@
 
 ## 快速导航
 
-- [第一次启动](#第一次启动)
-- [一次启动全部 Docker 服务](#一次启动全部-docker-服务)
+- [第一次启动](#第一次启动推荐本地开发模式)
 - [启用本机向量索引](#启用本机向量索引ollama)
 - [启用完整 RAG 问答](#启用完整-rag-问答)
 - [启用管理员配置发布](#启用管理员配置发布按需)
 - [启用 DWG 解析](#启用-dwg-解析按需)
+- [启动全部 Docker 服务](#启动全部-docker-服务按需启用-dwg)
 - [常见问题 FAQ](#常见问题-faq)
 - [开发与测试](#开发与测试)
 
@@ -41,6 +41,16 @@
 | Chroma           | 向量索引                         | Docker 内网                       |
 
 Deployment Agent、Parser Worker、Apache Tika、PostgreSQL、Redis 和 Chroma 默认不向宿主机或公网开放端口。
+
+### 名词速览
+
+后文会反复出现以下几个词。首次阅读时只需了解基本含义：
+
+- **Embedding（向量化）**：把文本转换成一串数字（向量），用于语义检索，而不是关键词匹配。
+- **LLM Provider**：生成最终问答回复的大模型服务，比如 OpenAI、Google 等。
+- **RAG**：先检索出相关文档片段，再交给 LLM 生成有依据的回答，即"检索增强生成"。
+- **Rerank（重排序）**：对检索出的候选片段按相关性再排一次序，提升最终结果质量，属于可选项。
+- **ACL / tenant**：权限与租户隔离，用于控制哪些人可以查看哪些文档。
 
 ## 选择运行模式
 
@@ -125,6 +135,9 @@ pnpm install --frozen-lockfile
 cp .env.example .env
 ```
 
+> [!IMPORTANT]
+> `.env` 会保存密码和可能的 API Key，已被 Git 忽略。接下来填写时，不要把这个文件提交、发送或截图分享出去。
+
 生成四个不同的随机值：
 
 ```bash
@@ -166,18 +179,15 @@ DEPLOYMENT_AGENT_TOKEN=<第四个随机值>
 
 这里显式关闭 DWG，表示本次启动不提供 DWG 上传能力；其他已支持格式不受影响。`DEV_ROLES_JSON=["admin"]` 只用于本地开发身份，便于访问文档管理页面，不能用于生产环境。
 
-> [!IMPORTANT]
-> `.env` 包含密码和可能的 API Key，已被 Git 忽略。不要提交、发送或截图分享该文件。
-
 ### 3. 启动本地开发服务
 
-确认 Docker Desktop 已运行，然后执行：
+确认 Docker Desktop 已运行。首次启动需要拉取镜像并构建服务。Parser Worker 还会下载 CPU PyTorch wheel 和中英文 OCR 模型，因此会比后续启动耗时更长。然后执行：
 
 ```bash
 pnpm docker:up:dev
 ```
 
-首次启动需要拉取镜像和构建服务，耗时通常比后续启动长。Parser Worker 首次构建还会下载 CPU PyTorch wheel 和中文/英文 OCR 模型。随后可用 `pnpm docker:dev -- ps` 确认 `api`、`deployment-agent`、`parser-worker`、`tika`、`postgres`、`redis` 和 `chroma` 正常运行。
+随后可用 `pnpm docker:dev -- ps` 确认 `api`、`deployment-agent`、`parser-worker`、`tika`、`postgres`、`redis` 和 `chroma` 正常运行。
 
 ### 4. 检查服务状态
 
@@ -203,7 +213,7 @@ pnpm docker:dev -- logs --tail=100 api deployment-agent parser-worker tika
 pnpm --filter @nexus-kb/web dev
 ```
 
-浏览器打开 [http://127.0.0.1:5173](http://127.0.0.1:5173)。开发模式会使用 `.env` 中的服务端固定身份，不需要输入账号密码。
+浏览器打开 [http://127.0.0.1:5173](http://127.0.0.1:5173/)。开发模式会使用 `.env` 中的服务端固定身份，不需要输入账号密码。
 
 ### 6. 完成第一次验证
 
@@ -213,18 +223,6 @@ pnpm --filter @nexus-kb/web dev
 4. 任务完成后，文档应显示“待建立索引”。
 
 此时本地开发环境已经跑通，管理页面不会因配置发布功能未启用而返回 503。要让文档进入向量索引，请继续启用 Ollama；要生成问答回答，还需要配置云端 LLM。
-
-## 启动全部 Docker 服务（按需启用 DWG）
-
-这不是第一次启动后的必做步骤。只有需要 DWG 时，才在已完成 ODA 安装包与 `.env` 配置后使用它；它会在本地开发模式基础上增加 DWG 专用 Worker，并启动全部**常驻** Docker 服务。
-
-```bash
-pnpm docker:up:all
-```
-
-它等同于完整 Compose 文件组合并启用 `configuration` profile；首次使用仍需先按 [启用 DWG 解析](#启用-dwg-解析按需)放置经许可的 ODA 包。缺少 ODA 时继续使用 `pnpm docker:up:dev`，不要用“全部启动”绕过 DWG 的安全检查。
-
-本地 BGE Rerank 的模型下载是有意隔离的短任务，不会由该命令自动执行；首次启用时按下文的 `reranker-model-init` 命令预下载模型。
 
 ## 启用本机向量索引（Ollama）
 
@@ -245,6 +243,9 @@ curl http://127.0.0.1:11434/api/tags
 
 ### 2. 修改 `.env`
 
+> [!WARNING]
+> 文档与查询必须使用相同的 Embedding Provider、模型和维度。更换这些配置后不能继续写入旧 collection，必须创建新索引并执行迁移。
+
 ```dotenv
 EMBEDDING_PROVIDER=ollama
 EMBEDDING_MODEL=bge-m3:latest
@@ -257,7 +258,7 @@ Ollama 不需要 API Key。`host.docker.internal` 是 API 容器访问 Mac 宿�
 
 ### 3. 重建 API 容器
 
-下面以推荐本地开发模式为例。已启用 DWG 或 DBeaver 时，必须使用 [日常使用](#日常使用)中当前模式对应的入口，不能临时切回开发模式。
+下面以推荐本地开发模式为例。已启用 DWG 或 DBeaver 时，必须使用 [选择固定的 Compose 入口](#选择固定的-compose-入口)中当前模式对应的入口，不能临时切回开发模式。
 
 ```bash
 pnpm docker:dev -- up -d --force-recreate api
@@ -265,9 +266,6 @@ curl --fail-with-body http://127.0.0.1:3000/health/ready
 ```
 
 之前处于“待建立索引”的文档，可在文档详情点击“继续建立索引”，系统会复用已完成的解析、分块和脱敏结果。
-
-> [!WARNING]
-> 文档与查询必须使用相同的 Embedding Provider、模型和维度。更换这些配置后不能继续写入旧 collection，必须创建新索引并执行迁移。
 
 ## 启用完整 RAG 问答
 
@@ -279,6 +277,9 @@ curl --fail-with-body http://127.0.0.1:3000/health/ready
 
 在 `.env` 中将 `LLM_PROVIDER` 改为 `openai`、`google`、`deepseek`、`alibaba` 或 `custom`，并填写该平台控制台当前可用的模型 ID、HTTPS Base URL 和 API Key。例如使用 Google 时需要填写：
 
+> [!IMPORTANT]
+> API Key 只应保存在 Git 忽略的 `.env` 或 Secret Manager 中。不要写入代码、Git、截图或 shell 命令。`confidential` 内容默认不能发送到云端 LLM 或 Rerank。
+
 ```dotenv
 LLM_PROVIDER=google
 LLM_MODEL=<控制台当前可用的模型 ID>
@@ -286,9 +287,7 @@ GEMINI_API_KEY=<本地开发 Key>
 GEMINI_BASE_URL=https://generativelanguage.googleapis.com/v1beta
 ```
 
-修改后只需重建 API：
-
-下面以推荐本地开发模式为例。已启用 DWG 或 DBeaver 时，必须使用 [日常使用](#选择固定的-compose-入口)中当前模式对应的入口。
+修改后只需重建 API（下面以推荐本地开发模式为例；已启用 DWG 或 DBeaver 时，须改用 [选择固定的 Compose 入口](#选择固定的-compose-入口)中当前模式对应的入口）：
 
 ```bash
 pnpm docker:dev -- up -d --force-recreate api
@@ -297,9 +296,7 @@ curl --fail-with-body http://127.0.0.1:3000/health/ready
 
 然后在“知识问答”中提问，并核对回答是否包含 `[来源N]` 和对应来源卡片。
 
-- 不要把 API Key 写进代码、Git、截图或 shell 命令。
 - Rerank 默认保持 `none`，是否启用应由正式质量评测决定。
-- `confidential` 内容默认禁止发送到云端 LLM 或 Rerank。
 
 ### 启用本地 BGE Rerank（按需）
 
@@ -319,7 +316,7 @@ RERANK_INTERNAL_TOKEN=
 然后执行：
 
 ```bash
-# 推荐模式用 docker:dev；已启用 DWG 时用 docker:full。
+# 推荐模式使用 docker:dev；已启用 DWG 时使用 docker:full。
 pnpm docker:dev -- --profile model-init run --rm reranker-model-init
 pnpm docker:dev -- up -d --build api reranker-worker
 pnpm docker:dev -- ps api reranker-worker
@@ -386,6 +383,9 @@ apps/parser-worker/vendor/oda/oda-file-converter.deb
 
 该文件已被 Git 忽略，禁止提交到仓库。随后按照 [部署运维手册：CAD / DWG 转换流程](./docs/06-部署运维手册.md#91-cad--dwg-转换流程)读取实际安装版本、填写 `DWG_CONVERTER_RELEASE`。
 
+> [!IMPORTANT]
+> 从以下 `pnpm docker:full` 命令开始即进入 **DWG 模式**。后续统一使用 `pnpm docker:full -- <Compose 子命令>`；该入口保留原生 `parser-worker` 处理图片/PDF 等常规文件，并额外启动 `linux/amd64` 的 `parser-worker-dwg`。API 仅把 DWG 路由到后者，两个 Worker 的 readiness 都必须通过。
+
 构建前先打开 Docker Desktop，等待 Docker Engine 完全启动，并确认下面两条命令均成功：
 
 ```bash
@@ -417,9 +417,6 @@ docker run --rm --platform linux/amd64 --entrypoint python nexus-kb-parser-worke
 
 `ps` 中的 `api`、原生 `parser-worker`、`parser-worker-dwg`、`tika`、`postgres`、`redis` 和 `chroma` 应正常运行，随后再检查：
 
-> [!IMPORTANT]
-> 从此处开始即进入 **DWG 模式**。后续统一使用 `pnpm docker:full -- <Compose 子命令>`；该入口保留原生 `parser-worker` 处理图片/PDF 等常规文件，并额外启动 `linux/amd64` 的 `parser-worker-dwg`。API 仅把 DWG 路由到后者，两个 Worker 的 readiness 都必须通过。
-
 ```bash
 curl --fail-with-body http://127.0.0.1:3000/health/live
 curl --fail-with-body http://127.0.0.1:3000/health/ready
@@ -428,6 +425,18 @@ curl --fail-with-body http://127.0.0.1:3000/health/ready
 如果还需要通过 DBeaver 访问 PostgreSQL，统一改用 `pnpm docker:full:db -- <Compose 子命令>`；该入口额外加载本地调试覆盖文件，生产环境不得使用。
 
 缺少或未获许可的 ODA 安装包时，请保持 `DWG_CONVERSION_ENABLED=false`；不要绕过转换器就绪检查，也不要暴露 Worker 端口。
+
+## 启动全部 Docker 服务（按需启用 DWG）
+
+这不是第一次启动后的必做步骤。只有在完成上一节的 ODA 安装包与 `.env` 配置后才使用它；它会在本地开发模式基础上增加 DWG 专用 Worker，并启动全部**常驻** Docker 服务。
+
+```bash
+pnpm docker:up:all
+```
+
+它等同于完整 Compose 文件组合并启用 `configuration` profile。缺少 ODA 时继续使用 `pnpm docker:up:dev`，不要用“全部启动”绕过 DWG 的安全检查。
+
+本地 BGE Rerank 的模型下载是有意隔离的短任务，不会由该命令自动执行；首次启用时按上文的 `reranker-model-init` 命令预下载模型。
 
 ## 日常使用
 
@@ -448,6 +457,9 @@ curl --fail-with-body http://127.0.0.1:3000/health/ready
 
 以下示例为推荐本地开发模式。停止服务并保留数据：
 
+> [!CAUTION]
+> 不要把 `docker compose down -v` 当作日常停止命令。`-v` 会删除 PostgreSQL、Chroma、Redis 和上传文件使用的本地 volume。
+
 ```bash
 pnpm docker:dev -- down
 ```
@@ -457,9 +469,6 @@ pnpm docker:dev -- down
 ```bash
 pnpm docker:up:dev
 ```
-
-> [!CAUTION]
-> 不要把 `docker compose down -v` 当作日常停止命令。`-v` 会删除 PostgreSQL、Chroma、Redis 和上传文件使用的本地 volume。
 
 ### 修改后如何生效
 
@@ -575,7 +584,7 @@ pnpm docker:base -- up -d --force-recreate postgres api
 curl --fail-with-body http://127.0.0.1:3000/health/ready
 ```
 
-DBeaver 使用 `127.0.0.1:15432`，数据库和用户名读取 `.env` 的 `POSTGRES_DB`、`POSTGRES_USER`（默认均为 `kb`），密码使用 `POSTGRES_PASSWORD`。不得使用 `docker compose down -v` 处理认证失败，该命令会删除数据volume。
+DBeaver 使用 `127.0.0.1:15432`，数据库和用户名读取 `.env` 的 `POSTGRES_DB`、`POSTGRES_USER`（默认均为 `kb`），密码使用 `POSTGRES_PASSWORD`。不得使用 `docker compose down -v` 处理认证失败，该命令会删除数据 volume。
 
 ### 5. 文档显示“待建立索引”，或问答没有返回答案
 

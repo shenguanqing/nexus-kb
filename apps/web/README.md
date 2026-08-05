@@ -1,7 +1,6 @@
 # Vue Web 应用说明
 
-`apps/web` 是 NexusKB 的浏览器界面，使用 Vue 3、TypeScript、Vite、Vue Router、Pinia 和 Element Plus。
-它提供知识问答、来源展示、问答历史、文档与入库任务管理、访问控制、审计、Provider、系统状态和用量页面。
+`apps/web` 是 NexusKB 的浏览器界面，使用 Vue 3、TypeScript、Vite、Vue Router、Pinia 和 Element Plus。它提供知识问答、来源展示、问答历史、文档与入库任务管理、访问控制、审计、Provider、系统状态和用量页面。
 
 Web 只负责用户体验。真正的身份、tenant、ACL、敏感度和 capability 校验始终由 NestJS API 执行。
 
@@ -66,8 +65,7 @@ Web 只负责用户体验。真正的身份、tenant、ACL、敏感度和 capabi
 - 表格、列表和详情正文在各自内容块内滚动，避免整个页面横向溢出。
 - 触控目标至少 44px；手机可聚焦输入控件字号至少 16px。
 
-详细页面和交互规范见
-[`docs/03-前端产品与界面设计.md`](../../docs/03-前端产品与界面设计.md)。
+详细页面和交互规范见 [`docs/03-前端产品与界面设计.md`](../../docs/03-前端产品与界面设计.md)。
 
 ## 开发命令
 

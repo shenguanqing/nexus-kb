@@ -47,6 +47,21 @@ POST /internal/v1/parse
 | `bbox`        | OCR 文字的 `[x1, y1, x2, y2]` 四元坐标框           |
 | `metadata`    | 行号、表头、实体类型、图层等格式特有信息           |
 
+## 当前支持范围
+
+以下算法章节按格式逐一介绍；先看这张总表可以快速确认某个格式是否已支持：
+
+| 格式                          | 状态                 | 解析器                                       |
+| ----------------------------- | -------------------- | -------------------------------------------- |
+| TXT / Markdown                | 已实现               | 原生 UTF-8 行扫描                            |
+| DOCX                          | 已实现               | python-docx                                  |
+| XLSX                          | 已实现               | openpyxl                                     |
+| DXF                           | 已实现               | ezdxf                                        |
+| DWG                           | 已实现，依赖本地 ODA | ODA → DXF → ezdxf                            |
+| PDF                           | 已实现               | Unstructured；失败或空结果时由内网 Tika 兜底 |
+| PNG / JPG / JPEG              | 已实现               | EasyOCR（CPU、离线模型）                     |
+| PPTX / HTML / DOC / RTF / EML | 未实现               | 后续阶段                                     |
+
 ## 解析器算法
 
 ### `parsers/text.py`
@@ -58,8 +73,7 @@ TXT 和 Markdown 共用 UTF-8 行扫描算法：
 - 连续非空普通行合并成一个 `paragraph`。
 - 空行结束当前段落。
 
-因此普通 TXT 中符合 Markdown 标题语法的行也会被识别为标题。当前不会把列表、代码块、引用或 Markdown
-表格拆成独立元素。
+因此普通 TXT 中符合 Markdown 标题语法的行也会被识别为标题。当前不会把列表、代码块、引用或 Markdown 表格拆成独立元素。
 
 ### `parsers/docx.py`
 
@@ -125,21 +139,7 @@ DWG 使用“受控转换后复用 DXF”：
 6. 调用 `parse_dxf()`。
 7. 返回 ODA 与 ezdxf 的组合版本和转换 warning。
 
-转换产物只存在于临时目录，不替换原始 DWG，并在任务结束时自动清理。ODA 第三方安装包和许可说明见
-[`vendor/oda/README.md`](./vendor/oda/README.md)。
-
-## 当前支持范围
-
-| 格式                          | 状态                 | 解析器                                       |
-| ----------------------------- | -------------------- | -------------------------------------------- |
-| TXT / Markdown                | 已实现               | 原生 UTF-8 行扫描                            |
-| DOCX                          | 已实现               | python-docx                                  |
-| XLSX                          | 已实现               | openpyxl                                     |
-| DXF                           | 已实现               | ezdxf                                        |
-| DWG                           | 已实现，依赖本地 ODA | ODA → DXF → ezdxf                            |
-| PDF                           | 已实现               | Unstructured；失败或空结果时由内网 Tika 兜底 |
-| PNG / JPG / JPEG              | 已实现               | EasyOCR（CPU、离线模型）                     |
-| PPTX / HTML / DOC / RTF / EML | 未实现               | 后续阶段                                     |
+转换产物只存在于临时目录，不替换原始 DWG，并在任务结束时自动清理。ODA 第三方安装包和许可说明见 [`vendor/oda/README.md`](./vendor/oda/README.md)。
 
 ## 资源与安全限制
 
@@ -165,13 +165,11 @@ DWG 使用“受控转换后复用 DXF”：
 - `DWG_CONVERSION_TIMEOUT_SECONDS`
 - `MAX_DWG_CONVERTED_BYTES`
 
-请求不能指定 Tika 地址、解析器可执行文件、临时目录或任意转换参数。Compose 中的 Tika 只连接
-`backend` 内部网络，不发布宿主机端口；加密、页数超限等安全拒绝不会进入 fallback。日志只记录
-trace、job、document、parser 和安全错误类型，不记录完整正文或内部文件路径。
+请求不能指定 Tika 地址、解析器可执行文件、临时目录或任意转换参数。Compose 中的 Tika 只连接 `backend` 内部网络，不发布宿主机端口；加密、页数超限等安全拒绝不会进入 fallback。日志只记录 trace、job、document、parser 和安全错误类型，不记录完整正文或内部文件路径。
 
 ## 开发与验证
 
-从仓库根目录进入 Worker：
+从仓库根目录进入 Worker。运行前确认本机 Python 版本为 3.11：
 
 ```bash
 cd apps/parser-worker
@@ -180,7 +178,7 @@ ruff check .
 mypy app tests
 ```
 
-Python 版本要求为 3.11。宿主机测试适合验证解析契约、限制和安全分支，但 PDF/OCR 的完整运行环境以 Docker 镜像为准：镜像还包含 Poppler、Tesseract 中文/英文语言包、CPU PyTorch，以及构建阶段预载且运行时只读的 EasyOCR 和 NLTK 模型资源。运行时不得为用户文档下载模型或语言资源。涉及 `requirements.lock`、PDF、图片、OCR 或 Dockerfile 的变更，至少还应构建并启动 Parser 镜像，然后从容器内检查 Worker readiness：
+宿主机测试适合验证解析契约、限制和安全分支，但 PDF/OCR 的完整运行环境以 Docker 镜像为准：镜像还包含 Poppler、Tesseract 中文/英文语言包、CPU PyTorch，以及构建阶段预载且运行时只读的 EasyOCR 和 NLTK 模型资源。运行时不得为用户文档下载模型或语言资源。涉及 `requirements.lock`、PDF、图片、OCR 或 Dockerfile 的变更，至少还应构建并启动 Parser 镜像，然后从容器内检查 Worker readiness：
 
 ```bash
 pnpm docker:full -- exec parser-worker python -c \
@@ -196,5 +194,4 @@ docker run --rm --platform linux/amd64 --entrypoint python nexus-kb-parser-worke
   -c "import torch; print({'torch': torch.__version__, 'cuda': torch.version.cuda})"
 ```
 
-输出中的 `cuda` 应为 `None`。Docker 和 DWG 专用 Worker 的启动方式见根目录
-[`README.md`](../../README.md) 与 [`docs/06-部署运维手册.md`](../../docs/06-部署运维手册.md)。
+输出中的 `cuda` 应为 `None`。Docker 和 DWG 专用 Worker 的启动方式见根目录 [`README.md`](../../README.md) 与 [`docs/06-部署运维手册.md`](../../docs/06-部署运维手册.md)。
