@@ -24,7 +24,7 @@ def parse_docx(path: Path, max_elements: int) -> list[ParsedElement]:
         else:
             element_type = "paragraph"
         elements.append(
-            ParsedElement(text=text, elementType=element_type, sectionPath=section_path.copy())
+            ParsedElement(text=text, element_type=element_type, section_path=section_path.copy())
         )
         _check_limit(elements, max_elements)
     for table_index, table in enumerate(document.tables, start=1):
@@ -34,8 +34,8 @@ def parse_docx(path: Path, max_elements: int) -> list[ParsedElement]:
                 elements.append(
                     ParsedElement(
                         text="\t".join(values),
-                        elementType="table_row",
-                        sectionPath=section_path.copy(),
+                        element_type="table_row",
+                        section_path=section_path.copy(),
                         metadata={"tableIndex": table_index, "rowIndex": row_index},
                     )
                 )

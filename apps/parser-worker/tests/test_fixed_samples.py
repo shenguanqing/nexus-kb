@@ -19,13 +19,13 @@ def payload(path: Path, mime_type: str) -> dict[str, str]:
     }
 
 
-def client() -> TestClient:
+def client(parser_temp_path: Path) -> TestClient:
     return TestClient(
         create_app(
             Settings(
                 PARSER_INTERNAL_TOKEN=TOKEN,
                 RAW_DOCS_PATH=FIXTURES,
-                PARSER_TEMP_PATH=Path("/tmp/parser"),
+                PARSER_TEMP_PATH=parser_temp_path,
                 TIKA_ENABLED=False,
                 DWG_CONVERSION_ENABLED=False,
             )
@@ -33,11 +33,11 @@ def client() -> TestClient:
     )
 
 
-def test_fixed_pdf_sample_is_parsed_with_real_unstructured() -> None:
+def test_fixed_pdf_sample_is_parsed_with_real_unstructured(tmp_path: Path) -> None:
     path = FIXTURES / "parser-sample.pdf"
     assert path.is_file(), "Run node apps/parser-worker/tests/fixtures/generate-fixtures.mjs first"
 
-    response = client().post(
+    response = client(tmp_path / "parser").post(
         "/internal/v1/parse",
         headers={"x-internal-token": TOKEN},
         json=payload(path, "application/pdf"),
@@ -49,11 +49,11 @@ def test_fixed_pdf_sample_is_parsed_with_real_unstructured() -> None:
     assert "PAYMENT 30 DAYS" in " ".join(element["text"] for element in body["elements"]).upper()
 
 
-def test_fixed_png_sample_is_parsed_with_real_easyocr() -> None:
+def test_fixed_png_sample_is_parsed_with_real_easyocr(tmp_path: Path) -> None:
     path = FIXTURES / "parser-sample.png"
     assert path.is_file(), "Run node apps/parser-worker/tests/fixtures/generate-fixtures.mjs first"
 
-    response = client().post(
+    response = client(tmp_path / "parser").post(
         "/internal/v1/parse",
         headers={"x-internal-token": TOKEN},
         json=payload(path, "image/png"),

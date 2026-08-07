@@ -70,7 +70,7 @@ def parser_error_headers(code: str) -> dict[str, str]:
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
-    resolved_settings = settings or Settings()  # type: ignore[call-arg]
+    resolved_settings = settings or Settings()
     api = FastAPI(title="NexusKB Parser Worker", version="1.0.0", docs_url=None, redoc_url=None)
     api.state.settings = resolved_settings
 
@@ -305,7 +305,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         )
         return ParseResponse(
             parser=parser,
-            parserVersion=parser_version,
+            parser_version=parser_version,
             elements=elements,
             warnings=warnings,
         )

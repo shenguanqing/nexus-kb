@@ -28,7 +28,7 @@ def parse_xlsx(path: Path, max_rows: int, max_elements: int) -> list[ParsedEleme
                 elements.append(
                     ParsedElement(
                         text="\t".join(normalized),
-                        elementType=element_type,
+                        element_type=element_type,
                         sheet=sheet.title,
                         metadata={"row": row_number, "headers": header},
                     )

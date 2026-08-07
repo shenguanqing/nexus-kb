@@ -19,10 +19,14 @@ def create_png(path: Path) -> None:
 
 def create_pdf(path: Path) -> None:
     stream = f"BT\n/F1 18 Tf\n72 720 Td\n({TEXT}) Tj\nET\n"
+    page = (
+        "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] "
+        "/Resources << /Font << /F1 5 0 R >> >> /Contents 4 0 R >>"
+    )
     objects = [
         "<< /Type /Catalog /Pages 2 0 R >>",
         "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
-        "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 5 0 R >> >> /Contents 4 0 R >>",
+        page,
         f"<< /Length {len(stream.encode('ascii'))} >>\nstream\n{stream}endstream",
         "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
     ]
@@ -34,7 +38,10 @@ def create_pdf(path: Path) -> None:
     xref_offset = len(output.encode("ascii"))
     output += f"xref\n0 {len(objects) + 1}\n0000000000 65535 f \n"
     output += "".join(f"{offset:010d} 00000 n \n" for offset in offsets[1:])
-    output += f"trailer\n<< /Size {len(objects) + 1} /Root 1 0 R >>\nstartxref\n{xref_offset}\n%%EOF\n"
+    output += (
+        f"trailer\n<< /Size {len(objects) + 1} /Root 1 0 R >>\n"
+        f"startxref\n{xref_offset}\n%%EOF\n"
+    )
     path.write_bytes(output.encode("ascii"))
 
 

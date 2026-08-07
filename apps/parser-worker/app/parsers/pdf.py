@@ -39,9 +39,9 @@ def parse_pdf(
         elements.append(
             ParsedElement(
                 text=text,
-                elementType=element_type,
+                element_type=element_type,
                 page=page_number,
-                sectionPath=[],
+                section_path=[],
                 metadata=extra,
             )
         )

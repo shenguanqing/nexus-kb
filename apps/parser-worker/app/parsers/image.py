@@ -45,7 +45,7 @@ def parse_image(
         elements.append(
             ParsedElement(
                 text=text,
-                elementType="ocr_text",
+                element_type="ocr_text",
                 page=1,
                 bbox=_flatten_bbox(bbox),
                 metadata={"confidence": round(confidence, 6)},

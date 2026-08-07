@@ -226,8 +226,8 @@ def _append_text_entity(
     _append_element(
         ParsedElement(
             text=text,
-            elementType="cad_text",
-            sectionPath=_section_path(layout_name, layer, block_path),
+            element_type="cad_text",
+            section_path=_section_path(layout_name, layer, block_path),
             metadata=metadata,
         ),
         layout_name,
@@ -265,8 +265,8 @@ def _append_dimension(
     _append_element(
         ParsedElement(
             text=text,
-            elementType="cad_dimension",
-            sectionPath=_section_path(layout_name, layer, block_path),
+            element_type="cad_dimension",
+            section_path=_section_path(layout_name, layer, block_path),
             metadata=metadata,
         ),
         layout_name,
@@ -311,8 +311,8 @@ def _drawing_summary(document: Drawing, state: _ParseState) -> ParsedElement:
     )
     return ParsedElement(
         text=text,
-        elementType="cad_summary",
-        sectionPath=["CAD 图纸摘要"],
+        element_type="cad_summary",
+        section_path=["CAD 图纸摘要"],
         metadata={
             "dxfVersion": document.dxfversion,
             "unitsCode": units,

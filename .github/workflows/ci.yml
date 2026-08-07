@@ -67,8 +67,6 @@ jobs:
     runs-on: ubuntu-latest
     env:
       PIP_NO_CACHE_DIR: '1'
-      OCR_MODEL_STORAGE_PATH: ${{ runner.temp }}/easyocr-models
-      NLTK_DATA: ${{ runner.temp }}/nltk-data
     defaults:
       run:
         working-directory: apps/parser-worker
@@ -77,6 +75,9 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+      - run: |
+          echo "OCR_MODEL_STORAGE_PATH=$RUNNER_TEMP/easyocr-models" >> "$GITHUB_ENV"
+          echo "NLTK_DATA=$RUNNER_TEMP/nltk-data" >> "$GITHUB_ENV"
       - run: >-
           python -m pip install --index-url https://download.pytorch.org/whl/cpu
           torch==2.8.0 torchvision==0.23.0
