@@ -252,10 +252,9 @@ def test_image_routes_to_easyocr_and_returns_confidence_warning(
 ) -> None:
     path = tmp_path / "scan.png"
     path.write_bytes(b"\x89PNG\r\n\x1a\nfixture")
-    expected_user_network_directory = (
-        Settings(PARSER_INTERNAL_TOKEN=TOKEN, RAW_DOCS_PATH=tmp_path).parser_temp_path
-        / "easyocr-user-network"
-    )
+    settings = Settings(PARSER_INTERNAL_TOKEN=TOKEN, RAW_DOCS_PATH=tmp_path)
+    expected_model_storage_path = settings.ocr_model_storage_path
+    expected_user_network_directory = settings.parser_temp_path / "easyocr-user-network"
 
     def fake_parse_image(
         source: Path,
@@ -267,7 +266,7 @@ def test_image_routes_to_easyocr_and_returns_confidence_warning(
         threshold: float,
     ) -> tuple[list[ParsedElement], list[str], str]:
         assert source == path
-        assert model_path == Path("/opt/easyocr-models")
+        assert model_path == expected_model_storage_path
         assert user_network_directory == expected_user_network_directory
         assert languages == ["ch_sim", "en"]
         assert max_pixels == 40_000_000
@@ -288,7 +287,7 @@ def test_image_routes_to_easyocr_and_returns_confidence_warning(
         )
 
     monkeypatch.setattr(main_module, "parse_image", fake_parse_image)
-    client = make_client(tmp_path)
+    client = TestClient(create_app(settings))
     body = payload(path)
     body["mimeType"] = "image/png"
 
