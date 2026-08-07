@@ -111,6 +111,39 @@ test('asks a grounded question and renders an authorized source', async ({ page 
   await expect(page.getByText('付款周期是多久？', { exact: true })).not.toBeVisible();
 });
 
+test('separates history pagination from the conversation list card', async ({ page }) => {
+  await mockSession(page);
+  const conversations = Array.from({ length: 20 }, (_, index) => ({
+    id: `11111111-1111-4111-8111-${String(index).padStart(12, '0')}`,
+    title: `会话 ${index + 1}`,
+    messageCount: 1,
+    createdAt: '2026-08-07T00:00:00.000Z',
+    updatedAt: '2026-08-07T00:00:00.000Z',
+  }));
+  await page.route('**/v1/history/conversations**', (route) =>
+    route.fulfill({ json: { conversations, total: 21, offset: 0, limit: 20 } }),
+  );
+
+  await page.goto('/history');
+
+  await expect(page.locator('.history-list-card .history-head')).toBeVisible();
+  await expect(page.locator('.history-list-card .history-list')).toBeVisible();
+  await expect(page.locator('.history-list-card + .history-pagination')).toBeVisible();
+  const cardLayout = await page.evaluate(() => {
+    const listCard = document.querySelector<HTMLElement>('.history-list-card');
+    const pagination = document.querySelector<HTMLElement>('.history-pagination');
+    return {
+      listCardBackground: listCard ? getComputedStyle(listCard).backgroundColor : '',
+      paginationBackground: pagination ? getComputedStyle(pagination).backgroundColor : '',
+      listCardBottom: listCard?.getBoundingClientRect().bottom ?? Number.POSITIVE_INFINITY,
+      paginationTop: pagination?.getBoundingClientRect().top ?? Number.NEGATIVE_INFINITY,
+    };
+  });
+  expect(cardLayout.listCardBackground).not.toBe('rgba(0, 0, 0, 0)');
+  expect(cardLayout.paginationBackground).not.toBe('rgba(0, 0, 0, 0)');
+  expect(cardLayout.paginationTop).toBeGreaterThan(cardLayout.listCardBottom);
+});
+
 test('omits unavailable source location metadata', async ({ page }) => {
   await mockSession(page, ['documents:read'], 'user');
   await page.route('**/v1/knowledge/query', (route) =>

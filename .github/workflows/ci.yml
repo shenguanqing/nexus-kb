@@ -67,6 +67,8 @@ jobs:
     runs-on: ubuntu-latest
     env:
       PIP_NO_CACHE_DIR: '1'
+      OCR_MODEL_STORAGE_PATH: ${{ runner.temp }}/easyocr-models
+      NLTK_DATA: ${{ runner.temp }}/nltk-data
     defaults:
       run:
         working-directory: apps/parser-worker
@@ -79,6 +81,10 @@ jobs:
           python -m pip install --index-url https://download.pytorch.org/whl/cpu
           torch==2.8.0 torchvision==0.23.0
       - run: python -m pip install -r requirements.lock
+      - run: |
+          mkdir -p "$OCR_MODEL_STORAGE_PATH" "$NLTK_DATA"
+          ./bin/nexus-download-easyocr-models
+          python -c "import nltk; [nltk.download(package, download_dir='$NLTK_DATA', quiet=True, raise_on_error=True) for package in ('punkt_tab', 'averaged_perceptron_tagger_eng')]"
       - run: ruff check app tests
       - run: mypy app
       - run: pytest

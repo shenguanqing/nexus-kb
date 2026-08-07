@@ -212,4 +212,7 @@ Vue 3 + TypeScript + Vite
   - [x] 横屏可操作性回归：用户目录与部门权限使用独立可滚动内容容器；历史筛选右对齐；导航 Drawer 顶栏与应用顶栏统一为 48px；用量、Provider、系统状态及各工具栏收敛为低高度单行布局。Playwright 使用长列表实际验证 `scrollTop` 可写入。
   - [x] 管理页工具栏命名与层级收敛：用户目录身份摘要和筛选合并为单一 `access-toolbar`；Provider、系统状态和用量统一采用 `xxxx-toolbar` 命名；用量桌面端介绍与筛选纵向排列，移动端任务、审计、Provider、系统状态和用量工具栏保持单行操作。
   - [x] 问答历史布局收敛：桌面端 `history-layout` 使用可伸展的主行填满筛选栏以下空间，左侧会话列表与右侧详情保持独立滚动。
+  - [x] 问答历史的标题与会话列表合并为同一内容卡片；分页位于下方独立卡片，与其他列表页面保持一致。
+  - [x] Parser Worker CI 在真实 PDF/OCR 样本测试前预载受控 EasyOCR 与 NLTK 资源；模型下载脚本遵从 `OCR_MODEL_STORAGE_PATH`，避免新 runner 缺少模型而失败。
+  - [x] Parser Worker 内部模型构造改用其公开 camelCase alias，消除 Pydantic mypy plugin 对 snake_case 构造参数的误报，同时保持运行时 Python 属性与对外契约不变。
   - [x] 用户与角色工具栏收敛为左右两列：标题/说明在左，新增后台账号/筛选在右；“新增后台账号”固定在右上角。

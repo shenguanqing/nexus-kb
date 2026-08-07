@@ -30,4 +30,3 @@ class ParseResponse(ApiModel):
     parser_version: str = Field(alias="parserVersion", min_length=1, max_length=64)
     elements: list[ParsedElement] = Field(min_length=1, max_length=100_000)
     warnings: list[str] = Field(default_factory=list, max_length=1_000)
-

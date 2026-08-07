@@ -29,8 +29,8 @@ def parse_text(path: Path) -> list[ParsedElement]:
             elements.append(
                 ParsedElement(
                     text=content,
-                    element_type="paragraph",
-                    section_path=section_path.copy(),
+                    elementType="paragraph",
+                    sectionPath=section_path.copy(),
                 )
             )
         paragraphs.clear()
@@ -45,8 +45,8 @@ def parse_text(path: Path) -> list[ParsedElement]:
             elements.append(
                 ParsedElement(
                     text=title,
-                    element_type="heading",
-                    section_path=section_path.copy(),
+                    elementType="heading",
+                    sectionPath=section_path.copy(),
                 )
             )
         elif line.strip():

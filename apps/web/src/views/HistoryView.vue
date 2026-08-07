@@ -127,58 +127,64 @@ async function changePage(nextPage: number): Promise<void> {
     </div>
     <div v-else class="history-layout" v-loading="loading">
       <section class="history-list-panel">
-        <div class="heading heading--h2 scroll-section-title" role="heading" aria-level="2">
-          会话列表
-        </div>
-        <div class="history-list" role="list" aria-label="问答会话列表">
-          <div class="history-list-scroll">
-            <div
-              v-for="row in conversations"
-              :key="row.id"
-              class="history-list-row"
-              :class="{ active: selected?.id === row.id }"
-              role="listitem"
-            >
-              <div
-                class="history-list-item"
-                :class="{ active: selected?.id === row.id }"
-                role="button"
-                tabindex="0"
-                :aria-pressed="selected?.id === row.id"
-                @click="open(row.id)"
-                @keydown.enter="open(row.id)"
-                @keydown.space.prevent="open(row.id)"
-              >
-                <strong>{{ row.title }}</strong>
-                <span>
-                  {{ row.messageCount }} 条消息 · {{ new Date(row.updatedAt).toLocaleString() }}
-                </span>
-              </div>
-              <el-button
-                class="history-delete"
-                text
-                type="danger"
-                :aria-label="`删除会话：${row.title}`"
-                @click="remove(row)"
-              >
-                删除
-              </el-button>
-            </div>
-            <el-empty
-              v-if="!loading && conversations.length === 0"
-              description="暂无个人问答历史"
-            />
+        <div class="history-list-card">
+          <div
+            class="heading heading--h2 scroll-section-title history-head"
+            role="heading"
+            aria-level="2"
+          >
+            会话列表
           </div>
-          <el-pagination
-            v-if="conversations.length > 0 && total > 20"
-            class="list-pagination history-pagination"
-            layout="total, prev, pager, next"
-            :current-page="page"
-            :page-size="20"
-            :total="total"
-            @current-change="changePage"
-          />
+          <div class="history-list" role="list" aria-label="问答会话列表">
+            <div class="history-list-scroll">
+              <div
+                v-for="row in conversations"
+                :key="row.id"
+                class="history-list-row"
+                :class="{ active: selected?.id === row.id }"
+                role="listitem"
+              >
+                <div
+                  class="history-list-item"
+                  :class="{ active: selected?.id === row.id }"
+                  role="button"
+                  tabindex="0"
+                  :aria-pressed="selected?.id === row.id"
+                  @click="open(row.id)"
+                  @keydown.enter="open(row.id)"
+                  @keydown.space.prevent="open(row.id)"
+                >
+                  <strong>{{ row.title }}</strong>
+                  <span>
+                    {{ row.messageCount }} 条消息 · {{ new Date(row.updatedAt).toLocaleString() }}
+                  </span>
+                </div>
+                <el-button
+                  class="history-delete"
+                  text
+                  type="danger"
+                  :aria-label="`删除会话：${row.title}`"
+                  @click="remove(row)"
+                >
+                  删除
+                </el-button>
+              </div>
+              <el-empty
+                v-if="!loading && conversations.length === 0"
+                description="暂无个人问答历史"
+              />
+            </div>
+          </div>
         </div>
+        <el-pagination
+          v-if="conversations.length > 0 && total > 20"
+          class="list-pagination history-pagination"
+          layout="total, prev, pager, next"
+          :current-page="page"
+          :page-size="20"
+          :total="total"
+          @current-change="changePage"
+        />
       </section>
       <article class="history-detail">
         <template v-if="selected">

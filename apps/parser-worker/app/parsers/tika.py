@@ -59,7 +59,7 @@ def parse_with_tika(
     elements = [
         ParsedElement(
             text=block,
-            element_type="paragraph",
+            elementType="paragraph",
             metadata={"fallbackUsed": True, "sourceType": "pdf"},
         )
         for block in blocks

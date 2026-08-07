@@ -1899,7 +1899,6 @@ a {
   align-content: stretch;
   grid-template-rows: minmax(0, 1fr);
 }
-.history-list-panel,
 .department-list-panel,
 .history-detail,
 .department-policy-card,
@@ -1917,6 +1916,16 @@ a {
   flex-direction: column;
   overflow: hidden;
   min-height: 0;
+}
+.history-list-card {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  overflow: hidden;
+  min-height: 0;
+  border: 1px solid var(--kb-color-border);
+  border-radius: 14px;
+  background: #fff;
 }
 .department-list-panel,
 .department-policy-card {

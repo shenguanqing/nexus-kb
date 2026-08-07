@@ -2,19 +2,21 @@
 
 ## 项目概述
 
-项目名称：知枢 NexusKB  
+项目名称：知枢 NexusKB
 仓库名称：`nexus-kb`
 
 本项目是一套企业级知识库系统。当前目标是在 Mac 本地跑通完整 RAG 流程，后续平滑部署到 Linux 服务器。
 
 核心架构：
 
+- Vue 3/TypeScript 前端：知识问答、来源展示、文档管理和管理后台界面。
 - TypeScript/NestJS 主服务：API、认证、权限、任务编排、模型 Provider、Embedding、向量检索、回答生成和审计。
 - Python/FastAPI Parser Worker：PDF、Office、Excel、OCR、Tika 和 CAD 等文档解析。
 - Redis + BullMQ：异步入库任务。
 - PostgreSQL：用户、ACL、文档、版本和任务状态。
 - Chroma Server：开发和早期服务器阶段的向量库。
-- LLM、Embedding 和可选 Rerank：当前均使用云端 API。
+- 内部部署代理（deployment-agent）：受控的运行配置发布与自动回滚，默认不启动。
+- LLM 使用云端 API；Embedding 支持经受控配置的云端 API 或本机 Ollama；Rerank 默认关闭，可使用云端 API 或受控本地 BGE Worker。
 
 ## 必读文档
 
@@ -247,8 +249,7 @@ docker compose logs -f api parser-worker
 - 编码、测试、Git 或协作规范变化：更新 `docs/04-开发规范.md`。
 - 工作拆分或完成状态变化：更新 `docs/05-开发任务清单.md`。
 - 部署、配置、备份或告警变化：更新 `docs/06-部署运维手册.md`。
-- 公开 API 的认证、权限、端点、错误码或调用方式变化：同步更新运行时契约、
-  `packages/contracts/openapi/api.v1.yaml` 和 `docs/07-API使用说明.md`。
+- 公开 API 的认证、权限、端点、错误码或调用方式变化：同步更新运行时契约、`packages/contracts/openapi/api.v1.yaml` 和 `docs/07-API使用说明.md`。
 - 当前开发阶段变化：更新 `TASK.md`。
 - 长期工程规则变化：更新本文件。
 

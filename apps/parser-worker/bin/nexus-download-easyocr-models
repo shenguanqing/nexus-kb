@@ -3,13 +3,16 @@ set -eu
 
 attempt=1
 max_attempts=5
+model_storage_path="${OCR_MODEL_STORAGE_PATH:-/opt/easyocr-models}"
+
+mkdir -p "$model_storage_path"
 
 while [ "$attempt" -le "$max_attempts" ]; do
-  if python -c "import easyocr; easyocr.Reader(['ch_sim','en'], gpu=False, model_storage_directory='/opt/easyocr-models', download_enabled=True, verbose=False)"; then
+  if OCR_MODEL_STORAGE_PATH="$model_storage_path" python -c "import os; import easyocr; easyocr.Reader(['ch_sim','en'], gpu=False, model_storage_directory=os.environ['OCR_MODEL_STORAGE_PATH'], download_enabled=True, verbose=False)"; then
     exit 0
   fi
 
-  rm -f /opt/easyocr-models/temp.zip
+  rm -f "$model_storage_path/temp.zip"
   if [ "$attempt" -eq "$max_attempts" ]; then
     echo "EasyOCR model download failed after ${max_attempts} attempts" >&2
     exit 1
