@@ -384,9 +384,8 @@ a {
   display: grid;
   gap: 10px;
   /*
-   * The sidebar reduces the usable canvas before the viewport reaches the
-   * tablet breakpoint. Let all four fields share the remaining inline space
-   * instead of preserving three 250px tracks that overflow the toolbar.
+   * 侧栏会在视口达到平板断点前压缩可用画布。让四个字段共享剩余的
+   * 行内空间，而不是保留三个 250px 轨道并导致工具栏溢出。
    */
   grid-template-columns: minmax(0, 1.2fr) repeat(3, minmax(0, 1fr)) auto;
   margin-bottom: 0;
@@ -2396,6 +2395,14 @@ a {
     flex-wrap: wrap;
     gap: 12px;
   }
+  /* 在图标侧栏布局中保持文档操作区可读。可用内容宽度不足以同时容纳
+     420px 摘要和操作按钮组。 */
+  .detail-actions {
+    flex-wrap: wrap;
+  }
+  .detail-actions > div:first-child {
+    flex-basis: 100%;
+  }
   .document-detail-page .mobile-data-card {
     display: grid;
     gap: 12px;
@@ -2565,7 +2572,7 @@ a {
     --kb-panel-padding: var(--kb-space-3);
     --kb-list-row-padding: var(--kb-space-3);
   }
-  /* iOS only zooms focused controls below 16px. Keep Element Plus inputs at that threshold. */
+  /* iOS 只会缩放字体小于 16px 的聚焦控件，因此 Element Plus 输入框保持该阈值。 */
   .el-input__inner,
   .el-textarea__inner,
   .el-select__selected-item,
@@ -2952,7 +2959,7 @@ a {
     padding: 14px;
   }
 }
-/* Tablet portrait uses the same Drawer navigation as phones; a 68px icon rail is not usable. */
+/* 平板竖屏与手机共用抽屉导航；68px 图标侧栏在此尺寸不可用。 */
 @media (min-width: 768px) and (max-width: 900px) {
   .app-shell,
   .app-shell.is-collapsed {
@@ -3007,7 +3014,7 @@ a {
   }
 }
 
-/* A phone in landscape has tablet-like width but very little vertical room. */
+/* 横屏手机虽有接近平板的宽度，但可用垂直空间很小。 */
 @media (max-width: 900px) and (max-height: 500px) and (orientation: landscape) {
   .app-shell,
   .app-shell.is-collapsed {
@@ -3260,7 +3267,7 @@ a {
   }
 }
 
-/* Mobile structural components are rendered by their Vue branches, not CSS-hidden desktop DOM. */
+/* 移动端结构组件由 Vue 条件分支渲染，不依赖 CSS 隐藏桌面端 DOM。 */
 .document-card-list {
   display: grid;
   gap: 12px;

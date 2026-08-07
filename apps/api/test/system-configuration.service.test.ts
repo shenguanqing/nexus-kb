@@ -71,9 +71,7 @@ function encryptLegacyConfiguration(configuration: Record<string, string>): stri
     cipher.update(JSON.stringify(configuration), 'utf8'),
     cipher.final(),
   ]);
-  return [iv, cipher.getAuthTag(), encrypted]
-    .map((value) => value.toString('base64'))
-    .join('.');
+  return [iv, cipher.getAuthTag(), encrypted].map((value) => value.toString('base64')).join('.');
 }
 
 beforeEach(() => {
@@ -129,6 +127,15 @@ describe('SystemConfigurationService', () => {
         '00000000-0000-4000-8000-000000000001',
       ),
     ).rejects.toMatchObject({ code: 'ADMIN_REQUIRED', status: 403 });
+  });
+
+  it('recreates both Parser Workers for CAD, Tika and parser resource changes', () => {
+    const service = fixture({} as PrismaService);
+    const affectedServices = (
+      service as unknown as { affectedServices(changedKeys: string[]): string[] }
+    ).affectedServices(['DWG_OUTPUT_VERSION', 'TIKA_ENABLED', 'MAX_ARCHIVE_ENTRIES']);
+
+    expect(affectedServices).toEqual(['api', 'parser-worker', 'parser-worker-dwg']);
   });
 
   it('fails closed when the dedicated deployment configuration is disabled', async () => {

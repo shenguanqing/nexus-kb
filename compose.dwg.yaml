@@ -1,15 +1,16 @@
 services:
   api:
     environment:
-      DWG_CONVERSION_ENABLED: 'true'
+      # 受控发布后，runtime.env 必须能够关闭 DWG 上传和路由。
+      DWG_CONVERSION_ENABLED: ${DWG_CONVERSION_ENABLED:-true}
       PARSER_DWG_WORKER_URL: http://parser-worker-dwg:8000
     depends_on:
       parser-worker-dwg:
         condition: service_healthy
 
   parser-worker-dwg:
-    # ODA currently provides its Linux File Converter package for x64. Docker
-    # Desktop runs it under emulation on Apple Silicon Macs.
+    # ODA 当前只提供 x64 的 Linux File Converter 包；Docker Desktop 会在
+    # Apple Silicon Mac 上通过模拟运行。
     platform: linux/amd64
     build:
       context: .

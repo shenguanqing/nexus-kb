@@ -1167,6 +1167,7 @@ components:
           status,
           services,
           configVersion,
+          changeReason,
           previousVersion,
           rollbackAvailable,
           errorCode,
@@ -1180,8 +1181,9 @@ components:
         services:
           type: array
           minItems: 1
-          items: { type: string, enum: [api, parser-worker, reranker-worker] }
+          items: { type: string, enum: [api, parser-worker, parser-worker-dwg, reranker-worker] }
         configVersion: { type: integer, minimum: 1 }
+        changeReason: { type: string, minLength: 1, maxLength: 500 }
         previousVersion: { type: [integer, 'null'], minimum: 1 }
         rollbackAvailable: { type: boolean }
         errorCode: { type: [string, 'null'] }

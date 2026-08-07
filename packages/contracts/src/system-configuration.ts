@@ -8,6 +8,8 @@ export const managedConfigurationFieldSchema = z.enum([
   'LLM_TEMPERATURE',
   'LLM_MAX_OUTPUT_TOKENS',
   'LLM_REQUEST_TIMEOUT_MS',
+  'LLM_MAX_ATTEMPTS',
+  'LLM_RETRY_BASE_DELAY_MS',
   'OPENAI_BASE_URL',
   'OPENAI_REGION',
   'GEMINI_BASE_URL',
@@ -25,6 +27,9 @@ export const managedConfigurationFieldSchema = z.enum([
   'RERANK_TOP_K',
   'RERANK_REQUEST_TIMEOUT_MS',
   'PARSER_REQUEST_TIMEOUT_MS',
+  'DWG_CONVERSION_ENABLED',
+  'DWG_OUTPUT_VERSION',
+  'MAX_DWG_CONVERTED_BYTES',
   'MAX_PARSE_BYTES',
   'MAX_ELEMENTS',
   'MAX_SPREADSHEET_ROWS',
@@ -35,9 +40,23 @@ export const managedConfigurationFieldSchema = z.enum([
   'MAX_CAD_ENTITIES',
   'MAX_CAD_INSERT_DEPTH',
   'DWG_CONVERSION_TIMEOUT_SECONDS',
+  'TIKA_ENABLED',
+  'TIKA_REQUEST_TIMEOUT_SECONDS',
+  'MAX_TIKA_RESPONSE_BYTES',
+  'MAX_ARCHIVE_ENTRIES',
+  'MAX_ARCHIVE_UNCOMPRESSED_BYTES',
+  'MAX_UPLOAD_BYTES',
+  'INGESTION_CONCURRENCY',
+  'INGESTION_MAX_ATTEMPTS',
+  'INGESTION_RETRY_BASE_DELAY_MS',
   'QUERY_ANSWER_MODE',
   'QUERY_RECALL_TOP_K',
   'QUERY_MAX_DISTANCE',
+  'QUERY_NEIGHBOR_WINDOW',
+  'QUERY_MAX_MERGED_CONTEXT_CHARS',
+  'QUERY_MAX_RERANK_INPUT_CHARS',
+  'QUERY_USER_RATE_LIMIT_PER_MINUTE',
+  'QUERY_TENANT_RATE_LIMIT_PER_MINUTE',
 ]);
 
 export const managedConfigurationSecretSchema = z.enum([
@@ -92,7 +111,12 @@ export const systemConfigurationResponseSchema = z
   })
   .strict();
 
-export const deploymentServiceSchema = z.enum(['api', 'parser-worker', 'reranker-worker']);
+export const deploymentServiceSchema = z.enum([
+  'api',
+  'parser-worker',
+  'parser-worker-dwg',
+  'reranker-worker',
+]);
 export const systemDeploymentStatusSchema = z.enum([
   'queued',
   'running',
@@ -107,6 +131,7 @@ export const systemDeploymentSchema = z
     status: systemDeploymentStatusSchema,
     services: z.array(deploymentServiceSchema).min(1),
     configVersion: z.number().int().positive(),
+    changeReason: z.string().min(1).max(500),
     previousVersion: z.number().int().positive().nullable(),
     rollbackAvailable: z.boolean(),
     errorCode: z.string().min(1).nullable(),

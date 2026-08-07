@@ -88,6 +88,37 @@ services:
     networks:
       - backend
 
+  # 仅用于测试的运行器：复用不可变的 Worker 镜像，只挂载测试目录，
+  # 使生产容器不携带测试资源或工具。
+  parser-worker-tests:
+    profiles:
+      - test
+    build:
+      context: .
+      dockerfile: apps/parser-worker/Dockerfile
+    environment:
+      PARSER_INTERNAL_TOKEN: test-internal-token
+      RAW_DOCS_PATH: /app/tests/fixtures
+      PARSER_TEMP_PATH: /tmp/parser
+      TIKA_ENABLED: 'false'
+      XDG_CACHE_HOME: /tmp/parser/.cache
+      MPLCONFIGDIR: /tmp/parser/.cache/matplotlib
+      NLTK_DATA: /opt/nltk_data
+      OCR_MODEL_STORAGE_PATH: /opt/easyocr-models
+      # Docker Desktop 将加固后的 /tmp tmpfs 挂载为 noexec。将 pytest 的
+      # 临时夹具目录保留在隔离的测试绑定挂载中，使 DWG 转换器契约测试可以
+      # 执行其模拟转换器。
+      PYTEST_ADDOPTS: -p no:cacheprovider --basetemp=/app/tests/.pytest-tmp
+    volumes:
+      - ./apps/parser-worker/tests:/app/tests
+    tmpfs:
+      - /tmp:size=1g,mode=1777,uid=10002,gid=10002
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    network_mode: none
+    entrypoint: ['sh', '-c', 'python tests/fixtures/generate-fixtures.py && python -m pytest']
+
   tika:
     image: apache/tika:3.2.3.0
     restart: unless-stopped
@@ -155,7 +186,7 @@ services:
       - '8200'
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-      # Host and container paths must match because Compose talks to the host daemon.
+      # Compose 连接宿主机守护进程，因此宿主机与容器内路径必须保持一致。
       - .:${PWD}:ro
       - ./config:${PWD}/config:rw
     read_only: true

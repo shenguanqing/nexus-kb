@@ -34,6 +34,8 @@ const VALUE_FIELDS = [
   'LLM_TEMPERATURE',
   'LLM_MAX_OUTPUT_TOKENS',
   'LLM_REQUEST_TIMEOUT_MS',
+  'LLM_MAX_ATTEMPTS',
+  'LLM_RETRY_BASE_DELAY_MS',
   'OPENAI_BASE_URL',
   'OPENAI_REGION',
   'GEMINI_BASE_URL',
@@ -51,6 +53,9 @@ const VALUE_FIELDS = [
   'RERANK_TOP_K',
   'RERANK_REQUEST_TIMEOUT_MS',
   'PARSER_REQUEST_TIMEOUT_MS',
+  'DWG_CONVERSION_ENABLED',
+  'DWG_OUTPUT_VERSION',
+  'MAX_DWG_CONVERTED_BYTES',
   'MAX_PARSE_BYTES',
   'MAX_ELEMENTS',
   'MAX_SPREADSHEET_ROWS',
@@ -61,9 +66,23 @@ const VALUE_FIELDS = [
   'MAX_CAD_ENTITIES',
   'MAX_CAD_INSERT_DEPTH',
   'DWG_CONVERSION_TIMEOUT_SECONDS',
+  'TIKA_ENABLED',
+  'TIKA_REQUEST_TIMEOUT_SECONDS',
+  'MAX_TIKA_RESPONSE_BYTES',
+  'MAX_ARCHIVE_ENTRIES',
+  'MAX_ARCHIVE_UNCOMPRESSED_BYTES',
+  'MAX_UPLOAD_BYTES',
+  'INGESTION_CONCURRENCY',
+  'INGESTION_MAX_ATTEMPTS',
+  'INGESTION_RETRY_BASE_DELAY_MS',
   'QUERY_ANSWER_MODE',
   'QUERY_RECALL_TOP_K',
   'QUERY_MAX_DISTANCE',
+  'QUERY_NEIGHBOR_WINDOW',
+  'QUERY_MAX_MERGED_CONTEXT_CHARS',
+  'QUERY_MAX_RERANK_INPUT_CHARS',
+  'QUERY_USER_RATE_LIMIT_PER_MINUTE',
+  'QUERY_TENANT_RATE_LIMIT_PER_MINUTE',
 ] as const satisfies readonly ManagedConfigurationField[];
 
 const SECRET_FIELDS = [
@@ -77,9 +96,12 @@ const SECRET_FIELDS = [
 const INTEGER_LIMITS: Partial<Record<ManagedConfigurationField, readonly [number, number]>> = {
   LLM_MAX_OUTPUT_TOKENS: [1, 65_536],
   LLM_REQUEST_TIMEOUT_MS: [100, 300_000],
+  LLM_MAX_ATTEMPTS: [1, 6],
+  LLM_RETRY_BASE_DELAY_MS: [1, 10_000],
   RERANK_TOP_K: [1, 100],
   RERANK_REQUEST_TIMEOUT_MS: [100, 300_000],
   PARSER_REQUEST_TIMEOUT_MS: [100, 900_000],
+  MAX_DWG_CONVERTED_BYTES: [1, 1_073_741_824],
   MAX_PARSE_BYTES: [1, 1_073_741_824],
   MAX_ELEMENTS: [1, 1_000_000],
   MAX_SPREADSHEET_ROWS: [1, 1_000_000],
@@ -88,7 +110,20 @@ const INTEGER_LIMITS: Partial<Record<ManagedConfigurationField, readonly [number
   MAX_CAD_ENTITIES: [1, 2_000_000],
   MAX_CAD_INSERT_DEPTH: [1, 32],
   DWG_CONVERSION_TIMEOUT_SECONDS: [1, 1800],
+  TIKA_REQUEST_TIMEOUT_SECONDS: [1, 600],
+  MAX_TIKA_RESPONSE_BYTES: [1, 268_435_456],
+  MAX_ARCHIVE_ENTRIES: [1, 100_000],
+  MAX_ARCHIVE_UNCOMPRESSED_BYTES: [1, 1_073_741_824],
+  MAX_UPLOAD_BYTES: [1, 1_073_741_824],
+  INGESTION_CONCURRENCY: [1, 32],
+  INGESTION_MAX_ATTEMPTS: [1, 20],
+  INGESTION_RETRY_BASE_DELAY_MS: [100, 60_000],
   QUERY_RECALL_TOP_K: [1, 100],
+  QUERY_NEIGHBOR_WINDOW: [0, 3],
+  QUERY_MAX_MERGED_CONTEXT_CHARS: [1_000, 100_000],
+  QUERY_MAX_RERANK_INPUT_CHARS: [1_000, 1_000_000],
+  QUERY_USER_RATE_LIMIT_PER_MINUTE: [1, 1_000],
+  QUERY_TENANT_RATE_LIMIT_PER_MINUTE: [1, 100_000],
 };
 
 type ManagedEnvironment = Record<string, string>;
@@ -402,6 +437,7 @@ export class SystemConfigurationService {
   private workerDefault(field: ManagedConfigurationField): string {
     const defaults: Partial<Record<ManagedConfigurationField, string>> = {
       MAX_PARSE_BYTES: '52428800',
+      MAX_DWG_CONVERTED_BYTES: '209715200',
       MAX_ELEMENTS: '100000',
       MAX_SPREADSHEET_ROWS: '100000',
       MAX_PDF_PAGES: '500',
@@ -411,6 +447,12 @@ export class SystemConfigurationService {
       MAX_CAD_ENTITIES: '1000000',
       MAX_CAD_INSERT_DEPTH: '8',
       DWG_CONVERSION_TIMEOUT_SECONDS: '180',
+      DWG_OUTPUT_VERSION: 'ACAD2018',
+      TIKA_ENABLED: 'true',
+      TIKA_REQUEST_TIMEOUT_SECONDS: '120',
+      MAX_TIKA_RESPONSE_BYTES: '52428800',
+      MAX_ARCHIVE_ENTRIES: '10000',
+      MAX_ARCHIVE_UNCOMPRESSED_BYTES: '524288000',
     };
     return defaults[field] ?? '';
   }
@@ -426,6 +468,19 @@ export class SystemConfigurationService {
         throw new ApiException('SYSTEM_CONFIG_INVALID', `配置字段 ${field} 不合法`, 400);
       }
       return String(numeric);
+    }
+    if (field === 'DWG_CONVERSION_ENABLED' || field === 'TIKA_ENABLED') {
+      if (value !== true && value !== false && value !== 'true' && value !== 'false') {
+        throw new ApiException('SYSTEM_CONFIG_INVALID', `配置字段 ${field} 不合法`, 400);
+      }
+      return String(value);
+    }
+    if (field === 'DWG_OUTPUT_VERSION') {
+      const text = String(value).trim();
+      if (!/^ACAD(12|13|14|2000|2004|2007|2010|2013|2018)$/.test(text)) {
+        throw new ApiException('SYSTEM_CONFIG_INVALID', `配置字段 ${field} 不合法`, 400);
+      }
+      return text;
     }
     if (field === 'LLM_TEMPERATURE' || field === 'QUERY_MAX_DISTANCE') {
       const numeric = Number(value);
@@ -465,23 +520,9 @@ export class SystemConfigurationService {
 
   private affectedServices(changedKeys: string[]): DeploymentService[] {
     const services = new Set<DeploymentService>(['api']);
-    if (
-      changedKeys.some((key) =>
-        [
-          'MAX_PARSE_BYTES',
-          'MAX_ELEMENTS',
-          'MAX_SPREADSHEET_ROWS',
-          'MAX_PDF_PAGES',
-          'MAX_IMAGE_PIXELS',
-          'OCR_LANGUAGES',
-          'OCR_CONFIDENCE_WARNING_THRESHOLD',
-          'MAX_CAD_ENTITIES',
-          'MAX_CAD_INSERT_DEPTH',
-          'DWG_CONVERSION_TIMEOUT_SECONDS',
-        ].includes(key),
-      )
-    ) {
+    if (changedKeys.some((key) => PARSER_RUNTIME_FIELDS.has(key))) {
       services.add('parser-worker');
+      services.add('parser-worker-dwg');
     }
     if (changedKeys.some((key) => key.startsWith('RERANK_'))) services.add('reranker-worker');
     return [...services];
@@ -541,6 +582,7 @@ export class SystemConfigurationService {
       status: row.status as DeploymentResponse['status'],
       services: this.jsonArray(row.services) as DeploymentService[],
       configVersion: row.configVersion.version,
+      changeReason: row.configVersion.changeReason,
       previousVersion: row.previousConfigVersion?.version ?? null,
       rollbackAvailable: row.status === 'succeeded' && row.previousConfigVersion !== null,
       errorCode: row.errorCode,
@@ -617,3 +659,23 @@ export class SystemConfigurationService {
     return Array.isArray(value) && value.every((item) => typeof item === 'string') ? value : [];
   }
 }
+
+const PARSER_RUNTIME_FIELDS = new Set<string>([
+  'DWG_OUTPUT_VERSION',
+  'MAX_DWG_CONVERTED_BYTES',
+  'MAX_PARSE_BYTES',
+  'MAX_ELEMENTS',
+  'MAX_SPREADSHEET_ROWS',
+  'MAX_PDF_PAGES',
+  'MAX_IMAGE_PIXELS',
+  'OCR_LANGUAGES',
+  'OCR_CONFIDENCE_WARNING_THRESHOLD',
+  'MAX_CAD_ENTITIES',
+  'MAX_CAD_INSERT_DEPTH',
+  'DWG_CONVERSION_TIMEOUT_SECONDS',
+  'TIKA_ENABLED',
+  'TIKA_REQUEST_TIMEOUT_SECONDS',
+  'MAX_TIKA_RESPONSE_BYTES',
+  'MAX_ARCHIVE_ENTRIES',
+  'MAX_ARCHIVE_UNCOMPRESSED_BYTES',
+]);

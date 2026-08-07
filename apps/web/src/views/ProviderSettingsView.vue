@@ -34,11 +34,14 @@ const numericFields = [
   'LLM_TEMPERATURE',
   'LLM_MAX_OUTPUT_TOKENS',
   'LLM_REQUEST_TIMEOUT_MS',
+  'LLM_MAX_ATTEMPTS',
+  'LLM_RETRY_BASE_DELAY_MS',
   'RERANK_TOP_K',
   'RERANK_REQUEST_TIMEOUT_MS',
   'QUERY_RECALL_TOP_K',
   'QUERY_MAX_DISTANCE',
   'PARSER_REQUEST_TIMEOUT_MS',
+  'MAX_DWG_CONVERTED_BYTES',
   'MAX_PARSE_BYTES',
   'MAX_ELEMENTS',
   'MAX_SPREADSHEET_ROWS',
@@ -48,6 +51,19 @@ const numericFields = [
   'MAX_CAD_ENTITIES',
   'MAX_CAD_INSERT_DEPTH',
   'DWG_CONVERSION_TIMEOUT_SECONDS',
+  'TIKA_REQUEST_TIMEOUT_SECONDS',
+  'MAX_TIKA_RESPONSE_BYTES',
+  'MAX_ARCHIVE_ENTRIES',
+  'MAX_ARCHIVE_UNCOMPRESSED_BYTES',
+  'MAX_UPLOAD_BYTES',
+  'INGESTION_CONCURRENCY',
+  'INGESTION_MAX_ATTEMPTS',
+  'INGESTION_RETRY_BASE_DELAY_MS',
+  'QUERY_NEIGHBOR_WINDOW',
+  'QUERY_MAX_MERGED_CONTEXT_CHARS',
+  'QUERY_MAX_RERANK_INPUT_CHARS',
+  'QUERY_USER_RATE_LIMIT_PER_MINUTE',
+  'QUERY_TENANT_RATE_LIMIT_PER_MINUTE',
 ] as const;
 type NumericField = (typeof numericFields)[number];
 const numericFieldSet = new Set<ManagedConfigurationField>(numericFields);
@@ -60,6 +76,10 @@ const llmProviders = ['none', 'openai', 'google', 'deepseek', 'alibaba', 'custom
 const terminalStatuses = new Set(['succeeded', 'rolled_back', 'failed']);
 const activeDeployment = computed(() =>
   deployments.value.find((deployment) => !terminalStatuses.has(deployment.status)),
+);
+const publishing = computed(() => saving.value || Boolean(activeDeployment.value));
+const publishingText = computed(() =>
+  saving.value ? '正在创建并发布运行配置…' : '正在等待服务重建和 readiness 检查…',
 );
 
 async function load(): Promise<void> {
@@ -225,7 +245,12 @@ onUnmounted(stopPolling);
       <el-button :loading="loading" @click="load">刷新状态</el-button>
     </div>
 
-    <div class="page-content">
+    <div
+      v-loading="publishing"
+      class="page-content"
+      :element-loading-text="publishingText"
+      element-loading-background="rgba(255, 255, 255, 0.78)"
+    >
       <div v-if="errorMessage && !result" class="document-error" role="alert">
         <strong>无法加载 Provider 配置</strong><span>{{ errorMessage }}</span>
         <el-button @click="load">重试</el-button>
@@ -343,6 +368,16 @@ onUnmounted(stopPolling);
                     v-model="numericForm.LLM_REQUEST_TIMEOUT_MS"
                     :min="100"
                     :max="300000"
+                  />
+                </el-form-item>
+                <el-form-item label="最大重试次数">
+                  <el-input-number v-model="numericForm.LLM_MAX_ATTEMPTS" :min="1" :max="6" />
+                </el-form-item>
+                <el-form-item label="重试初始延迟（ms）">
+                  <el-input-number
+                    v-model="numericForm.LLM_RETRY_BASE_DELAY_MS"
+                    :min="1"
+                    :max="10000"
                   />
                 </el-form-item>
               </div>
@@ -473,11 +508,74 @@ onUnmounted(stopPolling);
                     :step="0.01"
                   />
                 </el-form-item>
+                <el-form-item label="相邻分块窗口">
+                  <el-input-number v-model="numericForm.QUERY_NEIGHBOR_WINDOW" :min="0" :max="3" />
+                </el-form-item>
+                <el-form-item label="合并上下文最大字符数">
+                  <el-input-number
+                    v-model="numericForm.QUERY_MAX_MERGED_CONTEXT_CHARS"
+                    :min="1000"
+                    :max="100000"
+                  />
+                </el-form-item>
+                <el-form-item label="Rerank 输入最大字符数">
+                  <el-input-number
+                    v-model="numericForm.QUERY_MAX_RERANK_INPUT_CHARS"
+                    :min="1000"
+                    :max="1000000"
+                  />
+                </el-form-item>
+                <el-form-item label="单用户每分钟问答上限">
+                  <el-input-number
+                    v-model="numericForm.QUERY_USER_RATE_LIMIT_PER_MINUTE"
+                    :min="1"
+                    :max="1000"
+                  />
+                </el-form-item>
+                <el-form-item label="Tenant 每分钟问答上限">
+                  <el-input-number
+                    v-model="numericForm.QUERY_TENANT_RATE_LIMIT_PER_MINUTE"
+                    :min="1"
+                    :max="100000"
+                  />
+                </el-form-item>
               </div>
             </div>
 
             <div class="configuration-section">
-              <div class="heading heading--h3" role="heading" aria-level="3">Parser 资源限制</div>
+              <div class="heading heading--h3" role="heading" aria-level="3">上传与入库</div>
+              <div class="configuration-fields">
+                <el-form-item label="上传文件最大字节">
+                  <el-input-number
+                    v-model="numericForm.MAX_UPLOAD_BYTES"
+                    :min="1"
+                    :max="1073741824"
+                  />
+                </el-form-item>
+                <el-form-item label="入库并发数">
+                  <el-input-number v-model="numericForm.INGESTION_CONCURRENCY" :min="1" :max="32" />
+                </el-form-item>
+                <el-form-item label="入库最大尝试次数">
+                  <el-input-number
+                    v-model="numericForm.INGESTION_MAX_ATTEMPTS"
+                    :min="1"
+                    :max="20"
+                  />
+                </el-form-item>
+                <el-form-item label="入库重试初始延迟（ms）">
+                  <el-input-number
+                    v-model="numericForm.INGESTION_RETRY_BASE_DELAY_MS"
+                    :min="100"
+                    :max="60000"
+                  />
+                </el-form-item>
+              </div>
+            </div>
+
+            <div class="configuration-section">
+              <div class="heading heading--h3" role="heading" aria-level="3">
+                Parser、Tika 与 CAD
+              </div>
               <div class="configuration-fields">
                 <el-form-item label="API 等待超时（ms）">
                   <el-input-number
@@ -537,6 +635,75 @@ onUnmounted(stopPolling);
                     :max="1800"
                   />
                 </el-form-item>
+                <el-form-item label="DWG 转换产物最大字节">
+                  <el-input-number
+                    v-model="numericForm.MAX_DWG_CONVERTED_BYTES"
+                    :min="1"
+                    :max="1073741824"
+                  />
+                </el-form-item>
+                <el-form-item label="启用 DWG 上传与转换">
+                  <el-switch
+                    v-model="form.DWG_CONVERSION_ENABLED"
+                    active-value="true"
+                    inactive-value="false"
+                  />
+                </el-form-item>
+                <el-form-item label="DWG 输出版本">
+                  <el-select v-model="form.DWG_OUTPUT_VERSION">
+                    <el-option
+                      v-for="version in [
+                        'ACAD2018',
+                        'ACAD2013',
+                        'ACAD2010',
+                        'ACAD2007',
+                        'ACAD2004',
+                        'ACAD2000',
+                        'ACAD14',
+                        'ACAD13',
+                        'ACAD12',
+                      ]"
+                      :key="version"
+                      :label="version"
+                      :value="version"
+                    />
+                  </el-select>
+                </el-form-item>
+                <el-form-item label="启用 Tika PDF 兜底">
+                  <el-switch
+                    v-model="form.TIKA_ENABLED"
+                    active-value="true"
+                    inactive-value="false"
+                  />
+                </el-form-item>
+                <el-form-item label="Tika 超时（秒）">
+                  <el-input-number
+                    v-model="numericForm.TIKA_REQUEST_TIMEOUT_SECONDS"
+                    :min="1"
+                    :max="600"
+                  />
+                </el-form-item>
+                <el-form-item label="Tika 响应最大字节">
+                  <el-input-number
+                    v-model="numericForm.MAX_TIKA_RESPONSE_BYTES"
+                    :min="1"
+                    :max="268435456"
+                  />
+                </el-form-item>
+                <el-form-item label="压缩包最大条目数">
+                  <el-input-number
+                    v-model="numericForm.MAX_ARCHIVE_ENTRIES"
+                    :min="1"
+                    :max="100000"
+                  />
+                </el-form-item>
+                <el-form-item label="压缩包解压后最大字节">
+                  <el-input-number
+                    v-model="numericForm.MAX_ARCHIVE_UNCOMPRESSED_BYTES"
+                    :min="1"
+                    :max="1073741824"
+                  />
+                </el-form-item>
               </div>
             </div>
 
@@ -568,7 +735,8 @@ onUnmounted(stopPolling);
         <div class="deployment-panel">
           <div class="configuration-heading">
             <div>
-              <strong>发布记录</strong><span>显示受影响服务、readiness 结果与回滚入口。</span>
+              <strong>发布记录</strong
+              ><span>显示变更原因、受影响服务、readiness 结果与回滚入口。</span>
             </div>
           </div>
           <el-table v-if="!isMobile" :data="deployments" empty-text="暂无发布记录">
@@ -587,6 +755,12 @@ onUnmounted(stopPolling);
                 {{ scope.row.services.join('、') }}
               </template>
             </el-table-column>
+            <el-table-column
+              prop="changeReason"
+              label="变更原因"
+              min-width="220"
+              show-overflow-tooltip
+            />
             <el-table-column prop="errorCode" label="结果码" min-width="160">
               <template #default="scope"> {{ scope.row.errorCode ?? '—' }}</template>
             </el-table-column>
@@ -612,6 +786,7 @@ onUnmounted(stopPolling);
                 </el-tag>
               </div>
               <span>服务：{{ deployment.services.join('、') }}</span>
+              <span>原因：{{ deployment.changeReason }}</span>
               <span>结果码：{{ deployment.errorCode ?? '—' }}</span>
               <el-button
                 v-if="deployment.rollbackAvailable && !activeDeployment"

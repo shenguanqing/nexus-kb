@@ -178,6 +178,14 @@ ruff check .
 mypy app tests
 ```
 
+如宿主机没有项目要求的 Python 3.11 与锁定依赖，使用仓库根目录的等价 Docker 测试入口：
+
+```bash
+pnpm test:parser
+```
+
+该命令只启动一次性 `parser-worker-tests` profile 服务：它复用只读 Worker 镜像、只挂载测试目录，不暴露端口也不加入日常服务。固定 PDF/PNG 样本在测试启动时确定性生成，避免测试依赖本机 OCR 或 PDF 工具链。
+
 宿主机测试适合验证解析契约、限制和安全分支，但 PDF/OCR 的完整运行环境以 Docker 镜像为准：镜像还包含 Poppler、Tesseract 中文/英文语言包、CPU PyTorch，以及构建阶段预载且运行时只读的 EasyOCR 和 NLTK 模型资源。运行时不得为用户文档下载模型或语言资源。涉及 `requirements.lock`、PDF、图片、OCR 或 Dockerfile 的变更，至少还应构建并启动 Parser 镜像，然后从容器内检查 Worker readiness：
 
 ```bash

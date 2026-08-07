@@ -13,6 +13,7 @@ const runtimeEnvironmentPath = `${workspace}/config/runtime.env`;
 const readinessUrls = {
   api: 'http://api:3000/health/ready',
   'parser-worker': 'http://parser-worker:8000/health/ready',
+  'parser-worker-dwg': 'http://parser-worker-dwg:8000/health/ready',
   'reranker-worker': 'http://reranker-worker:8100/health/ready',
 };
 let activeDeploymentId = null;

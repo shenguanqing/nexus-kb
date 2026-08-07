@@ -802,6 +802,7 @@ test('keeps landscape mobile controls aligned and management content scrollable'
       json: {
         users: Array.from({ length: 12 }, (_, index) => ({
           userId: `user-${index + 1}`,
+          username: null,
           department: `department-${index + 1}`,
           roles: ['user'],
           roleSource: 'managed',
@@ -1176,6 +1177,7 @@ test('keeps shell chrome fixed and confines management-page scrolling below cont
         users: [
           {
             userId: 'admin.fixture',
+            username: 'admin.fixture',
             department: 'platform',
             roles: ['admin'],
             roleSource: 'managed',

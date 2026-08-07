@@ -24,6 +24,7 @@ apps/web/blob-report/
 # Python dependencies, bytecode, and tool caches
 .venv/
 .pytest_cache/
+apps/parser-worker/tests/.pytest-tmp/
 .mypy_cache/
 .ruff_cache/
 __pycache__/

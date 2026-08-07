@@ -102,8 +102,8 @@ API 为每个请求生成 UUID trace ID，并通过响应头 `X-Trace-Id` 返回
 NEXUSKB_BASE_URL=http://127.0.0.1:3000
 NEXUSKB_COOKIE_JAR=/tmp/nexuskb-cookie.txt
 umask 077
-read -r -p 'Username: ' NEXUSKB_USERNAME
-read -r -s -p 'Password: ' NEXUSKB_PASSWORD
+read -r 'NEXUSKB_USERNAME?Username: '
+read -r -s 'NEXUSKB_PASSWORD?Password: '
 printf '\n'
 jq -n \
   --arg username "$NEXUSKB_USERNAME" \
@@ -145,7 +145,7 @@ Authorization: Bearer <access-token>
 命令行调试时不要把真实 token 直接写进命令历史：
 
 ```bash
-read -r -s -p 'Access token: ' NEXUSKB_ACCESS_TOKEN
+read -r -s 'NEXUSKB_ACCESS_TOKEN?Access token: '
 printf '\n'
 curl --header "Authorization: Bearer $NEXUSKB_ACCESS_TOKEN" \
   "$NEXUSKB_BASE_URL/v1/auth/session"
@@ -276,7 +276,7 @@ unset NEXUSKB_ACCESS_TOKEN
 
 用户目录使用 `offset`/`limit` 分页，支持 `query` 和 `department`。管理员可以管理本地密码账号；外部 OIDC 身份账号仅可查看，应在身份源中增删。普通用户即使有 `access:read`，也不能通过 `department` 查看其他部门。用量接口要求同时提供 `from` 和 `to`。
 
-配置版本请求只接受共享契约列出的 LLM、Rerank、问答和 Parser 字段。API Key 位于 `secrets` 写入字段，响应永不回显，只返回 `secretConfigured`。客户端不能提交 tenant、服务名、Docker 命令、Compose 文件、callback URL 或 Embedding Provider/模型/维度。发布返回 HTTP 202；客户端轮询 deployment，终态为 `succeeded|rolled_back|failed`。`rolled_back` 表示目标 readiness 失败但上一配置已自动恢复；`failed` 需要运维介入。
+配置版本请求只接受共享契约列出的 LLM、Rerank、问答与限流、上传入库、Parser/Tika/CAD/DWG 受控字段。API Key 位于 `secrets` 写入字段，响应永不回显，只返回 `secretConfigured`。客户端不能提交 tenant、服务名、Docker 命令、Compose 文件、callback URL 或 Embedding Provider/模型/维度。Parser、Tika 或 CAD/DWG 字段变更时，服务端固定选择 `parser-worker` 和 `parser-worker-dwg`；发布返回 HTTP 202；客户端轮询 deployment，终态为 `succeeded|rolled_back|failed`，其中每条记录包含生成该配置版本时填写的 `changeReason`。`rolled_back` 表示目标 readiness 失败但上一配置已自动恢复；`failed` 需要运维介入。
 
 ---
 
@@ -318,6 +318,17 @@ curl --fail-with-body \
 ```
 
 上传返回 HTTP 202、`documentId` 和 `jobId`。文件的 tenant、owner、部门和默认敏感度来自服务端身份，不接受客户端表单伪造。
+
+仓库提供受显式开关保护的 PDF/图片真实容器入库冒烟脚本。它使用提供的账号创建 HttpOnly 会话，上传固定无敏感样本、等待任务完成并验证激活版本已写入向量集合；结束时删除本次创建的文档并登出。脚本不会打印凭据、Cookie 或文档正文。仅在本地 Docker 全链路及 Embedding 已就绪时执行：
+
+```bash
+read -r 'NEXUSKB_SMOKE_USERNAME?Username: '
+read -r -s 'NEXUSKB_SMOKE_PASSWORD?Password: '
+printf '\n'
+export NEXUSKB_SMOKE_USERNAME NEXUSKB_SMOKE_PASSWORD
+NEXUSKB_ALLOW_LIVE_SMOKE=true pnpm smoke:ingestion
+unset NEXUSKB_SMOKE_USERNAME NEXUSKB_SMOKE_PASSWORD
+```
 
 ### 6.3 查看任务和文档
 

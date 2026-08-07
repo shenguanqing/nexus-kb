@@ -118,10 +118,6 @@ const visibleManagementNavigation = computed(() => managementNavigation.filter(c
 function closeMobileMenu(): void {
   mobileMenuOpen.value = false;
 }
-async function navigate(to: string): Promise<void> {
-  closeMobileMenu();
-  await router.push(to);
-}
 const returnNavigation = computed<ReturnNavigation | null>(() => {
   if (/^\/documents\/[^/]+\/chunks$/.test(route.path)) {
     return { to: `/documents/${String(route.params.id)}`, label: '返回文档详情' };
@@ -191,7 +187,6 @@ async function signOut(): Promise<void> {
           v-for="item in visiblePrimaryNavigation"
           :key="item.to"
           :to="item.to"
-          @click.prevent="navigate(item.to)"
         >
           <span aria-hidden="true">{{ item.icon }}</span>
           <b>{{ item.label }}</b>
@@ -201,7 +196,6 @@ async function signOut(): Promise<void> {
           v-for="item in visibleManagementNavigation"
           :key="item.to"
           :to="item.to"
-          @click.prevent="navigate(item.to)"
         >
           <span aria-hidden="true">{{ item.icon }}</span>
           <b>{{ item.label }}</b>
@@ -261,7 +255,7 @@ async function signOut(): Promise<void> {
           v-for="item in visiblePrimaryNavigation"
           :key="item.to"
           :to="item.to"
-          @click.prevent="navigate(item.to)"
+          @click="closeMobileMenu"
         >
           <span aria-hidden="true">{{ item.icon }}</span>
           <b>{{ item.label }}</b>

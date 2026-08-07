@@ -32,6 +32,7 @@ describe('system configuration contracts', () => {
         status: 'running',
         services: ['postgres'],
         configVersion: 1,
+        changeReason: '不应允许基础设施服务',
         previousVersion: null,
         rollbackAvailable: false,
         errorCode: null,

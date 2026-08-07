@@ -328,7 +328,7 @@ Provider 的完整配置项见 [技术设计：配置](./docs/02-技术设计.md
 
 ## 启用管理员配置发布（按需）
 
-默认不启用。启用后，管理员可以在“Provider 与系统状态”页面创建加密的运行配置版本，并发布 LLM、Rerank、问答参数与 Parser 资源限制。独立的 `deployment-agent` 只接受 API 的内部请求，只能按服务端计算结果重建 `api`、`parser-worker` 或 `reranker-worker`；readiness 失败时会自动恢复上一版配置。
+默认不启用。启用后，管理员可以在“Provider 与系统状态”页面创建加密的运行配置版本，并发布 LLM、Rerank、问答与限流、上传入库及 Parser/Tika/CAD/DWG 运行参数。独立的 `deployment-agent` 只接受 API 的内部请求，只能按服务端计算结果重建 `api`、`parser-worker`、`parser-worker-dwg` 或 `reranker-worker`；readiness 失败时会自动恢复上一版配置。
 
 > [!WARNING]
 > `deployment-agent` 是唯一挂载 Docker socket 的组件。它不暴露宿主机端口，不能执行任意命令或重建任意服务。不要为 API、Web 或 Parser Worker 挂载 Docker socket，也不要手工编辑 `config/runtime.env`。
@@ -365,7 +365,7 @@ curl --fail-with-body http://127.0.0.1:3000/health/ready
 
 ### 3. 使用边界与失败处理
 
-- 进入版本化发布流程的仅限 LLM、Rerank、问答与 Parser 资源限制；Embedding Provider、模型、维度、分块/脱敏规则必须走索引迁移，数据库、认证根配置、网络、volume 和内部 token 仍由运维流程管理。
+- 进入版本化发布流程的仅限 LLM、Rerank、问答与限流、上传入库及 Parser/Tika/CAD/DWG 运行参数；Embedding Provider、模型、维度、分块/脱敏规则必须走索引迁移，数据库、认证根配置、网络、volume 和内部 token 仍由运维流程管理。
 - 发布时代理会原子写入 Git 忽略、权限为 `0600` 的 `config/runtime.env`，然后以固定参数重建受影响服务，并连续两次检查 readiness。
 - 发布失败会自动还原上一份 `runtime.env` 并再次验证；页面显示“已自动回滚”。若出现 `ROLLBACK_FAILED`，停止进一步发布，查看代理与目标服务日志，并按备份恢复。
 
@@ -610,9 +610,12 @@ pnpm build
 涉及 API 集成或前端完整流程时再运行：
 
 ```bash
+pnpm test:parser
 pnpm --filter @nexus-kb/api test:integration
 pnpm --filter @nexus-kb/web test:e2e
 ```
+
+需要在已授权的本地完整 RAG 环境中验证固定 PDF/图片的“上传 → 解析 → 向量索引”链路时，使用受显式开关保护的 `pnpm smoke:ingestion`。它需要交互提供的本地账号密码，完成后会删除本次创建的测试文档并登出；具体命令见 [API 使用说明](./docs/07-API使用说明.md#62-读取上传限制并上传)。
 
 ## 文档索引
 

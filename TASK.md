@@ -86,7 +86,7 @@ Vue 3 + TypeScript + Vite
 - [x] 应用角色收敛为 `user`/`admin`，保留 capability 与 ACL 独立校验，并提供旧角色的降权迁移。
 - [x] `user` 侧栏与前端路由只保留知识问答、问答历史；管理页面同时要求 `admin` 和对应 capability。
 - [x] 管理员全权账号管理：`admin` 自动获得当前 tenant 的全部应用 capability 与敏感度范围；本地密码账号在数据库以 scrypt 摘要保存，首次仅从受保护的 `PASSWORD_AUTH_USERS_JSON` 引导，之后可在“用户与角色”页面创建、编辑、禁用、重置密码和删除。所有变更撤销必要会话并写入访问审计；最后一个管理员不可删除、禁用或降级，管理员也不能删除、禁用或降级自己；tenant 隔离与 confidential 数据出网策略保持强制执行。
-- [x] 管理员配置发布：Provider/问答/Parser 运行参数由前端创建加密的不可变配置版本，密钥只写入不回显；独立 `deployment-agent` 仅按服务端计算的 `api`、`parser-worker`、`reranker-worker` 白名单执行 Compose 重建，readiness 失败自动恢复上一版本，页面显示结果并支持受控回滚。Embedding 向量空间配置不进入普通重启流程。
+- [x] 管理员配置发布：Provider/问答/上传入库/Parser/Tika/CAD/DWG 运行参数由前端创建加密的不可变配置版本，密钥只写入不回显；独立 `deployment-agent` 仅按服务端计算的 `api`、`parser-worker`、`parser-worker-dwg`、`reranker-worker` 白名单执行 Compose 重建，readiness 失败自动恢复上一版本，页面显示含变更原因的结果并支持受控回滚。Embedding 向量空间配置不进入普通重启流程。
 
 ### 3.8 F2–F5 收尾
 
@@ -137,7 +137,7 @@ Vue 3 + TypeScript + Vite
 ### 3.12 本地启动与数据库调试文档
 
 - [x] README 与部署运维手册明确：执行 DWG Worker 的 `docker compose build` 前必须启动 Docker Desktop，并先通过 `docker info` / `docker compose version` 验证 Docker Engine；两处均补齐专用 Worker 构建、合并配置校验、整套服务启动和状态检查的完整命令序列。
-- [x] 明确 `.env` 变更按实际读取服务重建：主服务配置重建 `api`，解析/CAD 配置重建 `parser-worker`， `PARSER_INTERNAL_TOKEN` 同时重建两端；普通运行配置变化不要求重新构建镜像。
+- [x] 明确 `.env` 变更按实际读取服务重建：主服务配置重建 `api`，解析/CAD 配置重建 `parser-worker` 与 `parser-worker-dwg`， `PARSER_INTERNAL_TOKEN` 同时重建两端；普通运行配置变化不要求重新构建镜像。
 - [x] 明确 PostgreSQL 初始化账号、数据库和密码在已有 volume 上不会因重建容器自动变更，禁止使用 `down -v` 作为配置重载方式。
 - [x] 新增仅绑定 `127.0.0.1:15432` 的 `compose.db-gui.yaml` 和 DBeaver 只读查看说明；生产环境仍不暴露 PostgreSQL。
 - [x] README 补全基础、DWG、DBeaver 及组合模式的固定 Compose 文件前缀，完善依赖健康分项诊断、已有 volume 的数据库密码同步流程、URL 密码编码提示和 PostgreSQL/Chroma 数据归属说明。
@@ -175,7 +175,8 @@ Vue 3 + TypeScript + Vite
 - [x] Parser Worker 首次构建加固：常规依赖显式使用官方 PyPI 并配置有限重试/超时；EasyOCR 模型下载与依赖层分离，断流时清理残包并有限重试。ARM64 与 ODA `linux/amd64` 镜像均完成重建，`pnpm docker:up:all` 与 API readiness 验证通过。
 - [x] Apple Silicon 本地 DWG/OCR Worker 拆分：常规文件由原生 `parser-worker` 处理，API 仅把 DWG 路由到 `linux/amd64` 的 ODA `parser-worker-dwg`；两个内部 Worker 都通过独立 readiness 验证，避免 x86 模拟拖慢图片 OCR。
 - [x] P0 受控 Tika 兜底：固定版本服务只连接内网；Unstructured 非安全校验失败或空结果时 fallback，含 readiness、超时、返回体上限、warning 和真实 PDF 冒烟验证。
-- [ ] P0 解析能力后续：提交固定 PDF/图片测试样本，并完成上传到索引的容器集成测试。
+- [x] P0 解析能力后续（样本与 Parser 容器）：提交确定性生成且已纳入版本控制的 PDF/PNG 样本；新增只读、无网络的 `parser-worker-tests` 容器，真实运行 Unstructured PDF、EasyOCR 图片及 DWG 解析契约测试。
+- [x] P0 解析能力后续（已授权全链路执行）：已在本地完整 RAG 环境以管理员会话运行 `pnpm smoke:ingestion`，验证固定 PDF/PNG 的上传、解析、Embedding、Chroma 索引与受控清理；两份样本均成功建立索引。
 
 - [x] 新增 Stylelint CSS 声明语义排序配置及独立检查/自动修复命令，覆盖 CSS、SCSS 和 Vue SFC；现有大文件样式不在本次配置变更中批量重排。
 - [x] 为 Playwright E2E 增加独立 TypeScript project reference，修复编辑器 ESLint Project Service 无法解析 `apps/web/e2e` 测试文件的问题。

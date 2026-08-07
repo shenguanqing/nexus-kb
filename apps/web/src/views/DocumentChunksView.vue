@@ -5,6 +5,7 @@ import { useRoute, useRouter } from 'vue-router';
 
 import { ApiError } from '@/api/client';
 import { fetchDocument, listDocumentChunks } from '@/api/documents';
+import { useBreakpoint } from '@/composables/useBreakpoint';
 
 const pageSize = 20;
 const route = useRoute();
@@ -16,6 +17,7 @@ const selectedVersion = ref<number | undefined>(readVersion(route.query.version)
 const page = ref(Math.max(1, Number(route.query.page) || 1));
 const loading = ref(false);
 const errorMessage = ref('');
+const { isPhone } = useBreakpoint();
 const selectedDocumentVersion = computed(() =>
   detail.value?.versions.find((version) => version.version === chunks.value?.documentVersion),
 );
@@ -179,9 +181,9 @@ onMounted(load);
           <el-empty v-else description="该版本尚未产生分块" />
         </template>
       </div>
-      <div v-if="chunks && chunks.total > pageSize" class="list-pagination">
+      <div v-if="chunks && chunks.total > pageSize" class="list-pagination document-pagination">
         <el-pagination
-          layout="total, prev, pager, next"
+          :layout="isPhone ? 'prev, pager, next' : 'total, prev, pager, next'"
           :current-page="chunks.page"
           :page-size="chunks.pageSize"
           :total="chunks.total"

@@ -9,12 +9,12 @@ const environment = managedEnvironmentFixture({ LLM_PROVIDER: 'google' });
 test('accepts only the fixed deployment callback and service allowlist', () => {
   const result = validatePayload({
     deploymentId,
-    services: ['api', 'parser-worker'],
+    services: ['api', 'parser-worker', 'parser-worker-dwg'],
     environment,
     previousEnvironment: environment,
     callbackUrl: `http://api:3000/v1/internal/deployments/${deploymentId}/result`,
   });
-  assert.deepEqual(result.services, ['api', 'parser-worker']);
+  assert.deepEqual(result.services, ['api', 'parser-worker', 'parser-worker-dwg']);
 });
 
 test('rejects infrastructure services and arbitrary callbacks', () => {
