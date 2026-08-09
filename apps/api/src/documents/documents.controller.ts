@@ -6,6 +6,7 @@ import {
   HttpCode,
   Param,
   Patch,
+  ParseIntPipe,
   ParseUUIDPipe,
   Post,
   Query,
@@ -114,6 +115,50 @@ export class DocumentsController {
       reply.header('content-range', `bytes ${start}-${end}/${content.size}`);
     }
     return new StreamableFile(createReadStream(content.path, { start, end }));
+  }
+
+  @Get('documents/:documentId/preview/overview')
+  async getDocumentPreviewOverview(
+    @Param('documentId', new ParseUUIDPipe({ version: '4' })) documentId: string,
+    @Req() request: FastifyRequest,
+    @Res({ passthrough: true }) reply: FastifyReply,
+  ): Promise<StreamableFile> {
+    const overview = await this.documents.getDocumentPreviewOverview(
+      documentId,
+      requestIdentity(request),
+    );
+    reply.header('cache-control', 'private, no-store');
+    reply.header('content-type', overview.mimeType);
+    reply.header('content-length', String(overview.size));
+    reply.header('content-disposition', inlineDisposition(overview.sourceName));
+    reply.header('x-content-type-options', 'nosniff');
+    return new StreamableFile(createReadStream(overview.path));
+  }
+
+  @Get('documents/:documentId/preview/tiles/:zoom/:tileX/:tileY')
+  async getDocumentPreviewTile(
+    @Param('documentId', new ParseUUIDPipe({ version: '4' })) documentId: string,
+    @Param('zoom', ParseIntPipe) zoom: number,
+    @Param('tileX', ParseIntPipe) tileX: number,
+    @Param('tileY', ParseIntPipe) tileY: number,
+    @Req() request: FastifyRequest,
+    @Res({ passthrough: true }) reply: FastifyReply,
+  ): Promise<StreamableFile> {
+    const tile = await this.documents.getDocumentPreviewTile(
+      documentId,
+      zoom,
+      tileX,
+      tileY,
+      requestIdentity(request),
+      request.id,
+    );
+    reply.header('cache-control', 'private, no-store');
+    reply.header('content-type', tile.mimeType);
+    reply.header('content-length', String(tile.size));
+    reply.header('content-disposition', inlineDisposition(tile.sourceName));
+    reply.header('x-content-type-options', 'nosniff');
+    reply.header('x-cad-tile-cache', tile.cacheHit ? 'hit' : 'miss');
+    return new StreamableFile(createReadStream(tile.path));
   }
 
   @Get('documents/:documentId/chunks')

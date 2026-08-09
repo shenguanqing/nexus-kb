@@ -815,6 +815,40 @@ a {
   margin: 0 auto;
   object-fit: initial;
 }
+.cad-tile-viewer {
+  position: relative;
+  overflow: hidden;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  background: #212830;
+}
+.cad-tile-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  outline-offset: -2px;
+  cursor: grab;
+  touch-action: none;
+}
+.cad-tile-canvas:active {
+  cursor: grabbing;
+}
+.cad-tile-status {
+  position: absolute;
+  bottom: var(--kb-space-3);
+  left: 50%;
+  max-width: calc(100% - var(--kb-space-6));
+  padding: var(--kb-space-2) var(--kb-space-3);
+  border-radius: var(--kb-radius-sm);
+  color: #fff;
+  background: rgb(0 0 0 / 68%);
+  font-size: 12px;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
 .preview-text {
   overflow: auto;
   overflow-wrap: anywhere;
@@ -1199,9 +1233,29 @@ a {
   display: grid;
   gap: var(--kb-space-4);
 }
+.configuration-editor {
+  --configuration-anchor-offset: calc(var(--kb-space-16) + var(--kb-space-12));
+  display: grid;
+  align-items: start;
+  gap: var(--kb-space-5);
+  grid-template-columns: 168px minmax(0, 1fr);
+}
+.configuration-anchor {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  align-self: start;
+  min-width: 0;
+  padding: var(--kb-space-2);
+  background: var(--kb-color-surface);
+}
+.configuration-anchor .el-anchor--horizontal .el-anchor__item:not(:first-child) {
+  padding-left: var(--kb-space-2);
+}
 .configuration-section {
   padding-top: var(--kb-space-4);
   border-top: 1px solid var(--kb-color-border);
+  scroll-margin-top: var(--configuration-anchor-offset);
 }
 .configuration-fields {
   display: grid;
@@ -1225,6 +1279,11 @@ a {
 .deployment-card-list {
   display: grid;
   gap: var(--kb-space-3);
+  overflow-y: auto;
+  max-height: 360px;
+}
+.deployment-table {
+  width: 100%;
 }
 .deployment-card {
   display: grid;
@@ -2591,6 +2650,16 @@ a {
   font-style: normal;
 }
 @media (min-width: 901px) and (max-width: 1279px) {
+  .configuration-editor {
+    --configuration-anchor-offset: var(--kb-space-16);
+    grid-template-columns: 1fr;
+  }
+  .configuration-anchor {
+    overflow-x: auto;
+    max-width: 100%;
+    padding-right: var(--kb-space-2);
+    padding-left: var(--kb-space-2);
+  }
   .document-filters {
     grid-template-columns: repeat(4, minmax(0, 1fr));
   }
@@ -2761,6 +2830,16 @@ a {
   }
   .configuration-fields {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .configuration-editor {
+    --configuration-anchor-offset: var(--kb-space-16);
+    grid-template-columns: 1fr;
+  }
+  .configuration-anchor {
+    overflow-x: auto;
+    max-width: 100%;
+    padding-right: var(--kb-space-2);
+    padding-left: var(--kb-space-2);
   }
   .queue-summary .data-list {
     grid-template-columns: repeat(3, minmax(0, 1fr));

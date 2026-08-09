@@ -11,6 +11,7 @@ import {
   listDocumentChunks,
 } from '@/api/documents';
 import SafeMarkdown from '@/components/common/SafeMarkdown.vue';
+import CadTileViewer from '@/components/documents/CadTileViewer.vue';
 import { useBreakpoint } from '@/composables/useBreakpoint';
 
 const fallbackPageSize = 20;
@@ -20,6 +21,7 @@ const documentId = String(route.params.id);
 const preview = ref<DocumentPreview | null>(null);
 const previewPage = ref<HTMLElement | null>(null);
 const cadViewport = ref<HTMLElement | null>(null);
+const cadTileViewer = ref<InstanceType<typeof CadTileViewer> | null>(null);
 const textContent = ref('');
 const chunks = ref<DocumentChunkListResponse | null>(null);
 const loading = ref(false);
@@ -39,16 +41,31 @@ const pdfUrl = computed(() =>
   sourcePage.value ? `${contentUrl.value}#page=${sourcePage.value}` : contentUrl.value,
 );
 const isCadPreview = computed(
-  () => preview.value?.status === 'ready' && preview.value.kind === 'svg',
+  () =>
+    preview.value?.status === 'ready' &&
+    (preview.value.kind === 'svg' || preview.value.kind === 'cad_tiles'),
 );
-const canPanCad = computed(() => isCadPreview.value && cadZoom.value > 1);
+const isTiledCadPreview = computed(
+  () => preview.value?.status === 'ready' && preview.value.kind === 'cad_tiles',
+);
+const canPanCad = computed(
+  () => preview.value?.status === 'ready' && preview.value.kind === 'svg' && cadZoom.value > 1,
+);
 const cadZoomPercent = computed(() => Math.round(cadZoom.value * 100));
 const cadImageStyle = computed(() => ({ width: `${cadZoomPercent.value}%` }));
 const { isPhone } = useBreakpoint();
 
 const cadZoomMinimum = 0.5;
-const cadZoomMaximum = 32;
+const cadSvgZoomMaximum = 32;
 const cadZoomStep = 0.25;
+const tiledCadCanZoomIn = ref(true);
+const tiledCadCanZoomOut = ref(true);
+const cadCanZoomIn = computed(() =>
+  isTiledCadPreview.value ? tiledCadCanZoomIn.value : cadZoom.value < cadSvgZoomMaximum,
+);
+const cadCanZoomOut = computed(() =>
+  isTiledCadPreview.value ? tiledCadCanZoomOut.value : cadZoom.value > cadZoomMinimum,
+);
 let cadDragPointerId: number | null = null;
 let cadDragStartX = 0;
 let cadDragStartY = 0;
@@ -101,20 +118,43 @@ async function load(): Promise<void> {
 }
 
 function changeCadZoom(delta: number): void {
+  if (isTiledCadPreview.value) {
+    if (delta > 0) cadTileViewer.value?.zoomIn();
+    else cadTileViewer.value?.zoomOut();
+    return;
+  }
   cadZoom.value = Math.min(
-    cadZoomMaximum,
+    cadSvgZoomMaximum,
     Math.max(cadZoomMinimum, Number((cadZoom.value + delta).toFixed(2))),
   );
   if (cadZoom.value <= 1) stopCadPan();
 }
 
 function resetCadZoom(): void {
+  if (isTiledCadPreview.value) {
+    cadTileViewer.value?.reset();
+    return;
+  }
   stopCadPan();
   cadZoom.value = 1;
   if (cadViewport.value) {
     cadViewport.value.scrollLeft = 0;
     cadViewport.value.scrollTop = 0;
   }
+}
+
+function handleCadTileZoomChange(state: {
+  percent: number;
+  canZoomIn: boolean;
+  canZoomOut: boolean;
+}): void {
+  cadZoom.value = state.percent / 100;
+  tiledCadCanZoomIn.value = state.canZoomIn;
+  tiledCadCanZoomOut.value = state.canZoomOut;
+}
+
+function handleCadTileError(message: string): void {
+  interactionMessage.value = message;
 }
 
 function handleCadWheel(event: WheelEvent): void {
@@ -228,7 +268,7 @@ onBeforeUnmount(() => {
             <el-button
               size="small"
               aria-label="缩小 CAD 预览"
-              :disabled="cadZoom <= cadZoomMinimum"
+              :disabled="!cadCanZoomOut"
               @click="changeCadZoom(-cadZoomStep)"
             >
               缩小
@@ -239,7 +279,7 @@ onBeforeUnmount(() => {
             <el-button
               size="small"
               aria-label="放大 CAD 预览"
-              :disabled="cadZoom >= cadZoomMaximum"
+              :disabled="!cadCanZoomIn"
               @click="changeCadZoom(cadZoomStep)"
             >
               放大
@@ -267,6 +307,15 @@ onBeforeUnmount(() => {
           :title="`${preview.sourceName} PDF 预览`"
         >
         </iframe>
+        <CadTileViewer
+          v-if="preview.kind === 'cad_tiles' && preview.cad"
+          ref="cadTileViewer"
+          :document-id="documentId"
+          :manifest="preview.cad"
+          :source-name="preview.sourceName"
+          @zoom-change="handleCadTileZoomChange"
+          @error="handleCadTileError"
+        />
         <div
           v-else-if="preview.kind === 'image' || preview.kind === 'svg'"
           ref="cadViewport"

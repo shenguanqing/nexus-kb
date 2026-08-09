@@ -9,13 +9,18 @@ from ezdxf.fonts import fonts
 from ezdxf.fonts.font_face import FontFace
 from pytest import MonkeyPatch, raises
 
+import app.cad_rendering as cad_rendering_module
 import app.preview as preview_module
+from app.cad_tiles import CadPreviewResourceError, CadPreviewTimeoutError
 from app.preview import (
     _bounded_svg_payload,
     _cad_render_context,
+    cad_preview_failure_warning,
+    generate_cad_preview,
     generate_cad_svg,
     generate_office_pdf,
 )
+from app.schemas import PreviewArtifact
 
 DOCUMENT_ID = UUID("6769af9a-a4d0-4dc2-a97d-942584a9c826")
 
@@ -96,18 +101,74 @@ def test_bounded_svg_payload_rejects_oversized_compressed_svg() -> None:
         _bounded_svg_payload(content, max_bytes=10)
 
 
+def test_generate_cad_preview_uses_weighted_render_cost_for_tile_routing(
+    tmp_path: Path,
+    monkeypatch: MonkeyPatch,
+) -> None:
+    source = tmp_path / "drawing.dxf"
+    source.write_bytes(b"small source")
+    preview_root = tmp_path / "previews"
+    preview_root.mkdir()
+    tiled = PreviewArtifact(
+        storageKey=f"{DOCUMENT_ID}.cad",
+        kind="cad_tiles",
+        mimeType="application/vnd.nexuskb.cad-tiles+json",
+        sizeBytes=4096,
+        renderer="ezdxf-cad-tiles",
+        rendererVersion="1",
+    )
+
+    def generate_tiles(*_args: object, **_kwargs: object) -> PreviewArtifact:
+        return tiled
+
+    monkeypatch.setattr(
+        preview_module,
+        "estimate_cad_render_cost",
+        lambda _source, _max_depth: (100, 100_001),
+    )
+    monkeypatch.setattr(preview_module, "generate_cad_tile_preview", generate_tiles)
+
+    artifact = generate_cad_preview(
+        source,
+        DOCUMENT_ID,
+        preview_root=preview_root,
+        max_bytes=1_000_000,
+        tiled_enabled=True,
+        tile_cost_threshold=100_000,
+        tile_source_bytes_threshold=20_971_520,
+        tile_size=512,
+        max_zoom=8,
+        render_timeout_seconds=60,
+        render_memory_bytes=2_147_483_648,
+    )
+
+    assert artifact.kind == "cad_tiles"
+
+
+def test_cad_preview_failures_report_stable_specific_warning_codes() -> None:
+    assert (
+        cad_preview_failure_warning(CadPreviewTimeoutError("timeout"))
+        == "CAD_PREVIEW_INITIALIZATION_TIMEOUT"
+    )
+    assert (
+        cad_preview_failure_warning(CadPreviewResourceError("resource"))
+        == "CAD_PREVIEW_RESOURCE_LIMIT_EXCEEDED"
+    )
+    assert cad_preview_failure_warning(RuntimeError("unexpected")) == "PREVIEW_GENERATION_FAILED"
+
+
 def test_cad_render_context_replaces_missing_cjk_fallback_font(
     monkeypatch: MonkeyPatch,
 ) -> None:
     drawing = new("R2010")
     drawing.modelspace().add_text("中文 NexusKB")
-    context = preview_module.RenderContext(drawing)
+    context = cad_rendering_module.RenderContext(drawing)
     context.fonts["standard"] = FontFace(
         filename="DejaVuSansCondensed.ttf",
         family="DejaVu Sans Condensed",
     )
     cjk_face = FontFace(filename="NotoSansCJK-Regular.ttc", family="Noto Sans CJK SC")
-    monkeypatch.setattr(preview_module, "RenderContext", lambda _: context)
+    monkeypatch.setattr(cad_rendering_module, "RenderContext", lambda _: context)
     monkeypatch.setattr(fonts, "find_best_match", lambda **_: cjk_face)
 
     rendered_context = _cad_render_context(drawing)

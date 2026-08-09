@@ -1,7 +1,17 @@
 import { Injectable, Optional } from '@nestjs/common';
 import { extname } from 'node:path';
-import { parseRequestSchema, parseResponseSchema } from '@nexus-kb/contracts';
-import type { ParseRequest, ParseResponse } from '@nexus-kb/contracts';
+import {
+  cadPreviewTileRequestSchema,
+  cadPreviewTileResponseSchema,
+  parseRequestSchema,
+  parseResponseSchema,
+} from '@nexus-kb/contracts';
+import type {
+  CadPreviewTileRequest,
+  CadPreviewTileResponse,
+  ParseRequest,
+  ParseResponse,
+} from '@nexus-kb/contracts';
 
 import { AppConfig } from '../config/app-config';
 import { MetricsService } from '../observability/metrics.service';
@@ -16,6 +26,9 @@ const SAFE_WORKER_ERROR_CODES = new Set([
   'DWG_CONVERSION_FAILED',
   'PARSER_EMPTY_RESULT',
   'TIKA_RESPONSE_LIMIT_EXCEEDED',
+  'CAD_PREVIEW_TILE_INVALID',
+  'CAD_PREVIEW_TILE_TIMEOUT',
+  'CAD_PREVIEW_TILE_UNAVAILABLE',
 ]);
 
 @Injectable()
@@ -55,9 +68,11 @@ export class ParserClient {
       if (!response.ok) throw this.statusError(response);
       try {
         const result = parseResponseSchema.parse(await response.json());
+        const expectedPreviewSuffix =
+          result.preview?.kind === 'cad_tiles' ? 'cad' : result.preview?.kind;
         if (
           result.preview &&
-          result.preview.storageKey !== `${validatedRequest.documentId}.${result.preview.kind}`
+          result.preview.storageKey !== `${validatedRequest.documentId}.${expectedPreviewSuffix}`
         ) {
           throw new Error('Preview artifact is not bound to the requested document');
         }
@@ -79,17 +94,95 @@ export class ParserClient {
     }
   }
 
+  async ensureCadPreviewTile(
+    request: CadPreviewTileRequest,
+    traceId: string,
+  ): Promise<CadPreviewTileResponse> {
+    const startedAt = Date.now();
+    const validatedRequest = cadPreviewTileRequestSchema.parse(request);
+    const controller = new AbortController();
+    const timeout = setTimeout(
+      () => controller.abort(),
+      Math.min((this.config.values.CAD_PREVIEW_RENDER_TIMEOUT_SECONDS + 10) * 1000, 610_000),
+    );
+    try {
+      let response: Response;
+      try {
+        response = await fetch(
+          new URL('/internal/v1/cad-preview/tile', this.config.values.PARSER_WORKER_URL),
+          {
+            method: 'POST',
+            headers: {
+              'content-type': 'application/json',
+              'x-internal-token': this.config.values.PARSER_INTERNAL_TOKEN,
+              'x-trace-id': traceId,
+            },
+            body: JSON.stringify(validatedRequest),
+            signal: controller.signal,
+          },
+        );
+      } catch (error) {
+        if (controller.signal.aborted || (error instanceof Error && error.name === 'AbortError')) {
+          throw new ParserError('timeout', true, {
+            cause: error,
+            code: 'CAD_PREVIEW_TILE_TIMEOUT',
+          });
+        }
+        throw new ParserError('unavailable', true, {
+          cause: error,
+          code: 'CAD_PREVIEW_TILE_UNAVAILABLE',
+        });
+      }
+      if (!response.ok) throw this.statusError(response);
+      try {
+        const result = cadPreviewTileResponseSchema.parse(await response.json());
+        const expectedPrefix = `${validatedRequest.documentId}.cad/bundles/`;
+        const expectedSuffix = `/tiles/${validatedRequest.zoom}/${validatedRequest.tileX}/${validatedRequest.tileY}.png`;
+        if (
+          !result.storageKey.startsWith(expectedPrefix) ||
+          !result.storageKey.endsWith(expectedSuffix)
+        ) {
+          throw new Error('CAD preview tile is not bound to the requested document and coordinate');
+        }
+        this.metrics?.observeCadPreviewTile(
+          validatedRequest.zoom,
+          result.cacheHit ? 'hit' : 'miss',
+          'success',
+          Date.now() - startedAt,
+        );
+        return result;
+      } catch (error) {
+        throw new ParserError('invalid_response', false, { cause: error });
+      }
+    } catch (error) {
+      this.metrics?.observeCadPreviewTile(
+        validatedRequest.zoom,
+        'unknown',
+        'error',
+        Date.now() - startedAt,
+      );
+      throw error;
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+
   private statusError(response: Response): ParserError {
     const status = response.status;
+    const workerCode = response.headers.get('x-parser-error-code');
+    const safeCode = workerCode && SAFE_WORKER_ERROR_CODES.has(workerCode) ? workerCode : undefined;
     if (status === 401 || status === 403) return new ParserError('authentication', false);
     if ([400, 404, 413, 415, 422].includes(status)) {
-      const workerCode = response.headers.get('x-parser-error-code');
       return new ParserError('invalid_request', false, {
-        ...(workerCode && SAFE_WORKER_ERROR_CODES.has(workerCode) ? { code: workerCode } : {}),
+        ...(safeCode ? { code: safeCode } : {}),
       });
     }
-    if (status === 408 || status === 504) return new ParserError('timeout', true);
-    if (status === 429 || status >= 500) return new ParserError('unavailable', true);
+    if (status === 408 || status === 504) {
+      return new ParserError('timeout', true, { ...(safeCode ? { code: safeCode } : {}) });
+    }
+    if (status === 429 || status >= 500) {
+      return new ParserError('unavailable', true, { ...(safeCode ? { code: safeCode } : {}) });
+    }
     return new ParserError('invalid_response', false);
   }
 

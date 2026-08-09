@@ -87,6 +87,8 @@ Vue 3 + TypeScript + Vite
 - [x] `user` 侧栏与前端路由只保留知识问答、问答历史；管理页面同时要求 `admin` 和对应 capability。
 - [x] 管理员全权账号管理：`admin` 自动获得当前 tenant 的全部应用 capability 与敏感度范围；本地密码账号在数据库以 scrypt 摘要保存，首次仅从受保护的 `PASSWORD_AUTH_USERS_JSON` 引导，之后可在“用户与角色”页面创建、编辑、禁用、重置密码和删除。所有变更撤销必要会话并写入访问审计；最后一个管理员不可删除、禁用或降级，管理员也不能删除、禁用或降级自己；tenant 隔离与 confidential 数据出网策略保持强制执行。
 - [x] 管理员配置发布：Provider/问答/上传入库/Parser/Tika/CAD/DWG 运行参数由前端创建加密的不可变配置版本，密钥只写入不回显；独立 `deployment-agent` 仅按服务端计算的 `api`、`parser-worker`、`parser-worker-dwg`、`reranker-worker` 白名单执行 Compose 重建，readiness 失败自动恢复上一版本，页面显示含变更原因的结果并支持受控回滚。Embedding 向量空间配置不进入普通重启流程。
+- [x] 配置发布一致性与 Provider 页面收敛：所有仓库 Compose 入口按 `.env → config/runtime.env` 顺序参与插值，基础模式固定关闭 DWG，避免手动重建后网页激活值与 API 上传能力漂移；运行配置增加响应式 Anchor，Parser、CAD/DWG、Tika 独立分区，发布记录固定表头并在块内滚动。
+  - [x] 修复 Anchor 响应式排版：901–1279px 与 `<=900px` 均使用顶部单栏横向导航，非桌面标签与间距紧凑化，消除平板 168px 容器溢出和手机末端入口裁切。
 
 ### 3.8 F2–F5 收尾
 
@@ -155,13 +157,23 @@ Vue 3 + TypeScript + Vite
 ### 3.14 已支持文件的统一预览
 
 - [x] 新增受 `documents:read` 与实时文档 ACL 保护的 preview manifest 和内容流接口；响应不包含 storage key/内部路径，PDF 支持单一 byte range。
-- [x] TXT/Markdown/PDF/PNG/JPEG 直接预览；DOCX/XLSX 在 Parser Worker 内使用固定 LibreOffice 命令生成 PDF；DXF/DWG 生成清洗后 SVG。产物与 `documentId` 强绑定并使用独立 `preview_artifacts` volume。
+- [x] TXT/Markdown/PDF/PNG/JPEG 直接预览；DOCX/XLSX 在 Parser Worker 内使用固定 LibreOffice 命令生成 PDF；DXF/DWG 根据渲染成本生成清洗 SVG 或版本化 PNG 瓦片 bundle。产物与 `documentId` 强绑定并使用独立 `preview_artifacts` volume。
 - [x] 预览生成失败只记录 warning，不阻断 RAG 入库；Web 预览页降级为 ACL 保护的解析原文，来源抽屉携带 page/sheet/version 定位。
 - [x] 文档删除同步清理预览产物；API/Worker readiness 检查预览目录，常规 Worker 额外检查 LibreOffice。
 - [x] 修复中文 Office/CAD 预览方块字：两个 Parser 镜像预置 Noto CJK，LibreOffice PDF 嵌入中文字形，ezdxf 在默认 DejaVu 缺字时显式使用 CJK 字体生成 SVG 路径，并覆盖 Ubuntu runner 的 DejaVu Sans Condensed 字体族变体。
-- [x] DXF/DWG 预览支持 50%–3200% 缩放、重置、Ctrl/Command + 滚轮与放大后的鼠标拖拽平移；全部 ready/fallback 预览支持浏览器全屏。权限说明收敛为文件名同行的“实时权限校验”标记，释放预览高度。
+- [x] DXF/DWG 小图 SVG 支持 50%–3200% 缩放，超大图瓦片默认支持相对总览 256×；两者均支持重置、Ctrl/Command + 滚轮、鼠标拖拽平移和浏览器全屏。权限说明收敛为文件名同行的“实时权限校验”标记，释放预览高度。
 - [x] 修复 CAD 线路在百万级 SVG viewBox 下因亚像素线宽不可见的问题；几何路径使用非缩放线宽，零宽 hairline 提升为屏幕 1px。超大型 CAD 的原始 SVG 超过 200 MiB 时自动 gzip 存储并由 API 透明解码，压缩后仍超限才降级解析文本。
 - [x] 完成本轮全量 lint、typecheck、单元测试、构建、Parser 容器测试和 Compose 配置校验。
+
+### 3.15 超大 CAD 深度预览
+
+- [x] 以源文件字节和按实体类型加权的 `renderCostScore` 分流：成本递归计入嵌套块及阵列实例，小图保留清洗 SVG，超大/高成本图纸改用版本化 PNG 瓦片 bundle。
+- [x] 入库只同步生成总览图、z0、实体/扁平图元 R-Tree 和带 CAD bounds / `worldToPixel` 的 manifest；不全量预生成细节 PNG，细节瓦片在缓存未命中时按视口懒渲染，原子写入并由磁盘 LRU 清理。
+- [x] Worker 渲染子进程增加超时/内存硬上限；API 增加无路径 manifest、总览和瓦片端点，瓦片渲染前后复核 ACL，删除文档递归清理 bundle。
+- [x] Vue Canvas 查看器支持默认最大层级 8（256× / 25,600%）、平移/全屏、最终视口防抖请求、可见瓦片优先、最多 2 并发、边缘一圈预取、`AbortController` 竞态取消和 `ImageBitmap` LRU 回收。
+- [x] 受控运行配置、OpenAPI、架构/前端/开发/运维/API 文档与 Prometheus 瓦片延迟、缓存命中和层级分布指标同步。
+- [x] 使用两份真实复杂 DWG 定位并修复预览慢路径：bundle 初始化预算扩展到单瓦片的 3 倍并封顶 180 秒，z0 复用总览，缓存命中绕过文档渲染锁，可见瓦片按视口中心优先；超时/资源失败使用稳定细分 warning，父进程回收被强杀子进程遗留的 UUID 临时 bundle。
+- [x] 使用 `E-一区一层照明平面图.dwg` 继续定位冷瓦片慢路径：移除每次请求约 20–23 秒的 91 MiB DXF 重解析，bundle 新增非可执行 SQLite/R-Tree 扁平图元索引，旧 bundle 首次请求原子补建；3×3 metatile 改为一次查询、一次组合绘制后裁图。z4 冷 3×3 从约 31 秒降至 2.97 秒，z8 冷 3×3 为 1.10 秒；一次性旧缓存升级 72.34 秒并受 180 秒硬上限保护。
 
 ---
 

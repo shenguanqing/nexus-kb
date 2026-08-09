@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
+  documentPreviewOverviewUrl,
+  documentPreviewTileUrl,
   fetchDocumentPreview,
   listDocumentChunks,
   listDocuments,
@@ -91,6 +93,7 @@ describe('documents API', () => {
           rendererVersion: null,
           generatedAt: null,
           fallbackVersion: null,
+          cad: null,
         }),
         { status: 200 },
       ),
@@ -102,6 +105,15 @@ describe('documents API', () => {
     ).resolves.toMatchObject({ status: 'ready', kind: 'pdf' });
     expect(fetchMock.mock.calls[0]?.[0]).toBe(
       '/v1/documents/6769af9a-a4d0-4dc2-a97d-942584a9c826/preview',
+    );
+  });
+
+  it('builds encoded CAD overview and integer tile URLs', () => {
+    expect(documentPreviewOverviewUrl('document/id')).toBe(
+      '/v1/documents/document%2Fid/preview/overview',
+    );
+    expect(documentPreviewTileUrl('document/id', 8, 255, 127)).toBe(
+      '/v1/documents/document%2Fid/preview/tiles/8/255/127',
     );
   });
 });

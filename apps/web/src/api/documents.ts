@@ -67,6 +67,19 @@ export function documentPreviewContentUrl(documentId: string): string {
   return `/v1/documents/${encodeURIComponent(documentId)}/preview/content`;
 }
 
+export function documentPreviewOverviewUrl(documentId: string): string {
+  return `/v1/documents/${encodeURIComponent(documentId)}/preview/overview`;
+}
+
+export function documentPreviewTileUrl(
+  documentId: string,
+  zoom: number,
+  tileX: number,
+  tileY: number,
+): string {
+  return `/v1/documents/${encodeURIComponent(documentId)}/preview/tiles/${zoom}/${tileX}/${tileY}`;
+}
+
 export function fetchDocumentPreviewText(documentId: string): Promise<string> {
   return apiTextRequest(documentPreviewContentUrl(documentId), {}, 120_000);
 }

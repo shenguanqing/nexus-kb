@@ -35,6 +35,31 @@ paths:
           description: Configured DWG converter is disabled or unavailable
         '504':
           description: DWG conversion timed out
+  /internal/v1/cad-preview/tile:
+    post:
+      summary: Ensure one bounded CAD preview tile exists in the shared preview cache
+      security:
+        - internalToken: []
+      parameters:
+        - in: header
+          name: X-Trace-Id
+          required: false
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CadPreviewTileRequest' }
+      responses:
+        '200':
+          description: Validated shared-storage reference for the requested PNG tile
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CadPreviewTileResponse' }
+        '401': { description: Missing or invalid internal token }
+        '422': { description: Invalid document or tile coordinates }
+        '503': { description: CAD tile renderer unavailable or resource limit exceeded }
+        '504': { description: CAD tile rendering timed out }
 components:
   securitySchemes:
     internalToken:
@@ -99,9 +124,38 @@ components:
       required: [storageKey, kind, mimeType, sizeBytes, renderer, rendererVersion]
       properties:
         storageKey:
-          { type: string, pattern: '^[0-9a-f-]{36}\.(?:pdf|svg)$', minLength: 40, maxLength: 40 }
-        kind: { type: string, enum: [pdf, svg] }
-        mimeType: { type: string, enum: [application/pdf, image/svg+xml] }
+          {
+            type: string,
+            pattern: '^[0-9a-f-]{36}\.(?:pdf|svg|cad)$',
+            minLength: 40,
+            maxLength: 40,
+          }
+        kind: { type: string, enum: [pdf, svg, cad_tiles] }
+        mimeType:
+          {
+            type: string,
+            enum: [application/pdf, image/svg+xml, application/vnd.nexuskb.cad-tiles+json],
+          }
         sizeBytes: { type: integer, minimum: 1, maximum: 1073741824 }
         renderer: { type: string, minLength: 1, maxLength: 128 }
         rendererVersion: { type: string, minLength: 1, maxLength: 64 }
+    CadPreviewTileRequest:
+      type: object
+      additionalProperties: false
+      required: [documentId, zoom, tileX, tileY]
+      properties:
+        documentId: { type: string, format: uuid }
+        zoom: { type: integer, minimum: 0, maximum: 12 }
+        tileX: { type: integer, minimum: 0, maximum: 65535 }
+        tileY: { type: integer, minimum: 0, maximum: 65535 }
+    CadPreviewTileResponse:
+      type: object
+      additionalProperties: false
+      required: [storageKey, mimeType, sizeBytes, cacheHit]
+      properties:
+        storageKey:
+          type: string
+          pattern: '^[0-9a-f-]{36}\.cad/bundles/[0-9a-f-]{36}/tiles/(?:[0-9]|1[0-2])/[0-9]{1,5}/[0-9]{1,5}\.png$'
+        mimeType: { const: image/png }
+        sizeBytes: { type: integer, minimum: 1, maximum: 16777216 }
+        cacheHit: { type: boolean }

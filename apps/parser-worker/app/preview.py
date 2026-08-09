@@ -12,24 +12,28 @@ from xml.etree import ElementTree
 from ezdxf import recover
 from ezdxf.addons.drawing import layout, svg
 from ezdxf.addons.drawing.frontend import Frontend
-from ezdxf.addons.drawing.properties import RenderContext
-from ezdxf.document import Drawing
 from ezdxf.filemanagement import readfile
-from ezdxf.fonts import fonts
 from ezdxf.lldxf.const import DXFError
 
+from app.cad_rendering import cad_render_context
+from app.cad_tiles import (
+    CadPreviewResourceError,
+    CadPreviewTimeoutError,
+    estimate_cad_render_cost,
+    generate_cad_tile_preview,
+)
 from app.schemas import PreviewArtifact
 
-_CJK_FONT_FAMILIES = ("Noto Sans CJK SC", "Noto Sans CJK", "WenQuanYi Zen Hei")
-_CAD_FALLBACK_FONT_FAMILIES = {
-    "dejavu sans",
-    "dejavu sans condensed",
-    "liberation sans",
-    "open sans",
-    "sans-serif",
-}
 _MAX_COMPRESSIBLE_SVG_BYTES = 1_073_741_824
 _ZERO_STROKE_WIDTH = re.compile(r"stroke-width:\s*0(?:\.0+)?;")
+
+
+def cad_preview_failure_warning(error: Exception) -> str:
+    if isinstance(error, CadPreviewTimeoutError):
+        return "CAD_PREVIEW_INITIALIZATION_TIMEOUT"
+    if isinstance(error, (CadPreviewResourceError, MemoryError)):
+        return "CAD_PREVIEW_RESOURCE_LIMIT_EXCEEDED"
+    return "PREVIEW_GENERATION_FAILED"
 
 
 def generate_office_pdf(
@@ -102,7 +106,7 @@ def generate_cad_svg(
     except (DXFError, UnicodeDecodeError):
         document, _auditor = recover.readfile(source, errors="strict")
     backend = svg.SVGBackend()
-    Frontend(_cad_render_context(document), backend).draw_layout(document.modelspace())
+    Frontend(cad_render_context(document), backend).draw_layout(document.modelspace())
     content = _sanitize_svg(backend.get_string(layout.Page(0, 0))).encode("utf-8")
     payload, compressed = _bounded_svg_payload(content, max_bytes)
     storage_key = f"{document_id}.svg"
@@ -126,22 +130,46 @@ def generate_cad_svg(
     )
 
 
-def _cad_render_context(document: Drawing) -> RenderContext:
-    context = RenderContext(document)
-    cjk_face = next(
-        (
-            face
-            for family in _CJK_FONT_FAMILIES
-            if (face := fonts.find_best_match(family=family)) is not None
-        ),
-        None,
+def generate_cad_preview(
+    source: Path,
+    document_id: UUID,
+    *,
+    preview_root: Path,
+    max_bytes: int,
+    tiled_enabled: bool,
+    tile_cost_threshold: int,
+    tile_source_bytes_threshold: int,
+    tile_size: int,
+    max_zoom: int,
+    render_timeout_seconds: int,
+    render_memory_bytes: int,
+    max_insert_depth: int = 8,
+) -> PreviewArtifact:
+    _entity_count, render_cost = estimate_cad_render_cost(source, max_insert_depth)
+    if tiled_enabled and (
+        source.stat().st_size > tile_source_bytes_threshold
+        or render_cost > tile_cost_threshold
+    ):
+        return generate_cad_tile_preview(
+            source,
+            document_id,
+            preview_root=preview_root,
+            tile_size=tile_size,
+            max_zoom=max_zoom,
+            max_source_bytes=max_bytes,
+            render_timeout_seconds=render_timeout_seconds,
+            render_memory_bytes=render_memory_bytes,
+        )
+    return generate_cad_svg(
+        source,
+        document_id,
+        preview_root=preview_root,
+        max_bytes=max_bytes,
     )
-    if cjk_face is None:
-        return context
-    for style_name, face in tuple(context.fonts.items()):
-        if face.family.casefold() in _CAD_FALLBACK_FONT_FAMILIES:
-            context.fonts[style_name] = cjk_face
-    return context
+
+
+# Backward-compatible test seam; production callers use cad_render_context directly.
+_cad_render_context = cad_render_context
 
 
 def _bounded_svg_payload(content: bytes, max_bytes: int) -> tuple[bytes, bool]:

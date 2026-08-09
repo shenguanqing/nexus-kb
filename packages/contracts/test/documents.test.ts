@@ -141,6 +141,7 @@ describe('document contracts', () => {
         rendererVersion: '25.2.4',
         generatedAt: '2026-08-09T08:00:00.000Z',
         fallbackVersion: null,
+        cad: null,
       }).kind,
     ).toBe('pdf');
     expect(
@@ -155,8 +156,43 @@ describe('document contracts', () => {
         rendererVersion: null,
         generatedAt: null,
         fallbackVersion: null,
+        cad: null,
         storagePath: '/data/previews/document.pdf',
       }).success,
+    ).toBe(false);
+  });
+
+  it('validates a CAD tile manifest with an explicit world-to-pixel transform', () => {
+    const preview = documentPreviewSchema.parse({
+      documentId: '6769af9a-a4d0-4dc2-a97d-942584a9c826',
+      sourceName: '厂区平面图.dxf',
+      sourceMimeType: 'image/vnd.dxf',
+      status: 'ready',
+      kind: 'cad_tiles',
+      contentType: 'application/vnd.nexuskb.cad-tiles+json',
+      renderer: 'ezdxf-cad-tiles',
+      rendererVersion: '1',
+      generatedAt: '2026-08-09T08:00:00.000Z',
+      fallbackVersion: null,
+      cad: {
+        strategy: 'tiles',
+        tileSize: 512,
+        minZoom: 0,
+        maxZoom: 8,
+        baseWidth: 512,
+        baseHeight: 256,
+        overviewWidth: 1600,
+        overviewHeight: 800,
+        bounds: { minX: 100, minY: 200, maxX: 1100, maxY: 700 },
+        worldToPixel: [0.512, 0, 0, -0.512, -51.2, 358.4],
+        entityCount: 120000,
+        renderCostScore: 480000,
+      },
+    });
+
+    expect(preview.cad?.worldToPixel).toHaveLength(6);
+    expect(
+      documentPreviewSchema.safeParse({ ...preview, kind: 'svg', cad: preview.cad }).success,
     ).toBe(false);
   });
 });

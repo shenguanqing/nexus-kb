@@ -134,6 +134,22 @@ describe('parser contract', () => {
         },
       }).preview,
     ).toMatchObject({ kind: 'pdf', sizeBytes: 1024 });
+
+    expect(
+      parseResponseSchema.parse({
+        parser: 'ezdxf',
+        parserVersion: '1.4.4',
+        elements: [{ text: 'LINE', elementType: 'cad_entity' }],
+        preview: {
+          storageKey: `${id}.cad`,
+          kind: 'cad_tiles',
+          mimeType: 'application/vnd.nexuskb.cad-tiles+json',
+          sizeBytes: 4096,
+          renderer: 'ezdxf-cad-tiles',
+          rendererVersion: '1',
+        },
+      }).preview,
+    ).toMatchObject({ kind: 'cad_tiles', sizeBytes: 4096 });
   });
 
   it('rejects unknown trusted fields and empty results', () => {

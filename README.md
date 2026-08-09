@@ -113,11 +113,11 @@ pnpm --version
 | `pnpm docker:full --`    | DWG + deployment-agent 的完整常驻服务  | `pnpm docker:full -- ps`                |
 | `pnpm docker:full:db --` | 完整服务，并临时开放本地 DBeaver 端口  | `pnpm docker:full:db -- up -d postgres` |
 
-`docker:dev` 启用 `configuration` profile；`docker:full` 额外加载 `compose.dwg.yaml`；`docker:full:db` 再额外加载 `compose.db-gui.yaml`。同一运行周期请始终使用同一个入口。一次性 Reranker 模型下载不属于常驻服务，仍使用 `--profile model-init run`。
+`docker:dev` 启用 `configuration` profile；`docker:full` 额外加载 `compose.dwg.yaml`；`docker:full:db` 再额外加载 `compose.db-gui.yaml`。这些入口会先加载 `.env`，再在存在时加载后台发布生成的 `config/runtime.env`，确保 Compose 插值和容器运行值都以激活版本为准；基础/开发模式仍固定关闭 DWG。不要绕过入口拼接另一套 Compose 命令。同一运行周期请始终使用同一个入口。一次性 Reranker 模型下载不属于常驻服务，仍使用 `--profile model-init run`。
 
 ## 第一次启动（推荐本地开发模式）
 
-本节不需要模型 API Key、Ollama 或 ODA。完成后可进入管理界面、使用 Provider 配置发布、上传 TXT、Markdown、PDF、DOCX、XLSX、PNG/JPG 或 DXF 测试文件，验证本地解析、分块、脱敏和预览流程。当前上传白名单内的所有格式都有预览：PDF/图片/文本直接显示，DOCX/XLSX 本地转 PDF，DXF 本地转 SVG；CAD 可缩放，全部预览可全屏，转换不可用时显示解析文本。问答和向量检索需要在后续配置模型。Parser Worker 镜像会在构建阶段预置 LibreOffice、Noto CJK 字体、中文/英文 OCR 模型，首次构建耗时和镜像体积会明显增加，运行时不会下载字体或模型。
+本节不需要模型 API Key、Ollama 或 ODA。完成后可进入管理界面、使用 Provider 配置发布、上传 TXT、Markdown、PDF、DOCX、XLSX、PNG/JPG 或 DXF 测试文件，验证本地解析、分块、脱敏和预览流程。当前上传白名单内的所有格式都有预览：PDF/图片/文本直接显示，DOCX/XLSX 本地转 PDF，小型 DXF 本地转 SVG，超大/高成本 CAD 使用按视口懒渲染的本地 PNG 瓦片；CAD 可深度缩放，全部预览可全屏，转换不可用时显示解析文本。问答和向量检索需要在后续配置模型。Parser Worker 镜像会在构建阶段预置 LibreOffice、Noto CJK 字体、中文/英文 OCR 模型，首次构建耗时和镜像体积会明显增加，运行时不会下载字体或模型。
 
 除特别说明外，所有命令都在仓库根目录执行。
 
@@ -494,7 +494,7 @@ pnpm docker:up:dev
 | 数据                                      | 位置                              |
 | ----------------------------------------- | --------------------------------- |
 | 上传的原始文件                            | Docker `raw_docs` volume          |
-| 本地生成的预览 PDF/SVG                    | Docker `preview_artifacts` volume |
+| 本地生成的预览 PDF/SVG/CAD 瓦片 bundle    | Docker `preview_artifacts` volume |
 | 文档、ACL、版本、任务、原始及脱敏分块文本 | Docker `postgres_data` volume     |
 | 向量、脱敏检索文本和标量 ACL metadata     | Docker `chroma_data` volume       |
 | 队列状态                                  | Docker `redis_data` volume        |

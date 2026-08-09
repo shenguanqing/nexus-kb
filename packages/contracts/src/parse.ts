@@ -23,9 +23,13 @@ export const parsedElementSchema = z
 
 export const previewArtifactSchema = z
   .object({
-    storageKey: z.string().regex(/^[0-9a-f-]{36}\.(?:pdf|svg)$/),
-    kind: z.enum(['pdf', 'svg']),
-    mimeType: z.enum(['application/pdf', 'image/svg+xml']),
+    storageKey: z.string().regex(/^[0-9a-f-]{36}\.(?:pdf|svg|cad)$/),
+    kind: z.enum(['pdf', 'svg', 'cad_tiles']),
+    mimeType: z.enum([
+      'application/pdf',
+      'image/svg+xml',
+      'application/vnd.nexuskb.cad-tiles+json',
+    ]),
     sizeBytes: z.number().int().positive().max(1_073_741_824),
     renderer: z.string().min(1).max(128),
     rendererVersion: z.string().min(1).max(64),
@@ -34,7 +38,8 @@ export const previewArtifactSchema = z
   .refine(
     (value) =>
       (value.kind === 'pdf' && value.mimeType === 'application/pdf') ||
-      (value.kind === 'svg' && value.mimeType === 'image/svg+xml'),
+      (value.kind === 'svg' && value.mimeType === 'image/svg+xml') ||
+      (value.kind === 'cad_tiles' && value.mimeType === 'application/vnd.nexuskb.cad-tiles+json'),
     { message: 'Preview kind and MIME type must match', path: ['mimeType'] },
   );
 
@@ -56,3 +61,28 @@ export type ParseRequest = z.infer<typeof parseRequestSchema>;
 export type ParsedElement = z.infer<typeof parsedElementSchema>;
 export type PreviewArtifact = z.infer<typeof previewArtifactSchema>;
 export type ParseResponse = z.infer<typeof parseResponseSchema>;
+
+export const cadPreviewTileRequestSchema = z
+  .object({
+    documentId: z.uuid(),
+    zoom: z.number().int().min(0).max(12),
+    tileX: z.number().int().min(0).max(65_535),
+    tileY: z.number().int().min(0).max(65_535),
+  })
+  .strict();
+
+export const cadPreviewTileResponseSchema = z
+  .object({
+    storageKey: z
+      .string()
+      .regex(
+        /^[0-9a-f-]{36}\.cad\/bundles\/[0-9a-f-]{36}\/tiles\/(?:[0-9]|1[0-2])\/[0-9]{1,5}\/[0-9]{1,5}\.png$/,
+      ),
+    mimeType: z.literal('image/png'),
+    sizeBytes: z.number().int().positive().max(16_777_216),
+    cacheHit: z.boolean(),
+  })
+  .strict();
+
+export type CadPreviewTileRequest = z.infer<typeof cadPreviewTileRequestSchema>;
+export type CadPreviewTileResponse = z.infer<typeof cadPreviewTileResponseSchema>;

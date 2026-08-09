@@ -20,7 +20,7 @@
     "lint": "pnpm -r --if-present lint && node scripts/check-secrets.mjs",
     "lint:css": "stylelint \"apps/web/src/**/*.{css,scss,vue}\"",
     "postinstall": "pnpm --filter @nexus-kb/api db:generate",
-    "test": "pnpm -r --if-present test",
+    "test": "node --test scripts/*.test.mjs && pnpm -r --if-present test",
     "test:parser": "pnpm docker:base -- --profile test run --rm parser-worker-tests",
     "smoke:ingestion": "node scripts/smoke-ingestion.mjs",
     "typecheck": "pnpm -r --if-present typecheck"

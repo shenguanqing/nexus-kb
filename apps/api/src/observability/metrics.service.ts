@@ -32,6 +32,8 @@ export class MetricsService {
   private readonly parserRequests: Counter<'status' | 'error_kind'>;
   private readonly parserDuration: Histogram<'status'>;
   private readonly parserOcrWarnings: Counter;
+  private readonly cadPreviewTiles: Counter<'zoom' | 'cache' | 'status'>;
+  private readonly cadPreviewTileDuration: Histogram<'zoom' | 'cache' | 'status'>;
   private readonly ingestionJobs: Counter<'status'>;
   private readonly ingestionDuration: Histogram<'status'>;
   private readonly queueJobs: Gauge<'state'>;
@@ -96,6 +98,17 @@ export class MetricsService {
       'nexuskb_parser_ocr_warnings_total',
       'OCR-related warnings returned by the parser worker.',
       [],
+    );
+    this.cadPreviewTiles = this.counter(
+      'nexuskb_cad_preview_tiles_total',
+      'CAD preview tile requests by bounded zoom, cache outcome, and status.',
+      ['zoom', 'cache', 'status'],
+    );
+    this.cadPreviewTileDuration = this.histogram(
+      'nexuskb_cad_preview_tile_duration_seconds',
+      'CAD preview tile worker duration, including cache lookup or on-demand rendering.',
+      ['zoom', 'cache', 'status'],
+      [0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30, 60],
     );
     this.ingestionJobs = this.counter(
       'nexuskb_ingestion_jobs_total',
@@ -183,6 +196,21 @@ export class MetricsService {
   addParserWarnings(warnings: string[]): void {
     const count = warnings.filter((warning) => warning.toUpperCase().includes('OCR')).length;
     if (count > 0) this.parserOcrWarnings.inc(count);
+  }
+
+  observeCadPreviewTile(
+    zoom: number,
+    cache: 'hit' | 'miss' | 'unknown',
+    status: 'success' | 'error',
+    durationMs: number,
+  ): void {
+    const labels = {
+      zoom: String(Math.min(12, Math.max(0, Math.trunc(zoom)))),
+      cache,
+      status,
+    };
+    this.cadPreviewTiles.inc(labels);
+    this.cadPreviewTileDuration.observe(labels, durationMs / 1000);
   }
 
   observeIngestion(status: 'completed' | 'failed', durationMs: number): void {

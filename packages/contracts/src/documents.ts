@@ -146,20 +146,60 @@ export const documentDetailSchema = z
   })
   .strict();
 
+export const cadPreviewBoundsSchema = z
+  .object({
+    minX: z.number().finite(),
+    minY: z.number().finite(),
+    maxX: z.number().finite(),
+    maxY: z.number().finite(),
+  })
+  .strict()
+  .refine((value) => value.maxX > value.minX && value.maxY > value.minY, {
+    message: 'CAD preview bounds must have positive dimensions',
+  });
+
+export const cadPreviewManifestSchema = z
+  .object({
+    strategy: z.literal('tiles'),
+    tileSize: z.number().int().min(256).max(1024),
+    minZoom: z.number().int().min(0).max(12),
+    maxZoom: z.number().int().min(0).max(12),
+    baseWidth: z.number().int().positive(),
+    baseHeight: z.number().int().positive(),
+    overviewWidth: z.number().int().positive().max(4096),
+    overviewHeight: z.number().int().positive().max(4096),
+    bounds: cadPreviewBoundsSchema,
+    worldToPixel: z.array(z.number().finite()).length(6),
+    entityCount: z.number().int().positive().max(2_000_000),
+    renderCostScore: z.number().int().positive().max(100_000_000),
+  })
+  .strict()
+  .refine((value) => value.maxZoom >= value.minZoom, {
+    message: 'CAD preview zoom range is invalid',
+    path: ['maxZoom'],
+  });
+
 export const documentPreviewSchema = z
   .object({
     documentId: z.uuid(),
     sourceName: z.string().min(1),
     sourceMimeType: z.string().min(1),
     status: z.enum(['ready', 'fallback', 'unavailable']),
-    kind: z.enum(['pdf', 'image', 'text', 'markdown', 'svg', 'extracted']).nullable(),
+    kind: z.enum(['pdf', 'image', 'text', 'markdown', 'svg', 'cad_tiles', 'extracted']).nullable(),
     contentType: z.string().min(1).nullable(),
     renderer: z.string().min(1).max(128).nullable(),
     rendererVersion: z.string().min(1).max(64).nullable(),
     generatedAt: z.iso.datetime({ offset: true }).nullable(),
     fallbackVersion: z.number().int().positive().nullable(),
+    cad: cadPreviewManifestSchema.nullable(),
   })
-  .strict();
+  .strict()
+  .refine(
+    (value) =>
+      (value.kind === 'cad_tiles' && value.cad !== null) ||
+      (value.kind !== 'cad_tiles' && value.cad === null),
+    { message: 'CAD tile preview must include its manifest', path: ['cad'] },
+  );
 
 export const documentChunkListRequestSchema = z
   .object({
@@ -242,6 +282,7 @@ export type DocumentUploadAccepted = z.infer<typeof documentUploadAcceptedSchema
 export type DocumentVersion = z.infer<typeof documentVersionSchema>;
 export type DocumentDetail = z.infer<typeof documentDetailSchema>;
 export type DocumentPreview = z.infer<typeof documentPreviewSchema>;
+export type CadPreviewManifest = z.infer<typeof cadPreviewManifestSchema>;
 export type DocumentChunkListRequest = z.infer<typeof documentChunkListRequestSchema>;
 export type DocumentChunk = z.infer<typeof documentChunkSchema>;
 export type DocumentChunkListResponse = z.infer<typeof documentChunkListResponseSchema>;

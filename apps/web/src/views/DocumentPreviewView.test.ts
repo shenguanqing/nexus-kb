@@ -5,6 +5,8 @@ import DocumentPreviewView from './DocumentPreviewView.vue';
 
 const api = vi.hoisted(() => ({
   documentPreviewContentUrl: vi.fn(() => '/v1/documents/document-id/preview/content'),
+  documentPreviewOverviewUrl: vi.fn(() => '/v1/documents/document-id/preview/overview'),
+  documentPreviewTileUrl: vi.fn(() => '/v1/documents/document-id/preview/tiles/0/0/0'),
   fetchDocumentPreview: vi.fn(),
   fetchDocumentPreviewText: vi.fn(),
   listDocumentChunks: vi.fn(),
@@ -24,7 +26,7 @@ function mountView() {
   return mount(DocumentPreviewView, {
     global: {
       directives: { loading: () => undefined },
-      stubs: { ElButton: true, ElEmpty: true, ElPagination: true },
+      stubs: { CadTileViewer: true, ElButton: true, ElEmpty: true, ElPagination: true },
     },
   });
 }
@@ -74,6 +76,7 @@ describe('DocumentPreviewView', () => {
       rendererVersion: null,
       generatedAt: null,
       fallbackVersion: null,
+      cad: null,
     });
 
     const wrapper = mountView();
@@ -97,6 +100,7 @@ describe('DocumentPreviewView', () => {
       rendererVersion: null,
       generatedAt: null,
       fallbackVersion: 2,
+      cad: null,
     });
     api.listDocumentChunks.mockResolvedValue({
       documentId: 'document-id',
@@ -150,6 +154,7 @@ describe('DocumentPreviewView', () => {
       rendererVersion: '1.4.4',
       generatedAt: '2026-08-09T08:00:00.000Z',
       fallbackVersion: null,
+      cad: null,
     });
 
     const wrapper = mountView();
@@ -184,6 +189,7 @@ describe('DocumentPreviewView', () => {
       rendererVersion: '1.4.4',
       generatedAt: '2026-08-09T08:00:00.000Z',
       fallbackVersion: null,
+      cad: null,
     });
 
     const wrapper = mountView();
@@ -229,6 +235,52 @@ describe('DocumentPreviewView', () => {
     expect(viewport.classes()).not.toContain('is-dragging');
   });
 
+  it('uses the tiled CAD viewer and accepts its zoom capability state', async () => {
+    api.fetchDocumentPreview.mockResolvedValue({
+      documentId: 'document-id',
+      sourceName: '超大厂区平面图.dxf',
+      sourceMimeType: 'image/vnd.dxf',
+      status: 'ready',
+      kind: 'cad_tiles',
+      contentType: 'application/vnd.nexuskb.cad-tiles+json',
+      renderer: 'ezdxf-cad-tiles',
+      rendererVersion: '1',
+      generatedAt: '2026-08-09T08:00:00.000Z',
+      fallbackVersion: null,
+      cad: {
+        strategy: 'tiles',
+        tileSize: 512,
+        minZoom: 0,
+        maxZoom: 8,
+        baseWidth: 512,
+        baseHeight: 256,
+        overviewWidth: 1600,
+        overviewHeight: 800,
+        bounds: { minX: 0, minY: 0, maxX: 1000, maxY: 500 },
+        worldToPixel: [0.512, 0, 0, -0.512, 0, 256],
+        entityCount: 120000,
+        renderCostScore: 480000,
+      },
+    });
+
+    const wrapper = mountView();
+    await flushPromises();
+    const viewer = wrapper.getComponent({ name: 'CadTileViewer' });
+    expect(viewer.props('documentId')).toBe('document-id');
+    const zoomInButton = wrapper.get('[aria-label="放大 CAD 预览"]');
+    expect(zoomInButton.attributes('disabled')).toBe('false');
+    (
+      viewer.vm as unknown as {
+        $emit: (
+          event: 'zoomChange',
+          state: { percent: number; canZoomIn: boolean; canZoomOut: boolean },
+        ) => void;
+      }
+    ).$emit('zoomChange', { percent: 25600, canZoomIn: false, canZoomOut: true });
+    await wrapper.vm.$nextTick();
+    expect(zoomInButton.attributes('disabled')).toBe('true');
+  });
+
   it('offers fullscreen for every ready preview', async () => {
     api.fetchDocumentPreview.mockResolvedValue({
       documentId: 'document-id',
@@ -241,6 +293,7 @@ describe('DocumentPreviewView', () => {
       rendererVersion: null,
       generatedAt: null,
       fallbackVersion: null,
+      cad: null,
     });
 
     const wrapper = mountView();

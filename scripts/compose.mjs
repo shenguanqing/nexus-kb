@@ -1,31 +1,18 @@
 import { spawnSync } from 'node:child_process';
+import { existsSync } from 'node:fs';
+
+import { composeArguments } from './compose-arguments.mjs';
 
 const mode = process.argv[2];
-const modes = {
-  base: [],
-  dev: ['--profile', 'configuration'],
-  full: ['-f', 'compose.yaml', '-f', 'compose.dwg.yaml', '--profile', 'configuration'],
-  'full-db': [
-    '-f',
-    'compose.yaml',
-    '-f',
-    'compose.dwg.yaml',
-    '-f',
-    'compose.db-gui.yaml',
-    '--profile',
-    'configuration',
-  ],
-};
+const arguments_ = composeArguments(mode, process.argv.slice(3), existsSync('config/runtime.env'));
 
-if (!Object.hasOwn(modes, mode)) {
+if (!arguments_) {
   process.stderr.write(
     'Usage: node scripts/compose.mjs <base|dev|full|full-db> [docker compose arguments]\n',
   );
   process.exitCode = 2;
 } else {
-  const arguments_ = process.argv.slice(3);
-  if (arguments_[0] === '--') arguments_.shift();
-  const result = spawnSync('docker', ['compose', ...modes[mode], ...arguments_], {
+  const result = spawnSync('docker', ['compose', ...arguments_], {
     stdio: 'inherit',
   });
   if (result.error) throw result.error;

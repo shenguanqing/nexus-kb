@@ -599,6 +599,53 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { description: Native or generated preview content is not ready }
         '416': { description: Invalid byte range }
+  /v1/documents/{documentId}/preview/overview:
+    parameters:
+      - $ref: '#/components/parameters/DocumentId'
+    get:
+      summary: Stream the ACL-authorized CAD overview image
+      responses:
+        '200':
+          description: Complete CAD overview PNG
+          content:
+            image/png: { schema: { type: string, format: binary } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { description: CAD tile preview is not ready }
+  /v1/documents/{documentId}/preview/tiles/{zoom}/{tileX}/{tileY}:
+    parameters:
+      - $ref: '#/components/parameters/DocumentId'
+      - { name: zoom, in: path, required: true, schema: { type: integer, minimum: 0, maximum: 12 } }
+      - {
+          name: tileX,
+          in: path,
+          required: true,
+          schema: { type: integer, minimum: 0, maximum: 65535 },
+        }
+      - {
+          name: tileY,
+          in: path,
+          required: true,
+          schema: { type: integer, minimum: 0, maximum: 65535 },
+        }
+    get:
+      summary: Generate on cache miss and stream one ACL-authorized CAD PNG tile
+      responses:
+        '200':
+          description: Requested CAD tile
+          headers:
+            X-Cad-Tile-Cache:
+              schema: { type: string, enum: [hit, miss] }
+          content:
+            image/png: { schema: { type: string, format: binary } }
+        '400': { description: Tile coordinate is outside the manifest grid }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { description: CAD tile preview is not ready }
+        '503': { description: CAD tile rendering is unavailable or exceeded a resource limit }
+        '504': { description: CAD tile rendering timed out }
   /v1/documents/{documentId}/reindex:
     parameters:
       - $ref: '#/components/parameters/DocumentId'
@@ -1585,18 +1632,71 @@ components:
           rendererVersion,
           generatedAt,
           fallbackVersion,
+          cad,
         ]
       properties:
         documentId: { type: string, format: uuid }
         sourceName: { type: string, minLength: 1 }
         sourceMimeType: { type: string, minLength: 1 }
         status: { type: string, enum: [ready, fallback, unavailable] }
-        kind: { type: [string, 'null'], enum: [pdf, image, text, markdown, svg, extracted, null] }
+        kind:
+          {
+            type: [string, 'null'],
+            enum: [pdf, image, text, markdown, svg, cad_tiles, extracted, null],
+          }
         contentType: { type: [string, 'null'], minLength: 1 }
         renderer: { type: [string, 'null'], minLength: 1, maxLength: 128 }
         rendererVersion: { type: [string, 'null'], minLength: 1, maxLength: 64 }
         generatedAt: { type: [string, 'null'], format: date-time }
         fallbackVersion: { type: [integer, 'null'], minimum: 1 }
+        cad:
+          oneOf:
+            - $ref: '#/components/schemas/CadPreviewManifest'
+            - type: 'null'
+    CadPreviewBounds:
+      type: object
+      additionalProperties: false
+      required: [minX, minY, maxX, maxY]
+      properties:
+        minX: { type: number }
+        minY: { type: number }
+        maxX: { type: number }
+        maxY: { type: number }
+    CadPreviewManifest:
+      type: object
+      additionalProperties: false
+      required:
+        [
+          strategy,
+          tileSize,
+          minZoom,
+          maxZoom,
+          baseWidth,
+          baseHeight,
+          overviewWidth,
+          overviewHeight,
+          bounds,
+          worldToPixel,
+          entityCount,
+          renderCostScore,
+        ]
+      properties:
+        strategy: { const: tiles }
+        tileSize: { type: integer, minimum: 256, maximum: 1024 }
+        minZoom: { type: integer, minimum: 0, maximum: 12 }
+        maxZoom: { type: integer, minimum: 0, maximum: 12 }
+        baseWidth: { type: integer, minimum: 1 }
+        baseHeight: { type: integer, minimum: 1 }
+        overviewWidth: { type: integer, minimum: 1, maximum: 4096 }
+        overviewHeight: { type: integer, minimum: 1, maximum: 4096 }
+        bounds: { $ref: '#/components/schemas/CadPreviewBounds' }
+        worldToPixel:
+          type: array
+          minItems: 6
+          maxItems: 6
+          items: { type: number }
+        entityCount: { type: integer, minimum: 1, maximum: 2000000 }
+        renderCostScore: { type: integer, minimum: 1, maximum: 100000000 }
     DocumentChunkListResponse:
       type: object
       additionalProperties: false

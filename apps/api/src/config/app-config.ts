@@ -188,6 +188,38 @@ const environmentSchema = z
       .enum(['true', 'false'])
       .default('true')
       .transform((value) => value === 'true'),
+    CAD_TILED_PREVIEW_ENABLED: z
+      .enum(['true', 'false'])
+      .default('true')
+      .transform((value) => value === 'true'),
+    CAD_PREVIEW_TILE_COST_THRESHOLD: z.coerce
+      .number()
+      .int()
+      .min(1)
+      .max(100_000_000)
+      .default(100_000),
+    CAD_PREVIEW_TILE_SOURCE_BYTES_THRESHOLD: z.coerce
+      .number()
+      .int()
+      .min(1)
+      .max(1_073_741_824)
+      .default(20_971_520),
+    CAD_PREVIEW_TILE_SIZE: z.coerce.number().int().min(256).max(1024).default(512),
+    CAD_PREVIEW_MAX_ZOOM: z.coerce.number().int().min(1).max(12).default(8),
+    CAD_PREVIEW_METATILE_RADIUS: z.coerce.number().int().min(0).max(2).default(1),
+    CAD_PREVIEW_TILE_CACHE_BYTES: z.coerce
+      .number()
+      .int()
+      .min(1_048_576)
+      .max(2_147_483_647)
+      .default(268_435_456),
+    CAD_PREVIEW_RENDER_TIMEOUT_SECONDS: z.coerce.number().int().min(5).max(600).default(60),
+    CAD_PREVIEW_RENDER_MEMORY_BYTES: z.coerce
+      .number()
+      .int()
+      .min(536_870_912)
+      .max(8_589_934_592)
+      .default(2_147_483_648),
     CHROMA_URL: z.url(),
     AUTH_REQUIRED: z
       .enum(['true', 'false'])
@@ -662,6 +694,7 @@ export function safeConfigurationSummary(environment: Environment): Record<strin
     parserWorkerEndpoint: safeEndpoint(environment.PARSER_WORKER_URL),
     parserTokenConfigured: Boolean(environment.PARSER_INTERNAL_TOKEN),
     dwgConversionEnabled: environment.DWG_CONVERSION_ENABLED,
+    cadTiledPreviewEnabled: environment.CAD_TILED_PREVIEW_ENABLED,
     vectorStoreProvider: environment.VECTOR_STORE_PROVIDER,
     chromaEndpoint: safeEndpoint(environment.CHROMA_URL),
     embeddingProvider: environment.EMBEDDING_PROVIDER,

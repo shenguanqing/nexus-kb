@@ -27,10 +27,13 @@ class ParsedElement(ApiModel):
 
 class PreviewArtifact(ApiModel):
     storage_key: str = Field(
-        alias="storageKey", pattern=r"^[0-9a-f-]{36}\.(?:pdf|svg)$"
+        alias="storageKey", pattern=r"^[0-9a-f-]{36}\.(?:pdf|svg|cad)$"
     )
-    kind: str = Field(pattern=r"^(?:pdf|svg)$")
-    mime_type: str = Field(alias="mimeType", pattern=r"^(?:application/pdf|image/svg\+xml)$")
+    kind: str = Field(pattern=r"^(?:pdf|svg|cad_tiles)$")
+    mime_type: str = Field(
+        alias="mimeType",
+        pattern=r"^(?:application/pdf|image/svg\+xml|application/vnd\.nexuskb\.cad-tiles\+json)$",
+    )
     size_bytes: int = Field(alias="sizeBytes", gt=0, le=1_073_741_824)
     renderer: str = Field(min_length=1, max_length=128)
     renderer_version: str = Field(alias="rendererVersion", min_length=1, max_length=64)
@@ -42,3 +45,45 @@ class ParseResponse(ApiModel):
     elements: list[ParsedElement] = Field(min_length=1, max_length=100_000)
     warnings: list[str] = Field(default_factory=list, max_length=1_000)
     preview: PreviewArtifact | None = None
+
+
+class CadPreviewBounds(ApiModel):
+    min_x: float = Field(alias="minX")
+    min_y: float = Field(alias="minY")
+    max_x: float = Field(alias="maxX")
+    max_y: float = Field(alias="maxY")
+
+
+class CadPreviewManifest(ApiModel):
+    strategy: str = Field(pattern=r"^tiles$")
+    tile_size: int = Field(alias="tileSize", ge=256, le=1024)
+    min_zoom: int = Field(alias="minZoom", ge=0, le=12)
+    max_zoom: int = Field(alias="maxZoom", ge=0, le=12)
+    base_width: int = Field(alias="baseWidth", ge=1)
+    base_height: int = Field(alias="baseHeight", ge=1)
+    overview_width: int = Field(alias="overviewWidth", ge=1, le=4096)
+    overview_height: int = Field(alias="overviewHeight", ge=1, le=4096)
+    bounds: CadPreviewBounds
+    world_to_pixel: list[float] = Field(alias="worldToPixel", min_length=6, max_length=6)
+    entity_count: int = Field(alias="entityCount", ge=1, le=2_000_000)
+    render_cost_score: int = Field(alias="renderCostScore", ge=1, le=100_000_000)
+
+
+class CadPreviewTileRequest(ApiModel):
+    document_id: UUID = Field(alias="documentId")
+    zoom: int = Field(ge=0, le=12)
+    tile_x: int = Field(alias="tileX", ge=0, le=65_535)
+    tile_y: int = Field(alias="tileY", ge=0, le=65_535)
+
+
+class CadPreviewTileResponse(ApiModel):
+    storage_key: str = Field(
+        alias="storageKey",
+        pattern=(
+            r"^[0-9a-f-]{36}\.cad/bundles/[0-9a-f-]{36}/tiles/"
+            r"(?:[0-9]|1[0-2])/[0-9]{1,5}/[0-9]{1,5}\.png$"
+        ),
+    )
+    mime_type: str = Field(alias="mimeType", pattern=r"^image/png$")
+    size_bytes: int = Field(alias="sizeBytes", gt=0, le=16_777_216)
+    cache_hit: bool = Field(alias="cacheHit")

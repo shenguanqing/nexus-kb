@@ -69,6 +69,48 @@ class Settings(BaseSettings):
     max_cad_insert_depth: int = Field(
         default=8, ge=1, le=32, validation_alias="MAX_CAD_INSERT_DEPTH"
     )
+    cad_tiled_preview_enabled: bool = Field(
+        default=True, validation_alias="CAD_TILED_PREVIEW_ENABLED"
+    )
+    cad_preview_tile_cost_threshold: int = Field(
+        default=100_000,
+        ge=1,
+        le=100_000_000,
+        validation_alias="CAD_PREVIEW_TILE_COST_THRESHOLD",
+    )
+    cad_preview_tile_source_bytes_threshold: int = Field(
+        default=20_971_520,
+        ge=1,
+        le=1_073_741_824,
+        validation_alias="CAD_PREVIEW_TILE_SOURCE_BYTES_THRESHOLD",
+    )
+    cad_preview_tile_size: int = Field(
+        default=512, ge=256, le=1024, validation_alias="CAD_PREVIEW_TILE_SIZE"
+    )
+    cad_preview_max_zoom: int = Field(
+        default=8, ge=1, le=12, validation_alias="CAD_PREVIEW_MAX_ZOOM"
+    )
+    cad_preview_metatile_radius: int = Field(
+        default=1, ge=0, le=2, validation_alias="CAD_PREVIEW_METATILE_RADIUS"
+    )
+    cad_preview_tile_cache_bytes: int = Field(
+        default=268_435_456,
+        ge=1_048_576,
+        le=2_147_483_647,
+        validation_alias="CAD_PREVIEW_TILE_CACHE_BYTES",
+    )
+    cad_preview_render_timeout_seconds: int = Field(
+        default=60,
+        ge=5,
+        le=600,
+        validation_alias="CAD_PREVIEW_RENDER_TIMEOUT_SECONDS",
+    )
+    cad_preview_render_memory_bytes: int = Field(
+        default=2_147_483_648,
+        ge=536_870_912,
+        le=8_589_934_592,
+        validation_alias="CAD_PREVIEW_RENDER_MEMORY_BYTES",
+    )
     dwg_conversion_enabled: bool = Field(default=True, validation_alias="DWG_CONVERSION_ENABLED")
     dwg_converter_executable: Path = Field(
         default=Path("/usr/local/bin/nexus-oda-file-converter"),

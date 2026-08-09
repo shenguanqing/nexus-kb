@@ -6,7 +6,7 @@ from pathlib import Path
 from uuid import UUID
 
 from app.parsers.dxf import DxfParseResult, parse_dxf
-from app.preview import generate_cad_svg
+from app.preview import cad_preview_failure_warning, generate_cad_preview
 
 SUPPORTED_DWG_VERSIONS = {
     "AC1009",
@@ -65,6 +65,13 @@ def parse_dwg(
     document_id: UUID,
     preview_root: Path,
     max_preview_bytes: int,
+    cad_tiled_preview_enabled: bool,
+    cad_preview_tile_cost_threshold: int,
+    cad_preview_tile_source_bytes_threshold: int,
+    cad_preview_tile_size: int,
+    cad_preview_max_zoom: int,
+    cad_preview_render_timeout_seconds: int,
+    cad_preview_render_memory_bytes: int,
 ) -> DxfParseResult:
     source_version = _validate_dwg_header(path)
     if not converter_is_ready(executable, temp_root):
@@ -122,16 +129,24 @@ def parse_dwg(
         preview = None
         preview_warnings: list[str] = []
         try:
-            preview = generate_cad_svg(
+            preview = generate_cad_preview(
                 output_path,
                 document_id,
                 preview_root=preview_root,
                 max_bytes=max_preview_bytes,
+                tiled_enabled=cad_tiled_preview_enabled,
+                tile_cost_threshold=cad_preview_tile_cost_threshold,
+                tile_source_bytes_threshold=cad_preview_tile_source_bytes_threshold,
+                tile_size=cad_preview_tile_size,
+                max_zoom=cad_preview_max_zoom,
+                render_timeout_seconds=cad_preview_render_timeout_seconds,
+                render_memory_bytes=cad_preview_render_memory_bytes,
+                max_insert_depth=max_insert_depth,
             )
             if preview.renderer == "ezdxf-svg-gzip":
                 preview_warnings.append("CAD_PREVIEW_GZIP_COMPRESSED")
-        except Exception:
-            preview_warnings.append("PREVIEW_GENERATION_FAILED")
+        except Exception as error:
+            preview_warnings.append(cad_preview_failure_warning(error))
         return DxfParseResult(
             elements=result.elements,
             warnings=[

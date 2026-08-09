@@ -1,4 +1,4 @@
-import { mkdtemp, readdir, realpath, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readdir, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Readable } from 'node:stream';
@@ -12,6 +12,7 @@ import { DocumentsService } from '../src/documents/documents.service';
 import type { AppConfig } from '../src/config/app-config';
 import type { PrismaService } from '../src/database/prisma.service';
 import type { IngestionQueue } from '../src/ingestion/ingestion.queue';
+import type { ParserClient } from '../src/parser/parser-client';
 import type { ChromaVectorStore } from '../src/vector-store/chroma-vector-store';
 
 const identity: Identity = {
@@ -511,6 +512,65 @@ describe('DocumentsService tenant isolation', () => {
     expect(updateJobs).toHaveBeenCalledOnce();
   });
 
+  it('recursively removes a document-bound CAD tile bundle on deletion', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'nexuskb-cad-delete-'));
+    const rawRoot = join(directory, 'raw');
+    const previewRoot = join(directory, 'previews');
+    const documentId = '6769af9a-a4d0-4dc2-a97d-942584a9c826';
+    const storageKey = `${documentId}.dxf`;
+    const previewStorageKey = `${documentId}.cad`;
+    await mkdir(join(previewRoot, previewStorageKey, 'bundles', documentId, 'tiles', '0', '0'), {
+      recursive: true,
+    });
+    await mkdir(rawRoot, { recursive: true });
+    await writeFile(join(rawRoot, storageKey), 'dxf');
+    await writeFile(join(previewRoot, `.${documentId}.cad.lock`), '');
+    await writeFile(
+      join(previewRoot, previewStorageKey, 'bundles', documentId, 'tiles', '0', '0', '0.png'),
+      'tile',
+    );
+    const update = vi.fn().mockResolvedValue({});
+    const service = new DocumentsService(
+      {
+        values: { RAW_DOCS_PATH: rawRoot, PREVIEW_ARTIFACTS_PATH: previewRoot },
+      } as unknown as AppConfig,
+      {
+        document: {
+          findFirst: vi.fn().mockResolvedValue({
+            id: documentId,
+            storageKey,
+            previewStorageKey,
+            status: 'active',
+            activeVersion: 1,
+            versions: [],
+            jobs: [],
+          }),
+          update,
+        },
+        ingestionJob: { updateMany: vi.fn().mockResolvedValue({ count: 0 }) },
+        documentVersion: { updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
+        knowledgeChunk: { deleteMany: vi.fn().mockResolvedValue({ count: 1 }) },
+        documentLifecycleAudit: { create: vi.fn().mockResolvedValue({}) },
+        $transaction: (operations: Array<Promise<unknown>>) => Promise.all(operations),
+      } as unknown as PrismaService,
+      {} as IngestionQueue,
+      { deleteDocument: vi.fn().mockResolvedValue(undefined) } as unknown as ChromaVectorStore,
+      logger,
+      acl,
+    );
+
+    try {
+      await expect(
+        service.deleteDocument(documentId, identity, 'd26720b3-1f78-40df-868d-8ca8510dca26'),
+      ).resolves.toEqual({ documentId, deleted: true });
+      await expect(readdir(rawRoot)).resolves.toEqual([]);
+      await expect(readdir(previewRoot)).resolves.toEqual([]);
+      expect(update).toHaveBeenCalledTimes(2);
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
   it('lists only failed jobs from the authenticated tenant', async () => {
     const findMany = vi.fn().mockResolvedValue([]);
     const service = new DocumentsService(
@@ -677,6 +737,155 @@ describe('DocumentsService tenant isolation', () => {
         mimeType: 'image/svg+xml',
         contentEncoding: 'gzip',
       });
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
+  it('serves a bounded CAD tile only after ACL checks before and after generation', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'nexuskb-cad-preview-'));
+    const documentId = '6769af9a-a4d0-4dc2-a97d-942584a9c826';
+    const bundleId = 'd26720b3-1f78-40df-868d-8ca8510dca26';
+    const storageKey = `${documentId}.cad`;
+    const bundle = join(directory, storageKey, 'bundles', bundleId);
+    const tileStorageKey = `${storageKey}/bundles/${bundleId}/tiles/1/0/0.png`;
+    await mkdir(join(bundle, 'tiles', '1', '0'), { recursive: true });
+    await writeFile(join(directory, storageKey, 'current.json'), JSON.stringify({ bundleId }));
+    await writeFile(
+      join(bundle, 'manifest.json'),
+      JSON.stringify({
+        strategy: 'tiles',
+        tileSize: 512,
+        minZoom: 0,
+        maxZoom: 8,
+        baseWidth: 512,
+        baseHeight: 256,
+        overviewWidth: 1600,
+        overviewHeight: 800,
+        bounds: { minX: 0, minY: 0, maxX: 1000, maxY: 500 },
+        worldToPixel: [0.512, 0, 0, -0.512, 0, 256],
+        entityCount: 120000,
+        renderCostScore: 480000,
+      }),
+    );
+    await writeFile(join(bundle, 'overview.png'), 'overview');
+    await writeFile(join(directory, tileStorageKey), 'tile');
+    const visibleDocument = {
+      sourceName: '厂区平面图.dxf',
+      previewStorageKey: storageKey,
+      previewKind: 'cad_tiles',
+      previewMimeType: 'application/vnd.nexuskb.cad-tiles+json',
+    };
+    const findFirst = vi
+      .fn()
+      .mockResolvedValueOnce(visibleDocument)
+      .mockResolvedValueOnce({ id: documentId });
+    const ensureCadPreviewTile = vi.fn().mockResolvedValue({
+      storageKey: tileStorageKey,
+      mimeType: 'image/png',
+      sizeBytes: 4,
+      cacheHit: false,
+    });
+    const service = new DocumentsService(
+      { values: { PREVIEW_ARTIFACTS_PATH: directory } } as unknown as AppConfig,
+      { document: { findFirst } } as unknown as PrismaService,
+      {} as IngestionQueue,
+      {} as ChromaVectorStore,
+      logger,
+      acl,
+      { ensureCadPreviewTile } as unknown as ParserClient,
+    );
+
+    try {
+      await expect(
+        service.getDocumentPreviewTile(
+          documentId,
+          1,
+          0,
+          0,
+          identity,
+          'a5427e4a-b9db-4750-8dfd-02d601a41473',
+        ),
+      ).resolves.toMatchObject({
+        path: await realpath(join(directory, tileStorageKey)),
+        mimeType: 'image/png',
+        cacheHit: false,
+      });
+      expect(ensureCadPreviewTile).toHaveBeenCalledWith(
+        { documentId, zoom: 1, tileX: 0, tileY: 0 },
+        'a5427e4a-b9db-4750-8dfd-02d601a41473',
+      );
+      expect(findFirst).toHaveBeenCalledTimes(2);
+      const [postRenderQuery] = findFirst.mock.calls[1] as unknown as [
+        { where: { tenantId: string; previewStorageKey: string; previewKind: string } },
+      ];
+      expect(postRenderQuery.where).toMatchObject({
+        tenantId: identity.tenantId,
+        previewStorageKey: storageKey,
+        previewKind: 'cad_tiles',
+      });
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
+  it('does not return a generated CAD tile after access is revoked', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'nexuskb-cad-revoked-'));
+    const documentId = '6769af9a-a4d0-4dc2-a97d-942584a9c826';
+    const bundleId = 'd26720b3-1f78-40df-868d-8ca8510dca26';
+    const storageKey = `${documentId}.cad`;
+    const bundle = join(directory, storageKey, 'bundles', bundleId);
+    const tileStorageKey = `${storageKey}/bundles/${bundleId}/tiles/0/0/0.png`;
+    await mkdir(join(bundle, 'tiles', '0', '0'), { recursive: true });
+    await writeFile(join(directory, storageKey, 'current.json'), JSON.stringify({ bundleId }));
+    await writeFile(
+      join(bundle, 'manifest.json'),
+      JSON.stringify({
+        strategy: 'tiles',
+        tileSize: 512,
+        minZoom: 0,
+        maxZoom: 1,
+        baseWidth: 512,
+        baseHeight: 512,
+        overviewWidth: 1600,
+        overviewHeight: 1600,
+        bounds: { minX: 0, minY: 0, maxX: 1000, maxY: 1000 },
+        worldToPixel: [0.512, 0, 0, -0.512, 0, 512],
+        entityCount: 1,
+        renderCostScore: 1,
+      }),
+    );
+    await writeFile(join(directory, tileStorageKey), 'tile');
+    const findFirst = vi
+      .fn()
+      .mockResolvedValueOnce({
+        sourceName: '厂区平面图.dxf',
+        previewStorageKey: storageKey,
+        previewKind: 'cad_tiles',
+        previewMimeType: 'application/vnd.nexuskb.cad-tiles+json',
+      })
+      .mockResolvedValueOnce(null);
+    const ensureCadPreviewTile = vi.fn().mockResolvedValue({
+      storageKey: tileStorageKey,
+      mimeType: 'image/png',
+      sizeBytes: 4,
+      cacheHit: true,
+    });
+    const service = new DocumentsService(
+      { values: { PREVIEW_ARTIFACTS_PATH: directory } } as unknown as AppConfig,
+      { document: { findFirst } } as unknown as PrismaService,
+      {} as IngestionQueue,
+      {} as ChromaVectorStore,
+      logger,
+      acl,
+      { ensureCadPreviewTile } as unknown as ParserClient,
+    );
+
+    try {
+      await expect(
+        service.getDocumentPreviewTile(documentId, 0, 0, 0, identity, bundleId),
+      ).rejects.toMatchObject({ code: 'DOCUMENT_NOT_FOUND', status: 404 });
+      expect(ensureCadPreviewTile).toHaveBeenCalledOnce();
     } finally {
       await rm(directory, { recursive: true, force: true });
     }

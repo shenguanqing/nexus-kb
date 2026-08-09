@@ -218,6 +218,8 @@ unset NEXUSKB_ACCESS_TOKEN
 | `GET`    | `/v1/documents/{documentId}`          | `documents:read`   | 文档摘要、版本和索引状态                |
 | `GET`    | `/v1/documents/{documentId}/preview`  | `documents:read`   | 无存储路径的预览 manifest 或降级状态   |
 | `GET`    | `/v1/documents/{documentId}/preview/content` | `documents:read` | 再次 ACL 校验后流式返回预览内容      |
+| `GET`    | `/v1/documents/{documentId}/preview/overview` | `documents:read` | 返回 CAD 瓦片模式总览 PNG                 |
+| `GET`    | `/v1/documents/{documentId}/preview/tiles/{zoom}/{tileX}/{tileY}` | `documents:read` | 缓存未命中时按需生成并返回 CAD PNG 瓦片 |
 | `GET`    | `/v1/documents/{documentId}/chunks`   | `documents:read`   | 按版本分页查看原始/脱敏分块，不返回向量 |
 | `POST`   | `/v1/documents/{documentId}/reindex`  | `documents:write`  | 继续建立索引或创建安全的新版本          |
 | `PATCH`  | `/v1/documents/{documentId}/metadata` | `documents:write`  | 修改允许的部门/敏感度并触发新版本       |
@@ -239,7 +241,9 @@ unset NEXUSKB_ACCESS_TOKEN
 
 `GET /v1/documents/{documentId}/chunks` 支持 `version`、`page` 和 `pageSize`。分块响应包含原始文本，属于权限敏感数据；不得写入浏览器持久化、普通日志、analytics 或错误上报。
 
-预览 manifest 的 `status` 为 `ready|fallback|unavailable`。`ready` 时才可请求 `/preview/content`；该内容接口支持单一 `Range: bytes=...` 并返回 `Accept-Ranges: bytes`，不支持多段 range。超大型 CAD 的 SVG 可能以 gzip 编码存储，内容接口仍返回 `image/svg+xml`，同时携带 `Content-Encoding: gzip`，浏览器会自动解压；命令行客户端需要使用 `curl --compressed` 才能直接得到 SVG 正文。`fallback` 时使用 `fallbackVersion` 调用 chunks 接口展示解析原文。两个预览接口都会使用当前服务端身份重新执行 tenant 和文档 ACL，响应不返回 storage key 或内部路径。
+预览 manifest 的 `status` 为 `ready|fallback|unavailable`。`kind=pdf|image|text|markdown|svg` 的 ready 预览使用 `/preview/content`；该接口支持单一 `Range: bytes=...`，不支持多段 range。`kind=cad_tiles` 时 manifest 额外返回 `cad`，其中包含 `tileSize`、`minZoom/maxZoom`、总览/基础像素尺寸、CAD `bounds`、六参数 `worldToPixel`、`entityCount` 和 `renderCostScore`；客户端应请求 `/preview/overview` 和视口需要的 `/preview/tiles/...`，不得猜测内部存储路径。瓦片响应的 `X-Cad-Tile-Cache: hit|miss` 仅用于调试/指标，不改变权限语义；`hit` 直接读取现有瓦片，不等待同文档的未命中渲染锁。一次 `miss` 可能在服务端同时生成相邻 3×3 metatile；旧 bundle 的首次 `miss` 还可能原子补建内部几何索引，因此客户端必须继续使用现有超时、总览打底和可取消请求，不得依赖内部缓存文件。
+
+`fallback` 时使用 `fallbackVersion` 调用 chunks 接口展示解析原文。所有 manifest、总览和瓦片请求都使用当前服务端身份执行 tenant 与文档 ACL；瓦片在缓存未命中的渲染完成后还会再查一次，以阻止渲染期间撤权后返回内容。这里不使用 5 分钟预览 token，因为项目现有安全规范要求立即撤权可见。响应始终不返回 storage key 或内部路径。
 
 `GET /v1/ingestion-jobs` 支持 `documentId`、`status`、`page` 和 `pageSize`。
 
@@ -376,6 +380,22 @@ curl --fail-with-body \
 ```
 
 该内容可能是原文件，也可能是本地生成的 PDF/SVG；超大型 CAD 调试时应为 `curl` 增加 `--compressed`。响应使用 `private, no-store` 且不返回内部路径。命令行调试完成后删除输出文件，不得将权限敏感预览上传到工单或公共网盘。
+
+`kind=cad_tiles` 时使用 manifest 内的有效坐标调试总览和瓦片：
+
+```bash
+curl --fail-with-body \
+  --cookie "$NEXUSKB_COOKIE_JAR" \
+  "$NEXUSKB_BASE_URL/v1/documents/<documentId>/preview/overview" \
+  --output /tmp/nexuskb-cad-overview.png
+
+curl --fail-with-body \
+  --cookie "$NEXUSKB_COOKIE_JAR" \
+  "$NEXUSKB_BASE_URL/v1/documents/<documentId>/preview/tiles/0/0/0" \
+  --output /tmp/nexuskb-cad-z0.png
+```
+
+不要批量穷举瓦片；它会触发受资源限制的本地渲染。缓存未命中超时返回 504，渲染器不可用/资源超限返回 503，坐标越界返回 400。
 
 ### 6.4 查询分块
 

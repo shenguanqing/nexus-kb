@@ -106,6 +106,85 @@ describe('ParserClient contract validation', () => {
     ).rejects.toMatchObject({ code: 'PARSER_INVALID_RESPONSE', retryable: false });
   });
 
+  it('accepts a document-bound CAD tile bundle and requests detail tiles from the native worker', async () => {
+    const bundleId = '6769af9a-a4d0-4dc2-a97d-942584a9c826';
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          storageKey: `${id}.cad/bundles/${bundleId}/tiles/8/255/127.png`,
+          mimeType: 'image/png',
+          sizeBytes: 4096,
+          cacheHit: false,
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      ),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    const config = {
+      values: {
+        PARSER_WORKER_URL: 'http://parser-worker:8000',
+        PARSER_DWG_WORKER_URL: 'http://parser-worker-dwg:8000',
+        PARSER_INTERNAL_TOKEN: 'internal-test-token',
+        PARSER_REQUEST_TIMEOUT_MS: 1_000,
+        CAD_PREVIEW_RENDER_TIMEOUT_SECONDS: 60,
+      },
+    } as AppConfig;
+
+    await expect(
+      new ParserClient(config).ensureCadPreviewTile(
+        { documentId: id, zoom: 8, tileX: 255, tileY: 127 },
+        id,
+      ),
+    ).resolves.toMatchObject({ cacheHit: false, sizeBytes: 4096 });
+    expect(String(fetchMock.mock.calls[0]?.[0])).toBe(
+      'http://parser-worker:8000/internal/v1/cad-preview/tile',
+    );
+  });
+
+  it('accepts a CAD tile preview artifact using the .cad storage suffix', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            parser: 'ezdxf',
+            parserVersion: '1.4.4',
+            elements: [{ text: 'LINE', elementType: 'cad_entity' }],
+            preview: {
+              storageKey: `${id}.cad`,
+              kind: 'cad_tiles',
+              mimeType: 'application/vnd.nexuskb.cad-tiles+json',
+              sizeBytes: 4096,
+              renderer: 'ezdxf-cad-tiles',
+              rendererVersion: '1',
+            },
+          }),
+          { status: 200 },
+        ),
+      ),
+    );
+    const config = {
+      values: {
+        PARSER_WORKER_URL: 'http://parser-worker:8000',
+        PARSER_DWG_WORKER_URL: 'http://parser-worker-dwg:8000',
+        PARSER_INTERNAL_TOKEN: 'internal-test-token',
+        PARSER_REQUEST_TIMEOUT_MS: 1_000,
+      },
+    } as AppConfig;
+
+    await expect(
+      new ParserClient(config).parse(
+        {
+          jobId: id,
+          documentId: id,
+          storagePath: '/data/raw-docs/a.dxf',
+          mimeType: 'image/vnd.dxf',
+        },
+        id,
+      ),
+    ).resolves.toMatchObject({ preview: { kind: 'cad_tiles' } });
+  });
+
   it('classifies temporary Worker failures as retryable', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(null, { status: 503 })));
     const config = {

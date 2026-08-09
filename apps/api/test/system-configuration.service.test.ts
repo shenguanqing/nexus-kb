@@ -133,7 +133,12 @@ describe('SystemConfigurationService', () => {
     const service = fixture({} as PrismaService);
     const affectedServices = (
       service as unknown as { affectedServices(changedKeys: string[]): string[] }
-    ).affectedServices(['DWG_OUTPUT_VERSION', 'TIKA_ENABLED', 'MAX_ARCHIVE_ENTRIES']);
+    ).affectedServices([
+      'DWG_OUTPUT_VERSION',
+      'TIKA_ENABLED',
+      'MAX_ARCHIVE_ENTRIES',
+      'CAD_PREVIEW_TILE_CACHE_BYTES',
+    ]);
 
     expect(affectedServices).toEqual(['api', 'parser-worker', 'parser-worker-dwg']);
   });

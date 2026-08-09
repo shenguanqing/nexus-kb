@@ -8,6 +8,7 @@ from uuid import UUID, uuid4
 from fastapi import Depends, FastAPI, Header, HTTPException, Request, Response, status
 
 from app.archive import validate_office_archive
+from app.cad_tiles import CadPreviewResourceError, CadPreviewTimeoutError, ensure_cad_preview_tile
 from app.config import Settings
 from app.parsers.docx import parse_docx
 from app.parsers.dwg import (
@@ -23,8 +24,14 @@ from app.parsers.pdf import parse_pdf
 from app.parsers.text import parse_text
 from app.parsers.tika import TikaUnavailableError, parse_with_tika, tika_is_ready
 from app.parsers.xlsx import parse_xlsx
-from app.preview import generate_cad_svg, generate_office_pdf
-from app.schemas import ParseRequest, ParseResponse, PreviewArtifact
+from app.preview import cad_preview_failure_warning, generate_cad_preview, generate_office_pdf
+from app.schemas import (
+    CadPreviewTileRequest,
+    CadPreviewTileResponse,
+    ParseRequest,
+    ParseResponse,
+    PreviewArtifact,
+)
 from app.security import validate_storage_path
 
 LOGGER = logging.getLogger("nexus_kb.parser_worker")
@@ -286,16 +293,28 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 parser = "ezdxf"
                 parser_version = result.parser_version
                 try:
-                    preview = generate_cad_svg(
+                    preview = generate_cad_preview(
                         path,
                         payload.document_id,
                         preview_root=resolved_settings.preview_artifacts_path,
                         max_bytes=resolved_settings.max_preview_bytes,
+                        tiled_enabled=resolved_settings.cad_tiled_preview_enabled,
+                        tile_cost_threshold=resolved_settings.cad_preview_tile_cost_threshold,
+                        tile_source_bytes_threshold=(
+                            resolved_settings.cad_preview_tile_source_bytes_threshold
+                        ),
+                        tile_size=resolved_settings.cad_preview_tile_size,
+                        max_zoom=resolved_settings.cad_preview_max_zoom,
+                        render_timeout_seconds=(
+                            resolved_settings.cad_preview_render_timeout_seconds
+                        ),
+                        render_memory_bytes=resolved_settings.cad_preview_render_memory_bytes,
+                        max_insert_depth=resolved_settings.max_cad_insert_depth,
                     )
                     if preview.renderer == "ezdxf-svg-gzip":
                         warnings.append("CAD_PREVIEW_GZIP_COMPRESSED")
-                except Exception:
-                    warnings.append("PREVIEW_GENERATION_FAILED")
+                except Exception as error:
+                    warnings.append(cad_preview_failure_warning(error))
             else:
                 if not resolved_settings.dwg_conversion_enabled:
                     raise DwgConversionUnavailableError("DWG 格式转换未启用")
@@ -313,6 +332,21 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                     document_id=payload.document_id,
                     preview_root=resolved_settings.preview_artifacts_path,
                     max_preview_bytes=resolved_settings.max_preview_bytes,
+                    cad_tiled_preview_enabled=resolved_settings.cad_tiled_preview_enabled,
+                    cad_preview_tile_cost_threshold=(
+                        resolved_settings.cad_preview_tile_cost_threshold
+                    ),
+                    cad_preview_tile_source_bytes_threshold=(
+                        resolved_settings.cad_preview_tile_source_bytes_threshold
+                    ),
+                    cad_preview_tile_size=resolved_settings.cad_preview_tile_size,
+                    cad_preview_max_zoom=resolved_settings.cad_preview_max_zoom,
+                    cad_preview_render_timeout_seconds=(
+                        resolved_settings.cad_preview_render_timeout_seconds
+                    ),
+                    cad_preview_render_memory_bytes=(
+                        resolved_settings.cad_preview_render_memory_bytes
+                    ),
                 )
                 elements = result.elements
                 warnings = result.warnings
@@ -384,5 +418,53 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             warnings=warnings,
             preview=preview,
         )
+
+    @api.post(
+        "/internal/v1/cad-preview/tile",
+        response_model=CadPreviewTileResponse,
+        dependencies=[Depends(require_internal_token)],
+    )
+    def cad_preview_tile(
+        payload: CadPreviewTileRequest,
+        request: Request,
+    ) -> CadPreviewTileResponse:
+        try:
+            return ensure_cad_preview_tile(
+                payload.document_id,
+                payload.zoom,
+                payload.tile_x,
+                payload.tile_y,
+                preview_root=resolved_settings.preview_artifacts_path,
+                metatile_radius=resolved_settings.cad_preview_metatile_radius,
+                max_cache_bytes=resolved_settings.cad_preview_tile_cache_bytes,
+                render_timeout_seconds=resolved_settings.cad_preview_render_timeout_seconds,
+                render_memory_bytes=resolved_settings.cad_preview_render_memory_bytes,
+            )
+        except CadPreviewTimeoutError as error:
+            raise HTTPException(
+                status_code=status.HTTP_504_GATEWAY_TIMEOUT,
+                detail="CAD 预览瓦片生成超时",
+                headers=parser_error_headers("CAD_PREVIEW_TILE_TIMEOUT"),
+            ) from error
+        except ValueError as error:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=str(error),
+                headers=parser_error_headers("CAD_PREVIEW_TILE_INVALID"),
+            ) from error
+        except CadPreviewResourceError as error:
+            LOGGER.warning(
+                "cad preview tile generation failed",
+                extra={
+                    "traceId": request.headers.get("x-trace-id"),
+                    "documentId": str(payload.document_id),
+                    "errorType": type(error).__name__,
+                },
+            )
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="CAD 预览瓦片暂时不可用",
+                headers=parser_error_headers("CAD_PREVIEW_TILE_UNAVAILABLE"),
+            ) from None
 
     return api

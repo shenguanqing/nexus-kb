@@ -1,11 +1,13 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { createWriteStream } from 'node:fs';
-import { lstat, realpath, rename, unlink } from 'node:fs/promises';
+import { lstat, readFile, realpath, rename, rm, unlink } from 'node:fs/promises';
 import { basename, extname, join, relative, resolve } from 'node:path';
 import { Transform } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
+import { cadPreviewManifestSchema } from '@nexus-kb/contracts';
 import type {
+  CadPreviewManifest,
   DocumentDetail,
   DocumentChunkListRequest,
   DocumentChunkListResponse,
@@ -30,6 +32,8 @@ import { OperationalLogger } from '../common/operational-logger';
 import { AppConfig } from '../config/app-config';
 import { PrismaService } from '../database/prisma.service';
 import { IngestionQueue } from '../ingestion/ingestion.queue';
+import { ParserClient } from '../parser/parser-client';
+import { ParserError } from '../parser/parser-error';
 import { ChromaVectorStore } from '../vector-store/chroma-vector-store';
 import { validateUploadedFile } from './file-validation';
 
@@ -42,6 +46,7 @@ export class DocumentsService {
     private readonly vectorStore: ChromaVectorStore,
     private readonly logger: OperationalLogger,
     private readonly acl: AclPolicy,
+    @Optional() private readonly parserClient?: ParserClient,
   ) {}
 
   async listDocuments(
@@ -364,24 +369,35 @@ export class DocumentsService {
         rendererVersion: null,
         generatedAt: null,
         fallbackVersion: null,
+        cad: null,
       };
     }
     if (
       document.previewStorageKey &&
       this.isGeneratedPreview(document.previewKind, document.previewMimeType) &&
-      extname(document.previewStorageKey) === `.${document.previewKind}`
+      this.previewStorageKeyMatches(document.id, document.previewStorageKey, document.previewKind)
     ) {
+      const cad =
+        document.previewKind === 'cad_tiles'
+          ? await this.readCadPreviewManifest(document.id, document.previewStorageKey)
+          : null;
       return {
         documentId: document.id,
         sourceName: document.sourceName,
         sourceMimeType: document.mimeType,
         status: 'ready',
         kind: document.previewKind,
-        contentType: document.previewKind === 'pdf' ? 'application/pdf' : 'image/svg+xml',
+        contentType:
+          document.previewKind === 'pdf'
+            ? 'application/pdf'
+            : document.previewKind === 'svg'
+              ? 'image/svg+xml'
+              : 'application/vnd.nexuskb.cad-tiles+json',
         renderer: document.previewRenderer,
         rendererVersion: document.previewRendererVersion,
         generatedAt: document.previewGeneratedAt?.toISOString() ?? null,
         fallbackVersion: null,
+        cad,
       };
     }
     const fallbackVersion =
@@ -400,6 +416,7 @@ export class DocumentsService {
         rendererVersion: null,
         generatedAt: null,
         fallbackVersion,
+        cad: null,
       };
     }
     return {
@@ -413,6 +430,7 @@ export class DocumentsService {
       rendererVersion: null,
       generatedAt: null,
       fallbackVersion: null,
+      cad: null,
     };
   }
 
@@ -462,7 +480,7 @@ export class DocumentsService {
     }
     if (
       document.previewStorageKey &&
-      this.isGeneratedPreview(document.previewKind, document.previewMimeType) &&
+      this.isStreamedGeneratedPreview(document.previewKind, document.previewMimeType) &&
       extname(document.previewStorageKey) === `.${document.previewKind}`
     ) {
       const file = await this.resolveStoredFile(
@@ -481,6 +499,82 @@ export class DocumentsService {
       };
     }
     throw new ApiException('DOCUMENT_PREVIEW_NOT_READY', '文档预览内容尚未生成', 409);
+  }
+
+  async getDocumentPreviewOverview(
+    id: string,
+    identity: Identity,
+  ): Promise<{ path: string; size: number; mimeType: 'image/png'; sourceName: string }> {
+    const document = await this.getVisibleCadPreviewDocument(id, identity);
+    const current = await this.resolveCadPreviewBundle(id, document.previewStorageKey);
+    const file = await this.resolveNestedPreviewFile(
+      `${document.previewStorageKey}/bundles/${current.bundleId}/overview.png`,
+      `${document.previewStorageKey}/bundles/${current.bundleId}/`,
+    );
+    return { ...file, mimeType: 'image/png', sourceName: document.sourceName };
+  }
+
+  async getDocumentPreviewTile(
+    id: string,
+    zoom: number,
+    tileX: number,
+    tileY: number,
+    identity: Identity,
+    traceId: string,
+  ): Promise<{
+    path: string;
+    size: number;
+    mimeType: 'image/png';
+    sourceName: string;
+    cacheHit: boolean;
+  }> {
+    const document = await this.getVisibleCadPreviewDocument(id, identity);
+    const manifest = await this.readCadPreviewManifest(id, document.previewStorageKey);
+    this.assertCadTileCoordinates(manifest, zoom, tileX, tileY);
+    if (!this.parserClient) {
+      throw new ApiException('CAD_PREVIEW_TILE_UNAVAILABLE', 'CAD 预览瓦片服务暂不可用', 503);
+    }
+    let tile;
+    try {
+      tile = await this.parserClient.ensureCadPreviewTile(
+        { documentId: id, zoom, tileX, tileY },
+        traceId,
+      );
+    } catch (error) {
+      if (error instanceof ParserError) {
+        const status =
+          error.kind === 'timeout' ? 504 : error.kind === 'invalid_request' ? 400 : 503;
+        throw new ApiException(
+          error.code.startsWith('CAD_PREVIEW_') ? error.code : 'CAD_PREVIEW_TILE_UNAVAILABLE',
+          error.kind === 'timeout' ? 'CAD 预览瓦片生成超时' : 'CAD 预览瓦片暂不可用',
+          status,
+        );
+      }
+      throw error;
+    }
+    const stillVisible = await this.prisma.document.findFirst({
+      where: {
+        id,
+        ...this.acl.documentWhere(identity),
+        status: { notIn: ['deleting', 'deleted'] },
+        previewStorageKey: document.previewStorageKey,
+        previewKind: 'cad_tiles',
+      },
+      select: { id: true },
+    });
+    if (!stillVisible) throw new ApiException('DOCUMENT_NOT_FOUND', '文档不存在', 404);
+    const expectedPrefix = `${document.previewStorageKey}/bundles/`;
+    const expectedSuffix = `/tiles/${zoom}/${tileX}/${tileY}.png`;
+    if (!tile.storageKey.startsWith(expectedPrefix) || !tile.storageKey.endsWith(expectedSuffix)) {
+      throw new ApiException('PREVIEW_STORAGE_INVALID', '预览产物引用不合法', 500);
+    }
+    const file = await this.resolveNestedPreviewFile(tile.storageKey, expectedPrefix);
+    return {
+      ...file,
+      mimeType: 'image/png',
+      sourceName: document.sourceName,
+      cacheHit: tile.cacheHit,
+    };
   }
 
   async listDocumentChunks(
@@ -1145,11 +1239,38 @@ export class DocumentsService {
       if (document.previewStorageKey !== basename(document.previewStorageKey)) {
         throw new ApiException('PREVIEW_STORAGE_INVALID', '预览产物引用不合法', 500);
       }
-      await unlink(
-        join(this.config.values.PREVIEW_ARTIFACTS_PATH, document.previewStorageKey),
-      ).catch((error: unknown) => {
-        if (!(error instanceof Error && 'code' in error && error.code === 'ENOENT')) throw error;
-      });
+      const previewPath = join(
+        this.config.values.PREVIEW_ARTIFACTS_PATH,
+        document.previewStorageKey,
+      );
+      if (document.previewStorageKey === `${document.id}.cad`) {
+        const metadata = await lstat(previewPath).catch((error: unknown) => {
+          if (error instanceof Error && 'code' in error && error.code === 'ENOENT') return null;
+          throw error;
+        });
+        if (metadata && (!metadata.isDirectory() || metadata.isSymbolicLink())) {
+          throw new ApiException('PREVIEW_STORAGE_INVALID', 'CAD 预览产物引用不合法', 500);
+        }
+        await rm(previewPath, { recursive: true, force: true });
+        const lockPath = join(
+          this.config.values.PREVIEW_ARTIFACTS_PATH,
+          `.${document.id}.cad.lock`,
+        );
+        const lockMetadata = await lstat(lockPath).catch((error: unknown) => {
+          if (error instanceof Error && 'code' in error && error.code === 'ENOENT') return null;
+          throw error;
+        });
+        if (lockMetadata && (!lockMetadata.isFile() || lockMetadata.isSymbolicLink())) {
+          throw new ApiException('PREVIEW_STORAGE_INVALID', 'CAD 预览锁文件不合法', 500);
+        }
+        await unlink(lockPath).catch((error: unknown) => {
+          if (!(error instanceof Error && 'code' in error && error.code === 'ENOENT')) throw error;
+        });
+      } else {
+        await unlink(previewPath).catch((error: unknown) => {
+          if (!(error instanceof Error && 'code' in error && error.code === 'ENOENT')) throw error;
+        });
+      }
     }
     await this.prisma.$transaction([
       this.prisma.document.update({
@@ -1227,11 +1348,174 @@ export class DocumentsService {
     return undefined;
   }
 
-  private isGeneratedPreview(kind: string | null, mimeType: string | null): kind is 'pdf' | 'svg' {
+  private isGeneratedPreview(
+    kind: string | null,
+    mimeType: string | null,
+  ): kind is 'pdf' | 'svg' | 'cad_tiles' {
+    return (
+      (kind === 'pdf' && mimeType === 'application/pdf') ||
+      (kind === 'svg' && mimeType === 'image/svg+xml') ||
+      (kind === 'cad_tiles' && mimeType === 'application/vnd.nexuskb.cad-tiles+json')
+    );
+  }
+
+  private isStreamedGeneratedPreview(
+    kind: string | null,
+    mimeType: string | null,
+  ): kind is 'pdf' | 'svg' {
     return (
       (kind === 'pdf' && mimeType === 'application/pdf') ||
       (kind === 'svg' && mimeType === 'image/svg+xml')
     );
+  }
+
+  private previewStorageKeyMatches(
+    documentId: string,
+    storageKey: string,
+    kind: 'pdf' | 'svg' | 'cad_tiles',
+  ): boolean {
+    return storageKey === `${documentId}.${kind === 'cad_tiles' ? 'cad' : kind}`;
+  }
+
+  private async getVisibleCadPreviewDocument(
+    id: string,
+    identity: Identity,
+  ): Promise<{ sourceName: string; previewStorageKey: string }> {
+    this.acl.assertCapability(identity, 'documents:read');
+    const document = await this.prisma.document.findFirst({
+      where: {
+        id,
+        ...this.acl.documentWhere(identity),
+        status: { notIn: ['deleting', 'deleted'] },
+      },
+      select: {
+        sourceName: true,
+        previewStorageKey: true,
+        previewKind: true,
+        previewMimeType: true,
+      },
+    });
+    if (
+      !document ||
+      document.previewStorageKey !== `${id}.cad` ||
+      document.previewKind !== 'cad_tiles' ||
+      document.previewMimeType !== 'application/vnd.nexuskb.cad-tiles+json'
+    ) {
+      throw new ApiException('DOCUMENT_PREVIEW_NOT_READY', 'CAD 瓦片预览尚未生成', 409);
+    }
+    return { sourceName: document.sourceName, previewStorageKey: document.previewStorageKey };
+  }
+
+  private async readCadPreviewManifest(
+    documentId: string,
+    storageKey: string,
+  ): Promise<CadPreviewManifest> {
+    const current = await this.resolveCadPreviewBundle(documentId, storageKey);
+    const file = await this.resolveNestedPreviewFile(
+      `${storageKey}/bundles/${current.bundleId}/manifest.json`,
+      `${storageKey}/bundles/${current.bundleId}/`,
+    );
+    try {
+      return cadPreviewManifestSchema.parse(JSON.parse(await readFile(file.path, 'utf8')));
+    } catch (error) {
+      this.logger.warn('cad preview manifest rejected', {
+        documentId,
+        errorCode: error instanceof Error ? error.name : 'UNKNOWN',
+      });
+      throw new ApiException('PREVIEW_STORAGE_INVALID', 'CAD 预览清单无效', 500);
+    }
+  }
+
+  private async resolveCadPreviewBundle(
+    documentId: string,
+    storageKey: string,
+  ): Promise<{ bundleId: string }> {
+    if (storageKey !== `${documentId}.cad`) {
+      throw new ApiException('PREVIEW_STORAGE_INVALID', '预览产物引用不合法', 500);
+    }
+    const rootPath = await realpath(this.config.values.PREVIEW_ARTIFACTS_PATH);
+    const cadRoot = resolve(rootPath, storageKey);
+    try {
+      const metadata = await lstat(cadRoot);
+      if (!metadata.isDirectory() || metadata.isSymbolicLink()) throw new Error('invalid CAD root');
+      const resolvedCadRoot = await realpath(cadRoot);
+      if (relative(rootPath, resolvedCadRoot).startsWith('..')) throw new Error('escaped root');
+      const currentFile = resolve(resolvedCadRoot, 'current.json');
+      const currentMetadata = await lstat(currentFile);
+      if (!currentMetadata.isFile() || currentMetadata.isSymbolicLink()) {
+        throw new Error('invalid current pointer');
+      }
+      const parsed = JSON.parse(await readFile(currentFile, 'utf8')) as unknown;
+      if (
+        typeof parsed !== 'object' ||
+        parsed === null ||
+        !('bundleId' in parsed) ||
+        typeof parsed.bundleId !== 'string' ||
+        !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+          parsed.bundleId,
+        )
+      ) {
+        throw new Error('invalid bundle pointer');
+      }
+      return { bundleId: parsed.bundleId };
+    } catch (error) {
+      if (error instanceof ApiException) throw error;
+      throw new ApiException('PREVIEW_STORAGE_INVALID', 'CAD 预览存储引用不合法', 500);
+    }
+  }
+
+  private async resolveNestedPreviewFile(
+    storageKey: string,
+    expectedPrefix: string,
+  ): Promise<{ path: string; size: number }> {
+    if (
+      !storageKey.startsWith(expectedPrefix) ||
+      storageKey.includes('\0') ||
+      storageKey.split('/').some((part) => !part || part === '.' || part === '..')
+    ) {
+      throw new ApiException('PREVIEW_STORAGE_INVALID', '预览产物引用不合法', 500);
+    }
+    try {
+      const rootPath = await realpath(this.config.values.PREVIEW_ARTIFACTS_PATH);
+      const candidate = resolve(rootPath, storageKey);
+      if (relative(rootPath, candidate).startsWith('..')) throw new Error('escaped root');
+      const metadata = await lstat(candidate);
+      if (!metadata.isFile() || metadata.isSymbolicLink() || metadata.size <= 0) {
+        throw new Error('invalid nested preview file');
+      }
+      const resolved = await realpath(candidate);
+      if (relative(rootPath, resolved).startsWith('..')) throw new Error('escaped root');
+      return { path: resolved, size: metadata.size };
+    } catch (error) {
+      if (error instanceof ApiException) throw error;
+      throw new ApiException('PREVIEW_STORAGE_INVALID', '预览产物引用不合法', 500);
+    }
+  }
+
+  private assertCadTileCoordinates(
+    manifest: CadPreviewManifest,
+    zoom: number,
+    tileX: number,
+    tileY: number,
+  ): void {
+    if (
+      !Number.isInteger(zoom) ||
+      !Number.isInteger(tileX) ||
+      !Number.isInteger(tileY) ||
+      zoom < manifest.minZoom ||
+      zoom > manifest.maxZoom
+    ) {
+      throw new ApiException('CAD_PREVIEW_TILE_INVALID', 'CAD 预览瓦片坐标不合法', 400);
+    }
+    const multiplier = 2 ** zoom;
+    const gridWidth = Math.max(1, Math.ceil((manifest.baseWidth * multiplier) / manifest.tileSize));
+    const gridHeight = Math.max(
+      1,
+      Math.ceil((manifest.baseHeight * multiplier) / manifest.tileSize),
+    );
+    if (tileX < 0 || tileY < 0 || tileX >= gridWidth || tileY >= gridHeight) {
+      throw new ApiException('CAD_PREVIEW_TILE_INVALID', 'CAD 预览瓦片坐标不合法', 400);
+    }
   }
 
   private async resolveStoredFile(
