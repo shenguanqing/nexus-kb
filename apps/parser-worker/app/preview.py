@@ -31,7 +31,7 @@ _ZERO_STROKE_WIDTH = re.compile(r"stroke-width:\s*0(?:\.0+)?;")
 def cad_preview_failure_warning(error: Exception) -> str:
     if isinstance(error, CadPreviewTimeoutError):
         return "CAD_PREVIEW_INITIALIZATION_TIMEOUT"
-    if isinstance(error, (CadPreviewResourceError, MemoryError)):
+    if isinstance(error, CadPreviewResourceError | MemoryError):
         return "CAD_PREVIEW_RESOURCE_LIMIT_EXCEEDED"
     return "PREVIEW_GENERATION_FAILED"
 

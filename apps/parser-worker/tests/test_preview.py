@@ -154,6 +154,10 @@ def test_cad_preview_failures_report_stable_specific_warning_codes() -> None:
         cad_preview_failure_warning(CadPreviewResourceError("resource"))
         == "CAD_PREVIEW_RESOURCE_LIMIT_EXCEEDED"
     )
+    assert (
+        cad_preview_failure_warning(MemoryError("memory"))
+        == "CAD_PREVIEW_RESOURCE_LIMIT_EXCEEDED"
+    )
     assert cad_preview_failure_warning(RuntimeError("unexpected")) == "PREVIEW_GENERATION_FAILED"
 
 
