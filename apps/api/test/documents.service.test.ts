@@ -643,7 +643,7 @@ describe('DocumentsService tenant isolation', () => {
     );
   });
 
-  it('streams only a regular generated preview file inside the configured root', async () => {
+  it('marks gzip-compressed SVG previews for HTTP content decoding', async () => {
     const directory = await mkdtemp(join(tmpdir(), 'nexuskb-preview-'));
     const storageKey = '6769af9a-a4d0-4dc2-a97d-942584a9c826.svg';
     await writeFile(join(directory, storageKey), '<svg xmlns="http://www.w3.org/2000/svg"/>');
@@ -658,6 +658,7 @@ describe('DocumentsService tenant isolation', () => {
             previewStorageKey: storageKey,
             previewKind: 'svg',
             previewMimeType: 'image/svg+xml',
+            previewRenderer: 'ezdxf-svg-gzip',
           }),
         },
       } as unknown as PrismaService,
@@ -674,6 +675,7 @@ describe('DocumentsService tenant isolation', () => {
         path: await realpath(join(directory, storageKey)),
         kind: 'svg',
         mimeType: 'image/svg+xml',
+        contentEncoding: 'gzip',
       });
     } finally {
       await rm(directory, { recursive: true, force: true });

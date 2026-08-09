@@ -795,6 +795,13 @@ a {
 .preview-image-viewport.is-zoomable {
   display: block;
 }
+.preview-image-viewport.is-pannable {
+  cursor: grab;
+}
+.preview-image-viewport.is-dragging {
+  cursor: grabbing;
+  user-select: none;
+}
 .preview-image {
   display: block;
   max-width: 100%;

@@ -1,4 +1,6 @@
+import gzip
 import os
+import re
 import shutil
 import subprocess
 import tempfile
@@ -21,10 +23,13 @@ from app.schemas import PreviewArtifact
 _CJK_FONT_FAMILIES = ("Noto Sans CJK SC", "Noto Sans CJK", "WenQuanYi Zen Hei")
 _CAD_FALLBACK_FONT_FAMILIES = {
     "dejavu sans",
+    "dejavu sans condensed",
     "liberation sans",
     "open sans",
     "sans-serif",
 }
+_MAX_COMPRESSIBLE_SVG_BYTES = 1_073_741_824
+_ZERO_STROKE_WIDTH = re.compile(r"stroke-width:\s*0(?:\.0+)?;")
 
 
 def generate_office_pdf(
@@ -99,14 +104,13 @@ def generate_cad_svg(
     backend = svg.SVGBackend()
     Frontend(_cad_render_context(document), backend).draw_layout(document.modelspace())
     content = _sanitize_svg(backend.get_string(layout.Page(0, 0))).encode("utf-8")
-    if not content or len(content) > max_bytes:
-        raise ValueError("预览产物为空或超过大小限制")
+    payload, compressed = _bounded_svg_payload(content, max_bytes)
     storage_key = f"{document_id}.svg"
     target = resolved_preview_root / storage_key
     temporary = resolved_preview_root / f".{storage_key}.tmp"
     try:
         with temporary.open("xb") as stream:
-            stream.write(content)
+            stream.write(payload)
             stream.flush()
             os.fsync(stream.fileno())
         temporary.replace(target)
@@ -116,8 +120,8 @@ def generate_cad_svg(
         storage_key=storage_key,
         kind="svg",
         mime_type="image/svg+xml",
-        size_bytes=len(content),
-        renderer="ezdxf-svg",
+        size_bytes=len(payload),
+        renderer="ezdxf-svg-gzip" if compressed else "ezdxf-svg",
         renderer_version=version("ezdxf"),
     )
 
@@ -138,6 +142,17 @@ def _cad_render_context(document: Drawing) -> RenderContext:
         if face.family.casefold() in _CAD_FALLBACK_FONT_FAMILIES:
             context.fonts[style_name] = cjk_face
     return context
+
+
+def _bounded_svg_payload(content: bytes, max_bytes: int) -> tuple[bytes, bool]:
+    if not content or len(content) > _MAX_COMPRESSIBLE_SVG_BYTES:
+        raise ValueError("预览产物为空或超过大小限制")
+    if len(content) <= max_bytes:
+        return content, False
+    compressed = gzip.compress(content, compresslevel=6, mtime=0)
+    if len(compressed) > max_bytes:
+        raise ValueError("预览产物为空或超过大小限制")
+    return compressed, True
 
 
 def _validated_executable(executable: Path) -> Path:
@@ -216,6 +231,11 @@ def _sanitize_svg(content: str) -> str:
     )
     blocked_tags = {"script", "foreignobject", "image", "a"}
     for parent in root.iter():
+        local_tag = parent.tag.rsplit("}", 1)[-1].lower()
+        if local_tag in {"path", "line", "polyline", "polygon", "circle", "ellipse"}:
+            parent.set("vector-effect", "non-scaling-stroke")
+        if local_tag == "style" and parent.text:
+            parent.text = _ZERO_STROKE_WIDTH.sub("stroke-width: 1;", parent.text)
         for child in list(parent):
             if child.tag.rsplit("}", 1)[-1].lower() in blocked_tags:
                 parent.remove(child)

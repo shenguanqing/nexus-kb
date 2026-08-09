@@ -64,7 +64,7 @@ POST /internal/v1/parse
 | PNG / JPG / JPEG              | 已实现               | EasyOCR（CPU、离线模型）                     |
 | PPTX / HTML / DOC / RTF / EML | 未实现               | 后续阶段                                     |
 
-预览与文本解析独立：DOCX/XLSX 使用镜像内固定 LibreOffice 与 Noto CJK 字体转 PDF，DXF 使用 ezdxf 转受限 SVG，DWG 在临时 DXF 被清理前复用其生成 SVG。ezdxf 默认 DejaVu 字体不含中文字形时显式切换到镜像内 CJK 字体后再输出路径，因此不依赖浏览器字体。产物只写入 `PREVIEW_ARTIFACTS_PATH`，生成失败返回 `PREVIEW_GENERATION_FAILED` 但不使解析任务失败。
+预览与文本解析独立：DOCX/XLSX 使用镜像内固定 LibreOffice 与 Noto CJK 字体转 PDF，DXF 使用 ezdxf 转受限 SVG，DWG 在临时 DXF 被清理前复用其生成 SVG。ezdxf 默认 DejaVu 字体不含中文字形时显式切换到镜像内 CJK 字体后再输出路径，因此不依赖浏览器字体；CAD 几何路径写入非缩放线宽，避免百万级 viewBox 将线路压成不可见的亚像素。原始 SVG 超过 `MAX_PREVIEW_BYTES` 时先尝试确定性 gzip 存储并返回 `CAD_PREVIEW_GZIP_COMPRESSED`，API 通过 `Content-Encoding: gzip` 交给浏览器透明解压；压缩后仍超限才返回 `PREVIEW_GENERATION_FAILED`。产物只写入 `PREVIEW_ARTIFACTS_PATH`，预览失败不使解析任务失败。
 
 ## 解析器算法
 

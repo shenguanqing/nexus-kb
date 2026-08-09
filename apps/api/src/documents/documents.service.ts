@@ -425,6 +425,7 @@ export class DocumentsService {
     mimeType: string;
     sourceName: string;
     kind: 'pdf' | 'image' | 'text' | 'markdown' | 'svg';
+    contentEncoding?: 'gzip';
   }> {
     this.acl.assertCapability(identity, 'documents:read');
     const document = await this.prisma.document.findFirst({
@@ -440,6 +441,7 @@ export class DocumentsService {
         previewStorageKey: true,
         previewKind: true,
         previewMimeType: true,
+        previewRenderer: true,
       },
     });
     if (!document) throw new ApiException('DOCUMENT_NOT_FOUND', '文档不存在', 404);
@@ -473,6 +475,9 @@ export class DocumentsService {
         mimeType: document.previewKind === 'pdf' ? 'application/pdf' : 'image/svg+xml',
         sourceName: document.sourceName,
         kind: document.previewKind,
+        ...(document.previewRenderer === 'ezdxf-svg-gzip'
+          ? { contentEncoding: 'gzip' as const }
+          : {}),
       };
     }
     throw new ApiException('DOCUMENT_PREVIEW_NOT_READY', '文档预览内容尚未生成', 409);

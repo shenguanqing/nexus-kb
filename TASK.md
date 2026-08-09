@@ -157,8 +157,9 @@ Vue 3 + TypeScript + Vite
 - [x] TXT/Markdown/PDF/PNG/JPEG 直接预览；DOCX/XLSX 在 Parser Worker 内使用固定 LibreOffice 命令生成 PDF；DXF/DWG 生成清洗后 SVG。产物与 `documentId` 强绑定并使用独立 `preview_artifacts` volume。
 - [x] 预览生成失败只记录 warning，不阻断 RAG 入库；Web 预览页降级为 ACL 保护的解析原文，来源抽屉携带 page/sheet/version 定位。
 - [x] 文档删除同步清理预览产物；API/Worker readiness 检查预览目录，常规 Worker 额外检查 LibreOffice。
-- [x] 修复中文 Office/CAD 预览方块字：两个 Parser 镜像预置 Noto CJK，LibreOffice PDF 嵌入中文字形，ezdxf 在默认 DejaVu 缺字时显式使用 CJK 字体生成 SVG 路径。
-- [x] DXF/DWG 预览支持 50%–400% 缩放、重置与 Ctrl/Command + 滚轮；全部 ready/fallback 预览支持浏览器全屏。权限说明收敛为文件名同行的“实时权限校验”标记，释放预览高度。
+- [x] 修复中文 Office/CAD 预览方块字：两个 Parser 镜像预置 Noto CJK，LibreOffice PDF 嵌入中文字形，ezdxf 在默认 DejaVu 缺字时显式使用 CJK 字体生成 SVG 路径，并覆盖 Ubuntu runner 的 DejaVu Sans Condensed 字体族变体。
+- [x] DXF/DWG 预览支持 50%–3200% 缩放、重置、Ctrl/Command + 滚轮与放大后的鼠标拖拽平移；全部 ready/fallback 预览支持浏览器全屏。权限说明收敛为文件名同行的“实时权限校验”标记，释放预览高度。
+- [x] 修复 CAD 线路在百万级 SVG viewBox 下因亚像素线宽不可见的问题；几何路径使用非缩放线宽，零宽 hairline 提升为屏幕 1px。超大型 CAD 的原始 SVG 超过 200 MiB 时自动 gzip 存储并由 API 透明解码，压缩后仍超限才降级解析文本。
 - [x] 完成本轮全量 lint、typecheck、单元测试、构建、Parser 容器测试和 Compose 配置校验。
 
 ---

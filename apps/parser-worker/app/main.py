@@ -292,6 +292,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                         preview_root=resolved_settings.preview_artifacts_path,
                         max_bytes=resolved_settings.max_preview_bytes,
                     )
+                    if preview.renderer == "ezdxf-svg-gzip":
+                        warnings.append("CAD_PREVIEW_GZIP_COMPRESSED")
                 except Exception:
                     warnings.append("PREVIEW_GENERATION_FAILED")
             else:

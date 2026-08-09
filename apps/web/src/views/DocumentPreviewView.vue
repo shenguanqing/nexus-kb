@@ -19,6 +19,7 @@ const router = useRouter();
 const documentId = String(route.params.id);
 const preview = ref<DocumentPreview | null>(null);
 const previewPage = ref<HTMLElement | null>(null);
+const cadViewport = ref<HTMLElement | null>(null);
 const textContent = ref('');
 const chunks = ref<DocumentChunkListResponse | null>(null);
 const loading = ref(false);
@@ -27,6 +28,7 @@ const interactionMessage = ref('');
 const isFullscreen = ref(false);
 const canFullscreen = ref(true);
 const cadZoom = ref(1);
+const isCadDragging = ref(false);
 const fallbackPage = ref(readPositiveInteger(route.query.chunkPage) ?? 1);
 const sourcePage = computed(() => readPositiveInteger(route.query.page));
 const sourceSheet = computed(() =>
@@ -39,13 +41,19 @@ const pdfUrl = computed(() =>
 const isCadPreview = computed(
   () => preview.value?.status === 'ready' && preview.value.kind === 'svg',
 );
+const canPanCad = computed(() => isCadPreview.value && cadZoom.value > 1);
 const cadZoomPercent = computed(() => Math.round(cadZoom.value * 100));
 const cadImageStyle = computed(() => ({ width: `${cadZoomPercent.value}%` }));
 const { isPhone } = useBreakpoint();
 
 const cadZoomMinimum = 0.5;
-const cadZoomMaximum = 4;
+const cadZoomMaximum = 32;
 const cadZoomStep = 0.25;
+let cadDragPointerId: number | null = null;
+let cadDragStartX = 0;
+let cadDragStartY = 0;
+let cadDragStartScrollLeft = 0;
+let cadDragStartScrollTop = 0;
 
 function readPositiveInteger(value: unknown): number | null {
   if (typeof value !== 'string') return null;
@@ -69,6 +77,7 @@ async function load(): Promise<void> {
   loading.value = true;
   errorMessage.value = '';
   interactionMessage.value = '';
+  stopCadPan();
   cadZoom.value = 1;
   textContent.value = '';
   chunks.value = null;
@@ -96,16 +105,55 @@ function changeCadZoom(delta: number): void {
     cadZoomMaximum,
     Math.max(cadZoomMinimum, Number((cadZoom.value + delta).toFixed(2))),
   );
+  if (cadZoom.value <= 1) stopCadPan();
 }
 
 function resetCadZoom(): void {
+  stopCadPan();
   cadZoom.value = 1;
+  if (cadViewport.value) {
+    cadViewport.value.scrollLeft = 0;
+    cadViewport.value.scrollTop = 0;
+  }
 }
 
 function handleCadWheel(event: WheelEvent): void {
   if (!event.ctrlKey && !event.metaKey) return;
   event.preventDefault();
   changeCadZoom(event.deltaY < 0 ? cadZoomStep : -cadZoomStep);
+}
+
+function startCadPan(event: PointerEvent): void {
+  const viewport = cadViewport.value;
+  if (!viewport || !canPanCad.value || event.pointerType !== 'mouse' || event.button !== 0) {
+    return;
+  }
+  cadDragPointerId = event.pointerId;
+  cadDragStartX = event.clientX;
+  cadDragStartY = event.clientY;
+  cadDragStartScrollLeft = viewport.scrollLeft;
+  cadDragStartScrollTop = viewport.scrollTop;
+  isCadDragging.value = true;
+  viewport.setPointerCapture?.(event.pointerId);
+  event.preventDefault();
+}
+
+function moveCadPan(event: PointerEvent): void {
+  const viewport = cadViewport.value;
+  if (!viewport || !isCadDragging.value || event.pointerId !== cadDragPointerId) return;
+  viewport.scrollLeft = cadDragStartScrollLeft - (event.clientX - cadDragStartX);
+  viewport.scrollTop = cadDragStartScrollTop - (event.clientY - cadDragStartY);
+  event.preventDefault();
+}
+
+function stopCadPan(event?: PointerEvent): void {
+  if (event && event.pointerId !== cadDragPointerId) return;
+  const pointerId = cadDragPointerId;
+  cadDragPointerId = null;
+  isCadDragging.value = false;
+  if (pointerId !== null && cadViewport.value?.hasPointerCapture?.(pointerId)) {
+    cadViewport.value.releasePointerCapture(pointerId);
+  }
 }
 
 function syncFullscreenState(): void {
@@ -144,6 +192,7 @@ onMounted(() => {
 });
 
 onBeforeUnmount(() => {
+  stopCadPan();
   document.removeEventListener('fullscreenchange', syncFullscreenState);
 });
 </script>
@@ -220,12 +269,24 @@ onBeforeUnmount(() => {
         </iframe>
         <div
           v-else-if="preview.kind === 'image' || preview.kind === 'svg'"
+          ref="cadViewport"
           class="preview-image-viewport"
-          :class="{ 'is-zoomable': preview.kind === 'svg' }"
+          :class="{
+            'is-zoomable': preview.kind === 'svg',
+            'is-pannable': canPanCad,
+            'is-dragging': isCadDragging,
+          }"
+          :title="canPanCad ? '按住鼠标左键拖拽查看 CAD 细节' : undefined"
           @wheel="handleCadWheel"
+          @pointerdown="startCadPan"
+          @pointermove="moveCadPan"
+          @pointerup="stopCadPan"
+          @pointercancel="stopCadPan"
+          @lostpointercapture="stopCadPan"
         >
           <img
             class="preview-image"
+            draggable="false"
             :style="preview.kind === 'svg' ? cadImageStyle : undefined"
             :src="contentUrl"
             :alt="`${preview.sourceName} 预览`"

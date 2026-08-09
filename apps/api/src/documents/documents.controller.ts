@@ -100,6 +100,7 @@ export class DocumentsController {
     reply.header('cache-control', 'private, no-store');
     reply.header('content-type', content.mimeType);
     reply.header('content-length', String(contentLength));
+    if (content.contentEncoding) reply.header('content-encoding', content.contentEncoding);
     reply.header('content-disposition', inlineDisposition(content.sourceName));
     reply.header('x-content-type-options', 'nosniff');
     if (content.kind === 'svg') {

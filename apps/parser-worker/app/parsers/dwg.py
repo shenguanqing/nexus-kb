@@ -128,6 +128,8 @@ def parse_dwg(
                 preview_root=preview_root,
                 max_bytes=max_preview_bytes,
             )
+            if preview.renderer == "ezdxf-svg-gzip":
+                preview_warnings.append("CAD_PREVIEW_GZIP_COMPRESSED")
         except Exception:
             preview_warnings.append("PREVIEW_GENERATION_FAILED")
         return DxfParseResult(

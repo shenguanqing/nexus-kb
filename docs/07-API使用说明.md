@@ -239,7 +239,7 @@ unset NEXUSKB_ACCESS_TOKEN
 
 `GET /v1/documents/{documentId}/chunks` 支持 `version`、`page` 和 `pageSize`。分块响应包含原始文本，属于权限敏感数据；不得写入浏览器持久化、普通日志、analytics 或错误上报。
 
-预览 manifest 的 `status` 为 `ready|fallback|unavailable`。`ready` 时才可请求 `/preview/content`；该内容接口支持单一 `Range: bytes=...` 并返回 `Accept-Ranges: bytes`，不支持多段 range。`fallback` 时使用 `fallbackVersion` 调用 chunks 接口展示解析原文。两个预览接口都会使用当前服务端身份重新执行 tenant 和文档 ACL，响应不返回 storage key 或内部路径。
+预览 manifest 的 `status` 为 `ready|fallback|unavailable`。`ready` 时才可请求 `/preview/content`；该内容接口支持单一 `Range: bytes=...` 并返回 `Accept-Ranges: bytes`，不支持多段 range。超大型 CAD 的 SVG 可能以 gzip 编码存储，内容接口仍返回 `image/svg+xml`，同时携带 `Content-Encoding: gzip`，浏览器会自动解压；命令行客户端需要使用 `curl --compressed` 才能直接得到 SVG 正文。`fallback` 时使用 `fallbackVersion` 调用 chunks 接口展示解析原文。两个预览接口都会使用当前服务端身份重新执行 tenant 和文档 ACL，响应不返回 storage key 或内部路径。
 
 `GET /v1/ingestion-jobs` 支持 `documentId`、`status`、`page` 和 `pageSize`。
 
@@ -375,7 +375,7 @@ curl --fail-with-body \
   --output /tmp/nexuskb-preview-part
 ```
 
-该内容可能是原文件，也可能是本地生成的 PDF/SVG；响应使用 `private, no-store` 且不返回内部路径。命令行调试完成后删除输出文件，不得将权限敏感预览上传到工单或公共网盘。
+该内容可能是原文件，也可能是本地生成的 PDF/SVG；超大型 CAD 调试时应为 `curl` 增加 `--compressed`。响应使用 `private, no-store` 且不返回内部路径。命令行调试完成后删除输出文件，不得将权限敏感预览上传到工单或公共网盘。
 
 ### 6.4 查询分块
 
