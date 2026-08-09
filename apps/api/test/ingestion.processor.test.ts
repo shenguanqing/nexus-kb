@@ -254,6 +254,50 @@ describe('IngestionProcessor vector indexing', () => {
     ).toBe(true);
   });
 
+  it('binds a parser-generated preview artifact to the ACL-protected document', async () => {
+    const deps = dependencies();
+    deps.parse.mockResolvedValueOnce({
+      parser: 'python-docx',
+      parserVersion: '1.1.0',
+      warnings: [],
+      elements: [
+        {
+          text: '预览内容',
+          elementType: 'paragraph',
+          page: 1,
+          sheet: null,
+          sectionPath: [],
+          bbox: null,
+          metadata: {},
+        },
+      ],
+      preview: {
+        storageKey: `${deps.record.documentId}.pdf`,
+        kind: 'pdf',
+        mimeType: 'application/pdf',
+        sizeBytes: 1024,
+        renderer: 'libreoffice',
+        rendererVersion: '25.2.4',
+      },
+    });
+
+    await deps.processor.process(deps.payload);
+
+    type UpdateInput = { data: Record<string, unknown> };
+    const documentUpdates = deps.updateDocument.mock.calls as unknown as Array<[UpdateInput]>;
+    expect(documentUpdates.some(([input]) => Object.hasOwn(input.data, 'previewStorageKey'))).toBe(
+      true,
+    );
+    expect(
+      documentUpdates.find(([input]) => Object.hasOwn(input.data, 'previewStorageKey'))?.[0].data,
+    ).toMatchObject({
+      previewStorageKey: `${deps.record.documentId}.pdf`,
+      previewKind: 'pdf',
+      previewMimeType: 'application/pdf',
+      previewRenderer: 'libreoffice',
+    });
+  });
+
   it('does not activate the document when vector upsert fails', async () => {
     const deps = dependencies();
     deps.upsert.mockRejectedValueOnce(new VectorStoreError('unavailable'));

@@ -1,5 +1,6 @@
 import hmac
 import logging
+import os
 from collections.abc import Awaitable, Callable
 from pathlib import Path
 from uuid import UUID, uuid4
@@ -22,7 +23,8 @@ from app.parsers.pdf import parse_pdf
 from app.parsers.text import parse_text
 from app.parsers.tika import TikaUnavailableError, parse_with_tika, tika_is_ready
 from app.parsers.xlsx import parse_xlsx
-from app.schemas import ParseRequest, ParseResponse
+from app.preview import generate_cad_svg, generate_office_pdf
+from app.schemas import ParseRequest, ParseResponse, PreviewArtifact
 from app.security import validate_storage_path
 
 LOGGER = logging.getLogger("nexus_kb.parser_worker")
@@ -99,6 +101,26 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     def ready(response: Response) -> dict[str, object]:
         root = resolved_settings.raw_docs_path
         raw_docs_ready = root.exists() and root.is_dir()
+        preview_root = resolved_settings.preview_artifacts_path
+        preview_artifacts_ready = (
+            preview_root.exists()
+            and preview_root.is_dir()
+            and os.access(preview_root, os.W_OK | os.X_OK)
+        )
+        office_preview_ready = resolved_settings.dwg_conversion_enabled
+        if not office_preview_ready:
+            office_executable = resolved_settings.libreoffice_executable
+            try:
+                resolved_office_executable = office_executable.resolve(strict=True)
+            except OSError:
+                office_preview_ready = False
+            else:
+                office_preview_ready = (
+                    office_executable.is_absolute()
+                    and not office_executable.is_symlink()
+                    and resolved_office_executable.is_file()
+                    and os.access(resolved_office_executable, os.X_OK)
+                )
         converter_ready = not resolved_settings.dwg_conversion_enabled or converter_is_ready(
             resolved_settings.dwg_converter_executable,
             resolved_settings.parser_temp_path,
@@ -113,13 +135,25 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         tika_status = "disabled"
         if resolved_settings.tika_enabled:
             tika_status = "up" if tika_ready else "down"
-        is_ready = raw_docs_ready and converter_ready and tika_ready
+        is_ready = (
+            raw_docs_ready
+            and preview_artifacts_ready
+            and office_preview_ready
+            and converter_ready
+            and tika_ready
+        )
         if not is_ready:
             response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
         return {
             "status": "ready" if is_ready else "not_ready",
             "checks": {
                 "rawDocs": {"status": "up" if raw_docs_ready else "down"},
+                "previewArtifacts": {
+                    "status": "up" if preview_artifacts_ready else "down"
+                },
+                "officePreview": {
+                    "status": "up" if office_preview_ready else "down"
+                },
                 "dwgConverter": {"status": converter_status},
                 "tika": {"status": tika_status},
             },
@@ -144,6 +178,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             )
         try:
             warnings: list[str] = []
+            preview: PreviewArtifact | None = None
             parser_version = "1.1.0"
             if suffix in {".txt", ".md"}:
                 elements = parse_text(path)
@@ -156,6 +191,18 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 )
                 elements = parse_docx(path, resolved_settings.max_elements)
                 parser = "python-docx"
+                try:
+                    preview = generate_office_pdf(
+                        path,
+                        payload.document_id,
+                        executable=resolved_settings.libreoffice_executable,
+                        preview_root=resolved_settings.preview_artifacts_path,
+                        temp_root=resolved_settings.parser_temp_path,
+                        timeout_seconds=resolved_settings.preview_conversion_timeout_seconds,
+                        max_bytes=resolved_settings.max_preview_bytes,
+                    )
+                except Exception:
+                    warnings.append("PREVIEW_GENERATION_FAILED")
             elif suffix == ".xlsx":
                 validate_office_archive(
                     path,
@@ -168,6 +215,18 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                     resolved_settings.max_elements,
                 )
                 parser = "openpyxl"
+                try:
+                    preview = generate_office_pdf(
+                        path,
+                        payload.document_id,
+                        executable=resolved_settings.libreoffice_executable,
+                        preview_root=resolved_settings.preview_artifacts_path,
+                        temp_root=resolved_settings.parser_temp_path,
+                        timeout_seconds=resolved_settings.preview_conversion_timeout_seconds,
+                        max_bytes=resolved_settings.max_preview_bytes,
+                    )
+                except Exception:
+                    warnings.append("PREVIEW_GENERATION_FAILED")
             elif suffix == ".pdf":
                 try:
                     elements, warnings, parser_version = parse_pdf(
@@ -226,6 +285,15 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 warnings = result.warnings
                 parser = "ezdxf"
                 parser_version = result.parser_version
+                try:
+                    preview = generate_cad_svg(
+                        path,
+                        payload.document_id,
+                        preview_root=resolved_settings.preview_artifacts_path,
+                        max_bytes=resolved_settings.max_preview_bytes,
+                    )
+                except Exception:
+                    warnings.append("PREVIEW_GENERATION_FAILED")
             else:
                 if not resolved_settings.dwg_conversion_enabled:
                     raise DwgConversionUnavailableError("DWG 格式转换未启用")
@@ -240,11 +308,15 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                     max_entities=resolved_settings.max_cad_entities,
                     max_elements=resolved_settings.max_elements,
                     max_insert_depth=resolved_settings.max_cad_insert_depth,
+                    document_id=payload.document_id,
+                    preview_root=resolved_settings.preview_artifacts_path,
+                    max_preview_bytes=resolved_settings.max_preview_bytes,
                 )
                 elements = result.elements
                 warnings = result.warnings
                 parser = "oda-file-converter+ezdxf"
                 parser_version = result.parser_version
+                preview = result.preview
         except DwgConversionTimeoutError as error:
             raise HTTPException(
                 status_code=status.HTTP_504_GATEWAY_TIMEOUT, detail=str(error)
@@ -308,6 +380,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             parser_version=parser_version,
             elements=elements,
             warnings=warnings,
+            preview=preview,
         )
 
     return api

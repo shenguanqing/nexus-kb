@@ -151,6 +151,16 @@ Vue 3 + TypeScript + Vite
 - [x] 重构 README 的信息层级，新增零模型/零 ODA 的新手基础模式、分步骤启动流程和常见问题 FAQ，并将 Ollama、完整 RAG、DWG 与数据库调试下沉为按需章节。
 - [x] 新增 `apps/README.md` 及 API、Web、Parser Worker 目录级 README，集中说明模块入口、调用关系、开发命令、安全边界和当前解析算法，避免为每个源文件维护易漂移的独立说明。
 
+### 3.14 已支持文件的统一预览
+
+- [x] 新增受 `documents:read` 与实时文档 ACL 保护的 preview manifest 和内容流接口；响应不包含 storage key/内部路径，PDF 支持单一 byte range。
+- [x] TXT/Markdown/PDF/PNG/JPEG 直接预览；DOCX/XLSX 在 Parser Worker 内使用固定 LibreOffice 命令生成 PDF；DXF/DWG 生成清洗后 SVG。产物与 `documentId` 强绑定并使用独立 `preview_artifacts` volume。
+- [x] 预览生成失败只记录 warning，不阻断 RAG 入库；Web 预览页降级为 ACL 保护的解析原文，来源抽屉携带 page/sheet/version 定位。
+- [x] 文档删除同步清理预览产物；API/Worker readiness 检查预览目录，常规 Worker 额外检查 LibreOffice。
+- [x] 修复中文 Office/CAD 预览方块字：两个 Parser 镜像预置 Noto CJK，LibreOffice PDF 嵌入中文字形，ezdxf 在默认 DejaVu 缺字时显式使用 CJK 字体生成 SVG 路径。
+- [x] DXF/DWG 预览支持 50%–400% 缩放、重置与 Ctrl/Command + 滚轮；全部 ready/fallback 预览支持浏览器全屏。权限说明收敛为文件名同行的“实时权限校验”标记，释放预览高度。
+- [x] 完成本轮全量 lint、typecheck、单元测试、构建、Parser 容器测试和 Compose 配置校验。
+
 ---
 
 ## 4. 阶段 15 验证状态

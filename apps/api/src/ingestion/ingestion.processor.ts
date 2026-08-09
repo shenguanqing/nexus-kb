@@ -273,13 +273,25 @@ export class IngestionProcessor {
       });
       await tx.document.updateMany({
         where: { id: record.documentId, status: { notIn: ['deleting', 'deleted'] } },
-        data:
-          record.document.activeVersion === null
+        data: {
+          ...(record.document.activeVersion === null
             ? {
                 status: isBlocked ? 'policy_blocked' : shouldIndex ? 'processing' : 'prepared',
                 activeVersion: null,
               }
-            : { status: 'active' },
+            : { status: 'active' as const }),
+          ...(result.preview
+            ? {
+                previewStorageKey: result.preview.storageKey,
+                previewKind: result.preview.kind,
+                previewMimeType: result.preview.mimeType,
+                previewSizeBytes: result.preview.sizeBytes,
+                previewRenderer: result.preview.renderer,
+                previewRendererVersion: result.preview.rendererVersion,
+                previewGeneratedAt: new Date(),
+              }
+            : {}),
+        },
       });
       return true;
     });

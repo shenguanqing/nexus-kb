@@ -13,6 +13,7 @@ Worker 不负责认证业务、tenant/ACL、分块、脱敏、Embedding、Rerank
 | [`app/schemas.py`](./app/schemas.py)                                         | `ParseRequest`、`ParsedElement`、`ParseResponse`      |
 | [`app/security.py`](./app/security.py)                                       | 共享根目录、绝对路径、软链接和文件大小校验            |
 | [`app/archive.py`](./app/archive.py)                                         | DOCX/XLSX ZIP 条目、路径和解压总大小校验              |
+| [`app/preview.py`](./app/preview.py)                                         | Office PDF、CAD SVG 的受控本地预览产物                |
 | [`app/parsers`](./app/parsers)                                               | 各格式解析算法                                        |
 | [`bin/nexus-parser-worker-entrypoint`](./bin/nexus-parser-worker-entrypoint) | 容器启动入口                                          |
 | [`bin/nexus-oda-file-converter`](./bin/nexus-oda-file-converter)             | 受控 ODA 启动包装                                     |
@@ -32,7 +33,8 @@ POST /internal/v1/parse
 → DOCX/XLSX 压缩包安全检查
 → 调用对应解析器
 → 拒绝空结果
-→ 返回 parser、parserVersion、elements、warnings
+→ 可选生成与 documentId 绑定的 preview artifact
+→ 返回 parser、parserVersion、elements、warnings、preview
 ```
 
 每个元素统一包含：
@@ -61,6 +63,8 @@ POST /internal/v1/parse
 | PDF                           | 已实现               | Unstructured；失败或空结果时由内网 Tika 兜底 |
 | PNG / JPG / JPEG              | 已实现               | EasyOCR（CPU、离线模型）                     |
 | PPTX / HTML / DOC / RTF / EML | 未实现               | 后续阶段                                     |
+
+预览与文本解析独立：DOCX/XLSX 使用镜像内固定 LibreOffice 与 Noto CJK 字体转 PDF，DXF 使用 ezdxf 转受限 SVG，DWG 在临时 DXF 被清理前复用其生成 SVG。ezdxf 默认 DejaVu 字体不含中文字形时显式切换到镜像内 CJK 字体后再输出路径，因此不依赖浏览器字体。产物只写入 `PREVIEW_ARTIFACTS_PATH`，生成失败返回 `PREVIEW_GENERATION_FAILED` 但不使解析任务失败。
 
 ## 解析器算法
 
@@ -164,6 +168,10 @@ DWG 使用“受控转换后复用 DXF”：
 - `MAX_ARCHIVE_UNCOMPRESSED_BYTES`
 - `DWG_CONVERSION_TIMEOUT_SECONDS`
 - `MAX_DWG_CONVERTED_BYTES`
+- `PREVIEW_ARTIFACTS_PATH`
+- `LIBREOFFICE_EXECUTABLE`
+- `PREVIEW_CONVERSION_TIMEOUT_SECONDS`
+- `MAX_PREVIEW_BYTES`
 
 请求不能指定 Tika 地址、解析器可执行文件、临时目录或任意转换参数。Compose 中的 Tika 只连接 `backend` 内部网络，不发布宿主机端口；加密、页数超限等安全拒绝不会进入 fallback。日志只记录 trace、job、document、parser 和安全错误类型，不记录完整正文或内部文件路径。
 

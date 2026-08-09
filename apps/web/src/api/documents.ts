@@ -10,6 +10,7 @@ import {
   documentUploadOptionsSchema,
   documentMetadataUpdateAcceptedSchema,
   documentMetadataUpdateRequestSchema,
+  documentPreviewSchema,
   type DocumentListRequest,
   type DocumentListResponse,
   type DocumentChunkListRequest,
@@ -20,9 +21,10 @@ import {
   type DocumentDetail,
   type DocumentReindexAccepted,
   type DocumentMetadataUpdateAccepted,
+  type DocumentPreview,
   type Sensitivity,
 } from '@nexus-kb/contracts';
-import { apiRequest } from './client';
+import { apiRequest, apiTextRequest } from './client';
 
 export function listDocuments(
   request: Partial<DocumentListRequest>,
@@ -52,6 +54,21 @@ export function uploadDocument(file: File): Promise<DocumentUploadAccepted> {
 
 export function fetchDocument(documentId: string): Promise<DocumentDetail> {
   return apiRequest(`/v1/documents/${encodeURIComponent(documentId)}`, documentDetailSchema);
+}
+
+export function fetchDocumentPreview(documentId: string): Promise<DocumentPreview> {
+  return apiRequest(
+    `/v1/documents/${encodeURIComponent(documentId)}/preview`,
+    documentPreviewSchema,
+  );
+}
+
+export function documentPreviewContentUrl(documentId: string): string {
+  return `/v1/documents/${encodeURIComponent(documentId)}/preview/content`;
+}
+
+export function fetchDocumentPreviewText(documentId: string): Promise<string> {
+  return apiTextRequest(documentPreviewContentUrl(documentId), {}, 120_000);
 }
 
 export function listDocumentChunks(

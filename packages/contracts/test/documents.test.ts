@@ -6,6 +6,7 @@ import {
   documentDetailSchema,
   documentListRequestSchema,
   documentListResponseSchema,
+  documentPreviewSchema,
   documentUploadOptionsSchema,
 } from '../src/documents';
 
@@ -125,5 +126,37 @@ describe('document contracts', () => {
       pageSize: 20,
     });
     expect(documentChunkListRequestSchema.safeParse({ tenantId: 'forged' }).success).toBe(false);
+  });
+
+  it('validates a path-free document preview manifest', () => {
+    expect(
+      documentPreviewSchema.parse({
+        documentId: '6769af9a-a4d0-4dc2-a97d-942584a9c826',
+        sourceName: '制度.docx',
+        sourceMimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        status: 'ready',
+        kind: 'pdf',
+        contentType: 'application/pdf',
+        renderer: 'libreoffice',
+        rendererVersion: '25.2.4',
+        generatedAt: '2026-08-09T08:00:00.000Z',
+        fallbackVersion: null,
+      }).kind,
+    ).toBe('pdf');
+    expect(
+      documentPreviewSchema.safeParse({
+        documentId: '6769af9a-a4d0-4dc2-a97d-942584a9c826',
+        sourceName: '制度.docx',
+        sourceMimeType: 'application/octet-stream',
+        status: 'ready',
+        kind: 'pdf',
+        contentType: 'application/pdf',
+        renderer: null,
+        rendererVersion: null,
+        generatedAt: null,
+        fallbackVersion: null,
+        storagePath: '/data/previews/document.pdf',
+      }).success,
+    ).toBe(false);
   });
 });

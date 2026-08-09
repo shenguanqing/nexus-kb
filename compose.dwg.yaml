@@ -23,6 +23,8 @@ services:
     environment:
       PARSER_INTERNAL_TOKEN: ${PARSER_INTERNAL_TOKEN}
       RAW_DOCS_PATH: /data/raw-docs
+      PREVIEW_ARTIFACTS_PATH: /data/previews
+      MAX_PREVIEW_BYTES: ${MAX_PREVIEW_BYTES:-209715200}
       DWG_CONVERSION_ENABLED: 'true'
       DWG_CONVERTER_EXECUTABLE: ${DWG_CONVERTER_EXECUTABLE:-/usr/local/bin/nexus-oda-file-converter}
       DWG_CONVERTER_RELEASE: ${DWG_CONVERTER_RELEASE:-not-installed}
@@ -42,6 +44,7 @@ services:
       - '8000'
     volumes:
       - raw_docs:/data/raw-docs:ro
+      - preview_artifacts:/data/previews
     tmpfs:
       - /tmp:size=1g,mode=1777,uid=10002,gid=10002
     healthcheck:

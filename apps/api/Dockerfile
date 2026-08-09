@@ -21,10 +21,14 @@ FROM base AS runtime
 ENV NODE_ENV=production
 WORKDIR /app
 RUN groupadd --gid 10001 app \
+    && groupadd --gid 10010 previews \
     && useradd --uid 10001 --gid app --create-home app \
-    && mkdir -p /data/raw-docs \
+    && usermod --append --groups previews app \
+    && mkdir -p /data/raw-docs /data/previews \
     && chown app:app /data/raw-docs \
-    && chmod 0755 /data/raw-docs
+    && chown app:previews /data/previews \
+    && chmod 0755 /data/raw-docs \
+    && chmod 2770 /data/previews
 COPY --from=build --chown=app:app /app /app
 USER app
 EXPOSE 3000

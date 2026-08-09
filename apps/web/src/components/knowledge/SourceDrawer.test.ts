@@ -20,7 +20,14 @@ function mountDrawer(overrides: Partial<KnowledgeSource> = {}) {
     global: {
       stubs: {
         ElButton: { template: '<button><slot /></button>' },
-        ElDrawer: { template: '<section><slot /><footer><slot name="footer" /></footer></section>' },
+        ElDrawer: {
+          template: '<section><slot /><footer><slot name="footer" /></footer></section>',
+        },
+        RouterLink: {
+          props: ['to'],
+          template:
+            '<a :data-path="to.path" :data-from="to.query.from" :data-version="to.query.version"><slot /></a>',
+        },
       },
     },
   });
@@ -33,9 +40,12 @@ describe('SourceDrawer', () => {
     expect(wrapper.get('.source-detail__header').text()).toContain('vue.md');
     expect(wrapper.find('.source-reference').exists()).toBe(false);
     expect(wrapper.text()).not.toContain('未标注');
-    expect(wrapper.get('.source-drawer__document-link').attributes('to')).toBe(
-      `/documents/${source.documentId}`,
+    expect(wrapper.get('.source-drawer__document-link').attributes('data-path')).toBe(
+      `/documents/${source.documentId}/preview`,
     );
+    expect(wrapper.get('.source-drawer__document-link').attributes('data-from')).toBe('/ask');
+    expect(wrapper.get('.source-drawer__document-link').attributes('data-version')).toBe('1');
+    expect(wrapper.text()).toContain('预览文档');
   });
 
   it('shows only the returned location and section metadata', () => {

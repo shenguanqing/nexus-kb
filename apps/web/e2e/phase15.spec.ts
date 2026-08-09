@@ -181,7 +181,7 @@ test('omits unavailable source location metadata', async ({ page }) => {
   await expect(page.getByRole('heading', { name: 'vue.md', level: 2 })).toBeVisible();
   await expect(page.locator('.source-reference')).toHaveCount(0);
   await expect(page.getByText('位置未标注')).toHaveCount(0);
-  await expect(page.getByRole('link', { name: '查看文档详情' })).toBeVisible();
+  await expect(page.getByRole('link', { name: '预览文档' })).toBeVisible();
 });
 
 test('renders explicit no-answer and blocks unauthorized management routes', async ({ page }) => {

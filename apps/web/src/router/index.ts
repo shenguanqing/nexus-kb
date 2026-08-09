@@ -38,6 +38,11 @@ export const router = createRouter({
           meta: { title: '文档管理', capabilities: ['documents:read'], adminOnly: true },
         },
         {
+          path: 'documents/:id/preview',
+          component: () => import('@/views/DocumentPreviewView.vue'),
+          meta: { title: '文档预览', capabilities: ['documents:read'] },
+        },
+        {
           path: 'documents/:id',
           component: () => import('@/views/DocumentDetailView.vue'),
           meta: { title: '文档详情', capabilities: ['documents:read'], adminOnly: true },

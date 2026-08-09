@@ -22,7 +22,7 @@ paths:
   /health/ready:
     get:
       security: []
-      summary: Check PostgreSQL, Redis, Chroma, Parser Worker and raw document storage readiness
+      summary: Check PostgreSQL, Redis, Chroma, Parser Worker and document storage readiness
       responses:
         '200':
           description: All required dependencies are ready
@@ -557,6 +557,48 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
+  /v1/documents/{documentId}/preview:
+    parameters:
+      - $ref: '#/components/parameters/DocumentId'
+    get:
+      summary: Describe the ACL-authorized document preview or extracted-text fallback
+      responses:
+        '200':
+          description: Preview manifest without storage paths
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DocumentPreview' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /v1/documents/{documentId}/preview/content:
+    parameters:
+      - $ref: '#/components/parameters/DocumentId'
+    get:
+      summary: Stream ACL-authorized native or generated preview content
+      parameters:
+        - name: Range
+          in: header
+          required: false
+          schema: { type: string, pattern: '^bytes=\d*-\d*$' }
+      responses:
+        '200':
+          description: Complete preview content
+          headers:
+            Accept-Ranges: { schema: { type: string, const: bytes } }
+          content:
+            application/pdf: { schema: { type: string, format: binary } }
+            image/png: { schema: { type: string, format: binary } }
+            image/jpeg: { schema: { type: string, format: binary } }
+            image/svg+xml: { schema: { type: string, format: binary } }
+            text/plain: { schema: { type: string } }
+            text/markdown: { schema: { type: string } }
+        '206': { description: Requested byte range }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { description: Native or generated preview content is not ready }
+        '416': { description: Invalid byte range }
   /v1/documents/{documentId}/reindex:
     parameters:
       - $ref: '#/components/parameters/DocumentId'
@@ -1528,6 +1570,33 @@ components:
         redactionPolicyVersion: { type: string, minLength: 1, maxLength: 64 }
         redactionSummary: { type: object, additionalProperties: { type: integer, minimum: 0 } }
         createdAt: { type: string, format: date-time }
+    DocumentPreview:
+      type: object
+      additionalProperties: false
+      required:
+        [
+          documentId,
+          sourceName,
+          sourceMimeType,
+          status,
+          kind,
+          contentType,
+          renderer,
+          rendererVersion,
+          generatedAt,
+          fallbackVersion,
+        ]
+      properties:
+        documentId: { type: string, format: uuid }
+        sourceName: { type: string, minLength: 1 }
+        sourceMimeType: { type: string, minLength: 1 }
+        status: { type: string, enum: [ready, fallback, unavailable] }
+        kind: { type: [string, 'null'], enum: [pdf, image, text, markdown, svg, extracted, null] }
+        contentType: { type: [string, 'null'], minLength: 1 }
+        renderer: { type: [string, 'null'], minLength: 1, maxLength: 128 }
+        rendererVersion: { type: [string, 'null'], minLength: 1, maxLength: 64 }
+        generatedAt: { type: [string, 'null'], format: date-time }
+        fallbackVersion: { type: [integer, 'null'], minimum: 1 }
     DocumentChunkListResponse:
       type: object
       additionalProperties: false

@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { createWriteStream } from 'node:fs';
-import { rename, unlink } from 'node:fs/promises';
-import { basename, join } from 'node:path';
+import { lstat, realpath, rename, unlink } from 'node:fs/promises';
+import { basename, extname, join, relative, resolve } from 'node:path';
 import { Transform } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { Injectable } from '@nestjs/common';
@@ -12,6 +12,7 @@ import type {
   DocumentListRequest,
   DocumentListResponse,
   DocumentMetadataUpdateRequest,
+  DocumentPreview,
   DocumentUploadOptions,
   IngestionJob,
   IngestionJobListRequest,
@@ -322,6 +323,159 @@ export class DocumentsService {
         createdAt: version.createdAt.toISOString(),
       })),
     };
+  }
+
+  async getDocumentPreview(id: string, identity: Identity): Promise<DocumentPreview> {
+    this.acl.assertCapability(identity, 'documents:read');
+    const document = await this.prisma.document.findFirst({
+      where: {
+        id,
+        ...this.acl.documentWhere(identity),
+        status: { notIn: ['deleting', 'deleted'] },
+      },
+      select: {
+        id: true,
+        sourceName: true,
+        mimeType: true,
+        activeVersion: true,
+        previewStorageKey: true,
+        previewKind: true,
+        previewMimeType: true,
+        previewRenderer: true,
+        previewRendererVersion: true,
+        previewGeneratedAt: true,
+        versions: {
+          orderBy: { version: 'desc' },
+          select: { version: true, chunkCount: true },
+        },
+      },
+    });
+    if (!document) throw new ApiException('DOCUMENT_NOT_FOUND', '文档不存在', 404);
+
+    const direct = this.directPreview(document.mimeType, document.sourceName);
+    if (direct) {
+      return {
+        documentId: document.id,
+        sourceName: document.sourceName,
+        sourceMimeType: document.mimeType,
+        status: 'ready',
+        ...direct,
+        renderer: 'browser-native',
+        rendererVersion: null,
+        generatedAt: null,
+        fallbackVersion: null,
+      };
+    }
+    if (
+      document.previewStorageKey &&
+      this.isGeneratedPreview(document.previewKind, document.previewMimeType) &&
+      extname(document.previewStorageKey) === `.${document.previewKind}`
+    ) {
+      return {
+        documentId: document.id,
+        sourceName: document.sourceName,
+        sourceMimeType: document.mimeType,
+        status: 'ready',
+        kind: document.previewKind,
+        contentType: document.previewKind === 'pdf' ? 'application/pdf' : 'image/svg+xml',
+        renderer: document.previewRenderer,
+        rendererVersion: document.previewRendererVersion,
+        generatedAt: document.previewGeneratedAt?.toISOString() ?? null,
+        fallbackVersion: null,
+      };
+    }
+    const fallbackVersion =
+      document.versions.find(
+        (version) => version.version === document.activeVersion && version.chunkCount > 0,
+      )?.version ?? document.versions.find((version) => version.chunkCount > 0)?.version;
+    if (fallbackVersion) {
+      return {
+        documentId: document.id,
+        sourceName: document.sourceName,
+        sourceMimeType: document.mimeType,
+        status: 'fallback',
+        kind: 'extracted',
+        contentType: null,
+        renderer: null,
+        rendererVersion: null,
+        generatedAt: null,
+        fallbackVersion,
+      };
+    }
+    return {
+      documentId: document.id,
+      sourceName: document.sourceName,
+      sourceMimeType: document.mimeType,
+      status: 'unavailable',
+      kind: null,
+      contentType: null,
+      renderer: null,
+      rendererVersion: null,
+      generatedAt: null,
+      fallbackVersion: null,
+    };
+  }
+
+  async getDocumentPreviewContent(
+    id: string,
+    identity: Identity,
+  ): Promise<{
+    path: string;
+    size: number;
+    mimeType: string;
+    sourceName: string;
+    kind: 'pdf' | 'image' | 'text' | 'markdown' | 'svg';
+  }> {
+    this.acl.assertCapability(identity, 'documents:read');
+    const document = await this.prisma.document.findFirst({
+      where: {
+        id,
+        ...this.acl.documentWhere(identity),
+        status: { notIn: ['deleting', 'deleted'] },
+      },
+      select: {
+        sourceName: true,
+        storageKey: true,
+        mimeType: true,
+        previewStorageKey: true,
+        previewKind: true,
+        previewMimeType: true,
+      },
+    });
+    if (!document) throw new ApiException('DOCUMENT_NOT_FOUND', '文档不存在', 404);
+
+    const direct = this.directPreview(document.mimeType, document.sourceName);
+    if (direct) {
+      const file = await this.resolveStoredFile(
+        this.config.values.RAW_DOCS_PATH,
+        document.storageKey,
+      );
+      return {
+        path: file.path,
+        size: file.size,
+        mimeType: direct.contentType,
+        sourceName: document.sourceName,
+        kind: direct.kind,
+      };
+    }
+    if (
+      document.previewStorageKey &&
+      this.isGeneratedPreview(document.previewKind, document.previewMimeType) &&
+      extname(document.previewStorageKey) === `.${document.previewKind}`
+    ) {
+      const file = await this.resolveStoredFile(
+        this.config.values.PREVIEW_ARTIFACTS_PATH,
+        document.previewStorageKey,
+      );
+      return {
+        path: file.path,
+        size: file.size,
+        mimeType: document.previewKind === 'pdf' ? 'application/pdf' : 'image/svg+xml',
+        sourceName: document.sourceName,
+        kind: document.previewKind,
+      };
+    }
+    throw new ApiException('DOCUMENT_PREVIEW_NOT_READY', '文档预览内容尚未生成', 409);
   }
 
   async listDocumentChunks(
@@ -945,6 +1099,7 @@ export class DocumentsService {
       select: {
         id: true,
         storageKey: true,
+        previewStorageKey: true,
         status: true,
         activeVersion: true,
         versions: { select: { vectorCollection: true } },
@@ -981,10 +1136,31 @@ export class DocumentsService {
         if (!(error instanceof Error && 'code' in error && error.code === 'ENOENT')) throw error;
       },
     );
+    if (document.previewStorageKey) {
+      if (document.previewStorageKey !== basename(document.previewStorageKey)) {
+        throw new ApiException('PREVIEW_STORAGE_INVALID', '预览产物引用不合法', 500);
+      }
+      await unlink(
+        join(this.config.values.PREVIEW_ARTIFACTS_PATH, document.previewStorageKey),
+      ).catch((error: unknown) => {
+        if (!(error instanceof Error && 'code' in error && error.code === 'ENOENT')) throw error;
+      });
+    }
     await this.prisma.$transaction([
       this.prisma.document.update({
         where: { id: document.id },
-        data: { status: 'deleted', deletedAt: new Date(), activeVersion: null },
+        data: {
+          status: 'deleted',
+          deletedAt: new Date(),
+          activeVersion: null,
+          previewStorageKey: null,
+          previewKind: null,
+          previewMimeType: null,
+          previewSizeBytes: null,
+          previewRenderer: null,
+          previewRendererVersion: null,
+          previewGeneratedAt: null,
+        },
       }),
       this.prisma.documentVersion.updateMany({
         where: { documentId: document.id, tenantId: identity.tenantId },
@@ -1021,6 +1197,69 @@ export class DocumentsService {
 
   private duplicateError(): ApiException {
     return new ApiException('DOCUMENT_DUPLICATE', '相同权限范围内已存在内容相同的文档', 409);
+  }
+
+  private directPreview(
+    mimeType: string,
+    sourceName: string,
+  ): { kind: 'pdf' | 'image' | 'text' | 'markdown'; contentType: string } | undefined {
+    const extension = extname(sourceName).toLowerCase();
+    if (mimeType === 'application/pdf' && extension === '.pdf') {
+      return { kind: 'pdf', contentType: 'application/pdf' };
+    }
+    if (mimeType === 'image/png' && extension === '.png') {
+      return { kind: 'image', contentType: 'image/png' };
+    }
+    if (mimeType === 'image/jpeg' && (extension === '.jpg' || extension === '.jpeg')) {
+      return { kind: 'image', contentType: 'image/jpeg' };
+    }
+    if (mimeType === 'text/plain' && extension === '.txt') {
+      return { kind: 'text', contentType: 'text/plain; charset=utf-8' };
+    }
+    if (mimeType === 'text/markdown' && extension === '.md') {
+      return { kind: 'markdown', contentType: 'text/markdown; charset=utf-8' };
+    }
+    return undefined;
+  }
+
+  private isGeneratedPreview(kind: string | null, mimeType: string | null): kind is 'pdf' | 'svg' {
+    return (
+      (kind === 'pdf' && mimeType === 'application/pdf') ||
+      (kind === 'svg' && mimeType === 'image/svg+xml')
+    );
+  }
+
+  private async resolveStoredFile(
+    root: string,
+    storageKey: string,
+  ): Promise<{ path: string; size: number }> {
+    if (!storageKey || storageKey !== basename(storageKey) || storageKey.includes('\0')) {
+      throw new ApiException('PREVIEW_STORAGE_INVALID', '预览存储引用不合法', 500);
+    }
+    try {
+      const rootPath = await realpath(root);
+      const candidate = resolve(rootPath, storageKey);
+      const relativePath = relative(rootPath, candidate);
+      if (relativePath.startsWith('..') || relativePath === '' || relativePath.includes('\0')) {
+        throw new Error('invalid storage path');
+      }
+      const metadata = await lstat(candidate);
+      if (!metadata.isFile() || metadata.isSymbolicLink() || metadata.size <= 0) {
+        throw new Error('not a non-empty regular file');
+      }
+      const filePath = await realpath(candidate);
+      const realRelativePath = relative(rootPath, filePath);
+      if (realRelativePath.startsWith('..') || realRelativePath === '') {
+        throw new Error('storage path escaped root');
+      }
+      return { path: filePath, size: metadata.size };
+    } catch (error) {
+      if (error instanceof ApiException) throw error;
+      if (error instanceof Error && 'code' in error && error.code === 'ENOENT') {
+        throw new ApiException('DOCUMENT_PREVIEW_MISSING', '文档预览内容不存在', 404);
+      }
+      throw new ApiException('PREVIEW_STORAGE_INVALID', '预览存储引用不合法', 500);
+    }
   }
 
   private ingestionJobSelect() {

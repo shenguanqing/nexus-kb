@@ -37,7 +37,9 @@ describe('ParserClient contract validation', () => {
     expect(result.elements[0]?.text).toBe('hello');
     const init = fetchMock.mock.calls[0]?.[1] as RequestInit;
     expect(new Headers(init.headers).get('x-internal-token')).toBe('internal-test-token');
-    expect(String(fetchMock.mock.calls[0]?.[0])).toBe('http://parser-worker:8000/internal/v1/parse');
+    expect(String(fetchMock.mock.calls[0]?.[0])).toBe(
+      'http://parser-worker:8000/internal/v1/parse',
+    );
   });
 
   it('rejects an invalid Worker response at runtime', async () => {
@@ -60,6 +62,45 @@ describe('ParserClient contract validation', () => {
     await expect(
       new ParserClient(config).parse(
         { jobId: id, documentId: id, storagePath: '/data/raw-docs/a.txt', mimeType: 'text/plain' },
+        id,
+      ),
+    ).rejects.toMatchObject({ code: 'PARSER_INVALID_RESPONSE', retryable: false });
+  });
+
+  it('rejects a preview artifact belonging to another document', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            parser: 'python-docx',
+            parserVersion: '1.1.0',
+            elements: [{ text: 'hello', elementType: 'paragraph' }],
+            preview: {
+              storageKey: '6769af9a-a4d0-4dc2-a97d-942584a9c826.pdf',
+              kind: 'pdf',
+              mimeType: 'application/pdf',
+              sizeBytes: 1024,
+              renderer: 'libreoffice',
+              rendererVersion: '25.2.4',
+            },
+          }),
+          { status: 200 },
+        ),
+      ),
+    );
+    const config = {
+      values: {
+        PARSER_WORKER_URL: 'http://parser-worker:8000',
+        PARSER_DWG_WORKER_URL: 'http://parser-worker-dwg:8000',
+        PARSER_INTERNAL_TOKEN: 'internal-test-token',
+        PARSER_REQUEST_TIMEOUT_MS: 1_000,
+      },
+    } as AppConfig;
+
+    await expect(
+      new ParserClient(config).parse(
+        { jobId: id, documentId: id, storagePath: '/data/raw-docs/a.docx', mimeType: 'docx' },
         id,
       ),
     ).rejects.toMatchObject({ code: 'PARSER_INVALID_RESPONSE', retryable: false });

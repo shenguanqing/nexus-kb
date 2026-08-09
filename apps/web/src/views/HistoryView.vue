@@ -191,7 +191,9 @@ async function changePage(nextPage: number): Promise<void> {
           <div class="heading heading--h2" role="heading" aria-level="2">{{ selected.title }}</div>
           <div class="history-detail-body">
             <div v-for="turn in selected.turns" :key="turn.id" class="history-turn">
-              <div class="history-question text-block"><strong>你</strong>{{ turn.question }}</div>
+              <div class="history-question text-block">
+                <strong>用户</strong>{{ turn.question }}
+              </div>
               <HistoryAnswer :turn="turn" />
             </div>
           </div>

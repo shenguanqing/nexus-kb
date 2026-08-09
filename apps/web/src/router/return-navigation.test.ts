@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { documentDetailReturn, ingestionJobsReturn } from './return-navigation';
+import {
+  documentDetailReturn,
+  documentPreviewReturn,
+  ingestionJobsReturn,
+} from './return-navigation';
 
 describe('return navigation', () => {
   it('preserves an ingestion task list as the document detail origin', () => {
@@ -26,5 +30,16 @@ describe('return navigation', () => {
       label: '返回文档详情',
     });
     expect(ingestionJobsReturn('/documents')).toBeNull();
+  });
+
+  it('returns previews only to safe in-app knowledge or document routes', () => {
+    expect(documentPreviewReturn('/history?page=2')).toEqual({
+      to: '/history?page=2',
+      label: '返回问答历史',
+    });
+    expect(documentPreviewReturn('https://example.com')).toEqual({
+      to: '/ask',
+      label: '返回知识问答',
+    });
   });
 });

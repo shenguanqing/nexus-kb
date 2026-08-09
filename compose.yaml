@@ -14,6 +14,7 @@ services:
       - '127.0.0.1:3000:3000'
     volumes:
       - raw_docs:/data/raw-docs
+      - preview_artifacts:/data/previews
     extra_hosts:
       - 'host.docker.internal:host-gateway'
     depends_on:
@@ -53,6 +54,10 @@ services:
     environment:
       PARSER_INTERNAL_TOKEN: ${PARSER_INTERNAL_TOKEN}
       RAW_DOCS_PATH: /data/raw-docs
+      PREVIEW_ARTIFACTS_PATH: /data/previews
+      LIBREOFFICE_EXECUTABLE: ${LIBREOFFICE_EXECUTABLE:-/usr/lib/libreoffice/program/soffice}
+      PREVIEW_CONVERSION_TIMEOUT_SECONDS: ${PREVIEW_CONVERSION_TIMEOUT_SECONDS:-120}
+      MAX_PREVIEW_BYTES: ${MAX_PREVIEW_BYTES:-209715200}
       # 常规解析保持原生架构；DWG 仅交由 compose.dwg.yaml 的专用 x86 Worker。
       DWG_CONVERSION_ENABLED: 'false'
       PARSER_TEMP_PATH: ${PARSER_TEMP_PATH:-/tmp/parser}
@@ -70,6 +75,7 @@ services:
       - '8000'
     volumes:
       - raw_docs:/data/raw-docs:ro
+      - preview_artifacts:/data/previews
     tmpfs:
       - /tmp:size=1g,mode=1777,uid=10002,gid=10002
     healthcheck:
@@ -299,6 +305,7 @@ networks:
 
 volumes:
   raw_docs: {}
+  preview_artifacts: {}
   postgres_data: {}
   redis_data: {}
   chroma_data: {}

@@ -7,6 +7,7 @@ import { useKnowledgeConversationStore } from '@/stores/knowledge-conversation';
 import { useBreakpoint } from '@/composables/useBreakpoint';
 import {
   documentDetailReturn,
+  documentPreviewReturn,
   ingestionJobsReturn,
   type ReturnNavigation,
 } from '@/router/return-navigation';
@@ -45,6 +46,7 @@ const pageSection = computed(() => {
 const pageDescription = computed(() => {
   if (route.path === '/history') return '查看与管理个人历史问答记录';
   if (route.path === '/documents') return '管理已授权文档、索引状态与上传入口';
+  if (/^\/documents\/[^/]+\/preview$/.test(route.path)) return '预览当前权限允许访问的文档内容';
   if (route.path === '/ingestion-jobs') return '跟踪文档解析、脱敏与索引进度';
   if (route.path === '/audit') return '查看当前租户的最小披露审计事件';
   if (route.path.startsWith('/access')) return '在服务端权限边界内管理访问策略';
@@ -119,6 +121,9 @@ function closeMobileMenu(): void {
   mobileMenuOpen.value = false;
 }
 const returnNavigation = computed<ReturnNavigation | null>(() => {
+  if (/^\/documents\/[^/]+\/preview$/.test(route.path)) {
+    return documentPreviewReturn(route.query.from);
+  }
   if (/^\/documents\/[^/]+\/chunks$/.test(route.path)) {
     return { to: `/documents/${String(route.params.id)}`, label: '返回文档详情' };
   }
@@ -183,20 +188,12 @@ async function signOut(): Promise<void> {
     <aside class="app-sidebar">
       <nav aria-label="主导航">
         <div class="navigation-label">工作台</div>
-        <RouterLink
-          v-for="item in visiblePrimaryNavigation"
-          :key="item.to"
-          :to="item.to"
-        >
+        <RouterLink v-for="item in visiblePrimaryNavigation" :key="item.to" :to="item.to">
           <span aria-hidden="true">{{ item.icon }}</span>
           <b>{{ item.label }}</b>
         </RouterLink>
         <div v-if="visibleManagementNavigation.length > 0" class="navigation-label">管理</div>
-        <RouterLink
-          v-for="item in visibleManagementNavigation"
-          :key="item.to"
-          :to="item.to"
-        >
+        <RouterLink v-for="item in visibleManagementNavigation" :key="item.to" :to="item.to">
           <span aria-hidden="true">{{ item.icon }}</span>
           <b>{{ item.label }}</b>
         </RouterLink>
@@ -214,7 +211,7 @@ async function signOut(): Promise<void> {
     <main class="app-main">
       <div v-if="route.path !== '/ask'" class="page-heading">
         <div class="page-heading-copy">
-          <span class="page-heading-eyebrow">{{ pageSection }}</span>
+          <!-- <span class="page-heading-eyebrow">{{ pageSection }}</span> -->
           <div class="heading heading--h1" role="heading" aria-level="1">{{ pageTitle }}</div>
           <div v-if="pageDescription" class="text-block">{{ pageDescription }}</div>
         </div>

@@ -76,7 +76,7 @@ components:
     ParseResponse:
       type: object
       additionalProperties: false
-      required: [parser, parserVersion, elements]
+      required: [parser, parserVersion, elements, preview]
       properties:
         parser: { type: string, minLength: 1 }
         parserVersion: { type: string, minLength: 1 }
@@ -89,3 +89,19 @@ components:
           type: array
           items: { type: string }
           default: []
+        preview:
+          oneOf:
+            - $ref: '#/components/schemas/PreviewArtifact'
+            - type: 'null'
+    PreviewArtifact:
+      type: object
+      additionalProperties: false
+      required: [storageKey, kind, mimeType, sizeBytes, renderer, rendererVersion]
+      properties:
+        storageKey:
+          { type: string, pattern: '^[0-9a-f-]{36}\.(?:pdf|svg)$', minLength: 40, maxLength: 40 }
+        kind: { type: string, enum: [pdf, svg] }
+        mimeType: { type: string, enum: [application/pdf, image/svg+xml] }
+        sizeBytes: { type: integer, minimum: 1, maximum: 1073741824 }
+        renderer: { type: string, minLength: 1, maxLength: 128 }
+        rendererVersion: { type: string, minLength: 1, maxLength: 64 }

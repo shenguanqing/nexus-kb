@@ -9,6 +9,9 @@ class Settings(BaseSettings):
 
     parser_internal_token: str = Field(min_length=16, validation_alias="PARSER_INTERNAL_TOKEN")
     raw_docs_path: Path = Field(validation_alias="RAW_DOCS_PATH")
+    preview_artifacts_path: Path = Field(
+        default=Path("/data/previews"), validation_alias="PREVIEW_ARTIFACTS_PATH"
+    )
     max_parse_bytes: int = Field(
         default=52_428_800,
         ge=1,
@@ -102,4 +105,20 @@ class Settings(BaseSettings):
     )
     max_archive_uncompressed_bytes: int = Field(
         default=524_288_000, ge=1, validation_alias="MAX_ARCHIVE_UNCOMPRESSED_BYTES"
+    )
+    libreoffice_executable: Path = Field(
+        default=Path("/usr/lib/libreoffice/program/soffice"),
+        validation_alias="LIBREOFFICE_EXECUTABLE",
+    )
+    preview_conversion_timeout_seconds: int = Field(
+        default=120,
+        ge=1,
+        le=900,
+        validation_alias="PREVIEW_CONVERSION_TIMEOUT_SECONDS",
+    )
+    max_preview_bytes: int = Field(
+        default=209_715_200,
+        ge=1,
+        le=1_073_741_824,
+        validation_alias="MAX_PREVIEW_BYTES",
     )

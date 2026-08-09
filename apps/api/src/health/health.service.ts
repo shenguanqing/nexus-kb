@@ -39,6 +39,7 @@ export class HealthService {
       this.checkVectorStore(),
       ...parserChecks,
       this.checkDirectory('rawDocs', this.config.values.RAW_DOCS_PATH),
+      this.checkDirectory('previewArtifacts', this.config.values.PREVIEW_ARTIFACTS_PATH),
     ]);
     const checks = Object.fromEntries(entries);
     return {

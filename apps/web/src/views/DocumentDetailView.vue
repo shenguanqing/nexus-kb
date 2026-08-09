@@ -173,6 +173,11 @@ onMounted(load);
             <div class="text-block">{{ document.mimeType }}</div>
           </div>
           <div class="detail-action-buttons">
+            <RouterLink
+              :to="{ path: `/documents/${document.id}/preview`, query: { from: route.fullPath } }"
+            >
+              <el-button>预览文档</el-button>
+            </RouterLink>
             <el-button
               v-if="canWrite"
               :disabled="document.status !== 'active'"
@@ -327,8 +332,8 @@ onMounted(load);
                   <span>解析器</span><strong>{{ version.parserVersion }}</strong>
                 </div>
                 <div>
-                  <span>向量库</span
-                  ><strong class="fingerprint">{{ version.vectorCollection ?? '—' }}</strong>
+                  <span>向量库</span>
+                  <strong class="fingerprint">{{ version.vectorCollection ?? '—' }}</strong>
                 </div>
                 <div>
                   <span>创建时间</span>

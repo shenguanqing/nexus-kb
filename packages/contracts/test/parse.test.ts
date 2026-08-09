@@ -115,6 +115,25 @@ describe('parser contract', () => {
 
     expect(response.elements[0]?.sectionPath).toEqual([]);
     expect(response.warnings).toEqual([]);
+    expect(response.preview).toBeNull();
+  });
+
+  it('accepts a bounded parser-generated preview artifact', () => {
+    expect(
+      parseResponseSchema.parse({
+        parser: 'python-docx',
+        parserVersion: '1.1.0',
+        elements: [{ text: 'hello', elementType: 'paragraph' }],
+        preview: {
+          storageKey: `${id}.pdf`,
+          kind: 'pdf',
+          mimeType: 'application/pdf',
+          sizeBytes: 1024,
+          renderer: 'libreoffice',
+          rendererVersion: '25.2.4',
+        },
+      }).preview,
+    ).toMatchObject({ kind: 'pdf', sizeBytes: 1024 });
   });
 
   it('rejects unknown trusted fields and empty results', () => {

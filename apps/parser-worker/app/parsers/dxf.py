@@ -11,7 +11,7 @@ from ezdxf.filemanagement import readfile
 from ezdxf.lldxf.const import DXFAttributeError, DXFError, DXFKeyError
 from ezdxf.version import __version__ as ezdxf_version
 
-from app.schemas import ParsedElement
+from app.schemas import ParsedElement, PreviewArtifact
 
 TEXT_ENTITY_TYPES = {"TEXT", "MTEXT", "ATTRIB", "ATTDEF"}
 DXF_UNIT_NAMES = {
@@ -48,6 +48,7 @@ class DxfParseResult:
     elements: list[ParsedElement]
     warnings: list[str]
     parser_version: str
+    preview: PreviewArtifact | None = None
 
 
 @dataclass

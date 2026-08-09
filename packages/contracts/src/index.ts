@@ -52,9 +52,11 @@ export {
   parsedElementSchema,
   parseRequestSchema,
   parseResponseSchema,
+  previewArtifactSchema,
   type ParsedElement,
   type ParseRequest,
   type ParseResponse,
+  type PreviewArtifact,
 } from './parse';
 export {
   localRerankRequestSchema,
@@ -172,6 +174,7 @@ export {
   documentChunkListResponseSchema,
   documentChunkSchema,
   documentDetailSchema,
+  documentPreviewSchema,
   documentListItemSchema,
   documentListRequestSchema,
   documentListResponseSchema,
@@ -187,6 +190,7 @@ export {
   type DocumentChunkListRequest,
   type DocumentChunkListResponse,
   type DocumentDetail,
+  type DocumentPreview,
   type DocumentListItem,
   type DocumentListRequest,
   type DocumentListResponse,

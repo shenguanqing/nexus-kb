@@ -117,7 +117,7 @@ pnpm --version
 
 ## 第一次启动（推荐本地开发模式）
 
-本节不需要模型 API Key、Ollama 或 ODA。完成后可进入管理界面、使用 Provider 配置发布、上传 TXT、Markdown、PDF、DOCX、XLSX、PNG/JPG 或 DXF 测试文件，验证本地解析、分块和脱敏流程。问答和向量检索需要在后续配置模型。Parser Worker 镜像会在构建阶段预置中文/英文 OCR 模型，首次构建耗时和镜像体积会明显增加，运行时不会下载模型。
+本节不需要模型 API Key、Ollama 或 ODA。完成后可进入管理界面、使用 Provider 配置发布、上传 TXT、Markdown、PDF、DOCX、XLSX、PNG/JPG 或 DXF 测试文件，验证本地解析、分块、脱敏和预览流程。当前上传白名单内的所有格式都有预览：PDF/图片/文本直接显示，DOCX/XLSX 本地转 PDF，DXF 本地转 SVG；CAD 可缩放，全部预览可全屏，转换不可用时显示解析文本。问答和向量检索需要在后续配置模型。Parser Worker 镜像会在构建阶段预置 LibreOffice、Noto CJK 字体、中文/英文 OCR 模型，首次构建耗时和镜像体积会明显增加，运行时不会下载字体或模型。
 
 除特别说明外，所有命令都在仓库根目录执行。
 
@@ -491,12 +491,13 @@ pnpm docker:up:dev
 
 ### 数据存放位置
 
-| 数据                                      | 位置                          |
-| ----------------------------------------- | ----------------------------- |
-| 上传的原始文件                            | Docker `raw_docs` volume      |
-| 文档、ACL、版本、任务、原始及脱敏分块文本 | Docker `postgres_data` volume |
-| 向量、脱敏检索文本和标量 ACL metadata     | Docker `chroma_data` volume   |
-| 队列状态                                  | Docker `redis_data` volume    |
+| 数据                                      | 位置                              |
+| ----------------------------------------- | --------------------------------- |
+| 上传的原始文件                            | Docker `raw_docs` volume          |
+| 本地生成的预览 PDF/SVG                    | Docker `preview_artifacts` volume |
+| 文档、ACL、版本、任务、原始及脱敏分块文本 | Docker `postgres_data` volume     |
+| 向量、脱敏检索文本和标量 ACL metadata     | Docker `chroma_data` volume       |
+| 队列状态                                  | Docker `redis_data` volume        |
 
 需要使用 DBeaver 只读查看 PostgreSQL 时，见 [部署运维手册：使用 DBeaver](./docs/06-部署运维手册.md#54-使用-dbeaver-只读查看-postgresql)。
 

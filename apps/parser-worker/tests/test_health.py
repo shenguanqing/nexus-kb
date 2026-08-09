@@ -49,3 +49,19 @@ def test_readiness_reports_enabled_tika_status(tmp_path: Path, monkeypatch) -> N
 
     assert response.status_code == 503
     assert response.json()["checks"]["tika"] == {"status": "down"}
+
+
+def test_readiness_reports_missing_preview_storage(tmp_path: Path) -> None:
+    settings = Settings(
+        PARSER_INTERNAL_TOKEN="x" * 16,
+        RAW_DOCS_PATH=tmp_path,
+        PREVIEW_ARTIFACTS_PATH=tmp_path / "missing-previews",
+        DWG_CONVERSION_ENABLED=True,
+        DWG_CONVERTER_EXECUTABLE=tmp_path / "missing-converter",
+        PARSER_TEMP_PATH=tmp_path,
+    )
+
+    response = TestClient(create_app(settings)).get("/health/ready")
+
+    assert response.status_code == 503
+    assert response.json()["checks"]["previewArtifacts"] == {"status": "down"}

@@ -146,6 +146,21 @@ export const documentDetailSchema = z
   })
   .strict();
 
+export const documentPreviewSchema = z
+  .object({
+    documentId: z.uuid(),
+    sourceName: z.string().min(1),
+    sourceMimeType: z.string().min(1),
+    status: z.enum(['ready', 'fallback', 'unavailable']),
+    kind: z.enum(['pdf', 'image', 'text', 'markdown', 'svg', 'extracted']).nullable(),
+    contentType: z.string().min(1).nullable(),
+    renderer: z.string().min(1).max(128).nullable(),
+    rendererVersion: z.string().min(1).max(64).nullable(),
+    generatedAt: z.iso.datetime({ offset: true }).nullable(),
+    fallbackVersion: z.number().int().positive().nullable(),
+  })
+  .strict();
+
 export const documentChunkListRequestSchema = z
   .object({
     version: z.coerce.number().int().positive().optional(),
@@ -226,6 +241,7 @@ export type DocumentUploadOptions = z.infer<typeof documentUploadOptionsSchema>;
 export type DocumentUploadAccepted = z.infer<typeof documentUploadAcceptedSchema>;
 export type DocumentVersion = z.infer<typeof documentVersionSchema>;
 export type DocumentDetail = z.infer<typeof documentDetailSchema>;
+export type DocumentPreview = z.infer<typeof documentPreviewSchema>;
 export type DocumentChunkListRequest = z.infer<typeof documentChunkListRequestSchema>;
 export type DocumentChunk = z.infer<typeof documentChunkSchema>;
 export type DocumentChunkListResponse = z.infer<typeof documentChunkListResponseSchema>;

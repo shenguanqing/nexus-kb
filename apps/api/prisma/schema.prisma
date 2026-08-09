@@ -54,25 +54,32 @@ enum DocumentVersionStatus {
 }
 
 model Document {
-  id               String             @id @db.Uuid
-  tenantId         String
-  sourceName       String
-  storageKey       String             @unique
-  mimeType         String
-  contentSha256    String
-  deduplicationKey String?            @db.Char(64)
-  department       String
-  sensitivity      Sensitivity
-  ownerId          String
-  activeVersion    Int?
-  status           DocumentStatus     @default(uploaded)
-  createdAt        DateTime           @default(now())
-  updatedAt        DateTime           @updatedAt
-  deletedAt        DateTime?
-  versions         DocumentVersion[]
-  jobs             IngestionJob[]
-  chunks           KnowledgeChunk[]
-  policyEvents     CloudPolicyEvent[]
+  id                     String             @id @db.Uuid
+  tenantId               String
+  sourceName             String
+  storageKey             String             @unique
+  mimeType               String
+  contentSha256          String
+  deduplicationKey       String?            @db.Char(64)
+  previewStorageKey      String?            @unique
+  previewKind            String?
+  previewMimeType        String?
+  previewSizeBytes       Int?
+  previewRenderer        String?
+  previewRendererVersion String?
+  previewGeneratedAt     DateTime?          @db.Timestamptz(3)
+  department             String
+  sensitivity            Sensitivity
+  ownerId                String
+  activeVersion          Int?
+  status                 DocumentStatus     @default(uploaded)
+  createdAt              DateTime           @default(now())
+  updatedAt              DateTime           @updatedAt
+  deletedAt              DateTime?
+  versions               DocumentVersion[]
+  jobs                   IngestionJob[]
+  chunks                 KnowledgeChunk[]
+  policyEvents           CloudPolicyEvent[]
 
   @@index([tenantId, status])
   @@index([tenantId, createdAt])
@@ -226,21 +233,21 @@ model QueryAudit {
 }
 
 model UserDirectoryEntry {
-  tenantId            String
-  userId              String
-  username            String?  @unique
-  department          String
-  roles               Json
-  managedRoles        Json?
+  tenantId             String
+  userId               String
+  username             String?      @unique
+  department           String
+  roles                Json
+  managedRoles         Json?
   allowedSensitivities Json?
-  defaultSensitivity  Sensitivity?
-  authSource          String   @default("identity")
-  passwordSalt        Bytes?
-  passwordDigest      Bytes?
-  enabled             Boolean  @default(true)
-  lastAuthenticatedAt DateTime @db.Timestamptz(3)
-  createdAt           DateTime @default(now()) @db.Timestamptz(3)
-  updatedAt           DateTime @updatedAt @db.Timestamptz(3)
+  defaultSensitivity   Sensitivity?
+  authSource           String       @default("identity")
+  passwordSalt         Bytes?
+  passwordDigest       Bytes?
+  enabled              Boolean      @default(true)
+  lastAuthenticatedAt  DateTime     @db.Timestamptz(3)
+  createdAt            DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt            DateTime     @updatedAt @db.Timestamptz(3)
 
   @@id([tenantId, userId])
   @@index([tenantId, department, lastAuthenticatedAt])

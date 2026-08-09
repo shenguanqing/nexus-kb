@@ -1,6 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { listDocumentChunks, listDocuments, uploadDocument } from './documents';
+import {
+  fetchDocumentPreview,
+  listDocumentChunks,
+  listDocuments,
+  uploadDocument,
+} from './documents';
 
 afterEach(() => vi.restoreAllMocks());
 
@@ -69,6 +74,34 @@ describe('documents API', () => {
 
     expect(fetchMock.mock.calls[0]?.[0]).toBe(
       '/v1/documents/6769af9a-a4d0-4dc2-a97d-942584a9c826/chunks?version=2&page=3&pageSize=20',
+    );
+  });
+
+  it('loads a path-free preview manifest', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          documentId: '6769af9a-a4d0-4dc2-a97d-942584a9c826',
+          sourceName: '制度.pdf',
+          sourceMimeType: 'application/pdf',
+          status: 'ready',
+          kind: 'pdf',
+          contentType: 'application/pdf',
+          renderer: 'browser-native',
+          rendererVersion: null,
+          generatedAt: null,
+          fallbackVersion: null,
+        }),
+        { status: 200 },
+      ),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(
+      fetchDocumentPreview('6769af9a-a4d0-4dc2-a97d-942584a9c826'),
+    ).resolves.toMatchObject({ status: 'ready', kind: 'pdf' });
+    expect(fetchMock.mock.calls[0]?.[0]).toBe(
+      '/v1/documents/6769af9a-a4d0-4dc2-a97d-942584a9c826/preview',
     );
   });
 });

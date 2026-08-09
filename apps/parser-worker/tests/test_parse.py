@@ -12,7 +12,7 @@ from app import main as main_module
 from app.config import Settings
 from app.main import create_app
 from app.parsers import image as image_parser
-from app.schemas import ParsedElement
+from app.schemas import ParsedElement, PreviewArtifact
 
 TOKEN = "test-internal-token"  # noqa: S105 -- non-secret test fixture
 
@@ -40,12 +40,15 @@ drawing.saveas(output_dir / source_name.with_suffix(".dxf").name)
 
 
 def make_client(root: Path, max_parse_bytes: int = 1_048_576) -> TestClient:
+    preview_root = root / "previews"
+    preview_root.mkdir(exist_ok=True)
     return TestClient(
         create_app(
             Settings(
                 PARSER_INTERNAL_TOKEN=TOKEN,
                 RAW_DOCS_PATH=root,
                 MAX_PARSE_BYTES=max_parse_bytes,
+                PREVIEW_ARTIFACTS_PATH=preview_root,
             )
         )
     )
@@ -110,6 +113,43 @@ def test_docx_preserves_heading_and_table(tmp_path: Path) -> None:
     assert response.json()["parser"] == "python-docx"
     assert response.json()["elements"][1]["sectionPath"] == ["制度"]
     assert response.json()["elements"][-1]["elementType"] == "table_row"
+
+
+def test_docx_returns_generated_preview_manifest(
+    tmp_path: Path, monkeypatch: MonkeyPatch
+) -> None:
+    path = tmp_path / "policy.docx"
+    document = Document()
+    document.add_paragraph("正文")
+    document.save(path)
+    body = payload(path)
+    body["mimeType"] = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    document_id = body["documentId"]
+
+    def fake_preview(*_: object, **__: object) -> PreviewArtifact:
+        return PreviewArtifact(
+            storage_key=f"{document_id}.pdf",
+            kind="pdf",
+            mime_type="application/pdf",
+            size_bytes=1024,
+            renderer="libreoffice",
+            renderer_version="test",
+        )
+
+    monkeypatch.setattr(main_module, "generate_office_pdf", fake_preview)
+    response = make_client(tmp_path).post(
+        "/internal/v1/parse", headers={"x-internal-token": TOKEN}, json=body
+    )
+
+    assert response.status_code == 200
+    assert response.json()["preview"] == {
+        "storageKey": f"{document_id}.pdf",
+        "kind": "pdf",
+        "mimeType": "application/pdf",
+        "sizeBytes": 1024,
+        "renderer": "libreoffice",
+        "rendererVersion": "test",
+    }
 
 
 def test_xlsx_preserves_sheet_and_header(tmp_path: Path) -> None:
@@ -395,6 +435,8 @@ def test_dxf_extracts_summary_text_block_attributes_and_dimensions(tmp_path: Pat
     assert any(element["text"] == "NexusKB CAD" for element in parsed["elements"])
     assert any(element["text"] == "Payment term: 30 days" for element in parsed["elements"])
     assert any(element["elementType"] == "cad_dimension" for element in parsed["elements"])
+    assert parsed["preview"]["kind"] == "svg"
+    assert (tmp_path / "previews" / parsed["preview"]["storageKey"]).is_file()
 
 
 def test_dxf_rejects_entity_limit(tmp_path: Path) -> None:

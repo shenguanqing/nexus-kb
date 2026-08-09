@@ -55,3 +55,45 @@ export async function apiRequest<T>(
     window.clearTimeout(timeout);
   }
 }
+
+export async function apiTextRequest(
+  path: string,
+  init: RequestInit = {},
+  timeoutMs = 30_000,
+): Promise<string> {
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(path, {
+      ...init,
+      credentials: 'include',
+      headers: { Accept: 'text/plain, text/markdown;q=0.9', ...init.headers },
+      signal: controller.signal,
+    });
+    const body = await response.text();
+    if (!response.ok) {
+      let payload: unknown = null;
+      try {
+        payload = JSON.parse(body) as unknown;
+      } catch {
+        // A non-JSON upstream error is intentionally reduced to a generic message.
+      }
+      const parsed = apiErrorSchema.safeParse(payload);
+      throw new ApiError(
+        response.status,
+        parsed.success ? parsed.data.error.code : 'HTTP_ERROR',
+        parsed.success ? parsed.data.error.message : '请求失败，请稍后重试',
+        parsed.success ? (parsed.data.error.traceId ?? null) : null,
+      );
+    }
+    return body;
+  } catch (error) {
+    if (error instanceof ApiError) throw error;
+    if (error instanceof DOMException && error.name === 'AbortError') {
+      throw new ApiError(504, 'REQUEST_TIMEOUT', '请求超时，请稍后重试', null);
+    }
+    throw new ApiError(0, 'NETWORK_ERROR', '网络连接失败，请检查连接后重试', null);
+  } finally {
+    window.clearTimeout(timeout);
+  }
+}

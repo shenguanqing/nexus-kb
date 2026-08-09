@@ -43,7 +43,7 @@ Web 只负责用户体验。真正的身份、tenant、ACL、敏感度和 capabi
 
 - `KnowledgeAskView`：知识问答、严格/通用回答模式和来源。
 - `HistoryView`：当前登录用户的问答历史。
-- `DocumentsView`、`DocumentDetailView`、`DocumentChunksView`：文档、版本和授权分块。
+- `DocumentsView`、`DocumentDetailView`、`DocumentChunksView`、`DocumentPreviewView`：文档、版本、授权分块和全格式预览；CAD 支持 50%–400% 缩放，全部预览支持全屏。
 - `IngestionJobsView`：入库状态、步骤、失败详情和安全重试。
 - `UsersView`、`DepartmentsView`：角色与部门权限。
 - `AuditView`：无正文结构化审计。

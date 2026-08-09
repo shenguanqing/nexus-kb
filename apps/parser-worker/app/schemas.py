@@ -25,8 +25,20 @@ class ParsedElement(ApiModel):
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 
+class PreviewArtifact(ApiModel):
+    storage_key: str = Field(
+        alias="storageKey", pattern=r"^[0-9a-f-]{36}\.(?:pdf|svg)$"
+    )
+    kind: str = Field(pattern=r"^(?:pdf|svg)$")
+    mime_type: str = Field(alias="mimeType", pattern=r"^(?:application/pdf|image/svg\+xml)$")
+    size_bytes: int = Field(alias="sizeBytes", gt=0, le=1_073_741_824)
+    renderer: str = Field(min_length=1, max_length=128)
+    renderer_version: str = Field(alias="rendererVersion", min_length=1, max_length=64)
+
+
 class ParseResponse(ApiModel):
     parser: str = Field(min_length=1, max_length=128)
     parser_version: str = Field(alias="parserVersion", min_length=1, max_length=64)
     elements: list[ParsedElement] = Field(min_length=1, max_length=100_000)
     warnings: list[str] = Field(default_factory=list, max_length=1_000)
+    preview: PreviewArtifact | None = None

@@ -3,8 +3,10 @@ import shutil
 import subprocess
 import tempfile
 from pathlib import Path
+from uuid import UUID
 
 from app.parsers.dxf import DxfParseResult, parse_dxf
+from app.preview import generate_cad_svg
 
 SUPPORTED_DWG_VERSIONS = {
     "AC1009",
@@ -60,6 +62,9 @@ def parse_dwg(
     max_entities: int,
     max_elements: int,
     max_insert_depth: int,
+    document_id: UUID,
+    preview_root: Path,
+    max_preview_bytes: int,
 ) -> DxfParseResult:
     source_version = _validate_dwg_header(path)
     if not converter_is_ready(executable, temp_root):
@@ -114,14 +119,27 @@ def parse_dwg(
         if output_size == 0 or output_size > max_converted_bytes:
             raise DwgConversionInvalidError("DWG 转换结果为空或超过大小限制")
         result = parse_dxf(output_path, max_entities, max_elements, max_insert_depth)
+        preview = None
+        preview_warnings: list[str] = []
+        try:
+            preview = generate_cad_svg(
+                output_path,
+                document_id,
+                preview_root=preview_root,
+                max_bytes=max_preview_bytes,
+            )
+        except Exception:
+            preview_warnings.append("PREVIEW_GENERATION_FAILED")
         return DxfParseResult(
             elements=result.elements,
             warnings=[
                 "DWG_CONVERTED_TO_DXF",
                 f"DWG_SOURCE_VERSION:{source_version}",
                 *result.warnings,
+                *preview_warnings,
             ],
             parser_version=f"oda-{converter_release}+ezdxf-{result.parser_version}",
+            preview=preview,
         )
 
 

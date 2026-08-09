@@ -22,7 +22,7 @@ Parser Worker 只返回结构化元素；分块、脱敏、云端出网策略和
 | ------------------------- | -------------------------------------------------------------- |
 | `src/auth`                | 服务端身份、OIDC/JWT、账号密码会话、角色与 ACL 基础策略        |
 | `src/access`              | 用户目录、角色和部门权限管理                                   |
-| `src/documents`           | 上传校验、文档、版本、metadata 和删除生命周期                  |
+| `src/documents`           | 上传校验、文档、版本、metadata、ACL 预览和删除生命周期         |
 | `src/ingestion`           | BullMQ 任务、Parser 调用后的分块、脱敏、出网策略和索引迁移     |
 | `src/parser`              | Parser Worker 内部客户端、响应校验和安全错误映射               |
 | `src/knowledge`           | 查询规范化、ACL 检索、上下文策略、回答生成、引用校验和查询审计 |

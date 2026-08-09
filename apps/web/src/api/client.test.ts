@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { apiRequest } from './client';
+import { apiRequest, apiTextRequest } from './client';
 
 afterEach(() => vi.restoreAllMocks());
 
@@ -32,5 +32,13 @@ describe('apiRequest', () => {
       code: 'FORBIDDEN',
       traceId: 'trace-1',
     });
+  });
+
+  it('loads authorized text preview content with cookies', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response('# 制度', { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(apiTextRequest('/preview')).resolves.toBe('# 制度');
+    expect(fetchMock.mock.calls[0]?.[1]).toMatchObject({ credentials: 'include' });
   });
 });

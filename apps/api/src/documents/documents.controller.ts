@@ -10,6 +10,8 @@ import {
   Post,
   Query,
   Req,
+  Res,
+  StreamableFile,
 } from '@nestjs/common';
 import {
   documentChunkListRequestSchema,
@@ -21,12 +23,14 @@ import type {
   DocumentDetail,
   DocumentChunkListResponse,
   DocumentListResponse,
+  DocumentPreview,
   DocumentUploadOptions,
   IngestionJob,
   IngestionJobListResponse,
   IngestionRetryAccepted,
 } from '@nexus-kb/contracts';
-import type { FastifyRequest } from 'fastify';
+import type { FastifyReply, FastifyRequest } from 'fastify';
+import { createReadStream } from 'node:fs';
 
 import { requestIdentity } from '../auth/identity';
 import { ApiException } from '../common/api-exception';
@@ -64,6 +68,51 @@ export class DocumentsController {
     @Req() request: FastifyRequest,
   ): Promise<DocumentDetail> {
     return this.documents.getDocument(documentId, requestIdentity(request));
+  }
+
+  @Get('documents/:documentId/preview')
+  getDocumentPreview(
+    @Param('documentId', new ParseUUIDPipe({ version: '4' })) documentId: string,
+    @Req() request: FastifyRequest,
+  ): Promise<DocumentPreview> {
+    return this.documents.getDocumentPreview(documentId, requestIdentity(request));
+  }
+
+  @Get('documents/:documentId/preview/content')
+  async getDocumentPreviewContent(
+    @Param('documentId', new ParseUUIDPipe({ version: '4' })) documentId: string,
+    @Req() request: FastifyRequest,
+    @Res({ passthrough: true }) reply: FastifyReply,
+  ): Promise<StreamableFile> {
+    const content = await this.documents.getDocumentPreviewContent(
+      documentId,
+      requestIdentity(request),
+    );
+    const range = parseSingleByteRange(request.headers.range, content.size);
+    if (request.headers.range && !range) {
+      reply.header('content-range', `bytes */${content.size}`);
+      throw new ApiException('PREVIEW_RANGE_INVALID', '预览范围请求不合法', 416);
+    }
+    const start = range?.start ?? 0;
+    const end = range?.end ?? content.size - 1;
+    const contentLength = end - start + 1;
+    reply.header('accept-ranges', 'bytes');
+    reply.header('cache-control', 'private, no-store');
+    reply.header('content-type', content.mimeType);
+    reply.header('content-length', String(contentLength));
+    reply.header('content-disposition', inlineDisposition(content.sourceName));
+    reply.header('x-content-type-options', 'nosniff');
+    if (content.kind === 'svg') {
+      reply.header(
+        'content-security-policy',
+        "default-src 'none'; style-src 'unsafe-inline'; sandbox",
+      );
+    }
+    if (range) {
+      reply.status(206);
+      reply.header('content-range', `bytes ${start}-${end}/${content.size}`);
+    }
+    return new StreamableFile(createReadStream(content.path, { start, end }));
   }
 
   @Get('documents/:documentId/chunks')
@@ -148,4 +197,36 @@ export class DocumentsController {
       request.id,
     );
   }
+}
+
+export function parseSingleByteRange(
+  header: string | undefined,
+  size: number,
+): { start: number; end: number } | undefined {
+  if (!header) return undefined;
+  const match = /^bytes=(\d*)-(\d*)$/.exec(header.trim());
+  if (!match || size <= 0) return undefined;
+  const [, startText = '', endText = ''] = match;
+  if (!startText && !endText) return undefined;
+  if (!startText) {
+    const suffixLength = Number(endText);
+    if (!Number.isSafeInteger(suffixLength) || suffixLength <= 0) return undefined;
+    return { start: Math.max(0, size - suffixLength), end: size - 1 };
+  }
+  const start = Number(startText);
+  const requestedEnd = endText ? Number(endText) : size - 1;
+  if (
+    !Number.isSafeInteger(start) ||
+    !Number.isSafeInteger(requestedEnd) ||
+    start < 0 ||
+    requestedEnd < start ||
+    start >= size
+  ) {
+    return undefined;
+  }
+  return { start, end: Math.min(requestedEnd, size - 1) };
+}
+
+function inlineDisposition(sourceName: string): string {
+  return `inline; filename*=UTF-8''${encodeURIComponent(sourceName)}`;
 }

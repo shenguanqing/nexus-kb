@@ -36,19 +36,16 @@ export class ParserClient {
     try {
       let response: Response;
       try {
-        response = await fetch(
-          new URL('/internal/v1/parse', this.workerUrl(validatedRequest)),
-          {
-            method: 'POST',
-            headers: {
-              'content-type': 'application/json',
-              'x-internal-token': this.config.values.PARSER_INTERNAL_TOKEN,
-              'x-trace-id': traceId,
-            },
-            body: JSON.stringify(validatedRequest),
-            signal: controller.signal,
+        response = await fetch(new URL('/internal/v1/parse', this.workerUrl(validatedRequest)), {
+          method: 'POST',
+          headers: {
+            'content-type': 'application/json',
+            'x-internal-token': this.config.values.PARSER_INTERNAL_TOKEN,
+            'x-trace-id': traceId,
           },
-        );
+          body: JSON.stringify(validatedRequest),
+          signal: controller.signal,
+        });
       } catch (error) {
         if (controller.signal.aborted || (error instanceof Error && error.name === 'AbortError')) {
           throw new ParserError('timeout', true, { cause: error });
@@ -58,6 +55,12 @@ export class ParserClient {
       if (!response.ok) throw this.statusError(response);
       try {
         const result = parseResponseSchema.parse(await response.json());
+        if (
+          result.preview &&
+          result.preview.storageKey !== `${validatedRequest.documentId}.${result.preview.kind}`
+        ) {
+          throw new Error('Preview artifact is not bound to the requested document');
+        }
         this.metrics?.observeParser('success', Date.now() - startedAt);
         this.metrics?.addParserWarnings(result.warnings);
         return result;

@@ -179,13 +179,11 @@ const environmentSchema = z
     DATABASE_URL: z.url().refine((url) => url.startsWith('postgresql://'), 'must use postgresql'),
     REDIS_URL: z.url().refine((url) => url.startsWith('redis://'), 'must use redis'),
     PARSER_WORKER_URL: z.url(),
-    PARSER_DWG_WORKER_URL: z
-      .string()
-      .trim()
-      .default('http://parser-worker-dwg:8000'),
+    PARSER_DWG_WORKER_URL: z.string().trim().default('http://parser-worker-dwg:8000'),
     PARSER_INTERNAL_TOKEN: z.string().min(16),
     PARSER_REQUEST_TIMEOUT_MS: z.coerce.number().int().min(100).max(900_000).default(240_000),
     RAW_DOCS_PATH: z.string().min(1),
+    PREVIEW_ARTIFACTS_PATH: z.string().min(1).default('/data/previews'),
     DWG_CONVERSION_ENABLED: z
       .enum(['true', 'false'])
       .default('true')

@@ -11,6 +11,16 @@ const sourceLocation = computed(() => {
   if (props.source?.sheet) return `工作表 ${props.source.sheet}`;
   return null;
 });
+const previewTarget = computed(() => {
+  if (!props.source) return '/ask';
+  const query: Record<string, string> = {
+    from: window.location.pathname === '/history' ? '/history' : '/ask',
+    version: String(props.source.documentVersion),
+  };
+  if (props.source.page) query.page = String(props.source.page);
+  if (props.source.sheet) query.sheet = props.source.sheet;
+  return { path: `/documents/${props.source.documentId}/preview`, query };
+});
 </script>
 
 <template>
@@ -44,12 +54,8 @@ const sourceLocation = computed(() => {
       </div>
     </div>
     <template #footer>
-      <RouterLink
-        v-if="source"
-        class="source-drawer__document-link"
-        :to="`/documents/${source.documentId}`"
-      >
-        <el-button type="primary">查看文档详情</el-button>
+      <RouterLink v-if="source" class="source-drawer__document-link" :to="previewTarget">
+        <el-button type="primary">预览文档</el-button>
       </RouterLink>
     </template>
   </el-drawer>

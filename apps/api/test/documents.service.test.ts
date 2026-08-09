@@ -1,4 +1,4 @@
-import { mkdtemp, readdir, rm } from 'node:fs/promises';
+import { mkdtemp, readdir, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Readable } from 'node:stream';
@@ -602,5 +602,81 @@ describe('DocumentsService tenant isolation', () => {
       code: 'CAPABILITY_REQUIRED',
       status: 403,
     });
+  });
+
+  it('returns only a path-free preview manifest for an ACL-visible document', async () => {
+    const findFirst = vi.fn().mockResolvedValue({
+      id: '6769af9a-a4d0-4dc2-a97d-942584a9c826',
+      sourceName: '制度.docx',
+      mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      activeVersion: 1,
+      previewStorageKey: '6769af9a-a4d0-4dc2-a97d-942584a9c826.pdf',
+      previewKind: 'pdf',
+      previewMimeType: 'application/pdf',
+      previewRenderer: 'libreoffice',
+      previewRendererVersion: '25.2.4',
+      previewGeneratedAt: new Date('2026-08-09T08:00:00.000Z'),
+      versions: [{ version: 1, chunkCount: 3 }],
+    });
+    const service = new DocumentsService(
+      {} as AppConfig,
+      { document: { findFirst } } as unknown as PrismaService,
+      {} as IngestionQueue,
+      {} as ChromaVectorStore,
+      logger,
+      acl,
+    );
+
+    const manifest = await service.getDocumentPreview(
+      '6769af9a-a4d0-4dc2-a97d-942584a9c826',
+      identity,
+    );
+
+    expect(manifest).toMatchObject({ status: 'ready', kind: 'pdf' });
+    expect(manifest).not.toHaveProperty('previewStorageKey');
+    const [query] = findFirst.mock.calls[0] as unknown as [
+      { where: { tenantId: string; OR: unknown } },
+    ];
+    expect(query.where.tenantId).toBe('tenant-a');
+    expect(query.where.OR).toEqual(
+      expect.arrayContaining([{ department: 'finance' }, { ownerId: 'user-a' }]),
+    );
+  });
+
+  it('streams only a regular generated preview file inside the configured root', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'nexuskb-preview-'));
+    const storageKey = '6769af9a-a4d0-4dc2-a97d-942584a9c826.svg';
+    await writeFile(join(directory, storageKey), '<svg xmlns="http://www.w3.org/2000/svg"/>');
+    const service = new DocumentsService(
+      { values: { PREVIEW_ARTIFACTS_PATH: directory } } as unknown as AppConfig,
+      {
+        document: {
+          findFirst: vi.fn().mockResolvedValue({
+            sourceName: '图纸.dxf',
+            storageKey: '6769af9a-a4d0-4dc2-a97d-942584a9c826.dxf',
+            mimeType: 'image/vnd.dxf',
+            previewStorageKey: storageKey,
+            previewKind: 'svg',
+            previewMimeType: 'image/svg+xml',
+          }),
+        },
+      } as unknown as PrismaService,
+      {} as IngestionQueue,
+      {} as ChromaVectorStore,
+      logger,
+      acl,
+    );
+
+    try {
+      await expect(
+        service.getDocumentPreviewContent('6769af9a-a4d0-4dc2-a97d-942584a9c826', identity),
+      ).resolves.toMatchObject({
+        path: await realpath(join(directory, storageKey)),
+        kind: 'svg',
+        mimeType: 'image/svg+xml',
+      });
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
   });
 });
