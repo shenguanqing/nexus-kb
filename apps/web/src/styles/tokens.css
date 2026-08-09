@@ -13,15 +13,50 @@
   --kb-radius-sm: 6px;
   --kb-radius-md: 12px;
   --kb-radius-lg: 20px;
+  /*
+   * 基础间距采用 4px 网格。新样式只能引用这些 token，不能自行写入
+   * 8px、10px、15px 等零散间距；例外须说明触控、图标或第三方组件原因。
+   */
+  --kb-space-0: 0;
   --kb-space-1: 4px;
   --kb-space-2: 8px;
   --kb-space-3: 12px;
   --kb-space-4: 16px;
+  --kb-space-5: 20px;
   --kb-space-6: 24px;
   --kb-space-8: 32px;
-  --kb-layout-gap: var(--kb-space-4);
-  --kb-panel-padding: 20px;
-  --kb-list-row-padding: 12px;
+  --kb-space-10: 40px;
+  --kb-space-12: 48px;
+  --kb-space-16: 64px;
+  --kb-space-20: 80px;
+
+  /* 元素级：图标、标签内部与紧凑行内元素。 */
+  --kb-space-inline: var(--kb-space-2);
+  --kb-space-element: var(--kb-space-3);
+  /* 组件级：表单字段、卡片内部和相邻控件。 */
+  --kb-space-component: var(--kb-space-4);
+  --kb-space-section: var(--kb-space-4);
+  /*
+   * 页面级仅允许使用流式 token：375px 为 12px，1440px 约 31px，
+   * 1920px 约 40px；限制上下界避免超宽屏产生松散布局。
+   */
+  --kb-space-page: clamp(12px, calc(1.8vw + 5px), 40px);
+  --kb-space-page-block: clamp(16px, calc(1.1vw + 12px), 32px);
+  /* Markdown 内容随字号缩放，仍集中管理以避免页面内的相对间距漂移。 */
+  --kb-space-text-2xs: 0.12em;
+  --kb-space-text-xs: 0.15em;
+  --kb-space-text-sm: 0.2em;
+  --kb-space-text-md: 0.3em;
+  --kb-space-text-lg: 0.35em;
+  --kb-space-text-xl: 0.6em;
+  --kb-space-text-2xl: 0.75em;
+  --kb-space-text-list-indent: 1.5em;
+  --kb-space-text-quote-indent: 0.9em;
+
+  /* 现有页面共享的语义别名，禁止在业务样式中重新定义数值。 */
+  --kb-layout-gap: var(--kb-space-section);
+  --kb-panel-padding: var(--kb-space-4);
+  --kb-list-row-padding: var(--kb-space-3);
   color: var(--kb-color-text-primary);
   background: var(--kb-color-canvas);
   font-family:
@@ -34,4 +69,23 @@
     'PingFang SC',
     'Microsoft YaHei',
     sans-serif;
+}
+
+/*
+ * 不增加新的布局断点：768/900/1280 与 breakpoints.scss 保持一致。
+ * 375px 通过默认值覆盖；1440px、1920px 由 --kb-space-page 流式插值覆盖。
+ */
+@media (max-width: 767px) {
+  :root {
+    --kb-layout-gap: var(--kb-space-3);
+    --kb-panel-padding: var(--kb-space-3);
+    --kb-list-row-padding: var(--kb-space-3);
+  }
+}
+
+@media (min-width: 768px) and (max-width: 900px) {
+  :root {
+    --kb-layout-gap: var(--kb-space-4);
+    --kb-panel-padding: var(--kb-space-4);
+  }
 }

@@ -97,6 +97,7 @@ Vue 3 + TypeScript + Vite
 
 ### 3.9 阶段 15 后续登录与布局收尾
 
+- [x] 前端间距规范收敛：`tokens.css` 建立 4px 基础间距、页面/组件/元素语义 token 与 375px、768px、1440px、1920px 的映射；`main.css` 的 gap/padding/margin 已统一引用 token（0/auto 与受上下界保护的流式 `clamp()` 除外），不新增既定响应式断点。
 - [x] 配置文档收敛：根目录 `.env.example` 为唯一完整可复制配置清单，每个配置项均有紧邻的中文用途说明；技术设计、开发规范与部署手册已同步到现行变量命名，场景文档不再维护重复全量配置。
 
 - [x] 新增受控账号密码认证模式、服务端 session migration、登录限速、HttpOnly Cookie、退出登录和共享 Zod/OpenAPI 契约；密码、原始 token 和账号配置不进入浏览器持久化、日志或数据库明文。
