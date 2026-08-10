@@ -170,7 +170,11 @@ async function rollback(deployment: SystemDeployment): Promise<void> {
   await ElMessageBox.confirm(
     `确认将运行配置从 v${deployment.configVersion} 回滚到 v${deployment.previousVersion}？`,
     '回滚配置',
-    { type: 'warning', confirmButtonText: '确认回滚', cancelButtonText: '取消' },
+    {
+      type: 'warning',
+      confirmButtonText: '确认回滚',
+      cancelButtonText: '取消',
+    },
   );
   try {
     const accepted = await rollbackSystemDeployment(deployment.id);

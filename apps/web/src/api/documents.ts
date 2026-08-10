@@ -103,7 +103,9 @@ export function reindexDocument(documentId: string): Promise<DocumentReindexAcce
   return apiRequest(
     `/v1/documents/${encodeURIComponent(documentId)}/reindex`,
     documentReindexAcceptedSchema,
-    { method: 'POST' },
+    {
+      method: 'POST',
+    },
   );
 }
 

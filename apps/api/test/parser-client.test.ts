@@ -64,7 +64,10 @@ describe('ParserClient contract validation', () => {
         { jobId: id, documentId: id, storagePath: '/data/raw-docs/a.txt', mimeType: 'text/plain' },
         id,
       ),
-    ).rejects.toMatchObject({ code: 'PARSER_INVALID_RESPONSE', retryable: false });
+    ).rejects.toMatchObject({
+      code: 'PARSER_INVALID_RESPONSE',
+      retryable: false,
+    });
   });
 
   it('rejects a preview artifact belonging to another document', async () => {
@@ -103,7 +106,10 @@ describe('ParserClient contract validation', () => {
         { jobId: id, documentId: id, storagePath: '/data/raw-docs/a.docx', mimeType: 'docx' },
         id,
       ),
-    ).rejects.toMatchObject({ code: 'PARSER_INVALID_RESPONSE', retryable: false });
+    ).rejects.toMatchObject({
+      code: 'PARSER_INVALID_RESPONSE',
+      retryable: false,
+    });
   });
 
   it('accepts a document-bound CAD tile bundle and requests detail tiles from the native worker', async () => {

@@ -76,7 +76,7 @@ async function startNewChat(): Promise<void> {
   <section class="ask-page">
     <header class="ask-header">
       <div>
-        <span class="eyebrow">企业知识助手</span>
+        <span class="eyebrow">知识助手</span>
         <div class="heading heading--h1" role="heading" aria-level="1">从资料中找到答案</div>
       </div>
       <button type="button" class="new-chat" @click="startNewChat">＋ 新建问答</button>
@@ -84,7 +84,9 @@ async function startNewChat(): Promise<void> {
     <div ref="conversationPanel" class="conversation" :class="{ empty: !hasConversation }">
       <div v-if="!hasConversation" class="welcome-state">
         <span class="welcome-mark">N</span>
-        <div class="heading heading--h2" role="heading" aria-level="2">今天想从知识库了解什么？</div>
+        <div class="heading heading--h2" role="heading" aria-level="2">
+          今天想从知识库了解什么？
+        </div>
         <div class="text-block">回答仅基于您有权访问的资料，并附带可核验来源。</div>
         <!-- <div class="example-grid">
           <button

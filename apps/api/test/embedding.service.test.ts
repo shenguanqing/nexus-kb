@@ -45,7 +45,9 @@ describe('EmbeddingService', () => {
 
     await expect(
       service.embedDocuments(['confidential text'], { sensitivity: 'confidential' }),
-    ).rejects.toMatchObject({ kind: 'policy_denied' });
+    ).rejects.toMatchObject({
+      kind: 'policy_denied',
+    });
     expect(embedDocuments).not.toHaveBeenCalled();
   });
 

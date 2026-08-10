@@ -165,7 +165,11 @@ async function removeUser(user: UserDirectoryEntry): Promise<void> {
     await ElMessageBox.confirm(
       `删除账号“${user.username}”后无法登录，且会立即撤销其会话。此操作不会删除其已创建的业务数据。`,
       '确认删除后台账号',
-      { confirmButtonText: '删除账号', cancelButtonText: '取消', type: 'warning' },
+      {
+        confirmButtonText: '删除账号',
+        cancelButtonText: '取消',
+        type: 'warning',
+      },
     );
     await deleteUser(user.userId);
     ElMessage.success('后台账号已删除');
@@ -231,7 +235,7 @@ onMounted(() => load());
           aria-label="用户目录筛选"
           @submit.prevent="applyFilters"
         >
-          <el-input v-model="search" clearable maxlength="128" placeholder="搜索企业用户 ID" />
+          <el-input v-model="search" clearable maxlength="128" placeholder="搜索用户 ID" />
           <el-input
             v-if="isAdmin"
             v-model="department"
@@ -240,7 +244,9 @@ onMounted(() => load());
             placeholder="筛选部门"
           />
           <el-button native-type="submit">筛选</el-button>
-          <el-button class="reset-button" native-type="button" @click="resetFilters">重置</el-button>
+          <el-button class="reset-button" native-type="button" @click="resetFilters"
+            >重置</el-button
+          >
         </form>
       </div>
       <template v-if="isMobile">
@@ -254,7 +260,7 @@ onMounted(() => load());
           :z-index="4000"
         >
           <form class="mobile-filter-form" aria-label="用户目录筛选" @submit.prevent="applyFilters">
-            <el-input v-model="search" clearable maxlength="128" placeholder="搜索企业用户 ID" />
+            <el-input v-model="search" clearable maxlength="128" placeholder="搜索用户 ID" />
             <el-input
               v-if="isAdmin"
               v-model="department"

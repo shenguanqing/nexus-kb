@@ -6,8 +6,7 @@ describe('SafeMarkdown', () => {
   it('renders supported Markdown and inline citations', () => {
     const wrapper = mount(SafeMarkdown, {
       props: {
-        content:
-          '## 结论\n\n**Vue 3** 支持：\n\n- Composition API\n- Proxy [来源1]\n\n`setup()`',
+        content: '## 结论\n\n**Vue 3** 支持：\n\n- Composition API\n- Proxy [来源1]\n\n`setup()`',
       },
     });
 

@@ -67,7 +67,11 @@ describe('AuthController', () => {
         { ip: '127.0.0.1' } as never,
         reply,
       ),
-    ).resolves.toMatchObject({ authenticated: true, mode: 'password', identity });
+    ).resolves.toMatchObject({
+      authenticated: true,
+      mode: 'password',
+      identity,
+    });
     expect(login).toHaveBeenCalledWith('user-a', 'password-for-test', '127.0.0.1');
     expect(sessionCookie).toHaveBeenCalledWith('x'.repeat(43));
     expect(observe).toHaveBeenCalledWith(identity);

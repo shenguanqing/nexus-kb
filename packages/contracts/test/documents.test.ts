@@ -14,7 +14,11 @@ describe('document contracts', () => {
   it('coerces bounded pagination and rejects unknown query fields', () => {
     expect(
       documentListRequestSchema.parse({ page: '2', pageSize: '25', search: ' 制度 ' }),
-    ).toMatchObject({ page: 2, pageSize: 25, search: '制度' });
+    ).toMatchObject({
+      page: 2,
+      pageSize: 25,
+      search: '制度',
+    });
     expect(documentListRequestSchema.safeParse({ tenantId: 'forged' }).success).toBe(false);
     expect(documentListRequestSchema.safeParse({ pageSize: '101' }).success).toBe(false);
   });

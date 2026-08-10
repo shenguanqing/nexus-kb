@@ -68,9 +68,7 @@ export class GoogleLlmProvider implements LlmProvider {
     this.randomFunction = options.randomFunction ?? Math.random;
     this.nowFunction = options.nowFunction ?? Date.now;
     this.telemetryRecorder = options.telemetryRecorder ?? (() => undefined);
-    this.endpoint = `${options.baseUrl.replace(/\/+$/, '')}/models/${encodeURIComponent(
-      options.model,
-    )}:generateContent`;
+    this.endpoint = `${options.baseUrl.replace(/\/+$/, '')}/models/${encodeURIComponent(options.model)}:generateContent`;
   }
 
   async answer(input: LlmAnswerInput): Promise<LlmAnswer> {
@@ -115,7 +113,10 @@ export class GoogleLlmProvider implements LlmProvider {
         try {
           responseBody = await response.json();
         } catch (error) {
-          if (controller.signal.aborted || (error instanceof Error && error.name === 'AbortError')) {
+          if (
+            controller.signal.aborted ||
+            (error instanceof Error && error.name === 'AbortError')
+          ) {
             throw new LlmProviderError('timeout', true, { cause: error });
           }
           throw new LlmProviderError('invalid_response', false, { cause: error });

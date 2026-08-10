@@ -111,7 +111,9 @@ describe('UserDirectoryService', () => {
         { department: 'legal', offset: 0, limit: 25 },
         { ...adminIdentity, department: 'finance', roles: ['user'] },
       ),
-    ).rejects.toMatchObject({ code: 'ACCESS_SCOPE_FORBIDDEN' });
+    ).rejects.toMatchObject({
+      code: 'ACCESS_SCOPE_FORBIDDEN',
+    });
     expect(deps.findMany).not.toHaveBeenCalled();
   });
 
@@ -278,7 +280,10 @@ describe('UserDirectoryService', () => {
         { ...adminIdentity, capabilities: ['access:write'] },
         '00000000-0000-4000-8000-000000000002',
       ),
-    ).rejects.toMatchObject({ code: 'SELF_ADMIN_MUTATION_FORBIDDEN', status: 409 });
+    ).rejects.toMatchObject({
+      code: 'SELF_ADMIN_MUTATION_FORBIDDEN',
+      status: 409,
+    });
     expect(update).not.toHaveBeenCalled();
   });
 });

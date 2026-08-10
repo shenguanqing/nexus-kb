@@ -7,13 +7,11 @@ afterEach(() => vi.restoreAllMocks());
 
 describe('remaining phase 15 APIs', () => {
   it('keeps history ownership implicit and rejects tenant filters', async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValue(
-        new Response(JSON.stringify({ conversations: [], total: 0, offset: 0, limit: 20 }), {
-          status: 200,
-        }),
-      );
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ conversations: [], total: 0, offset: 0, limit: 20 }), {
+        status: 200,
+      }),
+    );
     vi.stubGlobal('fetch', fetchMock);
     await listConversations({ query: '付款' });
     expect(fetchMock.mock.calls[0]?.[0]).toBe(

@@ -34,6 +34,8 @@ export function deleteConversation(id: string): Promise<ConversationDeleteRespon
   return apiRequest(
     `/v1/history/conversations/${encodeURIComponent(id)}`,
     conversationDeleteResponseSchema,
-    { method: 'DELETE' },
+    {
+      method: 'DELETE',
+    },
   );
 }

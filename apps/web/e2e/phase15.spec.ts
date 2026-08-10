@@ -238,7 +238,7 @@ test('labels a hybrid general-knowledge answer without knowledge-base sources', 
   await page.getByLabel('输入知识库问题').fill('Vue 2 和 Vue 3 的区别？');
   await page.getByRole('button', { name: '发送' }).click();
   await expect(page.getByText('通用知识补充', { exact: true })).toBeVisible();
-  await expect(page.getByText('不是企业知识库资料', { exact: false })).toBeVisible();
+  await expect(page.getByText('不是知识库资料', { exact: false })).toBeVisible();
   await expect(page.getByText('Vue 3 使用 Proxy', { exact: false })).toBeVisible();
   await expect(page.locator('.answer-sources')).toHaveCount(0);
 });
@@ -1210,7 +1210,7 @@ test('keeps shell chrome fixed and confines management-page scrolling below cont
         users: [
           {
             userId: 'admin.fixture',
-            username: 'admin.fixture',
+            username: null,
             department: 'platform',
             roles: ['admin'],
             roleSource: 'managed',
@@ -1313,14 +1313,17 @@ test('keeps shell chrome fixed and confines management-page scrolling below cont
     const section = document.querySelector<HTMLElement>('.app-main > section');
     return {
       actionsGap: actions ? getComputedStyle(actions).columnGap : '',
+      expectedActionsGap: actions
+        ? getComputedStyle(actions).getPropertyValue('--kb-space-2').trim()
+        : '',
       toolbarDirection: toolbar ? getComputedStyle(toolbar).flexDirection : '',
       toolbarPosition: toolbar ? getComputedStyle(toolbar).position : '',
       sectionLeft: section?.getBoundingClientRect().left ?? 0,
       sectionRight: section?.getBoundingClientRect().right ?? 0,
     };
   });
-  expect(usageLayout.actionsGap).toBe('10px');
-  expect(usageLayout.toolbarDirection).toBe('column');
+  expect(usageLayout.actionsGap).toBe(usageLayout.expectedActionsGap);
+  expect(usageLayout.toolbarDirection).toBe('row');
   expect(usageLayout.toolbarPosition).toBe('static');
   expect(usageLayout.sectionLeft).toBe(ingestionLayout.headingLeft);
   expect(usageLayout.sectionRight).toBe(ingestionLayout.headingRight);

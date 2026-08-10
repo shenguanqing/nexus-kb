@@ -134,6 +134,8 @@ describe('OidcJwtTokenVerifier', () => {
 
     await expect(
       new OidcJwtTokenVerifier(config(), verifyFunction).verify('signed-token'),
-    ).rejects.toMatchObject({ name: 'TokenVerificationError' });
+    ).rejects.toMatchObject({
+      name: 'TokenVerificationError',
+    });
   });
 });

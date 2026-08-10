@@ -18,14 +18,14 @@ describe('apiRequest', () => {
   it('maps structured API errors without exposing raw responses', async () => {
     vi.stubGlobal(
       'fetch',
-      vi
-        .fn()
-        .mockResolvedValue(
-          new Response(
-            JSON.stringify({ error: { code: 'FORBIDDEN', message: '无权限', traceId: 'trace-1' } }),
-            { status: 403 },
-          ),
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({ error: { code: 'FORBIDDEN', message: '无权限', traceId: 'trace-1' } }),
+          {
+            status: 403,
+          },
         ),
+      ),
     );
     await expect(apiRequest('/test', z.object({}))).rejects.toMatchObject({
       status: 403,

@@ -50,7 +50,10 @@ describe('RerankService', () => {
 
     await expect(
       service.rerank({ identity, query: 'query', chunks, topK: 2, traceId: 'trace-a' }),
-    ).resolves.toEqual({ chunks: chunks.slice(0, 2), degraded: true });
+    ).resolves.toEqual({
+      chunks: chunks.slice(0, 2),
+      degraded: true,
+    });
   });
 
   it('does not call the cloud provider when secondary policy rejects a chunk', async () => {

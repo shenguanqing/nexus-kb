@@ -126,9 +126,11 @@ describe('validateUploadedFile', () => {
     const path = join(directory, 'upload');
     await writeFile(path, 'not a document', 'utf8');
 
-    await expect(validateUploadedFile(path, 'policy.pdf', 'application/pdf')).rejects.toMatchObject({
-      code: 'FILE_SIGNATURE_MISMATCH',
-    } satisfies Partial<ApiException>);
+    await expect(validateUploadedFile(path, 'policy.pdf', 'application/pdf')).rejects.toMatchObject(
+      {
+        code: 'FILE_SIGNATURE_MISMATCH',
+      } satisfies Partial<ApiException>,
+    );
     await expect(validateUploadedFile(path, 'scan.png', 'image/png')).rejects.toMatchObject({
       code: 'FILE_SIGNATURE_MISMATCH',
     } satisfies Partial<ApiException>);

@@ -163,6 +163,7 @@ describe('OpenAiCompatibleLlmProvider', () => {
     const body = fetchFunction.mock.calls[0]?.[1]?.body;
     if (typeof body !== 'string') throw new Error('Expected a JSON request body');
     expect(body).toContain('通用知识补充模块');
+    expect(body).toContain('知识库助手');
     expect(body).not.toContain('<source');
   });
 });

@@ -268,13 +268,7 @@ export class KnowledgeQueryService {
       this.config.values.QUERY_ANSWER_MODE !== 'hybrid' ||
       this.config.values.LLM_PROVIDER === 'none'
     ) {
-      return this.noAnswer(
-        auditBase,
-        traceId,
-        'insufficient_relevance',
-        rerankDegraded,
-        startedAt,
-      );
+      return this.noAnswer(auditBase, traceId, 'insufficient_relevance', rerankDegraded, startedAt);
     }
     let answer: Awaited<ReturnType<LlmService['answerGeneral']>>;
     try {

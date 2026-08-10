@@ -486,7 +486,7 @@ curl --fail-with-body \
 | 状态                  | 约束                                                                 |
 | --------------------- | -------------------------------------------------------------------- |
 | `answerMode=grounded` | `noAnswer=false`、至少一个来源、`model` 非空                         |
-| `answerMode=general`  | `noAnswer=false`、`sources=[]`、`model` 非空；内容不是企业知识库资料 |
+| `answerMode=general`  | `noAnswer=false`、`sources=[]`、`model` 非空；内容不是知识库资料     |
 | `noAnswer=true`       | `answerMode=null`、`sources=[]`、`model=null`，`reason` 非空         |
 
 `general` 是默认 hybrid 模式下的通用知识补充，客户端必须持续显示“非知识库资料”。正式 RAG 质量评测使用 strict 模式，不把通用知识补充计为知识库命中。权限变化或 confidential 出网阻止时不得降级为通用回答。

@@ -107,6 +107,9 @@ describe('PasswordAuthService', () => {
     await deps.service.login('unknown-user', 'wrong-password', '127.0.0.1').catch(() => undefined);
     await expect(
       deps.service.login('unknown-user', 'wrong-password', '127.0.0.1'),
-    ).rejects.toMatchObject({ code: 'LOGIN_RATE_LIMITED', status: 429 });
+    ).rejects.toMatchObject({
+      code: 'LOGIN_RATE_LIMITED',
+      status: 429,
+    });
   });
 });

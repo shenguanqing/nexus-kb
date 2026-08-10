@@ -137,7 +137,9 @@ describe('SystemService', () => {
       PARSER_INTERNAL_TOKEN: 'reused-internal-service-token',
     });
 
-    const rerank = service.providers(identity).providers.find((provider) => provider.kind === 'rerank');
+    const rerank = service
+      .providers(identity)
+      .providers.find((provider) => provider.kind === 'rerank');
     expect(rerank).toMatchObject({
       provider: 'local_bge',
       model: 'BAAI/bge-reranker-v2-m3',

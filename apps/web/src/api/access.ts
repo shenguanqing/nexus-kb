@@ -50,7 +50,9 @@ export function deleteUser(userId: string): Promise<ManagedUserDeleteResponse> {
   return apiRequest(
     `/v1/access/users/${encodeURIComponent(userId)}`,
     managedUserDeleteResponseSchema,
-    { method: 'DELETE' },
+    {
+      method: 'DELETE',
+    },
   );
 }
 

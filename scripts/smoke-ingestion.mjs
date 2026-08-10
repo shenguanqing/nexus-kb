@@ -43,7 +43,8 @@ async function run() {
         body: form,
       });
       const payload = await json(uploaded);
-      if (!isUploadAccepted(payload)) throw new Error(`Upload response for ${fixture.file} is invalid.`);
+      if (!isUploadAccepted(payload))
+        throw new Error(`Upload response for ${fixture.file} is invalid.`);
       documentIds.push(payload.documentId);
       await waitForCompletion(payload.jobId, cookie);
       await verifyIndexedDocument(payload.documentId, cookie);
@@ -71,7 +72,8 @@ async function waitForCompletion(jobId, cookie) {
     const response = await request(`/v1/ingestion-jobs/${jobId}`, { headers: { cookie } });
     const job = await json(response);
     if (job?.status === 'completed') return;
-    if (job?.status === 'failed') throw new Error('Ingestion job failed. Inspect the authorized job detail.');
+    if (job?.status === 'failed')
+      throw new Error('Ingestion job failed. Inspect the authorized job detail.');
     await new Promise((resolveWait) => setTimeout(resolveWait, pollMs));
   }
   throw new Error(`Ingestion job did not finish within ${timeoutMs}ms.`);
@@ -91,7 +93,8 @@ async function verifyIndexedDocument(documentId, cookie) {
 
 async function request(path, init) {
   const response = await fetch(`${baseUrl}${path}`, init);
-  if (!response.ok) throw new Error(`Request failed: ${init?.method ?? 'GET'} ${path} (${response.status}).`);
+  if (!response.ok)
+    throw new Error(`Request failed: ${init?.method ?? 'GET'} ${path} (${response.status}).`);
   return response;
 }
 

@@ -38,7 +38,7 @@ const displayAnswer = computed(() =>
       <template v-else>
         <div v-if="response.answerMode === 'general'" class="general-answer-notice">
           <strong>通用知识补充</strong>
-          <span>以下内容来自模型通用知识，不是企业知识库资料，仅供参考。</span>
+          <span>以下内容来自模型通用知识，不是知识库资料，仅供参考。</span>
         </div>
         <SafeMarkdown class="answer-text" :content="displayAnswer" />
       </template>

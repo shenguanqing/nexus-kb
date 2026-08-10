@@ -4,12 +4,12 @@
 
 ## 应用索引
 
-| 目录                               | 技术栈                  | 主要职责                                                | 详细说明                                          |
-| ---------------------------------- | ----------------------- | ------------------------------------------------------- | ------------------------------------------------- |
-| [`api`](./api)                     | TypeScript、NestJS      | 公网 API、认证、ACL、入库编排、模型调用、向量检索和审计 | [API README](./api/README.md)                     |
-| [`web`](./web)                     | Vue 3、TypeScript、Vite | 知识问答、来源展示、文档管理和管理后台                  | [Web README](./web/README.md)                     |
-| [`parser-worker`](./parser-worker) | Python、FastAPI         | 内网文档解析、结构提取和受控 DWG 转换                   | [Parser Worker README](./parser-worker/README.md) |
-| [`reranker-worker`](./reranker-worker) | Python、FastAPI      | 内网 BGE 候选重排，只返回输入索引与分数                 | [Reranker Worker README](./reranker-worker/README.md) |
+| 目录                                   | 技术栈                  | 主要职责                                                | 详细说明                                              |
+| -------------------------------------- | ----------------------- | ------------------------------------------------------- | ----------------------------------------------------- |
+| [`api`](./api)                         | TypeScript、NestJS      | 公网 API、认证、ACL、入库编排、模型调用、向量检索和审计 | [API README](./api/README.md)                         |
+| [`web`](./web)                         | Vue 3、TypeScript、Vite | 知识问答、来源展示、文档管理和管理后台                  | [Web README](./web/README.md)                         |
+| [`parser-worker`](./parser-worker)     | Python、FastAPI         | 内网文档解析、结构提取和受控 DWG 转换                   | [Parser Worker README](./parser-worker/README.md)     |
+| [`reranker-worker`](./reranker-worker) | Python、FastAPI         | 内网 BGE 候选重排，只返回输入索引与分数                 | [Reranker Worker README](./reranker-worker/README.md) |
 
 ## 服务调用关系
 

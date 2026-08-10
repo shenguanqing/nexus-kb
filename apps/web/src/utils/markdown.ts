@@ -27,7 +27,8 @@ markdown.renderer.rules.paragraph_open = () => '<div class="markdown-paragraph">
 markdown.renderer.rules.paragraph_close = () => '</div>';
 markdown.renderer.rules.bullet_list_open = () => '<div class="markdown-list">';
 markdown.renderer.rules.bullet_list_close = () => '</div>';
-markdown.renderer.rules.ordered_list_open = () => '<div class="markdown-list markdown-list--ordered">';
+markdown.renderer.rules.ordered_list_open = () =>
+  '<div class="markdown-list markdown-list--ordered">';
 markdown.renderer.rules.ordered_list_close = () => '</div>';
 markdown.renderer.rules.list_item_open = () => '<div class="markdown-list-item">';
 markdown.renderer.rules.list_item_close = () => '</div>';

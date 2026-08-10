@@ -102,7 +102,10 @@ describe('documents API', () => {
 
     await expect(
       fetchDocumentPreview('6769af9a-a4d0-4dc2-a97d-942584a9c826'),
-    ).resolves.toMatchObject({ status: 'ready', kind: 'pdf' });
+    ).resolves.toMatchObject({
+      status: 'ready',
+      kind: 'pdf',
+    });
     expect(fetchMock.mock.calls[0]?.[0]).toBe(
       '/v1/documents/6769af9a-a4d0-4dc2-a97d-942584a9c826/preview',
     );

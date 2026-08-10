@@ -42,7 +42,9 @@ describe('KnowledgeHistoryService', () => {
     } as unknown as PrismaService);
     await expect(
       service.detail('11111111-1111-4111-8111-111111111111', identity),
-    ).rejects.toMatchObject({ code: 'CONVERSATION_NOT_FOUND' });
+    ).rejects.toMatchObject({
+      code: 'CONVERSATION_NOT_FOUND',
+    });
     const [input] = findFirst.mock.calls[0] as [{ where: { tenantId: string; userId: string } }];
     expect(input.where).toMatchObject({ tenantId: 'tenant-a', userId: 'user-a' });
   });

@@ -6,7 +6,11 @@ describe('ingestion contracts', () => {
   it('accepts bounded task filters without identity fields', () => {
     expect(
       ingestionJobListRequestSchema.parse({ status: 'failed', page: '2', pageSize: '50' }),
-    ).toMatchObject({ status: 'failed', page: 2, pageSize: 50 });
+    ).toMatchObject({
+      status: 'failed',
+      page: 2,
+      pageSize: 50,
+    });
     expect(ingestionJobListRequestSchema.safeParse({ tenantId: 'forged' }).success).toBe(false);
   });
 

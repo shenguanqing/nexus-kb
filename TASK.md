@@ -128,7 +128,7 @@ Vue 3 + TypeScript + Vite
 - [x] 已在最终只读 Worker 中实际转换并解析已上传的 `Drawing1.dwg`：得到 9 个元素，parser version 为 `oda-27.1.0.0+ezdxf-1.4.4`；ODA 使用私有 tmpfs 源副本和官方 `*.dwg` 过滤器，不扫描其他上传文件。
 - [x] 已以 `compose.yaml + compose.dwg.yaml` 重建本地 API 与 Worker；Worker `/health/ready` 报告 `dwgConverter.status=up`，修复了仅使用基础 Compose 镜像导致的 `PARSER_UNAVAILABLE`。
 - [x] DWG 转换改为本地默认启动路径：`.env.example`、配置默认值、Compose fallback 与 README 均要求使用 `compose.yaml + compose.dwg.yaml` 的 ODA 派生 Worker；没有 ODA 时默认失败关闭，不能静默降级。
-- [ ] 在已登录的本地 Web 页面为失败任务点击“重试”，完成 `Drawing1.dwg` 的索引与 Gemini 问答端到端冒烟验证（服务端鉴权保持启用，Gemini 仅在检索到来源后调用）。
+- [x] 在已登录的 Web 页面触发 `Drawing1.dwg` 重新索引：v2 在 7 秒内完成 ODA→DXF→ezdxf 解析、生成 2 个分块并原子激活；随后在服务端鉴权开启时完成真实来源问答，当前主 LLM `deepseek/deepseek-v4-flash` 仅在检索到来源后调用，回答返回 `Drawing1.dwg` v2 引用和 Trace ID。Gemini 已配置为备用 LLM，未为验收改写用户当前 Provider 配置。
 - [x] 无有效 `[来源N]` 的知识库 LLM 文本不再作为 Provider 502 返回；严格模式安全拒答，混合模式切换为不携带文档上下文、明确标记的通用知识补充。
 - [x] 若 Gemini 已调用但因“资料不足”或缺少有效引用而安全拒答，`QueryAudit` 仍保留实际 LLM Provider/model；未进入 LLM 的检索拒答仅显示 Embedding Provider。
 - [x] 修复 `vue2` / `vue 2` 等语义等价问法结果不一致：查询链路统一产品版本号空格，引用不可核验时使用相同授权上下文受控修复一次，仍失败则记录 `LLM_ANSWER_UNVERIFIABLE` 并安全拒答。
@@ -175,13 +175,20 @@ Vue 3 + TypeScript + Vite
 - [x] 使用两份真实复杂 DWG 定位并修复预览慢路径：bundle 初始化预算扩展到单瓦片的 3 倍并封顶 180 秒，z0 复用总览，缓存命中绕过文档渲染锁，可见瓦片按视口中心优先；超时/资源失败使用稳定细分 warning，父进程回收被强杀子进程遗留的 UUID 临时 bundle。
 - [x] 使用 `E-一区一层照明平面图.dwg` 继续定位冷瓦片慢路径：移除每次请求约 20–23 秒的 91 MiB DXF 重解析，bundle 新增非可执行 SQLite/R-Tree 扁平图元索引，旧 bundle 首次请求原子补建；3×3 metatile 改为一次查询、一次组合绘制后裁图。z4 冷 3×3 从约 31 秒降至 2.97 秒，z8 冷 3×3 为 1.10 秒；一次性旧缓存升级 72.34 秒并受 180 秒硬上限保护。
 
+### 3.16 产品定位与 Lite 预留
+
+- [x] 品牌、界面、提示词和项目文档统一使用“知识库 / 知识中心 / 知识助手”，保留多租户、ACL、审计等完整能力的真实语义。
+- [x] 明确 Lite 为后续规划而非当前已实现功能；Lite 必须复用共享 RAG 核心，并由服务端能力边界收敛功能。
+- [x] 区分产品模式与现有 `docker:full` Compose 拓扑命名，避免后续 Lite 实现时概念冲突。
+
 ---
 
 ## 4. 阶段 15 验证状态
 
 - [x] `pnpm lint`、`pnpm typecheck`、`pnpm test` 和 `pnpm build` 通过。
-- [x] `pnpm --filter @nexus-kb/web test:e2e` 14/14 通过，覆盖账号密码登录、固定 shell、块内滚动与响应式布局。
-- [x] Docker API 镜像构建、Prisma migration、ready 检查和 PostgreSQL/Redis/Chroma 集成测试通过。
+- [x] `pnpm --filter @nexus-kb/web test:e2e` 18/18 通过，覆盖账号密码登录、知识问答与来源、权限路由、固定 shell、管理页面块内滚动、375/768/900/1280px 响应式布局与核心页面 WCAG AA 自动检查。
+- [x] Docker API 镜像构建、Prisma migration、ready 检查和 PostgreSQL/Redis/Chroma 集成测试通过；本轮使用隔离端口与 tmpfs 临时服务重新执行 16 个迁移及 API integration 10/10，测试容器已清理，现有完整 Compose 服务保持健康。
+- [x] 只读、无网络 Parser 测试容器 40/40 通过，覆盖固定 PDF/OCR 样本、解析、预览与 CAD 瓦片。
 
 ---
 
@@ -193,7 +200,7 @@ Vue 3 + TypeScript + Vite
 
 ## 6. 下一开发入口
 
-阶段 15 已完成。本地 Ollama / Gemini 配置与待建立索引恢复已补齐。当前优先入口为第 3.11 节的真实 `Drawing1.dwg` Web 端到端验证：ODA Linux x64 包和转换器已就绪，但服务端鉴权保持启用，需要已登录的本地会话完成上传。阶段 14 的真实数据质量验收仍按第 5 节保留；完成 DWG 验证后再进入阶段 16 服务器上线准备。
+阶段 15 和第 3.11 节真实 `Drawing1.dwg` Web 端到端验证已完成。本地 Ollama Embedding、DeepSeek 主 LLM、Gemini 备用 LLM 与待建立索引恢复均已验证。阶段 14 的真实数据质量验收仍按第 5 节保留：仓库及 `nexus-kb-local-tests` 当前没有经批准的 30–100 条真实标注集和 ACL identity profile，取得受控数据后才能执行两轮付费 Provider 评测；除此之外，下一入口为阶段 16 服务器上线准备。
 
 - [x] P0 解析能力补齐第一批：API/契约/Web 已接受 PDF、PNG、JPG、JPEG；Worker 使用本地 Unstructured 与 EasyOCR，增加 PDF 页数、图片像素、离线模型和 OCR 置信度限制，并通过 ARM64 镜像内真实 PDF/OCR 冒烟验证。EasyOCR 用户网络目录固定为 Parser tmpfs，避免最终只读 Worker 写入 `~/.EasyOCR` 导致图片任务失败。
 - [x] Parser Worker 首次构建加固：常规依赖显式使用官方 PyPI 并配置有限重试/超时；EasyOCR 模型下载与依赖层分离，断流时清理残包并有限重试。ARM64 与 ODA `linux/amd64` 镜像均完成重建，`pnpm docker:up:all` 与 API readiness 验证通过。
@@ -234,7 +241,7 @@ Vue 3 + TypeScript + Vite
   - [x] 日期与筛选文案收敛：历史与用量页面的时间范围改为“开始时间 / 结束时间”两个独立日期时间选择器，移除 `datetimerange`；所有提交筛选操作统一命名为“筛选”，不再混用“查询”或“应用”。
   - [x] 移动端补充回归：文档分块页在手机上使用紧凑页码且保持不透明底部分页栏；用量与成本的时间筛选收纳至底部 Drawer，横屏低高度场景压缩介绍区并保留内容块滚动空间。
   - [x] 横屏可操作性回归：用户目录与部门权限使用独立可滚动内容容器；历史筛选右对齐；导航 Drawer 顶栏与应用顶栏统一为 48px；用量、Provider、系统状态及各工具栏收敛为低高度单行布局。Playwright 使用长列表实际验证 `scrollTop` 可写入。
-  - [x] 管理页工具栏命名与层级收敛：用户目录身份摘要和筛选合并为单一 `access-toolbar`；Provider、系统状态和用量统一采用 `xxxx-toolbar` 命名；用量桌面端介绍与筛选纵向排列，移动端任务、审计、Provider、系统状态和用量工具栏保持单行操作。
+  - [x] 管理页工具栏命名与层级收敛：用户目录身份摘要和筛选合并为单一 `access-toolbar`；Provider、系统状态和用量统一采用 `xxxx-toolbar` 命名；用量桌面端与审计中心一致采用左侧介绍、右侧筛选的左右布局，移动端任务、审计、Provider、系统状态和用量工具栏保持单行操作。
   - [x] 问答历史布局收敛：桌面端 `history-layout` 使用可伸展的主行填满筛选栏以下空间，左侧会话列表与右侧详情保持独立滚动。
   - [x] 问答历史的标题与会话列表合并为同一内容卡片；分页位于下方独立卡片，与其他列表页面保持一致。
   - [x] Parser Worker CI 在真实 PDF/OCR 样本测试前预载受控 EasyOCR 与 NLTK 资源；runner 启动后通过 `RUNNER_TEMP` 与 `GITHUB_ENV` 初始化模型目录，模型下载脚本遵从 `OCR_MODEL_STORAGE_PATH`，避免 workflow 调度失败或新 runner 缺少模型；预览资源异常分类使用 Python 3.11 联合类型语法并通过 Ruff `UP038` 检查。

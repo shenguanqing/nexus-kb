@@ -153,7 +153,10 @@ describe('SystemConfigurationService', () => {
         identity,
         '00000000-0000-4000-8000-000000000001',
       ),
-    ).rejects.toMatchObject({ code: 'SYSTEM_CONFIG_UNAVAILABLE', status: 503 });
+    ).rejects.toMatchObject({
+      code: 'SYSTEM_CONFIG_UNAVAILABLE',
+      status: 503,
+    });
   });
 
   it('creates an encrypted immutable version and never returns a submitted secret', async () => {
@@ -237,7 +240,9 @@ describe('SystemConfigurationService', () => {
 
     await expect(
       service.completeFromAgent(deployment.id, { status: 'succeeded', errorCode: null }),
-    ).resolves.toEqual({ accepted: true });
+    ).resolves.toEqual({
+      accepted: true,
+    });
     expect(transaction.systemConfigVersion.update).toHaveBeenCalledOnce();
     expect(transaction.systemConfigVersion.update.mock.calls[0]?.[0]).toMatchObject({
       where: { id: target.id },

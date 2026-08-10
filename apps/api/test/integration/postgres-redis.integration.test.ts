@@ -69,7 +69,9 @@ describe('PostgreSQL and Redis integration', () => {
     ).resolves.toBeNull();
     await expect(
       prisma.document.findFirst({ where: { id: documentId, tenantId: tenantA } }),
-    ).resolves.toMatchObject({ id: documentId });
+    ).resolves.toMatchObject({
+      id: documentId,
+    });
   });
 
   it('enforces department, sensitivity, owner and tenant-admin document ACL in PostgreSQL', async () => {

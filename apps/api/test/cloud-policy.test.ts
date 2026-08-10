@@ -80,6 +80,9 @@ describe('CloudPolicyService', () => {
 
     expect(
       service.evaluate({ sensitivity: 'confidential', providerId: 'ollama', region: 'local' }),
-    ).toMatchObject({ decision: 'blocked', reasonCode: 'EXPLICIT_RULE_BLOCKED' });
+    ).toMatchObject({
+      decision: 'blocked',
+      reasonCode: 'EXPLICIT_RULE_BLOCKED',
+    });
   });
 });

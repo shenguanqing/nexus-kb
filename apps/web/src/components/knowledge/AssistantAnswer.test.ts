@@ -5,8 +5,7 @@ import AssistantAnswer from './AssistantAnswer.vue';
 
 const response: KnowledgeQueryResponse = {
   conversationId: '5b9fd225-a565-42cd-8d63-1fc3f19b745d',
-  answer:
-    '## Vue 3\n\n**Proxy** 驱动响应式。[来源1][来源2]\n\n- 支持 Composition API。[来源2]',
+  answer: '## Vue 3\n\n**Proxy** 驱动响应式。[来源1][来源2]\n\n- 支持 Composition API。[来源2]',
   noAnswer: false,
   reason: null,
   answerMode: 'grounded',
@@ -40,7 +39,9 @@ describe('AssistantAnswer', () => {
     ]);
     expect(wrapper.get('.answer-text .markdown-heading--h2').text()).toBe('Vue 3');
     expect(wrapper.get('.answer-text strong').text()).toBe('Proxy');
-    expect(wrapper.get('.answer-text .markdown-list-item').text()).toBe('支持 Composition API。[来源2]');
+    expect(wrapper.get('.answer-text .markdown-list-item').text()).toBe(
+      '支持 Composition API。[来源2]',
+    );
     expect(wrapper.get('.answer-sources-label').text()).toBe('回答来源');
     expect(wrapper.findAll('.source-card').map((source) => source.text())).toEqual([
       expect.stringContaining('来源 1'),
@@ -64,7 +65,7 @@ describe('AssistantAnswer', () => {
       },
     });
 
-    expect(wrapper.get('.general-answer-notice').text()).toContain('不是企业知识库资料');
+    expect(wrapper.get('.general-answer-notice').text()).toContain('不是知识库资料');
     expect(wrapper.get('.answer-text').text()).toContain('Vue 3 使用 Proxy');
     expect(wrapper.find('.answer-sources').exists()).toBe(false);
   });

@@ -77,8 +77,7 @@ export class SystemService {
           dimensions: null,
           credentialConfigured:
             rerankEnabled &&
-            (environment.RERANK_PROVIDER === 'local_bge' ||
-              Boolean(environment.DASHSCOPE_API_KEY)),
+            (environment.RERANK_PROVIDER === 'local_bge' || Boolean(environment.DASHSCOPE_API_KEY)),
           fingerprint: null,
         },
       ],

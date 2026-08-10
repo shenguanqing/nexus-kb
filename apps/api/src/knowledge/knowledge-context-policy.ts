@@ -46,10 +46,7 @@ export class KnowledgeContextPolicy {
     );
   }
 
-  canSendQuestion(
-    identity: Identity,
-    provider?: { id: string; region: string },
-  ): boolean {
+  canSendQuestion(identity: Identity, provider?: { id: string; region: string }): boolean {
     return (
       provider !== undefined &&
       this.cloudPolicy.evaluate({

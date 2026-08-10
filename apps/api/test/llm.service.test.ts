@@ -90,7 +90,9 @@ describe('LlmService', () => {
 
     await expect(
       service.answer({ identity, question: '问题', contexts, traceId: 'trace-a' }),
-    ).rejects.toMatchObject({ kind: 'policy_denied' });
+    ).rejects.toMatchObject({
+      kind: 'policy_denied',
+    });
     expect(answer).not.toHaveBeenCalled();
   });
 
@@ -108,12 +110,16 @@ describe('LlmService', () => {
       factory,
       { allAllowed: vi.fn().mockReturnValue(true) } as unknown as KnowledgeContextPolicy,
       new AnswerSourceValidator(),
-      { warn: vi.fn() } as unknown as OperationalLogger,
+      {
+        warn: vi.fn(),
+      } as unknown as OperationalLogger,
     );
 
     await expect(
       service.answer({ identity, question: '问题', contexts, traceId: 'trace-a' }),
-    ).rejects.toMatchObject({ kind: 'authentication' });
+    ).rejects.toMatchObject({
+      kind: 'authentication',
+    });
     expect(fallbackAnswer).not.toHaveBeenCalled();
   });
 
@@ -160,7 +166,9 @@ describe('LlmService', () => {
       factory,
       { allAllowed: vi.fn().mockReturnValue(true) } as unknown as KnowledgeContextPolicy,
       new AnswerSourceValidator(),
-      { warn: vi.fn() } as unknown as OperationalLogger,
+      {
+        warn: vi.fn(),
+      } as unknown as OperationalLogger,
     );
 
     await expect(
@@ -210,12 +218,16 @@ describe('LlmService', () => {
       factory,
       { canSendQuestion: vi.fn().mockReturnValue(false) } as unknown as KnowledgeContextPolicy,
       new AnswerSourceValidator(),
-      { warn: vi.fn() } as unknown as OperationalLogger,
+      {
+        warn: vi.fn(),
+      } as unknown as OperationalLogger,
     );
 
     await expect(
       service.answerGeneral({ identity, question: '问题', traceId: 'trace-a' }),
-    ).rejects.toMatchObject({ kind: 'policy_denied' });
+    ).rejects.toMatchObject({
+      kind: 'policy_denied',
+    });
     expect(answer).not.toHaveBeenCalled();
   });
 
@@ -232,11 +244,15 @@ describe('LlmService', () => {
       factory,
       { canSendQuestion: vi.fn().mockReturnValue(true) } as unknown as KnowledgeContextPolicy,
       new AnswerSourceValidator(),
-      { warn: vi.fn() } as unknown as OperationalLogger,
+      {
+        warn: vi.fn(),
+      } as unknown as OperationalLogger,
     );
 
     await expect(
       service.answerGeneral({ identity, question: '问题', traceId: 'trace-a' }),
-    ).rejects.toMatchObject({ kind: 'invalid_response' });
+    ).rejects.toMatchObject({
+      kind: 'invalid_response',
+    });
   });
 });

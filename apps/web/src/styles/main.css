@@ -2681,6 +2681,9 @@ a {
   .detail-actions > div:first-child {
     flex-basis: 100%;
   }
+  .detail-actions {
+    flex-wrap: wrap;
+  }
   .document-detail-page .mobile-data-card {
     display: grid;
     gap: var(--kb-space-3);
@@ -2781,9 +2784,9 @@ a {
   .usage-toolbar,
   .provider-toolbar,
   .system-status-toolbar {
+    flex-direction: row;
+    flex-wrap: nowrap;
     align-items: center;
-    /* flex-direction: row;
-    flex-wrap: nowrap; */
   }
   .audit-toolbar .text-block,
   .usage-toolbar .text-block,

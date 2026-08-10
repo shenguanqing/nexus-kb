@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import type { ProviderStatus } from '@nexus-kb/contracts';
 
-import { credentialLabel, formatDiskUsage, formatDuration, providerTitle } from './system-presentation';
+import {
+  credentialLabel,
+  formatDiskUsage,
+  formatDuration,
+  providerTitle,
+} from './system-presentation';
 
 const disabledProvider: ProviderStatus = {
   kind: 'rerank',

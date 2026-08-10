@@ -69,12 +69,7 @@ export const knowledgeQueryResponseSchema = z
       response.answerMode === 'general' &&
       (response.reason !== null || response.sources.length > 0 || response.model === null);
     const missingAnswerMode = !response.noAnswer && response.answerMode === null;
-    if (
-      invalidNoAnswer ||
-      invalidGroundedAnswer ||
-      invalidGeneralAnswer ||
-      missingAnswerMode
-    ) {
+    if (invalidNoAnswer || invalidGroundedAnswer || invalidGeneralAnswer || missingAnswerMode) {
       context.addIssue({ code: 'custom', message: 'answer state is inconsistent' });
     }
   });

@@ -29,6 +29,8 @@ export function retryIngestionJob(jobId: string): Promise<IngestionRetryAccepted
   return apiRequest(
     `/v1/ingestion-jobs/${encodeURIComponent(jobId)}/retry`,
     ingestionRetryAcceptedSchema,
-    { method: 'POST' },
+    {
+      method: 'POST',
+    },
   );
 }

@@ -45,7 +45,12 @@ describe('DocumentsService tenant isolation', () => {
 
     await expect(
       service.listJobs({ status: 'failed', page: 2, pageSize: 20 }, identity),
-    ).resolves.toEqual({ items: [], page: 2, pageSize: 20, total: 0 });
+    ).resolves.toEqual({
+      items: [],
+      page: 2,
+      pageSize: 20,
+      total: 0,
+    });
     const [query] = findMany.mock.calls[0] as unknown as [
       { where: { tenantId: string; document: { tenantId: string } }; skip: number; take: number },
     ];
@@ -884,7 +889,10 @@ describe('DocumentsService tenant isolation', () => {
     try {
       await expect(
         service.getDocumentPreviewTile(documentId, 0, 0, 0, identity, bundleId),
-      ).rejects.toMatchObject({ code: 'DOCUMENT_NOT_FOUND', status: 404 });
+      ).rejects.toMatchObject({
+        code: 'DOCUMENT_NOT_FOUND',
+        status: 404,
+      });
       expect(ensureCadPreviewTile).toHaveBeenCalledOnce();
     } finally {
       await rm(directory, { recursive: true, force: true });

@@ -36,7 +36,9 @@ const chunks: RetrievedChunk[] = [
   },
 ];
 
-function provider(overrides: Partial<ConstructorParameters<typeof LocalBgeRerankProvider>[0]> = {}) {
+function provider(
+  overrides: Partial<ConstructorParameters<typeof LocalBgeRerankProvider>[0]> = {},
+) {
   return new LocalBgeRerankProvider({
     internalToken: 'internal-token',
     baseUrl: 'http://host.docker.internal:8100',
@@ -88,9 +90,10 @@ describe('LocalBgeRerankProvider', () => {
       ),
     );
 
-    await expect(
-      provider({ fetchFunction }).rerank('问题', chunks, 2),
-    ).rejects.toMatchObject({ kind: 'invalid_response', retryable: false });
+    await expect(provider({ fetchFunction }).rerank('问题', chunks, 2)).rejects.toMatchObject({
+      kind: 'invalid_response',
+      retryable: false,
+    });
   });
 
   it('classifies an aborted response body as a retryable timeout', async () => {

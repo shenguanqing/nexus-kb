@@ -82,7 +82,10 @@ export const managedUserUpdateRequestSchema = z
       value.allowedSensitivities === undefined ||
       value.defaultSensitivity === undefined ||
       value.allowedSensitivities.includes(value.defaultSensitivity),
-    { path: ['defaultSensitivity'], message: 'must be included in allowedSensitivities' },
+    {
+      path: ['defaultSensitivity'],
+      message: 'must be included in allowedSensitivities',
+    },
   );
 
 export const managedUserMutationResponseSchema = z

@@ -158,9 +158,7 @@ async function signOut(): Promise<void> {
         <span class="brand-mark">N</span>
         <span class="brand-copy"><strong>知枢</strong><small>NexusKB</small></span>
       </RouterLink>
-      <div class="header-context">
-        <span class="status-dot" aria-hidden="true"></span>企业知识服务
-      </div>
+      <div class="header-context"><span class="status-dot" aria-hidden="true"></span>知识服务</div>
       <div class="top-breadcrumb" aria-label="当前位置">
         <span>{{ pageSection }}</span>
         <i aria-hidden="true">/</i><strong>{{ pageTitle }}</strong>

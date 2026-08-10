@@ -198,7 +198,10 @@ export const documentPreviewSchema = z
     (value) =>
       (value.kind === 'cad_tiles' && value.cad !== null) ||
       (value.kind !== 'cad_tiles' && value.cad === null),
-    { message: 'CAD tile preview must include its manifest', path: ['cad'] },
+    {
+      message: 'CAD tile preview must include its manifest',
+      path: ['cad'],
+    },
   );
 
 export const documentChunkListRequestSchema = z
