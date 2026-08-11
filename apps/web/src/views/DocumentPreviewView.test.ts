@@ -56,6 +56,15 @@ function dispatchPointerEvent(
   element.dispatchEvent(event);
 }
 
+function dispatchCadWheelEvent(element: Element, deltaY: number): void {
+  const event = new Event('wheel', { bubbles: true, cancelable: true });
+  Object.defineProperties(event, {
+    ctrlKey: { value: true },
+    deltaY: { value: deltaY },
+  });
+  element.dispatchEvent(event);
+}
+
 describe('DocumentPreviewView', () => {
   beforeEach(() => {
     api.fetchDocumentPreview.mockReset();
@@ -142,7 +151,7 @@ describe('DocumentPreviewView', () => {
     expect(wrapper.text()).toContain('付款周期为 30 天');
   });
 
-  it('zooms a CAD preview and keeps the security explanation in a compact badge', async () => {
+  it('matches the tiled CAD zoom range and keeps the security explanation compact', async () => {
     api.fetchDocumentPreview.mockResolvedValue({
       documentId: 'document-id',
       sourceName: '园区平面图.dxf',
@@ -161,13 +170,17 @@ describe('DocumentPreviewView', () => {
     await flushPromises();
 
     expect(wrapper.get('.preview-image').attributes('style')).toContain('width: 100%');
+    dispatchCadWheelEvent(wrapper.get('.preview-image-viewport').element, -1);
+    await wrapper.vm.$nextTick();
+    expect(wrapper.get('.preview-image').attributes('style')).toContain('width: 125%');
+    await wrapper.get('[aria-label="重置 CAD 预览缩放"]').trigger('click');
     const zoomInButton = wrapper.get('[aria-label="放大 CAD 预览"]');
     await zoomInButton.trigger('click');
-    expect(wrapper.get('.preview-image').attributes('style')).toContain('width: 125%');
-    for (let step = 0; step < 123; step += 1) {
+    expect(wrapper.get('.preview-image').attributes('style')).toContain('width: 150%');
+    for (let step = 0; step < 13; step += 1) {
       await zoomInButton.trigger('click');
     }
-    expect(wrapper.get('.preview-image').attributes('style')).toContain('width: 3200%');
+    expect(wrapper.get('.preview-image').attributes('style')).toContain('width: 25600%');
     expect(zoomInButton.attributes()).toHaveProperty('disabled');
     expect(wrapper.get('.preview-security-badge').attributes('title')).toBe(
       '每次读取都会重新校验租户、部门与敏感度权限。',

@@ -56,12 +56,13 @@ const cadImageStyle = computed(() => ({ width: `${cadZoomPercent.value}%` }));
 const { isPhone } = useBreakpoint();
 
 const cadZoomMinimum = 0.5;
-const cadSvgZoomMaximum = 32;
-const cadZoomStep = 0.25;
+const cadZoomMaximum = 256;
+const cadButtonZoomFactor = 1.5;
+const cadWheelZoomFactor = 1.25;
 const tiledCadCanZoomIn = ref(true);
 const tiledCadCanZoomOut = ref(true);
 const cadCanZoomIn = computed(() =>
-  isTiledCadPreview.value ? tiledCadCanZoomIn.value : cadZoom.value < cadSvgZoomMaximum,
+  isTiledCadPreview.value ? tiledCadCanZoomIn.value : cadZoom.value < cadZoomMaximum,
 );
 const cadCanZoomOut = computed(() =>
   isTiledCadPreview.value ? tiledCadCanZoomOut.value : cadZoom.value > cadZoomMinimum,
@@ -117,17 +118,18 @@ async function load(): Promise<void> {
   }
 }
 
-function changeCadZoom(delta: number): void {
+function setSvgCadZoom(nextZoom: number): void {
+  cadZoom.value = Math.min(cadZoomMaximum, Math.max(cadZoomMinimum, Number(nextZoom.toFixed(4))));
+  if (cadZoom.value <= 1) stopCadPan();
+}
+
+function changeCadZoom(direction: -1 | 1): void {
   if (isTiledCadPreview.value) {
-    if (delta > 0) cadTileViewer.value?.zoomIn();
+    if (direction > 0) cadTileViewer.value?.zoomIn();
     else cadTileViewer.value?.zoomOut();
     return;
   }
-  cadZoom.value = Math.min(
-    cadSvgZoomMaximum,
-    Math.max(cadZoomMinimum, Number((cadZoom.value + delta).toFixed(2))),
-  );
-  if (cadZoom.value <= 1) stopCadPan();
+  setSvgCadZoom(cadZoom.value * (direction > 0 ? cadButtonZoomFactor : 1 / cadButtonZoomFactor));
 }
 
 function resetCadZoom(): void {
@@ -160,7 +162,7 @@ function handleCadTileError(message: string): void {
 function handleCadWheel(event: WheelEvent): void {
   if (!event.ctrlKey && !event.metaKey) return;
   event.preventDefault();
-  changeCadZoom(event.deltaY < 0 ? cadZoomStep : -cadZoomStep);
+  setSvgCadZoom(cadZoom.value * (event.deltaY < 0 ? cadWheelZoomFactor : 1 / cadWheelZoomFactor));
 }
 
 function startCadPan(event: PointerEvent): void {
@@ -269,7 +271,7 @@ onBeforeUnmount(() => {
               size="small"
               aria-label="缩小 CAD 预览"
               :disabled="!cadCanZoomOut"
-              @click="changeCadZoom(-cadZoomStep)"
+              @click="changeCadZoom(-1)"
             >
               缩小
             </el-button>
@@ -280,7 +282,7 @@ onBeforeUnmount(() => {
               size="small"
               aria-label="放大 CAD 预览"
               :disabled="!cadCanZoomIn"
-              @click="changeCadZoom(cadZoomStep)"
+              @click="changeCadZoom(1)"
             >
               放大
             </el-button>

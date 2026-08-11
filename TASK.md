@@ -161,7 +161,7 @@ Vue 3 + TypeScript + Vite
 - [x] 预览生成失败只记录 warning，不阻断 RAG 入库；Web 预览页降级为 ACL 保护的解析原文，来源抽屉携带 page/sheet/version 定位。
 - [x] 文档删除同步清理预览产物；API/Worker readiness 检查预览目录，常规 Worker 额外检查 LibreOffice。
 - [x] 修复中文 Office/CAD 预览方块字：两个 Parser 镜像预置 Noto CJK，LibreOffice PDF 嵌入中文字形，ezdxf 在默认 DejaVu 缺字时显式使用 CJK 字体生成 SVG 路径，并覆盖 Ubuntu runner 的 DejaVu Sans Condensed 字体族变体。
-- [x] DXF/DWG 小图 SVG 支持 50%–3200% 缩放，超大图瓦片默认支持相对总览 256×；两者均支持重置、Ctrl/Command + 滚轮、鼠标拖拽平移和浏览器全屏。权限说明收敛为文件名同行的“实时权限校验”标记，释放预览高度。
+- [x] DXF/DWG SVG 与瓦片预览统一支持 50%–25600%（相对总览 256×）缩放，按钮与 Ctrl/Command + 滚轮分别使用 1.5 与 1.25 倍率；两者均支持重置、鼠标拖拽平移和浏览器全屏。权限说明收敛为文件名同行的“实时权限校验”标记，释放预览高度。
 - [x] 修复 CAD 线路在百万级 SVG viewBox 下因亚像素线宽不可见的问题；几何路径使用非缩放线宽，零宽 hairline 提升为屏幕 1px。超大型 CAD 的原始 SVG 超过 200 MiB 时自动 gzip 存储并由 API 透明解码，压缩后仍超限才降级解析文本。
 - [x] 完成本轮全量 lint、typecheck、单元测试、构建、Parser 容器测试和 Compose 配置校验。
 
@@ -247,3 +247,7 @@ Vue 3 + TypeScript + Vite
   - [x] Parser Worker CI 在真实 PDF/OCR 样本测试前预载受控 EasyOCR 与 NLTK 资源；runner 启动后通过 `RUNNER_TEMP` 与 `GITHUB_ENV` 初始化模型目录，模型下载脚本遵从 `OCR_MODEL_STORAGE_PATH`，避免 workflow 调度失败或新 runner 缺少模型；预览资源异常分类使用 Python 3.11 联合类型语法并通过 Ruff `UP038` 检查。
   - [x] Parser Worker 内部 Pydantic 模型统一使用 snake_case Python 字段名构造，camelCase alias 仅用于外部 JSON 契约；保持 Pydantic mypy plugin、运行时属性和对外契约一致。
   - [x] 用户与角色工具栏收敛为左右两列：标题/说明在左，新增后台账号/筛选在右；“新增后台账号”固定在右上角。
+
+### 6.2 域名部署预览修复（2026-08-10）
+
+- [x] Caddy 将全局 `X-Frame-Options` 从 `DENY` 收敛为 `SAMEORIGIN`，并追加 `Content-Security-Policy: frame-ancestors 'self'`；PDF/Office 同源 `iframe` 可正常加载，跨域嵌入仍被阻止，配置回归测试已补充。

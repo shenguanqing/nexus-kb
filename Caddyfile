@@ -16,7 +16,10 @@ http://{$NEXUS_KB_PUBLIC_HOST:localhost}:8080 {
 
 	header {
 		X-Content-Type-Options nosniff
-		X-Frame-Options DENY
+		# PDF/Office previews use a same-origin iframe. Keep cross-origin framing
+		# blocked without rejecting the application's own preview frame.
+		X-Frame-Options SAMEORIGIN
+		+Content-Security-Policy "frame-ancestors 'self'"
 		Referrer-Policy strict-origin-when-cross-origin
 	}
 
