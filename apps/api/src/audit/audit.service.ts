@@ -152,6 +152,8 @@ export class AuditService {
         reasonCode: row.reasonCode,
         sensitivity: row.sensitivity,
         providerId: row.providerId,
+        embeddingProvider: row.providerId,
+        embeddingModel: row.embeddingModel,
         region: row.region,
         redactionPolicyVersion: row.redactionPolicyVersion,
       },

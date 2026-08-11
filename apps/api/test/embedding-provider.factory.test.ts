@@ -84,4 +84,38 @@ describe('EmbeddingProviderFactory', () => {
       region: 'local',
     });
   });
+
+  it('constructs the configured Google retrieval embedding provider', () => {
+    const config = {
+      values: {
+        EMBEDDING_PROVIDER: 'google',
+        EMBEDDING_MODEL: 'gemini-embedding-001',
+        EMBEDDING_DIMENSIONS: 768,
+        EMBEDDING_BATCH_SIZE: 10,
+        EMBEDDING_TASK_MODE: 'retrieval_document_query',
+        EMBEDDING_REGION: 'global',
+        EMBEDDING_REQUEST_TIMEOUT_MS: 60_000,
+        EMBEDDING_MAX_ATTEMPTS: 3,
+        EMBEDDING_RETRY_BASE_DELAY_MS: 500,
+        GEMINI_API_KEY: 'test-key',
+        GEMINI_BASE_URL: 'https://generativelanguage.googleapis.com/v1beta',
+        CHUNK_MAX_TOKENS: 600,
+        CHUNK_OVERLAP_TOKENS: 80,
+        REDACTION_POLICY_VERSION: 'v1',
+      },
+    } as unknown as AppConfig;
+    const factory = new EmbeddingProviderFactory(config, {
+      record: vi.fn(),
+    } as unknown as EmbeddingTelemetry);
+
+    expect(factory.getProvider()).toMatchObject({
+      id: 'google',
+      model: 'gemini-embedding-001',
+      dimensions: 768,
+      region: 'global',
+      taskMode: 'retrieval_document_query',
+      documentTaskRule: 'RETRIEVAL_DOCUMENT',
+      queryTaskRule: 'RETRIEVAL_QUERY',
+    });
+  });
 });

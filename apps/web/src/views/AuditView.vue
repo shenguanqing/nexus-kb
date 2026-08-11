@@ -207,7 +207,7 @@ onMounted(() => load());
             <el-table-column label="云端数据" min-width="82">
               <template #default="scope">{{ cloudEgressLabel(auditRow(scope.row)) }}</template>
             </el-table-column>
-            <el-table-column label="Provider/模型" min-width="145" show-overflow-tooltip>
+            <el-table-column label="Provider/模型" min-width="240" show-overflow-tooltip>
               <template #default="scope">{{ auditProvider(auditRow(scope.row)) }}</template>
             </el-table-column>
             <el-table-column label="结果" min-width="105">

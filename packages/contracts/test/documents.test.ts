@@ -50,13 +50,13 @@ describe('document contracts', () => {
     expect(
       documentUploadOptionsSchema.parse({
         maxUploadBytes: 1024,
-        acceptedExtensions: ['txt', 'md'],
+        acceptedExtensions: ['txt', 'md', 'doc'],
         department: 'finance',
         allowedSensitivities: ['internal'],
         defaultSensitivity: 'internal',
         dwgConversionEnabled: false,
       }).acceptedExtensions,
-    ).toEqual(['txt', 'md']);
+    ).toEqual(['txt', 'md', 'doc']);
   });
 
   it('validates document detail without parsed content or storage paths', () => {

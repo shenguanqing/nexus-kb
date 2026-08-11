@@ -25,6 +25,7 @@ def parse_with_tika(
     max_response_bytes: int,
     max_elements: int,
     parser_version: str,
+    source_type: str = "pdf",
 ) -> tuple[list[ParsedElement], list[str], str]:
     try:
         with path.open("rb") as source, httpx.Client(timeout=timeout_seconds) as client:
@@ -60,7 +61,7 @@ def parse_with_tika(
         ParsedElement(
             text=block,
             element_type="paragraph",
-            metadata={"fallbackUsed": True, "sourceType": "pdf"},
+            metadata={"fallbackUsed": True, "sourceType": source_type},
         )
         for block in blocks
     ]

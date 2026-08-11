@@ -10,6 +10,10 @@ const types = {
     canonicalMime: 'text/markdown',
     acceptedMimes: new Set(['text/markdown', 'text/plain']),
   },
+  '.doc': {
+    canonicalMime: 'application/msword',
+    acceptedMimes: new Set(['application/msword', 'application/x-msword']),
+  },
   '.docx': {
     canonicalMime: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
     acceptedMimes: new Set([
@@ -94,6 +98,8 @@ export async function validateUploadedFile(
     } finally {
       await handle.close();
     }
+  } else if (extension === '.doc') {
+    await validateCompoundDocumentSignature(path);
   } else if (extension === '.dxf') {
     await validateDxfSignature(path);
   } else if (extension === '.dwg') {
@@ -109,6 +115,23 @@ export async function validateUploadedFile(
     }
   }
   return { extension, mimeType: expected.canonicalMime };
+}
+
+async function validateCompoundDocumentSignature(path: string): Promise<void> {
+  const handle = await open(path, 'r');
+  try {
+    const signature = Buffer.alloc(8);
+    const { bytesRead } = await handle.read(signature, 0, signature.length, 0);
+    if (
+      bytesRead === signature.length &&
+      signature.equals(Buffer.from([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1]))
+    ) {
+      return;
+    }
+  } finally {
+    await handle.close();
+  }
+  throw new ApiException('FILE_SIGNATURE_MISMATCH', '文件签名与扩展名不匹配', 415);
 }
 
 const supportedDwgVersions = new Set([

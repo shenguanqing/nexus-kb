@@ -127,6 +127,7 @@ export class DocumentsService {
       acceptedExtensions: [
         'txt',
         'md',
+        'doc',
         'docx',
         'xlsx',
         'pdf',
@@ -837,6 +838,9 @@ export class DocumentsService {
         checkpoint: true,
         attempts: true,
         traceId: true,
+        embeddingCompletedChunks: true,
+        embeddingTotalChunks: true,
+        embeddingBatchSize: true,
         errorCode: true,
         errorCategory: true,
         retryable: true,
@@ -1230,6 +1234,14 @@ export class DocumentsService {
     } else {
       await this.vectorStore.deleteDocument(identity.tenantId, document.id);
     }
+    const cacheKeys = (
+      await this.prisma.knowledgeChunk.findMany({
+        where: { documentId: document.id, tenantId: identity.tenantId },
+        select: { embeddingCacheKey: true },
+      })
+    )
+      .map((chunk) => chunk.embeddingCacheKey)
+      .filter((key): key is string => key !== null);
     await unlink(join(this.config.values.RAW_DOCS_PATH, document.storageKey)).catch(
       (error: unknown) => {
         if (!(error instanceof Error && 'code' in error && error.code === 'ENOENT')) throw error;
@@ -1304,6 +1316,9 @@ export class DocumentsService {
       }),
       this.prisma.knowledgeChunk.deleteMany({
         where: { documentId: document.id, tenantId: identity.tenantId },
+      }),
+      this.prisma.embeddingCacheEntry.deleteMany({
+        where: { tenantId: identity.tenantId, key: { in: [...new Set(cacheKeys)] } },
       }),
       this.prisma.documentLifecycleAudit.create({
         data: {
@@ -1564,6 +1579,9 @@ export class DocumentsService {
       traceId: true,
       parserVersion: true,
       embeddingFingerprint: true,
+      embeddingCompletedChunks: true,
+      embeddingTotalChunks: true,
+      embeddingBatchSize: true,
       warnings: true,
       errorCode: true,
       errorCategory: true,
@@ -1588,6 +1606,9 @@ export class DocumentsService {
     traceId: string;
     parserVersion: string | null;
     embeddingFingerprint: string | null;
+    embeddingCompletedChunks: number;
+    embeddingTotalChunks: number | null;
+    embeddingBatchSize: number | null;
     warnings: unknown;
     errorCode: string | null;
     errorCategory: string | null;

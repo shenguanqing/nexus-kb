@@ -294,6 +294,10 @@ onUnmounted(() => {
             <div>
               <span>尝试次数</span><strong>{{ job.attempts }}</strong>
             </div>
+            <div v-if="job.embeddingTotalChunks !== null">
+              <span>Embedding 进度</span>
+              <strong>{{ job.embeddingCompletedChunks }} / {{ job.embeddingTotalChunks }}</strong>
+            </div>
             <div>
               <span>更新时间</span><strong>{{ new Date(job.updatedAt).toLocaleString() }}</strong>
             </div>

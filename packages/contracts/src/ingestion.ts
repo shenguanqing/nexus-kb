@@ -46,6 +46,9 @@ export const ingestionJobSchema = z
       .string()
       .regex(/^[0-9a-f]{64}$/)
       .nullable(),
+    embeddingCompletedChunks: z.number().int().nonnegative(),
+    embeddingTotalChunks: z.number().int().nonnegative().nullable(),
+    embeddingBatchSize: z.number().int().positive().nullable(),
     warnings: z.array(z.string()),
     errorCode: z.string().nullable(),
     errorCategory: z.string().nullable(),

@@ -78,6 +78,28 @@ describe('validateUploadedFile', () => {
     });
   });
 
+  it('accepts only a signed legacy DOC compound file', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'nexus-upload-'));
+    directories.push(directory);
+    const path = join(directory, 'upload');
+    await writeFile(
+      path,
+      Buffer.concat([
+        Buffer.from([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1]),
+        Buffer.alloc(64),
+      ]),
+    );
+
+    await expect(validateUploadedFile(path, 'policy.doc', 'application/msword')).resolves.toEqual({
+      extension: '.doc',
+      mimeType: 'application/msword',
+    });
+    await writeFile(path, Buffer.from('not-a-compound-document'));
+    await expect(
+      validateUploadedFile(path, 'policy.doc', 'application/msword'),
+    ).rejects.toMatchObject({ code: 'FILE_SIGNATURE_MISMATCH' } satisfies Partial<ApiException>);
+  });
+
   it('accepts signed PDF, PNG, JPG and JPEG files', async () => {
     const directory = await mkdtemp(join(tmpdir(), 'nexus-upload-'));
     directories.push(directory);

@@ -44,7 +44,9 @@ onMounted(load);
       <div class="usage-toolbar-intro">
         <strong>近 30 天用量事实</strong>
         <div class="text-block">
-          基于当前租户查询审计聚合；Provider 未回传 token 或未配置价格时保持“暂无数据”。
+          基于当前租户查询审计聚合。“涉及问答”表示该问答使用了对应阶段，一次问答可同时计入 Query
+          Embedding 和 LLM；它不是供应商账单请求数。当前 Embedding 配置即使尚无查询也会以 0
+          次展示，Provider 未回传 token 或未配置价格时保持“暂无数据”。
         </div>
       </div>
       <form
@@ -130,7 +132,7 @@ onMounted(load);
             <el-table-column prop="kind" label="类型" fixed="left" />
             <el-table-column prop="provider" label="Provider" />
             <el-table-column prop="model" label="模型" />
-            <el-table-column prop="requests" label="请求" />
+            <el-table-column prop="requests" label="涉及问答" />
             <el-table-column label="Token">
               <template #default="scope">{{ scope.row.inputTokens ?? '暂无数据' }}</template>
             </el-table-column>
@@ -160,7 +162,7 @@ onMounted(load);
               </header>
               <div class="mobile-data-fields">
                 <div>
-                  <span>请求</span><strong>{{ provider.requests }}</strong>
+                  <span>涉及问答</span><strong>{{ provider.requests }}</strong>
                 </div>
                 <div>
                   <span>Token</span><strong>{{ provider.inputTokens ?? '暂无数据' }}</strong>

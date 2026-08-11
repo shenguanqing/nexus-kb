@@ -278,19 +278,21 @@ const environmentSchema = z
       .default('false')
       .transform((value) => value === 'true'),
     CLOUD_EGRESS_RULES_JSON: jsonEnvironmentValue(z.array(cloudEgressRuleSchema).max(100), '[]'),
-    EMBEDDING_PROVIDER: z.enum(['none', 'alibaba', 'ollama']).default('none'),
+    EMBEDDING_PROVIDER: z.enum(['none', 'alibaba', 'google', 'ollama']).default('none'),
     EMBEDDING_MODEL: z.string().trim().max(128).default(''),
-    EMBEDDING_DIMENSIONS: z.coerce
-      .number()
-      .int()
-      .refine((value) => [64, 128, 256, 512, 768, 1024, 1536, 2048].includes(value))
-      .default(1024),
+    EMBEDDING_DIMENSIONS: z.coerce.number().int().min(64).max(3072).default(1024),
     EMBEDDING_BATCH_SIZE: z.coerce.number().int().min(1).max(10).default(10),
-    EMBEDDING_TASK_MODE: z.enum(['symmetric']).default('symmetric'),
+    EMBEDDING_TASK_MODE: z.enum(['symmetric', 'retrieval_document_query']).default('symmetric'),
     EMBEDDING_REGION: z.string().trim().max(64).default(''),
     EMBEDDING_REQUEST_TIMEOUT_MS: z.coerce.number().int().min(100).max(300_000).default(60_000),
     EMBEDDING_MAX_ATTEMPTS: z.coerce.number().int().min(1).max(6).default(3),
     EMBEDDING_RETRY_BASE_DELAY_MS: z.coerce.number().int().min(1).max(10_000).default(500),
+    EMBEDDING_CACHE_TTL_SECONDS: z.coerce
+      .number()
+      .int()
+      .min(3600)
+      .max(31_536_000)
+      .default(2_592_000),
     DASHSCOPE_API_KEY: z.string().trim().default(''),
     ALIBABA_BASE_URL: z.string().trim().default(''),
     ALIBABA_REGION: z.string().trim().max(64).default('cn-beijing'),
@@ -430,6 +432,66 @@ const environmentSchema = z
           message: 'must be text-embedding-v4 for the current Alibaba adapter',
         });
       }
+      if (![64, 128, 256, 512, 768, 1024, 1536, 2048].includes(environment.EMBEDDING_DIMENSIONS)) {
+        context.addIssue({
+          code: 'custom',
+          path: ['EMBEDDING_DIMENSIONS'],
+          message: 'is not supported by the current Alibaba adapter',
+        });
+      }
+      if (environment.EMBEDDING_TASK_MODE !== 'symmetric') {
+        context.addIssue({
+          code: 'custom',
+          path: ['EMBEDDING_TASK_MODE'],
+          message: 'must be symmetric for the Alibaba provider',
+        });
+      }
+    }
+    if (environment.EMBEDDING_PROVIDER === 'google') {
+      const requiredFields = [
+        ['EMBEDDING_MODEL', environment.EMBEDDING_MODEL],
+        ['EMBEDDING_REGION', environment.EMBEDDING_REGION],
+        ['GEMINI_API_KEY', environment.GEMINI_API_KEY],
+        ['GEMINI_BASE_URL', environment.GEMINI_BASE_URL],
+      ] as const;
+      for (const [field, value] of requiredFields) {
+        if (!value) context.addIssue({ code: 'custom', path: [field], message: 'is required' });
+      }
+      if (environment.EMBEDDING_MODEL && environment.EMBEDDING_MODEL !== 'gemini-embedding-001') {
+        context.addIssue({
+          code: 'custom',
+          path: ['EMBEDDING_MODEL'],
+          message: 'must be gemini-embedding-001 for the current Google adapter',
+        });
+      }
+      if (environment.EMBEDDING_DIMENSIONS < 128 || environment.EMBEDDING_DIMENSIONS > 3072) {
+        context.addIssue({
+          code: 'custom',
+          path: ['EMBEDDING_DIMENSIONS'],
+          message: 'must be between 128 and 3072 for gemini-embedding-001',
+        });
+      }
+      if (environment.EMBEDDING_TASK_MODE !== 'retrieval_document_query') {
+        context.addIssue({
+          code: 'custom',
+          path: ['EMBEDDING_TASK_MODE'],
+          message: 'must be retrieval_document_query for the Google provider',
+        });
+      }
+      if (environment.GEMINI_BASE_URL) {
+        try {
+          const url = new URL(environment.GEMINI_BASE_URL);
+          if (!['/v1', '/v1beta'].includes(url.pathname.replace(/\/$/, ''))) {
+            throw new Error('unsupported API path');
+          }
+        } catch {
+          context.addIssue({
+            code: 'custom',
+            path: ['GEMINI_BASE_URL'],
+            message: 'must end in /v1 or /v1beta for Google Embedding',
+          });
+        }
+      }
     }
     if (environment.EMBEDDING_PROVIDER === 'ollama') {
       const requiredFields = [
@@ -452,6 +514,20 @@ const environmentSchema = z
           code: 'custom',
           path: ['OLLAMA_BASE_URL'],
           message: 'must be an approved local HTTP endpoint on port 11434',
+        });
+      }
+      if (![64, 128, 256, 512, 768, 1024, 1536, 2048].includes(environment.EMBEDDING_DIMENSIONS)) {
+        context.addIssue({
+          code: 'custom',
+          path: ['EMBEDDING_DIMENSIONS'],
+          message: 'is not supported by the current Ollama adapter',
+        });
+      }
+      if (environment.EMBEDDING_TASK_MODE !== 'symmetric') {
+        context.addIssue({
+          code: 'custom',
+          path: ['EMBEDDING_TASK_MODE'],
+          message: 'must be symmetric for the Ollama provider',
         });
       }
     }
@@ -711,15 +787,21 @@ export function safeConfigurationSummary(environment: Environment): Record<strin
     embeddingDimensions: environment.EMBEDDING_DIMENSIONS,
     embeddingRegion: environment.EMBEDDING_REGION || null,
     embeddingKeyConfigured:
-      environment.EMBEDDING_PROVIDER === 'ollama' ? true : Boolean(environment.DASHSCOPE_API_KEY),
+      environment.EMBEDDING_PROVIDER === 'ollama'
+        ? true
+        : environment.EMBEDDING_PROVIDER === 'google'
+          ? Boolean(environment.GEMINI_API_KEY)
+          : Boolean(environment.DASHSCOPE_API_KEY),
     embeddingEndpoint:
       environment.EMBEDDING_PROVIDER === 'ollama'
         ? environment.OLLAMA_BASE_URL
           ? safeEndpoint(environment.OLLAMA_BASE_URL)
           : null
-        : environment.ALIBABA_BASE_URL
-          ? safeEndpoint(environment.ALIBABA_BASE_URL)
-          : null,
+        : environment.EMBEDDING_PROVIDER === 'google'
+          ? safeEndpoint(environment.GEMINI_BASE_URL)
+          : environment.ALIBABA_BASE_URL
+            ? safeEndpoint(environment.ALIBABA_BASE_URL)
+            : null,
     llmProvider: environment.LLM_PROVIDER,
     llmModel: environment.LLM_MODEL || null,
     llmFallbackProvider: environment.LLM_FALLBACK_PROVIDER,

@@ -10,6 +10,7 @@ import { PrismaService } from '../database/prisma.service';
 import { ParserClient } from '../parser/parser-client';
 import { EmbeddingProviderFactory } from '../providers/embedding/embedding-provider.factory';
 import { EmbeddingService } from '../providers/embedding/embedding.service';
+import type { EmbeddingBatchProgress } from '../providers/embedding/embedding.service';
 import { ChromaVectorStore } from '../vector-store/chroma-vector-store';
 import type { VectorChunk } from '../vector-store/vector-store';
 import { VectorStoreError } from '../vector-store/vector-store-error';
@@ -58,7 +59,8 @@ export class IngestionProcessor {
       }
       return;
     }
-    const resumeFromLocalPreparation = record.checkpoint === 'local_prepared';
+    const resumeFromLocalPreparation =
+      record.checkpoint === 'local_prepared' || record.checkpoint.startsWith('embedding_batch:');
     const initialProcessingStatus =
       record.document.mimeType === 'image/vnd.dwg' ? 'converting' : 'parsing';
     const [jobUpdate] = await this.prisma.$transaction([
@@ -135,6 +137,7 @@ export class IngestionProcessor {
         result,
         redactedChunks,
         policy,
+        embeddingModel: provider?.model ?? null,
         isBlocked,
         shouldIndex,
         vectorStoreInfo,
@@ -175,12 +178,21 @@ export class IngestionProcessor {
       }
     >;
     policy: ReturnType<CloudPolicyService['evaluate']>;
+    embeddingModel: string | null;
     isBlocked: boolean;
     shouldIndex: boolean;
     vectorStoreInfo: ReturnType<ChromaVectorStore['info']>;
   }): Promise<boolean> {
-    const { record, result, redactedChunks, policy, isBlocked, shouldIndex, vectorStoreInfo } =
-      input;
+    const {
+      record,
+      result,
+      redactedChunks,
+      policy,
+      embeddingModel,
+      isBlocked,
+      shouldIndex,
+      vectorStoreInfo,
+    } = input;
     const persisted = await this.prisma.$transaction(async (tx) => {
       const lockedDocument = await tx.document.updateMany({
         where: { id: record.documentId, status: { notIn: ['deleting', 'deleted'] } },
@@ -243,6 +255,7 @@ export class IngestionProcessor {
           reasonCode: policy.reasonCode,
           sensitivity: record.document.sensitivity,
           providerId: policy.providerId,
+          embeddingModel,
           region: policy.region,
           redactionPolicyVersion: this.config.values.REDACTION_POLICY_VERSION,
         },
@@ -251,6 +264,7 @@ export class IngestionProcessor {
           reasonCode: policy.reasonCode,
           sensitivity: record.document.sensitivity,
           providerId: policy.providerId,
+          embeddingModel,
           region: policy.region,
           redactionPolicyVersion: this.config.values.REDACTION_POLICY_VERSION,
         },
@@ -268,6 +282,9 @@ export class IngestionProcessor {
           errorCategory: isBlocked ? 'policy' : null,
           retryable: false,
           embeddingFingerprint: vectorStoreInfo.fingerprint,
+          embeddingCompletedChunks: 0,
+          embeddingTotalChunks: shouldIndex ? redactedChunks.length : null,
+          embeddingBatchSize: shouldIndex ? this.config.values.EMBEDDING_BATCH_SIZE : null,
           vectorCollection: vectorStoreInfo.collectionName,
         },
       });
@@ -353,9 +370,18 @@ export class IngestionProcessor {
     vectorStoreInfo: ReturnType<ChromaVectorStore['info']>,
   ): Promise<void> {
     const provider = this.embeddingFactory.getProvider();
+    const fingerprint = this.embeddingFactory.getFingerprint();
+    if (vectorStoreInfo.fingerprint !== fingerprint.value) {
+      throw new VectorStoreError('configuration_mismatch');
+    }
     const vectors = await this.embedding.embedDocuments(
       chunks.map((chunk) => chunk.redactedText),
-      { sensitivity: record.document.sensitivity },
+      {
+        sensitivity: record.document.sensitivity,
+        tenantId: record.tenantId,
+        onBatchCompleted: (progress) =>
+          this.persistEmbeddingBatchCheckpoint(record, chunks, progress, fingerprint.value),
+      },
     );
     await this.prisma.ingestionJob.updateMany({
       where: { id: record.id, status: { not: 'deleted' } },
@@ -409,6 +435,45 @@ export class IngestionProcessor {
       status: 'completed',
       checkpoint: 'completed',
     });
+  }
+
+  private async persistEmbeddingBatchCheckpoint(
+    record: IngestionRecord,
+    chunks: VectorChunk[],
+    progress: EmbeddingBatchProgress,
+    fingerprint: string,
+  ): Promise<void> {
+    const batchStart = progress.completedChunks - progress.cacheKeys.length;
+    const batchChunks = chunks.slice(batchStart, progress.completedChunks);
+    if (batchChunks.length !== progress.cacheKeys.length) {
+      throw new VectorStoreError('invalid_input');
+    }
+    await this.prisma.$transaction([
+      ...batchChunks.map((chunk, index) =>
+        this.prisma.knowledgeChunk.updateMany({
+          where: {
+            id: chunk.id,
+            tenantId: record.tenantId,
+            documentId: record.documentId,
+            documentVersion: record.version,
+            document: { status: { notIn: ['deleting', 'deleted'] } },
+          },
+          data: { embeddingCacheKey: progress.cacheKeys[index] },
+        }),
+      ),
+      this.prisma.ingestionJob.updateMany({
+        where: { id: record.id, status: { not: 'deleted' } },
+        data: {
+          status: 'embedding',
+          step: 'embedding',
+          checkpoint: `embedding_batch:${progress.completedBatches}/${progress.totalBatches}`,
+          embeddingFingerprint: fingerprint,
+          embeddingCompletedChunks: progress.completedChunks,
+          embeddingTotalChunks: progress.totalChunks,
+          embeddingBatchSize: progress.batchSize,
+        },
+      }),
+    ]);
   }
 
   private stringArray(value: Prisma.JsonValue): string[] {

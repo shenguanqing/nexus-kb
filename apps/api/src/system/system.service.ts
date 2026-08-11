@@ -35,7 +35,9 @@ export class SystemService {
     const embeddingEndpoint =
       environment.EMBEDDING_PROVIDER === 'ollama'
         ? environment.OLLAMA_BASE_URL
-        : environment.ALIBABA_BASE_URL;
+        : environment.EMBEDDING_PROVIDER === 'google'
+          ? environment.GEMINI_BASE_URL
+          : environment.ALIBABA_BASE_URL;
     return {
       providers: [
         {
@@ -48,7 +50,10 @@ export class SystemService {
           dimensions: embeddingEnabled ? environment.EMBEDDING_DIMENSIONS : null,
           credentialConfigured:
             embeddingEnabled &&
-            (environment.EMBEDDING_PROVIDER === 'ollama' || Boolean(environment.DASHSCOPE_API_KEY)),
+            (environment.EMBEDDING_PROVIDER === 'ollama' ||
+              (environment.EMBEDDING_PROVIDER === 'google'
+                ? Boolean(environment.GEMINI_API_KEY)
+                : Boolean(environment.DASHSCOPE_API_KEY))),
           fingerprint: embeddingEnabled ? this.vectorStore.info().fingerprint : null,
         },
         this.llmStatus('llm', environment.LLM_PROVIDER, environment.LLM_MODEL),

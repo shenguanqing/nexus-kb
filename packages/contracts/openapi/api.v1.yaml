@@ -1091,7 +1091,7 @@ components:
         kind: { type: string, enum: [embedding, rerank, llm] }
         provider: { type: string, minLength: 1 }
         model: { type: string, minLength: 1 }
-        requests: { type: integer, minimum: 1 }
+        requests: { type: integer, minimum: 0 }
         failures: { type: integer, minimum: 0 }
         inputTokens: { type: [integer, 'null'], minimum: 0 }
         outputTokens: { type: [integer, 'null'], minimum: 0 }
@@ -1455,7 +1455,7 @@ components:
       enum: [uploaded, processing, prepared, active, policy_blocked, failed, deleting, deleted]
     DocumentFormat:
       type: string
-      enum: [txt, md, pdf, docx, xlsx, png, jpg, jpeg, dxf, dwg]
+      enum: [txt, md, pdf, doc, docx, xlsx, png, jpg, jpeg, dxf, dwg]
     DocumentListItem:
       type: object
       additionalProperties: false
@@ -1760,6 +1760,9 @@ components:
           checkpoint,
           attempts,
           traceId,
+          embeddingCompletedChunks,
+          embeddingTotalChunks,
+          embeddingBatchSize,
           errorCode,
           errorCategory,
           retryable,
@@ -1777,6 +1780,9 @@ components:
         checkpoint: { type: string }
         attempts: { type: integer, minimum: 0 }
         traceId: { type: string, format: uuid }
+        embeddingCompletedChunks: { type: integer, minimum: 0 }
+        embeddingTotalChunks: { type: [integer, 'null'], minimum: 0 }
+        embeddingBatchSize: { type: [integer, 'null'], minimum: 1 }
         errorCode: { type: [string, 'null'] }
         errorCategory: { type: [string, 'null'] }
         retryable: { type: boolean }

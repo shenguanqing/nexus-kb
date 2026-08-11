@@ -157,6 +157,7 @@ describe('KnowledgeQueryService', () => {
     });
     expect(deps.embedQuery).toHaveBeenCalledWith('付款周期是多少？', {
       sensitivity: 'internal',
+      tenantId: 'tenant-a',
     });
     expect(JSON.stringify(deps.record.mock.calls)).not.toContain('付款周期是多少');
     expect(deps.record).toHaveBeenCalledWith(
@@ -173,9 +174,11 @@ describe('KnowledgeQueryService', () => {
 
     expect(compact.embedQuery).toHaveBeenCalledWith('vue 2和vue 3区别', {
       sensitivity: 'internal',
+      tenantId: 'tenant-a',
     });
     expect(spaced.embedQuery).toHaveBeenCalledWith('vue 2和vue 3区别', {
       sensitivity: 'internal',
+      tenantId: 'tenant-a',
     });
     expect(compact.rerank).toHaveBeenCalledWith(
       expect.objectContaining({ query: 'vue 2和vue 3区别' }),
@@ -196,6 +199,7 @@ describe('KnowledgeQueryService', () => {
     expect(deps.recentQuestions).toHaveBeenCalledWith(conversationId, identity);
     expect(deps.embedQuery).toHaveBeenCalledWith(contextualQuestion, {
       sensitivity: 'internal',
+      tenantId: 'tenant-a',
     });
     expect(deps.rerank).toHaveBeenCalledWith(
       expect.objectContaining({ query: contextualQuestion }),
@@ -220,6 +224,7 @@ describe('KnowledgeQueryService', () => {
 
     expect(deps.embedQuery).toHaveBeenCalledWith('解释 PostgreSQL 的 MVCC。', {
       sensitivity: 'internal',
+      tenantId: 'tenant-a',
     });
     expect(deps.answer).toHaveBeenCalledWith(
       expect.objectContaining({

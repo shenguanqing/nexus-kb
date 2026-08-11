@@ -27,6 +27,7 @@ describe('createEmbeddingFingerprint', () => {
       { ...environment, CHUNK_MAX_TOKENS: 512 },
       { ...environment, CHUNK_OVERLAP_TOKENS: 64 },
       { ...environment, REDACTION_POLICY_VERSION: 'v2' },
+      { ...environment, EMBEDDING_TASK_MODE: 'retrieval_document_query' },
     ];
     expect(
       variants.every((variant) => createEmbeddingFingerprint(variant).value !== original),

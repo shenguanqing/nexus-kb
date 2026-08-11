@@ -23,12 +23,16 @@ describe('PostgreSQL and Redis integration', () => {
   const crossTenantDocumentId = randomUUID();
   const replacementDocumentId = randomUUID();
   const aclDocumentId = randomUUID();
+  const embeddingCacheKey = 'c'.repeat(64);
 
   beforeAll(async () => {
     await prisma.$connect();
   });
 
   afterAll(async () => {
+    await prisma.embeddingCacheEntry.deleteMany({
+      where: { tenantId: { in: [tenantA, tenantB] } },
+    });
     await prisma.queryAudit.deleteMany({ where: { tenantId: { in: [tenantA, tenantB] } } });
     await prisma.document.deleteMany({
       where: {
@@ -71,6 +75,41 @@ describe('PostgreSQL and Redis integration', () => {
       prisma.document.findFirst({ where: { id: documentId, tenantId: tenantA } }),
     ).resolves.toMatchObject({
       id: documentId,
+    });
+  });
+
+  it('persists embedding cache identity fields and keeps cache reads tenant scoped', async () => {
+    await prisma.embeddingCacheEntry.create({
+      data: {
+        key: embeddingCacheKey,
+        tenantId: tenantA,
+        textSha256: 'd'.repeat(64),
+        embeddingFingerprint: 'e'.repeat(64),
+        provider: 'google',
+        model: 'gemini-embedding-001',
+        dimensions: 3,
+        taskRule: 'RETRIEVAL_DOCUMENT',
+        chunkMaxTokens: 600,
+        chunkOverlapTokens: 80,
+        redactionPolicyVersion: 'v1',
+        vector: [1, 0, 0],
+        expiresAt: new Date(Date.now() + 60_000),
+      },
+    });
+
+    await expect(
+      prisma.embeddingCacheEntry.findFirst({
+        where: { key: embeddingCacheKey, tenantId: tenantB },
+      }),
+    ).resolves.toBeNull();
+    await expect(
+      prisma.embeddingCacheEntry.findFirst({
+        where: { key: embeddingCacheKey, tenantId: tenantA },
+      }),
+    ).resolves.toMatchObject({
+      provider: 'google',
+      model: 'gemini-embedding-001',
+      taskRule: 'RETRIEVAL_DOCUMENT',
     });
   });
 

@@ -152,6 +152,97 @@ def test_docx_returns_generated_preview_manifest(
     }
 
 
+def test_legacy_doc_uses_tika_and_returns_local_pdf_preview(
+    tmp_path: Path, monkeypatch: MonkeyPatch
+) -> None:
+    path = tmp_path / "policy.doc"
+    path.write_bytes(b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1fixture")
+    body = payload(path)
+    body["mimeType"] = "application/msword"
+    document_id = body["documentId"]
+
+    def fake_parse_with_tika(
+        source: Path,
+        mime_type: str,
+        base_url: str,
+        timeout_seconds: float,
+        max_response_bytes: int,
+        max_elements: int,
+        parser_version: str,
+        source_type: str = "pdf",
+    ) -> tuple[list[ParsedElement], list[str], str]:
+        assert source == path
+        assert mime_type == "application/msword"
+        assert base_url == "http://tika:9998"
+        assert timeout_seconds == 120
+        assert max_response_bytes == 52_428_800
+        assert max_elements == 100_000
+        assert source_type == "doc"
+        return [ParsedElement(text="旧版 Word 正文", element_type="paragraph")], [], parser_version
+
+    def fake_preview(*_: object, **__: object) -> PreviewArtifact:
+        return PreviewArtifact(
+            storage_key=f"{document_id}.pdf",
+            kind="pdf",
+            mime_type="application/pdf",
+            size_bytes=1024,
+            renderer="libreoffice",
+            renderer_version="test",
+        )
+
+    monkeypatch.setattr(main_module, "parse_with_tika", fake_parse_with_tika)
+    monkeypatch.setattr(main_module, "generate_office_pdf", fake_preview)
+    preview_root = tmp_path / "previews"
+    preview_root.mkdir()
+    client = TestClient(
+        create_app(
+            Settings(
+                PARSER_INTERNAL_TOKEN=TOKEN,
+                RAW_DOCS_PATH=tmp_path,
+                PREVIEW_ARTIFACTS_PATH=preview_root,
+                TIKA_ENABLED=True,
+            )
+        )
+    )
+
+    response = client.post(
+        "/internal/v1/parse", headers={"x-internal-token": TOKEN}, json=body
+    )
+
+    assert response.status_code == 200
+    assert response.json()["parser"] == "apache-tika"
+    assert response.json()["elements"][0]["text"] == "旧版 Word 正文"
+    assert response.json()["preview"]["storageKey"] == f"{document_id}.pdf"
+
+
+def test_legacy_doc_fails_closed_when_tika_is_disabled(tmp_path: Path) -> None:
+    path = tmp_path / "policy.doc"
+    path.write_bytes(b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1fixture")
+    body = payload(path)
+    body["mimeType"] = "application/msword"
+
+    response = make_client(tmp_path).post(
+        "/internal/v1/parse", headers={"x-internal-token": TOKEN}, json=body
+    )
+
+    assert response.status_code == 503
+    assert response.headers["x-parser-error-code"] == "TIKA_UNAVAILABLE"
+
+
+def test_legacy_doc_rejects_a_forged_compound_signature(tmp_path: Path) -> None:
+    path = tmp_path / "policy.doc"
+    path.write_bytes(b"not-a-compound-document")
+    body = payload(path)
+    body["mimeType"] = "application/msword"
+
+    response = make_client(tmp_path).post(
+        "/internal/v1/parse", headers={"x-internal-token": TOKEN}, json=body
+    )
+
+    assert response.status_code == 422
+    assert response.headers["x-parser-error-code"] == "FILE_SIGNATURE_MISMATCH"
+
+
 def test_xlsx_preserves_sheet_and_header(tmp_path: Path) -> None:
     path = tmp_path / "records.xlsx"
     workbook = Workbook()

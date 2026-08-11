@@ -66,8 +66,9 @@ function fixture() {
       decision: 'blocked',
       reasonCode: 'CONFIDENTIAL_CLOUD_EGRESS_DENIED',
       sensitivity: 'confidential',
-      providerId: null,
-      region: null,
+      providerId: 'google',
+      embeddingModel: 'gemini-embedding-001',
+      region: 'global',
       redactionPolicyVersion: 'v1',
       createdAt: new Date('2026-07-18T00:00:01.000Z'),
       ingestionJob: { traceId: 'a1111111-1111-4111-8111-111111111111' },
@@ -120,6 +121,14 @@ describe('AuditService', () => {
     expect(serialized).not.toContain('"answer":');
     expect(serialized).not.toContain('"originalText":');
     expect(serialized).not.toContain('"redactedText":');
+    expect(result.events[0]?.attributes).toMatchObject({
+      embeddingProvider: 'alibaba',
+      embeddingModel: 'text-embedding-v4',
+    });
+    expect(result.events[2]?.attributes).toMatchObject({
+      embeddingProvider: 'google',
+      embeddingModel: 'gemini-embedding-001',
+    });
   });
 
   it('only queries the selected event type', async () => {

@@ -32,12 +32,13 @@ from app.schemas import (
     ParseResponse,
     PreviewArtifact,
 )
-from app.security import validate_storage_path
+from app.security import validate_legacy_doc_signature, validate_storage_path
 
 LOGGER = logging.getLogger("nexus_kb.parser_worker")
 SUPPORTED_TYPES = {
     ".txt": {"text/plain"},
     ".md": {"text/markdown", "text/plain"},
+    ".doc": {"application/msword", "application/x-msword"},
     ".docx": {"application/vnd.openxmlformats-officedocument.wordprocessingml.document"},
     ".xlsx": {"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"},
     ".pdf": {"application/pdf"},
@@ -67,6 +68,7 @@ VALUE_ERROR_CODES = {
     "图片像素数量超过限制": "IMAGE_PIXEL_LIMIT_EXCEEDED",
     "OCR 返回格式无效": "OCR_INVALID_RESPONSE",
     "Tika 返回内容超过限制": "TIKA_RESPONSE_LIMIT_EXCEEDED",
+    "DOC 文件签名无效": "FILE_SIGNATURE_MISMATCH",
 }
 DWG_INVALID_ERROR_CODES = {
     "DWG 版本不受支持或文件签名无效": "DWG_VERSION_UNSUPPORTED",
@@ -190,6 +192,33 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             if suffix in {".txt", ".md"}:
                 elements = parse_text(path)
                 parser = "markdown" if suffix == ".md" else "text"
+            elif suffix == ".doc":
+                validate_legacy_doc_signature(path)
+                if not resolved_settings.tika_enabled:
+                    raise TikaUnavailableError("DOC 解析需要已启用的内网 Tika")
+                elements, warnings, parser_version = parse_with_tika(
+                    path,
+                    payload.mime_type,
+                    resolved_settings.tika_base_url,
+                    resolved_settings.tika_request_timeout_seconds,
+                    resolved_settings.max_tika_response_bytes,
+                    resolved_settings.max_elements,
+                    resolved_settings.tika_version,
+                    source_type="doc",
+                )
+                parser = "apache-tika"
+                try:
+                    preview = generate_office_pdf(
+                        path,
+                        payload.document_id,
+                        executable=resolved_settings.libreoffice_executable,
+                        preview_root=resolved_settings.preview_artifacts_path,
+                        temp_root=resolved_settings.parser_temp_path,
+                        timeout_seconds=resolved_settings.preview_conversion_timeout_seconds,
+                        max_bytes=resolved_settings.max_preview_bytes,
+                    )
+                except Exception:
+                    warnings.append("PREVIEW_GENERATION_FAILED")
             elif suffix == ".docx":
                 validate_office_archive(
                     path,

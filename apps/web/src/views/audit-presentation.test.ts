@@ -30,14 +30,14 @@ const event: AuditEvent = {
 
 describe('audit presentation', () => {
   it('renders provider summaries without exposing source chunk identifiers', () => {
-    expect(auditProvider(event)).toBe('deepseek / model-a');
+    expect(auditProvider(event)).toBe('LLM：deepseek/model-a');
     expect(visibleAuditAttributes(event)).toEqual([
       { label: '问题长度', value: '12' },
       { label: '回答模式', value: '通用知识补充' },
     ]);
   });
 
-  it('identifies embedding usage when retrieval ended before an LLM call', () => {
+  it('does not substitute embedding details when a query never called an LLM', () => {
     const noAnswer: AuditEvent = {
       ...event,
       outcome: 'no_answer',
@@ -47,7 +47,37 @@ describe('audit presentation', () => {
       },
     };
 
-    expect(auditProvider(noAnswer)).toBe('Embedding：ollama / bge-m3:latest');
+    expect(auditProvider(noAnswer)).toBe('—');
+  });
+
+  it('shows only the LLM model for a completed query', () => {
+    const answered: AuditEvent = {
+      ...event,
+      attributes: {
+        ...event.attributes,
+        embeddingProvider: 'google',
+        embeddingModel: 'gemini-embedding-001',
+      },
+    };
+
+    expect(auditProvider(answered)).toBe('LLM：deepseek/model-a');
+  });
+
+  it.each([
+    ['ollama', 'bge-m3:latest'],
+    ['google', 'gemini-embedding-001'],
+  ])('shows %s/%s for an ingestion cloud-policy event', (providerId, embeddingModel) => {
+    const policyEvent: AuditEvent = {
+      ...event,
+      type: 'cloud_policy',
+      event: 'cloud_egress_policy',
+      attributes: {
+        providerId,
+        embeddingModel,
+      },
+    };
+
+    expect(auditProvider(policyEvent)).toBe(`Embedding：${providerId}/${embeddingModel}`);
   });
 
   it('does not infer cloud egress from ordinary query records', () => {

@@ -38,16 +38,19 @@ export function auditResource(event: AuditEvent): string {
 }
 
 export function auditProvider(event: AuditEvent): string {
-  const llmProvider = stringAttribute(event, 'llmProvider');
-  if (llmProvider) return modelSummary(llmProvider, stringAttribute(event, 'llmModel'));
-
-  const embeddingProvider = stringAttribute(event, 'embeddingProvider');
-  if (embeddingProvider) {
-    return `Embedding：${modelSummary(embeddingProvider, stringAttribute(event, 'embeddingModel'))}`;
+  if (event.type === 'query') {
+    const llmProvider = stringAttribute(event, 'llmProvider');
+    return llmProvider
+      ? `LLM：${modelSummary(llmProvider, stringAttribute(event, 'llmModel'))}`
+      : '—';
   }
 
-  const providerId = stringAttribute(event, 'providerId');
-  return providerId ? modelSummary(providerId, null) : '—';
+  if (event.type !== 'cloud_policy') return '—';
+  const embeddingProvider =
+    stringAttribute(event, 'embeddingProvider') ?? stringAttribute(event, 'providerId');
+  return embeddingProvider
+    ? `Embedding：${modelSummary(embeddingProvider, stringAttribute(event, 'embeddingModel'))}`
+    : '—';
 }
 
 export function cloudEgressLabel(event: AuditEvent): string {
@@ -100,5 +103,5 @@ function stringAttribute(event: AuditEvent, key: string): string | null {
 }
 
 function modelSummary(provider: string, model: string | null): string {
-  return `${provider}${model ? ` / ${model}` : ''}`;
+  return `${provider}${model ? `/${model}` : ''}`;
 }

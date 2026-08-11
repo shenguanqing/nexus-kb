@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { UsageService } from '../src/usage/usage.service';
 import { AclPolicy } from '../src/auth/acl-policy';
 import type { Identity } from '../src/auth/identity';
+import type { AppConfig } from '../src/config/app-config';
 import type { PrismaService } from '../src/database/prisma.service';
 
 const identity: Identity = {
@@ -13,6 +14,13 @@ const identity: Identity = {
   capabilities: ['system:read'],
   defaultSensitivity: 'internal',
 };
+
+const googleEmbeddingConfig = {
+  values: {
+    EMBEDDING_PROVIDER: 'google',
+    EMBEDDING_MODEL: 'gemini-embedding-001',
+  },
+} as unknown as AppConfig;
 
 describe('UsageService', () => {
   it('aggregates tenant-scoped request facts without inventing tokens or cost', async () => {
@@ -43,6 +51,7 @@ describe('UsageService', () => {
     const service = new UsageService(
       { queryAudit: { findMany } } as unknown as PrismaService,
       new AclPolicy(),
+      googleEmbeddingConfig,
     );
     const result = await service.query(
       { from: '2026-07-01T00:00:00.000Z', to: '2026-07-20T00:00:00.000Z' },
@@ -62,6 +71,43 @@ describe('UsageService', () => {
       inputTokens: null,
       estimatedCostUsd: null,
     });
+    expect(result.providers).toContainEqual({
+      kind: 'embedding',
+      provider: 'google',
+      model: 'gemini-embedding-001',
+      requests: 0,
+      failures: 0,
+      inputTokens: null,
+      outputTokens: null,
+      estimatedCostUsd: null,
+    });
+  });
+
+  it('shows the current embedding provider and model before the first query audit exists', async () => {
+    const findMany = vi.fn().mockResolvedValue([]);
+    const service = new UsageService(
+      { queryAudit: { findMany } } as unknown as PrismaService,
+      new AclPolicy(),
+      googleEmbeddingConfig,
+    );
+
+    const result = await service.query(
+      { from: '2026-07-01T00:00:00.000Z', to: '2026-07-20T00:00:00.000Z' },
+      identity,
+    );
+
+    expect(result.providers).toEqual([
+      {
+        kind: 'embedding',
+        provider: 'google',
+        model: 'gemini-embedding-001',
+        requests: 0,
+        failures: 0,
+        inputTokens: null,
+        outputTokens: null,
+        estimatedCostUsd: null,
+      },
+    ]);
   });
 
   it('requires platform administrator role before database access', async () => {
@@ -69,6 +115,7 @@ describe('UsageService', () => {
     const service = new UsageService(
       { queryAudit: { findMany } } as unknown as PrismaService,
       new AclPolicy(),
+      googleEmbeddingConfig,
     );
     await expect(
       service.query(

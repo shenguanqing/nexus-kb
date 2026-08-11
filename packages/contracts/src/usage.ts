@@ -13,7 +13,7 @@ export const usageProviderRowSchema = z
     kind: z.enum(['embedding', 'rerank', 'llm']),
     provider: z.string().min(1),
     model: z.string().min(1),
-    requests: z.number().int().positive(),
+    requests: z.number().int().nonnegative(),
     failures: z.number().int().nonnegative(),
     inputTokens: z.number().int().nonnegative().nullable(),
     outputTokens: z.number().int().nonnegative().nullable(),

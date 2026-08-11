@@ -88,6 +88,7 @@ export class KnowledgeQueryService {
       const retrievalQuestion = buildRetrievalQuestion(normalizedQuestion, conversationQuestions);
       const queryVector = await this.embedding.embedQuery(retrievalQuestion, {
         sensitivity: identity.defaultSensitivity,
+        tenantId: identity.tenantId,
       });
       const candidates = await this.retrieval.retrieve(identity, queryVector);
       observer?.recordVectorSources(candidates.map((candidate) => this.qualitySource(candidate)));

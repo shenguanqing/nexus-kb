@@ -1,4 +1,4 @@
-export type EmbeddingTaskMode = 'symmetric';
+export type EmbeddingTaskMode = 'symmetric' | 'retrieval_document_query';
 
 export interface EmbeddingProvider {
   readonly id: string;
@@ -6,6 +6,8 @@ export interface EmbeddingProvider {
   readonly dimensions: number;
   readonly region: string;
   readonly taskMode: EmbeddingTaskMode;
+  readonly documentTaskRule: string;
+  readonly queryTaskRule: string;
   embedDocuments(texts: string[]): Promise<number[][]>;
   embedQuery(text: string): Promise<number[]>;
 }

@@ -121,6 +121,46 @@ describe('embedding configuration', () => {
     });
   });
 
+  it('accepts Google retrieval embeddings only with the verified model task contract', () => {
+    const environment = parseEnvironment({
+      ...baseEnvironment,
+      EMBEDDING_PROVIDER: 'google',
+      EMBEDDING_MODEL: 'gemini-embedding-001',
+      EMBEDDING_DIMENSIONS: '768',
+      EMBEDDING_TASK_MODE: 'retrieval_document_query',
+      EMBEDDING_REGION: 'global',
+      GEMINI_API_KEY: 'test-google-key',
+      GEMINI_BASE_URL: 'https://generativelanguage.googleapis.com/v1beta',
+    });
+    expect(environment).toMatchObject({
+      EMBEDDING_PROVIDER: 'google',
+      EMBEDDING_MODEL: 'gemini-embedding-001',
+      EMBEDDING_DIMENSIONS: 768,
+      EMBEDDING_TASK_MODE: 'retrieval_document_query',
+    });
+    expect(safeConfigurationSummary(environment)).toMatchObject({
+      embeddingKeyConfigured: true,
+      embeddingEndpoint: 'https://generativelanguage.googleapis.com',
+    });
+  });
+
+  it('rejects Google models, dimensions and task rules outside the adapter contract', () => {
+    expect(() =>
+      parseEnvironment({
+        ...baseEnvironment,
+        EMBEDDING_PROVIDER: 'google',
+        EMBEDDING_MODEL: 'embedding-001',
+        EMBEDDING_DIMENSIONS: '64',
+        EMBEDDING_TASK_MODE: 'symmetric',
+        EMBEDDING_REGION: 'global',
+        GEMINI_API_KEY: 'test-google-key',
+        GEMINI_BASE_URL: 'https://generativelanguage.googleapis.com/custom',
+      }),
+    ).toThrow(
+      'Invalid application configuration: EMBEDDING_MODEL, EMBEDDING_DIMENSIONS, EMBEDDING_TASK_MODE, GEMINI_BASE_URL',
+    );
+  });
+
   it('accepts an approved local Ollama embedding configuration without a cloud key', () => {
     const environment = parseEnvironment({
       ...baseEnvironment,

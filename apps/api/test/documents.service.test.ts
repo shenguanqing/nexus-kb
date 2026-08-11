@@ -193,7 +193,7 @@ describe('DocumentsService tenant isolation', () => {
 
     expect(service.getUploadOptions(identity)).toEqual({
       maxUploadBytes: 4096,
-      acceptedExtensions: ['txt', 'md', 'docx', 'xlsx', 'pdf', 'png', 'jpg', 'jpeg', 'dxf'],
+      acceptedExtensions: ['txt', 'md', 'doc', 'docx', 'xlsx', 'pdf', 'png', 'jpg', 'jpeg', 'dxf'],
       department: 'finance',
       allowedSensitivities: ['public', 'internal'],
       defaultSensitivity: 'internal',
@@ -535,6 +535,7 @@ describe('DocumentsService tenant isolation', () => {
       'tile',
     );
     const update = vi.fn().mockResolvedValue({});
+    const deleteEmbeddingCache = vi.fn().mockResolvedValue({ count: 1 });
     const service = new DocumentsService(
       {
         values: { RAW_DOCS_PATH: rawRoot, PREVIEW_ARTIFACTS_PATH: previewRoot },
@@ -554,7 +555,11 @@ describe('DocumentsService tenant isolation', () => {
         },
         ingestionJob: { updateMany: vi.fn().mockResolvedValue({ count: 0 }) },
         documentVersion: { updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
-        knowledgeChunk: { deleteMany: vi.fn().mockResolvedValue({ count: 1 }) },
+        knowledgeChunk: {
+          findMany: vi.fn().mockResolvedValue([{ embeddingCacheKey: 'c'.repeat(64) }]),
+          deleteMany: vi.fn().mockResolvedValue({ count: 1 }),
+        },
+        embeddingCacheEntry: { deleteMany: deleteEmbeddingCache },
         documentLifecycleAudit: { create: vi.fn().mockResolvedValue({}) },
         $transaction: (operations: Array<Promise<unknown>>) => Promise.all(operations),
       } as unknown as PrismaService,
@@ -571,6 +576,9 @@ describe('DocumentsService tenant isolation', () => {
       await expect(readdir(rawRoot)).resolves.toEqual([]);
       await expect(readdir(previewRoot)).resolves.toEqual([]);
       expect(update).toHaveBeenCalledTimes(2);
+      expect(deleteEmbeddingCache).toHaveBeenCalledWith({
+        where: { tenantId: 'tenant-a', key: { in: ['c'.repeat(64)] } },
+      });
     } finally {
       await rm(directory, { recursive: true, force: true });
     }

@@ -19,6 +19,7 @@
   },
   "dependencies": {
     "@fastify/multipart": "^9.4.0",
+    "@google/genai": "^2.16.0",
     "@nestjs/common": "^11.1.0",
     "@nestjs/core": "^11.1.0",
     "@nestjs/platform-fastify": "^11.1.0",

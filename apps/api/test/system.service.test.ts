@@ -129,6 +129,29 @@ describe('SystemService', () => {
     });
   });
 
+  it('reports Google Embedding with the Gemini endpoint and credential state', () => {
+    const { service } = fixture({
+      EMBEDDING_PROVIDER: 'google',
+      EMBEDDING_MODEL: 'gemini-embedding-001',
+      EMBEDDING_DIMENSIONS: 768,
+      EMBEDDING_REGION: 'global',
+      GEMINI_API_KEY: 'google-embedding-secret',
+      GEMINI_BASE_URL: 'https://generativelanguage.googleapis.com/v1beta',
+      DASHSCOPE_API_KEY: '',
+    });
+
+    const result = service.providers(identity).providers[0];
+    expect(result).toMatchObject({
+      kind: 'embedding',
+      provider: 'google',
+      model: 'gemini-embedding-001',
+      dimensions: 768,
+      endpointHost: 'generativelanguage.googleapis.com',
+      credentialConfigured: true,
+    });
+    expect(JSON.stringify(result)).not.toContain('google-embedding-secret');
+  });
+
   it('reports the local BGE reranker as configured without a cloud credential', () => {
     const { service } = fixture({
       RERANK_PROVIDER: 'local_bge',

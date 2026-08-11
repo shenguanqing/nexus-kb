@@ -112,30 +112,33 @@ model DocumentVersion {
 }
 
 model IngestionJob {
-  id                   String             @id @db.Uuid
-  tenantId             String
-  documentId           String             @db.Uuid
-  version              Int
-  kind                 String             @default("ingestion")
-  activateOnComplete   Boolean            @default(true)
-  status               IngestionStatus    @default(queued)
-  step                 String             @default("queued")
-  checkpoint           String             @default("queued")
-  attempts             Int                @default(0)
-  traceId              String             @db.Uuid
-  parserVersion        String?
-  embeddingFingerprint String?            @db.Char(64)
-  vectorCollection     String?
-  warnings             Json?
-  errorCode            String?
-  errorCategory        String?
-  retryable            Boolean            @default(false)
-  startedAt            DateTime?
-  completedAt          DateTime?
-  createdAt            DateTime           @default(now())
-  updatedAt            DateTime           @updatedAt
-  document             Document           @relation(fields: [documentId], references: [id], onDelete: Cascade)
-  policyEvents         CloudPolicyEvent[]
+  id                       String             @id @db.Uuid
+  tenantId                 String
+  documentId               String             @db.Uuid
+  version                  Int
+  kind                     String             @default("ingestion")
+  activateOnComplete       Boolean            @default(true)
+  status                   IngestionStatus    @default(queued)
+  step                     String             @default("queued")
+  checkpoint               String             @default("queued")
+  attempts                 Int                @default(0)
+  traceId                  String             @db.Uuid
+  parserVersion            String?
+  embeddingFingerprint     String?            @db.Char(64)
+  embeddingCompletedChunks Int                @default(0)
+  embeddingTotalChunks     Int?
+  embeddingBatchSize       Int?
+  vectorCollection         String?
+  warnings                 Json?
+  errorCode                String?
+  errorCategory            String?
+  retryable                Boolean            @default(false)
+  startedAt                DateTime?
+  completedAt              DateTime?
+  createdAt                DateTime           @default(now())
+  updatedAt                DateTime           @updatedAt
+  document                 Document           @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  policyEvents             CloudPolicyEvent[]
 
   @@index([tenantId, status])
   @@index([tenantId, documentId])
@@ -177,11 +180,33 @@ model KnowledgeChunk {
   nextChunkId            String?  @db.Char(64)
   redactionPolicyVersion String
   redactionSummary       Json
+  embeddingCacheKey      String?  @db.Char(64)
   createdAt              DateTime @default(now())
   document               Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
 
   @@unique([documentId, documentVersion, ordinal])
   @@index([tenantId, documentId, documentVersion])
+}
+
+model EmbeddingCacheEntry {
+  key                    String   @id @db.Char(64)
+  tenantId               String
+  textSha256             String   @db.Char(64)
+  embeddingFingerprint   String   @db.Char(64)
+  provider               String
+  model                  String
+  dimensions             Int
+  taskRule               String
+  chunkMaxTokens         Int
+  chunkOverlapTokens     Int
+  redactionPolicyVersion String
+  vector                 Json
+  expiresAt              DateTime @db.Timestamptz(3)
+  lastUsedAt             DateTime @default(now()) @db.Timestamptz(3)
+  createdAt              DateTime @default(now()) @db.Timestamptz(3)
+
+  @@index([tenantId, embeddingFingerprint, expiresAt])
+  @@index([tenantId, textSha256])
 }
 
 model CloudPolicyEvent {
@@ -194,6 +219,7 @@ model CloudPolicyEvent {
   reasonCode             String
   sensitivity            Sensitivity
   providerId             String?
+  embeddingModel         String?
   region                 String?
   redactionPolicyVersion String
   createdAt              DateTime            @default(now())

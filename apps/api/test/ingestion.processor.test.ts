@@ -10,14 +10,21 @@ import { IngestionProcessor } from '../src/ingestion/ingestion.processor';
 import { RedactionService } from '../src/ingestion/redaction';
 import type { ParserClient } from '../src/parser/parser-client';
 import type { EmbeddingProviderFactory } from '../src/providers/embedding/embedding-provider.factory';
-import type { EmbeddingService } from '../src/providers/embedding/embedding.service';
+import type {
+  EmbeddingBatchProgress,
+  EmbeddingService,
+} from '../src/providers/embedding/embedding.service';
 import type { ChromaVectorStore } from '../src/vector-store/chroma-vector-store';
 import type { VectorChunk } from '../src/vector-store/vector-store';
 import { VectorStoreError } from '../src/vector-store/vector-store-error';
 
 type EmbedDocumentsCall = (
   texts: string[],
-  context: { sensitivity: 'public' | 'internal' | 'confidential' },
+  context: {
+    sensitivity: 'public' | 'internal' | 'confidential';
+    tenantId?: string;
+    onBatchCompleted?: (progress: EmbeddingBatchProgress) => Promise<void>;
+  },
 ) => Promise<number[][]>;
 type VectorUpsertCall = (chunks: VectorChunk[], vectors: number[][]) => Promise<void>;
 
@@ -29,6 +36,7 @@ function config(): AppConfig {
       CHUNK_OVERLAP_TOKENS: 80,
       REDACTION_POLICY_VERSION: 'v1',
       BUSINESS_REDACTION_RULES_JSON: [],
+      EMBEDDING_BATCH_SIZE: 32,
       ALLOW_CONFIDENTIAL_TO_CLOUD: false,
       CLOUD_EGRESS_RULES_JSON: [],
     },
@@ -52,6 +60,9 @@ function dependencies(sensitivity: 'internal' | 'confidential' = 'internal') {
     traceId: randomUUID(),
     parserVersion: null,
     embeddingFingerprint: null,
+    embeddingCompletedChunks: 0,
+    embeddingTotalChunks: null,
+    embeddingBatchSize: null,
     vectorCollection: null,
     warnings: null,
     errorCode: null,
@@ -99,6 +110,7 @@ function dependencies(sensitivity: 'internal' | 'confidential' = 'internal') {
       nextChunkId: null,
       redactionPolicyVersion: 'v1',
       redactionSummary: { EMAIL: 1 },
+      embeddingCacheKey: null,
       createdAt: new Date(),
     },
   ]);
@@ -117,6 +129,7 @@ function dependencies(sensitivity: 'internal' | 'confidential' = 'internal') {
       deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
       createMany: vi.fn().mockResolvedValue({ count: 1 }),
       findMany: findPreparedChunks,
+      updateMany: vi.fn().mockResolvedValue({ count: 1 }),
     },
     cloudPolicyEvent: { upsert: upsertPolicyEvent },
     documentLifecycleAudit: { create: vi.fn().mockResolvedValue({ id: randomUUID() }) },
@@ -164,7 +177,24 @@ function dependencies(sensitivity: 'internal' | 'confidential' = 'internal') {
   const embeddingFactory = {
     getProvider: () => ({
       id: 'alibaba',
+      model: 'text-embedding-v4',
+      dimensions: 3,
       region: 'cn-beijing',
+      taskMode: 'symmetric',
+      documentTaskRule: 'SYMMETRIC',
+      queryTaskRule: 'SYMMETRIC',
+    }),
+    getFingerprint: () => ({
+      value: 'a'.repeat(64),
+      configuration: {
+        provider: 'alibaba',
+        model: 'text-embedding-v4',
+        dimensions: 3,
+        taskMode: 'symmetric',
+        chunkMaxTokens: 600,
+        chunkOverlapTokens: 80,
+        redactionPolicyVersion: 'v1',
+      },
     }),
   } as EmbeddingProviderFactory;
   const appConfig = config();
@@ -230,10 +260,26 @@ describe('IngestionProcessor vector indexing', () => {
 
     await deps.processor.process(deps.payload);
 
-    expect(deps.embedDocuments).toHaveBeenCalledWith(['联系邮箱 [REDACTED:EMAIL]'], {
-      sensitivity: 'internal',
-    });
+    expect(deps.embedDocuments).toHaveBeenCalledWith(
+      ['联系邮箱 [REDACTED:EMAIL]'],
+      expect.objectContaining({ sensitivity: 'internal', tenantId: 'tenant-a' }),
+    );
     expect(deps.upsert).toHaveBeenCalledOnce();
+    type PolicyEventUpsertInput = {
+      create: Record<string, unknown>;
+      update: Record<string, unknown>;
+    };
+    const policyEventCalls = deps.upsertPolicyEvent.mock.calls as unknown as Array<
+      [PolicyEventUpsertInput]
+    >;
+    expect(policyEventCalls[0]?.[0].create).toMatchObject({
+      providerId: 'alibaba',
+      embeddingModel: 'text-embedding-v4',
+    });
+    expect(policyEventCalls[0]?.[0].update).toMatchObject({
+      providerId: 'alibaba',
+      embeddingModel: 'text-embedding-v4',
+    });
     const [chunks] = deps.upsert.mock.calls[0] ?? [];
     expect(chunks?.[0]?.redactedText).toBe('联系邮箱 [REDACTED:EMAIL]');
     expect(JSON.stringify(chunks)).not.toContain('demo@example.com');
@@ -384,10 +430,42 @@ describe('IngestionProcessor vector indexing', () => {
     expect(deps.parse).not.toHaveBeenCalled();
     expect(deps.findPreparedChunks).toHaveBeenCalledOnce();
     expect(deps.upsertPolicyEvent).not.toHaveBeenCalled();
-    expect(deps.embedDocuments).toHaveBeenCalledWith(['联系邮箱 [REDACTED:EMAIL]'], {
-      sensitivity: 'internal',
-    });
+    expect(deps.embedDocuments).toHaveBeenCalledWith(
+      ['联系邮箱 [REDACTED:EMAIL]'],
+      expect.objectContaining({ sensitivity: 'internal', tenantId: 'tenant-a' }),
+    );
     expect(deps.upsert).toHaveBeenCalledOnce();
+  });
+
+  it('resumes an embedding-batch checkpoint without parsing and persists the next batch', async () => {
+    const deps = dependencies();
+    deps.record.status = 'failed';
+    deps.record.step = 'failed';
+    deps.record.checkpoint = 'embedding_batch:1/2';
+    deps.embedDocuments.mockImplementationOnce(async (_texts, context) => {
+      await context.onBatchCompleted?.({
+        completedChunks: 1,
+        totalChunks: 1,
+        completedBatches: 1,
+        totalBatches: 1,
+        batchSize: 32,
+        cacheKeys: ['c'.repeat(64)],
+      });
+      return [[1, 0, 0]];
+    });
+
+    await deps.processor.process(deps.payload);
+
+    expect(deps.parse).not.toHaveBeenCalled();
+    type UpdateInput = { data: Record<string, unknown> };
+    const jobUpdates = deps.updateJob.mock.calls as unknown as Array<[UpdateInput]>;
+    expect(
+      jobUpdates.some(
+        ([input]) =>
+          input.data.checkpoint === 'embedding_batch:1/1' &&
+          input.data.embeddingCompletedChunks === 1,
+      ),
+    ).toBe(true);
   });
 
   it('skips duplicate delivery after a job reached a terminal state', async () => {

@@ -17,6 +17,7 @@ export const documentFormats = [
   'txt',
   'md',
   'pdf',
+  'doc',
   'docx',
   'xlsx',
   'png',

@@ -1,6 +1,6 @@
 # 当前开发任务
 
-> 项目：知枢 NexusKB；当前阶段：阶段 16——服务器上线准备；状态：进行中，前端与本地 RAG 主链路已完成，正式质量评测仍等待获批数据集，阶段 4/7 的增强项已明确延期。
+> 项目：知枢 NexusKB；当前阶段：阶段 16——服务器上线准备；状态：进行中，前端与本地 RAG 主链路已完成，正式质量评测仍等待获批数据集，剩余阶段 4/7 增强项已明确延期。
 
 ---
 
@@ -27,17 +27,15 @@
 
 以下原阶段 4/7 项目尚未实现，但不属于当前上传白名单或运行时 Provider 范围，因此不阻塞进入阶段 16：
 
-- PPTX、HTML、DOC、RTF 和 EML 解析与预览。
-- OpenAI、Google Embedding 的运行时配置、Factory 接入和契约测试。
-- 同一向量空间内基于完整配置指纹的文本哈希 Embedding 复用。
-- Embedding 批次级 checkpoint；当前仅承诺 `local_prepared` 步骤级恢复和稳定 chunk ID upsert，不承诺从失败批次的下一批继续。
+- PPTX、HTML、RTF 和 EML 解析与预览。
+- OpenAI Embedding 的运行时配置、Factory 接入和契约测试。
 
 这些项目不得被描述为已交付。阶段 16 的压测、恢复演练或获批业务需求如证明其中任一项是生产上线前置条件，必须先提高优先级并完成实现、测试与文档；详细勾选项见 [开发任务清单](./docs/05-开发任务清单.md#阶段-16-前遗留与明确延期)。
 
 ## 4. 已完成基线
 
 - 前端交付：Vue 前端、知识问答与来源、文档生命周期、管理后台、响应式与可访问性已完成。
-- 本地 RAG 链路已覆盖受控 Ollama Embedding、可配置 LLM、待建立索引恢复、DXF/DWG 解析和统一预览。
+- 本地 RAG 链路已覆盖 Alibaba、Google 和受控 Ollama Embedding、可配置 LLM、文本哈希向量复用、批次级 checkpoint、待建立索引恢复、DOC/DXF/DWG 解析和统一预览。
 - API、Parser Worker、前端与 Compose 的安全边界、共享 OpenAPI/Zod 契约、迁移和自动化测试已建立。
 - 文档职责已收敛：当前任务在本文，阶段路线图在任务清单，配置在 `.env.example`，接口字段在 OpenAPI。
 
@@ -49,6 +47,8 @@
 - 2026-08-11：问答上下文联动、行内来源和历史来源详情已完成安全回归。
 - 2026-08-11：完成第二轮全量 Markdown 审查，修正文档与运行时事实漂移，并将格式、链接、端点、Provider 与断点检查纳入 `pnpm docs:check` 和 CI。
 - 2026-08-11：阶段 4/7 未完成项从“已完成阶段”折叠区移出，明确为不阻塞阶段 16 的延期增强与优化；Embedding 遥测按现有实现更正为已完成。
+- 2026-08-11：完成 DOC 经内网 Tika 解析和本地 PDF 预览、Google `gemini-embedding-001` 运行时接入、完整指纹文本哈希向量缓存，以及失败后跳过已缓存批次的 Embedding checkpoint 续跑。
+- 2026-08-11：用量页在零查询时展示当前 Embedding Provider/model，并明确其数量是“涉及问答”而非供应商请求；审计中心的知识问答只展示实际 LLM，云端策略展示并固化当时的 Embedding Provider/model，历史事件按 collection 事实回填已支持模型。
 
 ## 6. 交付要求
 

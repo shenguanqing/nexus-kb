@@ -5,6 +5,7 @@ import { AclPolicy } from '../auth/acl-policy';
 import { isAdmin } from '../auth/app-role';
 import type { Identity } from '../auth/identity';
 import { ApiException } from '../common/api-exception';
+import { AppConfig } from '../config/app-config';
 import { PrismaService } from '../database/prisma.service';
 
 @Injectable()
@@ -12,6 +13,7 @@ export class UsageService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly acl: AclPolicy,
+    private readonly config: AppConfig,
   ) {}
 
   async query(request: UsageQueryRequest, identity: Identity): Promise<UsageResponse> {
@@ -57,6 +59,7 @@ export class UsageService {
       this.addProvider(providerMap, 'rerank', row.rerankProvider, row.rerankModel, row.outcome);
       this.addProvider(providerMap, 'llm', row.llmProvider, row.llmModel, row.outcome);
     }
+    this.addCurrentEmbeddingConfiguration(providerMap);
     const departmentCounts = new Map<string, number>();
     for (const row of rows) {
       if (row.department)
@@ -82,6 +85,27 @@ export class UsageService {
         .map(([department, requests]) => ({ department, requests })),
       usageCompleteness: 'request_only',
     };
+  }
+
+  private addCurrentEmbeddingConfiguration(
+    map: Map<
+      string,
+      {
+        kind: 'embedding' | 'rerank' | 'llm';
+        provider: string;
+        model: string;
+        requests: number;
+        failures: number;
+      }
+    >,
+  ): void {
+    const provider = this.config.values.EMBEDDING_PROVIDER;
+    const model = this.config.values.EMBEDDING_MODEL;
+    if (provider === 'none' || !model) return;
+    const key = `embedding:${provider}:${model}`;
+    if (!map.has(key)) {
+      map.set(key, { kind: 'embedding', provider, model, requests: 0, failures: 0 });
+    }
   }
 
   private addProvider(

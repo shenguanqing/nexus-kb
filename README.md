@@ -119,7 +119,7 @@ pnpm --version
 
 ## 第一次启动（推荐本地开发模式）
 
-本节不需要模型 API Key、Ollama 或 ODA。完成后可进入管理界面、使用 Provider 配置发布、上传 TXT、Markdown、PDF、DOCX、XLSX、PNG/JPG 或 DXF 测试文件，验证本地解析、分块、脱敏和预览流程。当前上传白名单内的所有格式都有预览：PDF/图片/文本直接显示，DOCX/XLSX 本地转 PDF，小型 DXF 本地转 SVG，超大/高成本 CAD 使用按视口懒渲染的本地 PNG 瓦片；CAD 可深度缩放，全部预览可全屏，转换不可用时显示解析文本。问答和向量检索需要在后续配置模型。Parser Worker 镜像会在构建阶段预置 LibreOffice、Noto CJK 字体、中文/英文 OCR 模型，首次构建耗时和镜像体积会明显增加，运行时不会下载字体或模型。
+本节不需要模型 API Key、Ollama 或 ODA。完成后可进入管理界面、使用 Provider 配置发布、上传 TXT、Markdown、PDF、DOC、DOCX、XLSX、PNG/JPG 或 DXF 测试文件，验证本地解析、分块、脱敏和预览流程。当前上传白名单内的所有格式都有预览：PDF/图片/文本直接显示，DOC/DOCX/XLSX 本地转 PDF，小型 DXF 本地转 SVG，超大/高成本 CAD 使用按视口懒渲染的本地 PNG 瓦片；CAD 可深度缩放，全部预览可全屏，转换不可用时显示解析文本。DOC 正文解析依赖 Compose 中的内网 Tika。问答和向量检索需要在后续配置模型。Parser Worker 镜像会在构建阶段预置 LibreOffice、Noto CJK 字体、中文/英文 OCR 模型，首次构建耗时和镜像体积会明显增加，运行时不会下载字体或模型。
 
 除特别说明外，所有命令都在仓库根目录执行。
 
@@ -220,7 +220,7 @@ pnpm --filter @nexus-kb/web dev
 ### 6. 完成第一次验证
 
 1. 进入“文档管理”。
-2. 上传一份不含敏感信息的 TXT、Markdown、PDF、DOCX、XLSX、PNG/JPG 或 DXF 文件。
+2. 上传一份不含敏感信息的 TXT、Markdown、PDF、DOC、DOCX、XLSX、PNG/JPG 或 DXF 文件。
 3. 在“上传与入库任务”查看解析、分块和脱敏状态。
 4. 任务完成后，文档应显示“待建立索引”。
 

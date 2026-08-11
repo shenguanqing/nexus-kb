@@ -30,6 +30,7 @@ POST /internal/v1/parse
 → 验证文件位于 RAW_DOCS_PATH
 → 拒绝 ..、软链接逃逸、非文件和超大文件
 → 扩展名与 MIME allowlist 匹配
+→ DOC 再校验 CFB/OLE 签名，固定经内网 Tika 解析，并用本地 LibreOffice 尝试生成 PDF 预览
 → DOCX/XLSX 压缩包安全检查
 → 调用对应解析器
 → 拒绝空结果
@@ -53,20 +54,21 @@ POST /internal/v1/parse
 
 以下算法章节按格式逐一介绍；先看这张总表可以快速确认某个格式是否已支持：
 
-| 格式                          | 状态                 | 解析器                                       |
-| ----------------------------- | -------------------- | -------------------------------------------- |
-| TXT / Markdown                | 已实现               | 原生 UTF-8 行扫描                            |
-| DOCX                          | 已实现               | python-docx                                  |
-| XLSX                          | 已实现               | openpyxl                                     |
-| DXF                           | 已实现               | ezdxf                                        |
-| DWG                           | 已实现，依赖本地 ODA | ODA → DXF → ezdxf                            |
-| PDF                           | 已实现               | Unstructured；失败或空结果时由内网 Tika 兜底 |
-| PNG / JPG / JPEG              | 已实现               | EasyOCR（CPU、离线模型）                     |
-| PPTX / HTML / DOC / RTF / EML | 未实现               | 后续阶段                                     |
+| 格式                    | 状态                 | 解析器                                       |
+| ----------------------- | -------------------- | -------------------------------------------- |
+| TXT / Markdown          | 已实现               | 原生 UTF-8 行扫描                            |
+| DOC                     | 已实现               | 内网 Apache Tika                             |
+| DOCX                    | 已实现               | python-docx                                  |
+| XLSX                    | 已实现               | openpyxl                                     |
+| DXF                     | 已实现               | ezdxf                                        |
+| DWG                     | 已实现，依赖本地 ODA | ODA → DXF → ezdxf                            |
+| PDF                     | 已实现               | Unstructured；失败或空结果时由内网 Tika 兜底 |
+| PNG / JPG / JPEG        | 已实现               | EasyOCR（CPU、离线模型）                     |
+| PPTX / HTML / RTF / EML | 未实现               | 后续阶段                                     |
 
 预览与文本解析独立：
 
-- DOCX/XLSX 使用镜像内固定 LibreOffice 与 Noto CJK 字体转 PDF。
+- DOC/DOCX/XLSX 使用镜像内固定 LibreOffice 与 Noto CJK 字体转 PDF；DOC 正文解析要求内网 Tika 就绪，预览失败仍按统一 warning 降级。
 - DXF/DWG 按源字节数和实体类型加权渲染成本分流：小图生成受限 SVG；超大或高成本图生成总览图、z0、实体 R-Tree、非可执行 SQLite/R-Tree 图元索引和 manifest，细节 PNG 由内部端点按需渲染并以磁盘 LRU 清理。
 - 一个 3×3 metatile 只查询、绘制一次，再裁成相邻瓦片。旧 bundle 首次冷请求原子补建图元索引，之后不再重复解析完整 DXF。
 - manifest 包含 CAD bounds 和 `worldToPixel`；瓦片渲染子进程受超时和内存上限保护。SVG 保留 CJK 字形替换、非缩放线宽和受控 gzip 兼容逻辑。
