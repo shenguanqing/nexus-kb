@@ -232,30 +232,54 @@ model CloudPolicyEvent {
 }
 
 model QueryAudit {
-  id                String   @id @db.Uuid
-  traceId           String   @unique @db.Uuid
+  id                String               @id @db.Uuid
+  traceId           String               @unique @db.Uuid
   tenantId          String
   userId            String
   department        String?
   queryLength       Int
   outcome           String
   answerMode        String?
-  resultCount       Int      @default(0)
+  resultCount       Int                  @default(0)
   sourceChunkIds    Json
   embeddingProvider String?
   embeddingModel    String?
   rerankProvider    String?
   rerankModel       String?
-  rerankDegraded    Boolean  @default(false)
+  rerankDegraded    Boolean              @default(false)
   llmProvider       String?
   llmModel          String?
-  fallbackUsed      Boolean  @default(false)
+  fallbackUsed      Boolean              @default(false)
   errorCode         String?
   durationMs        Int
-  createdAt         DateTime @default(now()) @db.Timestamptz(3)
+  createdAt         DateTime             @default(now()) @db.Timestamptz(3)
+  providerUsages    QueryProviderUsage[]
 
+  @@unique([traceId, tenantId])
   @@index([tenantId, createdAt])
   @@index([tenantId, userId, createdAt])
+}
+
+model QueryProviderUsage {
+  id                   String     @id @db.Uuid
+  queryTraceId         String     @db.Uuid
+  tenantId             String
+  kind                 String
+  provider             String
+  model                String
+  status               String
+  inputTokens          Int?
+  cacheHitInputTokens  Int?
+  cacheMissInputTokens Int?
+  outputTokens         Int?
+  totalTokens          Int?
+  estimatedCostUsd     Decimal?   @db.Decimal(20, 12)
+  createdAt            DateTime   @default(now()) @db.Timestamptz(3)
+  queryAudit           QueryAudit @relation(fields: [queryTraceId, tenantId], references: [traceId, tenantId], onDelete: Cascade)
+
+  @@index([tenantId, createdAt])
+  @@index([tenantId, kind, provider, model, createdAt])
+  @@index([queryTraceId])
 }
 
 model UserDirectoryEntry {

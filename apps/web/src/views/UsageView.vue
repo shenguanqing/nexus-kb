@@ -10,6 +10,7 @@ const { isMobile } = useBreakpoint();
 const loading = ref(false);
 const errorMessage = ref('');
 const filtersVisible = ref(false);
+const emptyValueLabel = '暂无数据';
 const now = new Date();
 const startAt = ref(new Date(now.getTime() - 30 * 86400000));
 const endAt = ref(now);
@@ -34,7 +35,7 @@ function resetFilters(): void {
   endAt.value = current;
 }
 function percent(value: number | null): string {
-  return value === null ? '暂无数据' : `${(value * 100).toFixed(1)}%`;
+  return value === null ? emptyValueLabel : `${(value * 100).toFixed(1)}%`;
 }
 onMounted(load);
 </script>
@@ -46,7 +47,8 @@ onMounted(load);
         <div class="text-block">
           基于当前租户查询审计聚合。“涉及问答”表示该问答使用了对应阶段，一次问答可同时计入 Query
           Embedding 和 LLM；它不是供应商账单请求数。当前 Embedding 配置即使尚无查询也会以 0
-          次展示，Provider 未回传 token 或未配置价格时保持“暂无数据”。
+          次展示。Token 来自问答期间的实际 Provider 遥测；Provider 未回传 token
+          或未配置价格时保持“暂无数据”。
         </div>
       </div>
       <form
@@ -115,7 +117,9 @@ onMounted(load);
           </article>
           <article>
             <span>查询 P95</span>
-            <strong>{{ usage.queryP95Ms === null ? '暂无数据' : `${usage.queryP95Ms} ms` }}</strong>
+            <strong>
+              {{ usage.queryP95Ms === null ? emptyValueLabel : `${usage.queryP95Ms} ms` }}
+            </strong>
           </article>
           <article>
             <span>失败率</span><strong>{{ percent(usage.failureRate) }}</strong>
@@ -133,14 +137,17 @@ onMounted(load);
             <el-table-column prop="provider" label="Provider" />
             <el-table-column prop="model" label="模型" />
             <el-table-column prop="requests" label="涉及问答" />
-            <el-table-column label="Token">
-              <template #default="scope">{{ scope.row.inputTokens ?? '暂无数据' }}</template>
+            <el-table-column label="输入 Token">
+              <template #default="scope">{{ scope.row.inputTokens ?? emptyValueLabel }}</template>
+            </el-table-column>
+            <el-table-column label="输出 Token">
+              <template #default="scope">{{ scope.row.outputTokens ?? emptyValueLabel }}</template>
             </el-table-column>
             <el-table-column label="估算成本">
               <template #default="scope">
                 {{
                   scope.row.estimatedCostUsd === null
-                    ? '暂无数据'
+                    ? emptyValueLabel
                     : `$${scope.row.estimatedCostUsd.toFixed(4)}`
                 }}
               </template>
@@ -157,22 +164,27 @@ onMounted(load);
               class="mobile-data-card"
             >
               <header>
-                <strong>{{ provider.provider }} / {{ provider.model }}</strong
-                ><el-tag>{{ provider.kind }}</el-tag>
+                <strong>{{ provider.provider }} / {{ provider.model }}</strong>
+                <el-tag>{{ provider.kind }}</el-tag>
               </header>
               <div class="mobile-data-fields">
                 <div>
                   <span>涉及问答</span><strong>{{ provider.requests }}</strong>
                 </div>
                 <div>
-                  <span>Token</span><strong>{{ provider.inputTokens ?? '暂无数据' }}</strong>
+                  <span>输入 Token</span>
+                  <strong>{{ provider.inputTokens ?? emptyValueLabel }}</strong>
                 </div>
                 <div>
-                  <span>估算成本</span
-                  ><strong>
+                  <span>输出 Token</span>
+                  <strong>{{ provider.outputTokens ?? emptyValueLabel }}</strong>
+                </div>
+                <div>
+                  <span>估算成本</span>
+                  <strong>
                     {{
                       provider.estimatedCostUsd === null
-                        ? '暂无数据'
+                        ? emptyValueLabel
                         : `$${provider.estimatedCostUsd.toFixed(4)}`
                     }}
                   </strong>

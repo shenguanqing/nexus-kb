@@ -17,13 +17,18 @@ class Settings(BaseSettings):
     local_rerank_batch_size: int = Field(
         default=8, ge=1, le=32, validation_alias="LOCAL_RERANK_BATCH_SIZE"
     )
+    local_rerank_max_length: int = Field(
+        default=512, ge=128, le=8192, validation_alias="LOCAL_RERANK_MAX_LENGTH"
+    )
 
     @model_validator(mode="after")
     def validate_enabled_configuration(self) -> "Settings":
         if not self.local_rerank_enabled:
             return self
         if len(self.internal_token) < 16:
-            raise ValueError("RERANK_INTERNAL_TOKEN or PARSER_INTERNAL_TOKEN must be at least 16 characters")
+            raise ValueError(
+                "RERANK_INTERNAL_TOKEN or PARSER_INTERNAL_TOKEN must be at least 16 characters"
+            )
         if self.rerank_model != "BAAI/bge-reranker-v2-m3":
             raise ValueError("RERANK_MODEL must be BAAI/bge-reranker-v2-m3")
         return self

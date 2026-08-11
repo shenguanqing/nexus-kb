@@ -138,7 +138,9 @@ export class QueryRetrievalService {
         !previous ||
         previous.documentId !== row.documentId ||
         previous.documentVersion !== row.documentVersion ||
-        previous.ordinal + 1 !== row.ordinal
+        previous.ordinal + 1 !== row.ordinal ||
+        previous.page !== row.page ||
+        previous.sheet !== row.sheet
       ) {
         groups.push([row]);
       } else {

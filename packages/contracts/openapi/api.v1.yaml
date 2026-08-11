@@ -409,13 +409,13 @@ paths:
               schema: { $ref: '#/components/schemas/ConversationDeleteResponse' }
   /v1/system/usage:
     get:
-      summary: Aggregate tenant query and Provider request facts for platform administrators
+      summary: Aggregate tenant query and persisted Provider usage facts for platform administrators
       parameters:
         - { name: from, in: query, required: true, schema: { type: string, format: date-time } }
         - { name: to, in: query, required: true, schema: { type: string, format: date-time } }
       responses:
         '200':
-          description: Request-level usage with nullable token and cost fields
+          description: Tenant query usage with Provider-reported token and configured cost fields
           content:
             application/json:
               schema: { $ref: '#/components/schemas/UsageResponse' }

@@ -23,6 +23,7 @@ def settings(enabled: bool = True) -> Settings:
             "RERANK_INTERNAL_TOKEN": "reranker-test-token",
             "RERANK_MODEL": "BAAI/bge-reranker-v2-m3",
             "LOCAL_RERANK_MODEL_REVISION": "test-revision",
+            "LOCAL_RERANK_MAX_LENGTH": 512,
         }
     )
 

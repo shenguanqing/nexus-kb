@@ -43,6 +43,30 @@ describe('model provider configuration', () => {
     ).toThrow('Invalid application configuration: MODEL_PRICING_USD_PER_MILLION_TOKENS_JSON');
   });
 
+  it('requires cache-hit and cache-miss prices to be configured together', () => {
+    expect(
+      parseEnvironment({
+        ...baseEnvironment,
+        MODEL_PRICING_USD_PER_MILLION_TOKENS_JSON:
+          '{"deepseek:model-a":{"input":1,"output":2,"cacheHitInput":0.1,"cacheMissInput":1}}',
+      }).MODEL_PRICING_USD_PER_MILLION_TOKENS_JSON,
+    ).toEqual({
+      'deepseek:model-a': {
+        input: 1,
+        output: 2,
+        cacheHitInput: 0.1,
+        cacheMissInput: 1,
+      },
+    });
+    expect(() =>
+      parseEnvironment({
+        ...baseEnvironment,
+        MODEL_PRICING_USD_PER_MILLION_TOKENS_JSON:
+          '{"deepseek:model-a":{"input":1,"output":2,"cacheHitInput":0.1}}',
+      }),
+    ).toThrow('Invalid application configuration: MODEL_PRICING_USD_PER_MILLION_TOKENS_JSON');
+  });
+
   it('rejects inconsistent query retrieval budgets', () => {
     expect(() =>
       parseEnvironment({

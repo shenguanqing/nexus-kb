@@ -73,12 +73,14 @@ RERANK_PROVIDER=none
 
 ```text
 QUERY_RECALL_TOP_K=20
-RERANK_PROVIDER=alibaba
+RERANK_PROVIDER=local_bge
 RERANK_TOP_K=5
 ```
 
-每条 observation 只保存 caseId、noAnswer、向量排序来源、最终 Top 5、引用来源、durationMs、costUsd 和 errorCode，不保存模型回答正文。`costUsd` 必须来自本次调用的实际 Provider 用量与当期价格；无法归属时写
-null，最终 Rerank 建议会保持 `inconclusive`，不得用平均猜测值补齐。
+使用本地 BGE 时还应固定 `LOCAL_RERANK_MODEL_REVISION`、`LOCAL_RERANK_BATCH_SIZE` 和
+`LOCAL_RERANK_MAX_LENGTH`。最大序列长度会同时影响长片段质量、CPU 延迟与内存，任何修改都必须重新执行两轮评测。
+
+每条 observation 只保存 caseId、noAnswer、向量排序来源、最终 Top 5、引用来源、durationMs、costUsd 和 errorCode，不保存模型回答正文。采集器在每题前后读取隔离的 Provider 计量快照，使用本次成功调用实际上报的 token 与显式当期价格计算 `costUsd`；支持缓存命中/未命中分别计价。发生付费调用但缺少用量、价格或可归属计量时写 null，最终 Rerank 建议会保持 `inconclusive`，不得用平均猜测值补齐。
 
 普通 CI 禁止执行付费评测。只有设置专用测试 Key、完成数据出网审批并显式启用
 `RUN_PAID_PROVIDER_TESTS=true` 后，才可生成真实运行结果。
@@ -131,7 +133,8 @@ RUN_PAID_PROVIDER_TESTS=true pnpm --filter @nexus-kb/api quality:capture -- \
 ```
 
 CLI 会记录 Chroma collection 名称和 Embedding 配置指纹、校验 Top K/Rerank 配置与所选 variant 一致，
-并拒绝覆盖现有文件。聚合器会拒绝比较 collection 或指纹不同的两轮结果。采集结果初始将 `costUsd` 写为 null；应使用每条 observation 的 `traceId` 对照本次 Provider 用量与当期价格，在私有运行文件中补入实际单次成本。费用未完整归属时聚合结论会保持 `inconclusive`。
+并拒绝覆盖现有文件。聚合器会拒绝比较 collection 或指纹不同的两轮结果。运行前必须在
+`MODEL_PRICING_USD_PER_MILLION_TOKENS_JSON` 配置本轮所有非本地 Provider 的显式价格；采集器自动写入逐题成本，费用未完整归属时聚合结论会保持 `inconclusive`。
 
 ## 3. 生成聚合报告
 
@@ -158,6 +161,8 @@ pnpm --filter @nexus-kb/api quality:evaluate -- \
 - `unauthorizedLeakRate`：无权限问题的向量、最终或引用来源命中受限目标来源的比例，必须为 0。
 - `p95LatencyMs`：全部 case durationMs 的 nearest-rank P95。
 - `averageCostUsd`：有实际成本记录 case 的平均值；`costCoverage` 必须为 1 才能给出启用建议。
+
+来源始终先匹配 `documentId`。标注包含稳定 `chunkIds` 时，以实际返回来源中的 chunk 交集判定命中，因为相邻块合并后的展示页属于合并组首块；只有未标注 chunk ID 时才使用 page/sheet 作为定位条件。
 
 Rerank 只有在越权率为 0，Recall@5、MRR、引用、拒答和错误率达到绝对门槛，引用和拒答无超限回退、
 P95/成本比未超阈值，并且 Recall@5 或 MRR 达到最小增益时才建议启用。基线存在越权泄露时结论为

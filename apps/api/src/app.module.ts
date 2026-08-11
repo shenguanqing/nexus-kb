@@ -56,6 +56,7 @@ import { HistoryController } from './history/history.controller';
 import { KnowledgeHistoryService } from './history/knowledge-history.service';
 import { UsageController } from './usage/usage.controller';
 import { UsageService } from './usage/usage.service';
+import { QueryProviderUsageContext } from './usage/query-provider-usage.context';
 
 @Module({
   controllers: [
@@ -75,6 +76,7 @@ import { UsageService } from './usage/usage.service';
   providers: [
     AppConfig,
     MetricsService,
+    QueryProviderUsageContext,
     OperationalLogger,
     HealthService,
     ParserClient,

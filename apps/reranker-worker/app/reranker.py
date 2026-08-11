@@ -5,7 +5,7 @@ from sentence_transformers import CrossEncoder
 
 
 class BgeReranker:
-    def __init__(self, model_name: str, revision: str, batch_size: int) -> None:
+    def __init__(self, model_name: str, revision: str, batch_size: int, max_length: int) -> None:
         model_path = snapshot_download(
             repo_id=model_name,
             revision=revision,
@@ -13,6 +13,7 @@ class BgeReranker:
         )
         self._model = CrossEncoder(
             model_path,
+            max_length=max_length,
             trust_remote_code=False,
             local_files_only=True,
         )

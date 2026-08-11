@@ -1,5 +1,5 @@
 import hmac
-from collections.abc import Awaitable, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from typing import Protocol
 from uuid import UUID, uuid4
@@ -22,12 +22,13 @@ def create_app(settings: Settings | None = None, reranker: Reranker | None = Non
     resolved_settings = settings or Settings()
 
     @asynccontextmanager
-    async def lifespan(api: FastAPI):
+    async def lifespan(api: FastAPI) -> AsyncIterator[None]:
         if resolved_settings.local_rerank_enabled:
             api.state.reranker = reranker or BgeReranker(
                 resolved_settings.rerank_model,
                 resolved_settings.local_rerank_model_revision,
                 resolved_settings.local_rerank_batch_size,
+                resolved_settings.local_rerank_max_length,
             )
         else:
             api.state.reranker = None
@@ -69,7 +70,10 @@ def create_app(settings: Settings | None = None, reranker: Reranker | None = Non
         available = not enabled or api.state.reranker is not None
         if not available:
             response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
-        return {"status": "ready" if available else "not_ready", "model": resolved_settings.rerank_model if enabled else "disabled"}
+        return {
+            "status": "ready" if available else "not_ready",
+            "model": resolved_settings.rerank_model if enabled else "disabled",
+        }
 
     @api.post(
         "/internal/v1/rerank",
@@ -79,7 +83,10 @@ def create_app(settings: Settings | None = None, reranker: Reranker | None = Non
     def rerank(payload: RerankRequest) -> RerankResponse:
         engine: Reranker | None = api.state.reranker
         if engine is None:
-            raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="本地重排未启用")
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="本地重排未启用",
+            )
         results = engine.rank(payload.query, payload.documents, payload.top_k)
         if len(results) != payload.top_k or len({index for index, _ in results}) != len(results):
             raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="重排结果无效")

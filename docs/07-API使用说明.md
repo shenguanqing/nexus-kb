@@ -307,7 +307,7 @@ unset NEXUSKB_ACCESS_TOKEN
 
 审计接口支持 `type=query|document_lifecycle|cloud_policy|access_change`、`before` 和 `limit`，返回 `nextBefore` 时间游标及当前 tenant、事件类型筛选范围内的 `total`。下一页继续传递 `before=<nextBefore>`；`before` 不改变 `total`，游标不是权限凭据。
 
-用户目录使用 `offset`/`limit` 分页，支持 `query` 和 `department`。管理员可以管理本地密码账号；外部 OIDC 身份账号仅可查看，应在身份源中增删。普通用户即使有 `access:read`，也不能通过 `department` 查看其他部门。用量接口要求同时提供 `from` 和 `to`；`providers` 由查询审计聚合，并额外包含当前生效的 Embedding Provider/model。Provider 行的 `requests` 表示关联该阶段的问答数，不是供应商 HTTP 请求或账单调用数；一次问答可同时计入 Query Embedding 和 LLM。若时间范围内尚无当前 Embedding 配置的查询，返回 `requests=0`、`failures=0`，token 与成本仍为 `null`，不得把入库批次解释为问答用量。查询审计事件可同时包含 Embedding 与 LLM Provider/model 事实，但审计页的知识问答行只展示 LLM；云端策略事件包含并展示策略检查当时固化的 Embedding Provider/model。
+用户目录使用 `offset`/`limit` 分页，支持 `query` 和 `department`。管理员可以管理本地密码账号；外部 OIDC 身份账号仅可查看，应在身份源中增删。普通用户即使有 `access:read`，也不能通过 `department` 查看其他部门。用量接口要求同时提供 `from` 和 `to`；`providers` 由查询审计聚合，并额外包含当前生效的 Embedding Provider/model。Provider 行的 `requests` 表示关联该阶段的问答数，不是供应商 HTTP 请求或账单调用数；一次问答可同时计入 Query Embedding 和 LLM。问答期间的实际 Provider telemetry 以 tenant + trace 持久化，输入/输出 token 为 Provider 回传值，估算成本使用调用时显式 `provider:model` USD 价格。Provider 未回传 usage、价格缺失或数据库迁移前没有事实时对应字段为 `null`；部分行仍可返回已知数值，但只有全部非零 Provider 行完整时 `usageCompleteness=tokens_and_cost`。若时间范围内尚无当前 Embedding 配置的查询，返回 `requests=0`、`failures=0`，token 与成本仍为 `null`，不得把入库批次解释为问答用量。查询审计事件可同时包含 Embedding 与 LLM Provider/model 事实，但审计页的知识问答行只展示 LLM；云端策略事件包含并展示策略检查当时固化的 Embedding Provider/model。
 
 配置发布规则：
 

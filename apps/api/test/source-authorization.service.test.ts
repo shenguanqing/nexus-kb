@@ -165,4 +165,68 @@ describe('SourceAuthorizationService', () => {
       filter: { tenantId: 'tenant-a', userId: 'user-a' },
     });
   });
+
+  it('does not merge adjacent chunks across PDF page boundaries', async () => {
+    const documentId = '6769af9a-a4d0-4dc2-a97d-942584a9c826';
+    const vectorChunk = (ordinal: number, page: number, distance: number) => ({
+      id: `${ordinal}`.padStart(64, 'b'),
+      text: `命中正文${ordinal}`,
+      distance,
+      metadata: {
+        tenantId: 'tenant-a',
+        documentId,
+        documentVersion: 1,
+        chunkId: `${ordinal}`.padStart(64, 'b'),
+        ordinal,
+        sourceName: '动态表单 API.pdf',
+        department: 'finance',
+        sensitivity: 'internal',
+        ownerId: 'user-a',
+        page,
+      },
+    });
+    const vectorQuery = vi.fn().mockResolvedValue([vectorChunk(1, 2, 0.2), vectorChunk(3, 4, 0.1)]);
+    const findChunks = vi.fn().mockResolvedValue(
+      [1, 2, 3, 4, 5].map((page, ordinal) => ({
+        id: `${ordinal}`.padStart(64, 'a'),
+        documentId,
+        documentVersion: 1,
+        ordinal,
+        redactedText: page === 4 ? 'uploadUrl 配置' : `第${page}页内容`,
+        page,
+        sheet: null,
+        sectionPath: [],
+        document: {
+          activeVersion: 1,
+          sourceName: '动态表单 API.pdf',
+          tenantId: 'tenant-a',
+          department: 'finance',
+          sensitivity: 'internal',
+          ownerId: 'user-a',
+        },
+      })),
+    );
+    const retrieval = new QueryRetrievalService(
+      {
+        values: {
+          QUERY_RECALL_TOP_K: 20,
+          QUERY_MAX_DISTANCE: 0.45,
+          QUERY_NEIGHBOR_WINDOW: 1,
+          QUERY_MAX_MERGED_CONTEXT_CHARS: 20_000,
+          QUERY_MAX_RERANK_INPUT_CHARS: 120_000,
+        },
+      } as AppConfig,
+      { query: vectorQuery } as unknown as ChromaVectorStore,
+      { knowledgeChunk: { findMany: findChunks } } as unknown as PrismaService,
+      new AclPolicy(),
+    );
+
+    const result = await retrieval.retrieve(identity, [1, 0, 0]);
+    const uploadSource = result.find((item) => item.text === 'uploadUrl 配置');
+
+    expect(result).toHaveLength(5);
+    expect(uploadSource?.metadata.page).toBe(4);
+    expect(uploadSource?.metadata.chunkIds).toHaveLength(1);
+    expect(result.some((item) => item.text.includes('第3页内容\n\nuploadUrl'))).toBe(false);
+  });
 });

@@ -285,14 +285,11 @@ export class QualityEvaluator {
 
   private sourceMatches(actual: QualitySource, expected: QualitySource): boolean {
     if (actual.documentId !== expected.documentId) return false;
+    if (expected.chunkIds.length > 0) {
+      return actual.chunkIds.some((chunkId) => expected.chunkIds.includes(chunkId));
+    }
     if (expected.page !== null && actual.page !== expected.page) return false;
     if (expected.sheet !== null && actual.sheet !== expected.sheet) return false;
-    if (
-      expected.chunkIds.length > 0 &&
-      !actual.chunkIds.some((chunkId) => expected.chunkIds.includes(chunkId))
-    ) {
-      return false;
-    }
     return true;
   }
 

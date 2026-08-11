@@ -57,8 +57,14 @@ const modelPricingSchema = z
       .object({
         input: z.number().nonnegative().max(1_000_000),
         output: z.number().nonnegative().max(1_000_000),
+        cacheHitInput: z.number().nonnegative().max(1_000_000).optional(),
+        cacheMissInput: z.number().nonnegative().max(1_000_000).optional(),
       })
-      .strict(),
+      .strict()
+      .refine(
+        (value) => (value.cacheHitInput === undefined) === (value.cacheMissInput === undefined),
+        'cacheHitInput and cacheMissInput must be configured together',
+      ),
   )
   .refine((value) => Object.keys(value).length <= 100, 'must contain at most 100 model prices');
 

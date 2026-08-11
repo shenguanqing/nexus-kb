@@ -160,6 +160,37 @@ describe('QualityEvaluator', () => {
     expect(report.rerankRecommendation.decision).toBe('keep_disabled');
   });
 
+  it('uses stable chunk IDs when a merged source reports its first page', () => {
+    const input = dataset();
+    const first = input.cases[0]!;
+    const chunkId = 'a'.repeat(64);
+    const withChunkGroundTruth: QualityEvaluationDataset = {
+      ...input,
+      cases: input.cases.map((item) =>
+        item.id === first.id
+          ? {
+              ...item,
+              expectedSources: [{ ...item.expectedSources[0]!, chunkIds: [chunkId] }],
+            }
+          : item,
+      ),
+    };
+    const baseline = replaceObservation(run(withChunkGroundTruth, 'vector_top_5'), first.id, {
+      vectorSources: [{ ...first.expectedSources[0]!, page: 999, chunkIds: [chunkId] }],
+      finalSources: [{ ...first.expectedSources[0]!, page: 999, chunkIds: [chunkId] }],
+      citationSources: [{ ...first.expectedSources[0]!, page: 999, chunkIds: [chunkId] }],
+    });
+
+    const report = new QualityEvaluator(now).evaluate(
+      withChunkGroundTruth,
+      baseline,
+      run(withChunkGroundTruth, 'vector_top_20_rerank_top_5'),
+    );
+
+    expect(report.variants.vector_top_5.finalRecallAt5).toBe(0.5);
+    expect(report.variants.vector_top_5.citationAccuracy).toBe(1);
+  });
+
   it('requires explicitly approved absolute quality thresholds in addition to relative gain', () => {
     const input = dataset();
     const stricter = {

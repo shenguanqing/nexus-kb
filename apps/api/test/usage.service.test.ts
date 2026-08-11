@@ -22,6 +22,13 @@ const googleEmbeddingConfig = {
   },
 } as unknown as AppConfig;
 
+function prismaWithUsage(queryAudits: unknown[], usageFacts: unknown[] = []): PrismaService {
+  return {
+    queryAudit: { findMany: vi.fn().mockResolvedValue(queryAudits) },
+    queryProviderUsage: { findMany: vi.fn().mockResolvedValue(usageFacts) },
+  } as unknown as PrismaService;
+}
+
 describe('UsageService', () => {
   it('aggregates tenant-scoped request facts without inventing tokens or cost', async () => {
     const findMany = vi.fn().mockResolvedValue([
@@ -48,11 +55,9 @@ describe('UsageService', () => {
         llmModel: null,
       },
     ]);
-    const service = new UsageService(
-      { queryAudit: { findMany } } as unknown as PrismaService,
-      new AclPolicy(),
-      googleEmbeddingConfig,
-    );
+    const prisma = prismaWithUsage([]);
+    (prisma.queryAudit.findMany as ReturnType<typeof vi.fn>) = findMany;
+    const service = new UsageService(prisma, new AclPolicy(), googleEmbeddingConfig);
     const result = await service.query(
       { from: '2026-07-01T00:00:00.000Z', to: '2026-07-20T00:00:00.000Z' },
       identity,
@@ -84,12 +89,7 @@ describe('UsageService', () => {
   });
 
   it('shows the current embedding provider and model before the first query audit exists', async () => {
-    const findMany = vi.fn().mockResolvedValue([]);
-    const service = new UsageService(
-      { queryAudit: { findMany } } as unknown as PrismaService,
-      new AclPolicy(),
-      googleEmbeddingConfig,
-    );
+    const service = new UsageService(prismaWithUsage([]), new AclPolicy(), googleEmbeddingConfig);
 
     const result = await service.query(
       { from: '2026-07-01T00:00:00.000Z', to: '2026-07-20T00:00:00.000Z' },
@@ -110,13 +110,106 @@ describe('UsageService', () => {
     ]);
   });
 
-  it('requires platform administrator role before database access', async () => {
-    const findMany = vi.fn();
+  it('aggregates persisted token and configured cost facts without cross-tenant data', async () => {
+    const prisma = prismaWithUsage(
+      [
+        {
+          outcome: 'answered',
+          durationMs: 120,
+          department: 'finance',
+          embeddingProvider: null,
+          embeddingModel: null,
+          rerankProvider: null,
+          rerankModel: null,
+          llmProvider: 'deepseek',
+          llmModel: 'chat-a',
+        },
+      ],
+      [
+        {
+          queryTraceId: '11111111-1111-4111-8111-111111111111',
+          kind: 'llm',
+          provider: 'deepseek',
+          model: 'chat-a',
+          status: 'success',
+          inputTokens: 120,
+          outputTokens: 30,
+          estimatedCostUsd: 0.00018,
+        },
+      ],
+    );
+    const service = new UsageService(prisma, new AclPolicy(), googleEmbeddingConfig);
+
+    const result = await service.query(
+      { from: '2026-07-01T00:00:00.000Z', to: '2026-07-20T00:00:00.000Z' },
+      identity,
+    );
+
+    expect(result.providers).toContainEqual({
+      kind: 'llm',
+      provider: 'deepseek',
+      model: 'chat-a',
+      requests: 1,
+      failures: 0,
+      inputTokens: 120,
+      outputTokens: 30,
+      estimatedCostUsd: 0.00018,
+    });
+    expect(result.usageCompleteness).toBe('tokens_and_cost');
+    const usageInput = (prisma.queryProviderUsage.findMany as ReturnType<typeof vi.fn>).mock
+      .calls[0]?.[0] as { where: { tenantId: string } };
+    expect(usageInput.where.tenantId).toBe('tenant-a');
+  });
+
+  it('keeps cost unknown when a successful provider call has no configured estimate', async () => {
     const service = new UsageService(
-      { queryAudit: { findMany } } as unknown as PrismaService,
+      prismaWithUsage(
+        [
+          {
+            outcome: 'answered',
+            durationMs: 120,
+            department: 'finance',
+            embeddingProvider: null,
+            embeddingModel: null,
+            rerankProvider: null,
+            rerankModel: null,
+            llmProvider: 'deepseek',
+            llmModel: 'chat-a',
+          },
+        ],
+        [
+          {
+            queryTraceId: '11111111-1111-4111-8111-111111111111',
+            kind: 'llm',
+            provider: 'deepseek',
+            model: 'chat-a',
+            status: 'success',
+            inputTokens: 120,
+            outputTokens: 30,
+            estimatedCostUsd: null,
+          },
+        ],
+      ),
       new AclPolicy(),
       googleEmbeddingConfig,
     );
+
+    const result = await service.query(
+      { from: '2026-07-01T00:00:00.000Z', to: '2026-07-20T00:00:00.000Z' },
+      identity,
+    );
+
+    expect(result.providers.find((provider) => provider.kind === 'llm')).toMatchObject({
+      inputTokens: 120,
+      outputTokens: 30,
+      estimatedCostUsd: null,
+    });
+    expect(result.usageCompleteness).toBe('request_only');
+  });
+
+  it('requires platform administrator role before database access', async () => {
+    const findMany = vi.fn();
+    const service = new UsageService(prismaWithUsage([]), new AclPolicy(), googleEmbeddingConfig);
     await expect(
       service.query(
         { from: '2026-07-01T00:00:00.000Z', to: '2026-07-20T00:00:00.000Z' },

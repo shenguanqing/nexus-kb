@@ -11,6 +11,7 @@ RERANK_PROVIDER=local_bge
 RERANK_MODEL=BAAI/bge-reranker-v2-m3
 LOCAL_RERANK_ENABLED=true
 LOCAL_RERANK_BASE_URL=http://reranker-worker:8100
+LOCAL_RERANK_MAX_LENGTH=512
 # 可选；留空时本地开发复用 PARSER_INTERNAL_TOKEN。
 RERANK_INTERNAL_TOKEN=
 ```
@@ -25,4 +26,4 @@ pnpm docker:base -- --profile model-init run --rm reranker-model-init
 pnpm docker:base -- up -d --build api reranker-worker
 ```
 
-生产部署前，将 `LOCAL_RERANK_MODEL_REVISION` 固定为已批准的 Hugging Face revision。Docker Desktop 会以 CPU 运行该 Linux Worker；正式启用前应评估延迟与质量。
+生产部署前，将 `LOCAL_RERANK_MODEL_REVISION` 固定为已批准的 Hugging Face revision。`LOCAL_RERANK_MAX_LENGTH` 限制每个问题与候选拼接后的 token 数，调大可保留更多长文本、但会显著增加 cross-encoder 的 CPU 延迟与内存；修改后必须重新执行质量与性能评测。Docker Desktop 会以 CPU 运行该 Linux Worker；正式启用前应评估延迟与质量。

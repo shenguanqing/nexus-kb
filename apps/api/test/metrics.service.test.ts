@@ -7,7 +7,12 @@ function service(): MetricsService {
   return new MetricsService({
     values: {
       MODEL_PRICING_USD_PER_MILLION_TOKENS_JSON: {
-        'deepseek:model-a': { input: 1, output: 2 },
+        'deepseek:model-a': {
+          input: 1,
+          output: 2,
+          cacheHitInput: 0.1,
+          cacheMissInput: 1,
+        },
       },
     },
   } as unknown as AppConfig);
@@ -24,10 +29,20 @@ describe('MetricsService', () => {
       attempts: 3,
       status: 'success',
       inputTokens: 100,
+      cacheHitInputTokens: 80,
+      cacheMissInputTokens: 20,
       outputTokens: 50,
       totalTokens: 150,
     });
+    metrics.observeProvider('llm', {
+      provider: 'other',
+      model: 'ignored',
+      durationMs: 50,
+      status: 'success',
+      totalTokens: 500,
+    });
     const output = await metrics.render();
+    const billing = await metrics.providerBillingSnapshot(new Set(['deepseek:model-a']));
 
     expect(output).toContain('route="/v1/documents/:documentId"');
     expect(output).toContain(
@@ -37,8 +52,13 @@ describe('MetricsService', () => {
       'nexuskb_provider_tokens_total{kind="llm",provider="deepseek",model="model-a",token_type="input"} 100',
     );
     expect(output).toContain(
-      'nexuskb_provider_estimated_cost_usd_total{kind="llm",provider="deepseek",model="model-a"} 0.0002',
+      'nexuskb_provider_estimated_cost_usd_total{kind="llm",provider="deepseek",model="model-a"} 0.000128',
     );
+    expect(billing).toEqual({
+      estimatedCostUsd: 0.000128,
+      successfulRequests: 1,
+      reportedTokens: 400,
+    });
     expect(output).not.toContain('documentId=');
     expect(output).not.toContain('traceId=');
     expect(output).not.toContain('userId=');

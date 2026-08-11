@@ -17,7 +17,9 @@ import type { Identity } from '../auth/identity';
 import { AppConfig } from '../config/app-config';
 import type { QualityQueryObserver } from '../knowledge/knowledge-query.service';
 import { KnowledgeQueryService } from '../knowledge/knowledge-query.service';
+import { MetricsService } from '../observability/metrics.service';
 import { ChromaVectorStore } from '../vector-store/chroma-vector-store';
+import { billableProviders, billingDelta } from './quality-billing';
 
 const MAX_INPUT_BYTES = 10 * 1024 * 1024;
 
@@ -142,6 +144,8 @@ async function main(): Promise<void> {
     assertConfiguration(arguments_.variant, config);
     assertRateLimits(dataset, identities.profiles, config);
     const queryService = app.get(KnowledgeQueryService);
+    const metrics = app.get(MetricsService);
+    const billableProviderModels = billableProviders(config);
     const vectorStoreInfo = app.get(ChromaVectorStore).info();
     if (
       !vectorStoreInfo.enabled ||
@@ -165,6 +169,7 @@ async function main(): Promise<void> {
           finalSources = qualitySourceSchema.array().parse(sources);
         },
       };
+      const billingBefore = await metrics.providerBillingSnapshot(billableProviderModels);
       try {
         const response = await queryService.query(
           { question: item.question },
@@ -185,7 +190,10 @@ async function main(): Promise<void> {
             chunkIds: source.chunkIds,
           })),
           durationMs: Date.now() - startedAt,
-          costUsd: null,
+          costUsd: billingDelta(
+            billingBefore,
+            await metrics.providerBillingSnapshot(billableProviderModels),
+          ),
           errorCode: null,
         });
       } catch (error) {
@@ -197,7 +205,10 @@ async function main(): Promise<void> {
           finalSources,
           citationSources: [],
           durationMs: Date.now() - startedAt,
-          costUsd: null,
+          costUsd: billingDelta(
+            billingBefore,
+            await metrics.providerBillingSnapshot(billableProviderModels),
+          ),
           errorCode: safeErrorCode(error),
         });
       }

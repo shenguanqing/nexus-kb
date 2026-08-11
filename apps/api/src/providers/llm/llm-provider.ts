@@ -2,6 +2,8 @@ import type { RetrievedChunk } from '../../knowledge/retrieved-chunk';
 
 export interface ModelUsage {
   inputTokens?: number;
+  cacheHitInputTokens?: number;
+  cacheMissInputTokens?: number;
   outputTokens?: number;
   totalTokens?: number;
 }
@@ -46,6 +48,8 @@ export interface LlmTelemetryEvent {
   durationMs: number;
   attempts: number;
   inputTokens?: number;
+  cacheHitInputTokens?: number;
+  cacheMissInputTokens?: number;
   outputTokens?: number;
   totalTokens?: number;
   contextCount: number;

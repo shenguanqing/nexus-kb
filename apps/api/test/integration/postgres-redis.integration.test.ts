@@ -357,10 +357,11 @@ describe('PostgreSQL and Redis integration', () => {
   });
 
   it('stores a bodyless query audit with source identifiers', async () => {
+    const traceId = randomUUID();
     const audit = await prisma.queryAudit.create({
       data: {
         id: randomUUID(),
-        traceId: randomUUID(),
+        traceId,
         tenantId: tenantA,
         userId: 'integration-user',
         queryLength: 8,
@@ -372,12 +373,35 @@ describe('PostgreSQL and Redis integration', () => {
         llmProvider: 'deepseek',
         llmModel: 'deepseek-chat',
         durationMs: 120,
+        providerUsages: {
+          create: {
+            id: randomUUID(),
+            kind: 'llm',
+            provider: 'deepseek',
+            model: 'deepseek-chat',
+            status: 'success',
+            inputTokens: 120,
+            outputTokens: 30,
+            totalTokens: 150,
+            estimatedCostUsd: 0.00018,
+          },
+        },
       },
     });
 
     expect(audit.sourceChunkIds).toEqual(['a'.repeat(64)]);
     expect(Object.keys(audit)).not.toContain('question');
     expect(Object.keys(audit)).not.toContain('answer');
+    await expect(
+      prisma.queryProviderUsage.findFirst({
+        where: { queryTraceId: traceId, tenantId: tenantB },
+      }),
+    ).resolves.toBeNull();
+    await expect(
+      prisma.queryProviderUsage.findFirst({
+        where: { queryTraceId: traceId, tenantId: tenantA },
+      }),
+    ).resolves.toMatchObject({ inputTokens: 120, outputTokens: 30 });
   });
 
   it('queries audit events with capability and tenant isolation', async () => {

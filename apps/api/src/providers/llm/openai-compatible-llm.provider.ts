@@ -27,6 +27,8 @@ const responseSchema = z
     usage: z
       .object({
         prompt_tokens: z.number().int().nonnegative().optional(),
+        prompt_cache_hit_tokens: z.number().int().nonnegative().optional(),
+        prompt_cache_miss_tokens: z.number().int().nonnegative().optional(),
         completion_tokens: z.number().int().nonnegative().optional(),
         total_tokens: z.number().int().nonnegative().optional(),
       })
@@ -141,6 +143,8 @@ export class OpenAiCompatibleLlmProvider implements LlmProvider {
           requestId: response.headers.get('x-request-id') ?? parsed.data.id,
           usage: {
             inputTokens: parsed.data.usage?.prompt_tokens,
+            cacheHitInputTokens: parsed.data.usage?.prompt_cache_hit_tokens,
+            cacheMissInputTokens: parsed.data.usage?.prompt_cache_miss_tokens,
             outputTokens: parsed.data.usage?.completion_tokens,
             totalTokens: parsed.data.usage?.total_tokens,
           },
@@ -153,6 +157,8 @@ export class OpenAiCompatibleLlmProvider implements LlmProvider {
           durationMs: this.nowFunction() - startedAt,
           attempts: attempt,
           inputTokens: result.usage.inputTokens,
+          cacheHitInputTokens: result.usage.cacheHitInputTokens,
+          cacheMissInputTokens: result.usage.cacheMissInputTokens,
           outputTokens: result.usage.outputTokens,
           totalTokens: result.usage.totalTokens,
           contextCount: input.contexts.length,

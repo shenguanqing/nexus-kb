@@ -13,8 +13,16 @@ interface ProviderMetricEvent {
   status: 'success' | 'error';
   errorKind?: string;
   inputTokens?: number;
+  cacheHitInputTokens?: number;
+  cacheMissInputTokens?: number;
   outputTokens?: number;
   totalTokens?: number;
+}
+
+export interface ProviderBillingSnapshot {
+  estimatedCostUsd: number;
+  successfulRequests: number;
+  reportedTokens: number;
 }
 
 @Injectable()
@@ -166,6 +174,29 @@ export class MetricsService {
     return this.registry.metrics();
   }
 
+  async providerBillingSnapshot(
+    providerModels: ReadonlySet<string>,
+  ): Promise<ProviderBillingSnapshot> {
+    const [requests, tokens, costs] = await Promise.all([
+      this.providerRequests.get(),
+      this.providerTokens.get(),
+      this.providerCost.get(),
+    ]);
+    const includes = (labels: Record<string, string | number>) =>
+      providerModels.has(`${String(labels.provider)}:${String(labels.model)}`);
+    return {
+      estimatedCostUsd: costs.values
+        .filter((value) => includes(value.labels))
+        .reduce((sum, value) => sum + value.value, 0),
+      successfulRequests: requests.values
+        .filter((value) => includes(value.labels) && value.labels.status === 'success')
+        .reduce((sum, value) => sum + value.value, 0),
+      reportedTokens: tokens.values
+        .filter((value) => includes(value.labels))
+        .reduce((sum, value) => sum + value.value, 0),
+    };
+  }
+
   observeHttp(method: string, route: string, statusCode: number, durationMs: number): void {
     const labels = {
       method: method.toUpperCase(),
@@ -263,6 +294,18 @@ export class MetricsService {
     if (event.totalTokens !== undefined) {
       this.providerTokens.inc({ ...labels, token_type: 'total' }, event.totalTokens);
     }
+    if (event.cacheHitInputTokens !== undefined) {
+      this.providerTokens.inc(
+        { ...labels, token_type: 'cache_hit_input' },
+        event.cacheHitInputTokens,
+      );
+    }
+    if (event.cacheMissInputTokens !== undefined) {
+      this.providerTokens.inc(
+        { ...labels, token_type: 'cache_miss_input' },
+        event.cacheMissInputTokens,
+      );
+    }
   }
 
   private estimatedCost(provider: string, model: string, event: ProviderMetricEvent): number {
@@ -272,6 +315,19 @@ export class MetricsService {
     const input =
       event.inputTokens ?? Math.max(0, (event.totalTokens ?? 0) - (event.outputTokens ?? 0));
     const output = event.outputTokens ?? 0;
+    if (
+      event.cacheHitInputTokens !== undefined &&
+      event.cacheMissInputTokens !== undefined &&
+      pricing.cacheHitInput !== undefined &&
+      pricing.cacheMissInput !== undefined
+    ) {
+      return (
+        (event.cacheHitInputTokens * pricing.cacheHitInput +
+          event.cacheMissInputTokens * pricing.cacheMissInput +
+          output * pricing.output) /
+        1_000_000
+      );
+    }
     return (input * pricing.input + output * pricing.output) / 1_000_000;
   }
 

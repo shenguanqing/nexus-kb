@@ -49,7 +49,13 @@ describe('OpenAiCompatibleLlmProvider', () => {
         JSON.stringify({
           id: 'response-id',
           choices: [{ index: 0, message: { content: '应在验收后30天内付款。[来源1]' } }],
-          usage: { prompt_tokens: 100, completion_tokens: 20, total_tokens: 120 },
+          usage: {
+            prompt_tokens: 100,
+            prompt_cache_hit_tokens: 80,
+            prompt_cache_miss_tokens: 20,
+            completion_tokens: 20,
+            total_tokens: 120,
+          },
         }),
         { headers: { 'x-request-id': 'request-id' } },
       ),
@@ -82,6 +88,8 @@ describe('OpenAiCompatibleLlmProvider', () => {
       provider: 'deepseek',
       model: 'configured-model',
       totalTokens: 120,
+      cacheHitInputTokens: 80,
+      cacheMissInputTokens: 20,
       contextCount: 1,
       status: 'success',
     });

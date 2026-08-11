@@ -28,6 +28,7 @@ import {
   needsConversationContext,
   selectConversationQuestions,
 } from './conversation-context';
+import { QueryProviderUsageContext } from '../usage/query-provider-usage.context';
 
 const NO_ANSWER_TEXT = '当前知识库中没有找到足够可靠且有权限访问的依据。';
 type QueryResult = Omit<KnowledgeQueryResponse, 'conversationId'>;
@@ -51,9 +52,22 @@ export class KnowledgeQueryService {
     private readonly audit: QueryAuditService,
     private readonly sourceValidator: AnswerSourceValidator,
     @Optional() private readonly history?: KnowledgeHistoryService,
+    @Optional() private readonly providerUsage?: QueryProviderUsageContext,
   ) {}
 
   async query(
+    request: KnowledgeQueryRequest,
+    identity: Identity,
+    traceId: string,
+    observer?: QualityQueryObserver,
+  ): Promise<KnowledgeQueryResponse> {
+    if (!this.providerUsage) return this.executeQuery(request, identity, traceId, observer);
+    return this.providerUsage.run(identity, traceId, () =>
+      this.executeQuery(request, identity, traceId, observer),
+    );
+  }
+
+  private async executeQuery(
     request: KnowledgeQueryRequest,
     identity: Identity,
     traceId: string,
