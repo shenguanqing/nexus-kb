@@ -1,266 +1,55 @@
 # 当前开发任务
 
-> 项目：知枢 NexusKB
-> 当前阶段：阶段 15——Vue 前端
-> 状态：完成（F1–F5 已实现，并通过本地、Playwright 与容器集成验收）
+> 项目：知枢 NexusKB；当前阶段：阶段 16——服务器上线准备；状态：进行中，前端与本地 RAG 主链路已完成，正式质量评测仍等待获批数据集，阶段 4/7 的增强项已明确延期。
 
 ---
 
-## 1. 背景
+## 1. 当前目标
 
-阶段 14 的可重复评测框架已经完成，但正式真实数据运行仍等待业务方批准的脱敏标注集。用户于 2026-07-18 明确授权保留阶段 14 未完成并先进入阶段 15；不得将前端推进视为质量验收通过，也不得默认启用 Rerank。
+为 Linux 服务器上线完成可验证的最小准备。完整 checklist、依赖与勾选状态见 [05-开发任务清单.md](./docs/05-开发任务清单.md)。
 
-真实问题、标准答案和目标来源可能包含业务信息。仓库当前没有经过批准的真实评测集；按 confidential 零出网和日志无正文约束，不读取本地业务文档来自动编造问题，也不把合成 fixture 计为真实验收结果。
+- 固定生产镜像、非 root 与最小权限。
+- 配置 TLS、认证、Secret Manager、PostgreSQL/Redis 持久化。
+- 完成备份恢复演练、日志指标采集、压测与安全测试。
+- 确认数据保留、删除策略和模型区域合规。
 
----
+## 2. 当前阻塞与边界
 
-## 2. 阶段 15 当前目标
+正式质量评测仍需业务方批准的 30–100 条脱敏标注集、实际 ACL identity profile，以及两轮受控 Provider 运行和成本归属。在此之前：
 
-```text
-Vue 3 + TypeScript + Vite
-→ AppShell / 服务端身份摘要 / 路由 capability
-→ 统一运行时校验 API client
-→ 知识问答 / 无答案 / 错误重试 / 来源抽屉
-→ 文档管理与入库任务
-→ 管理后台与完整 E2E
-```
+- Rerank 保持默认关闭。
+- 不读取本地业务文档自动编造评测问题。
+- 不将合成 fixture 视为真实质量验收。
 
----
+数据集、运行命令和决策门槛见 [`evaluation/README.md`](./evaluation/README.md)。
 
-## 3. 本阶段已完成
+## 3. 阶段 16 前遗留与明确延期
 
-### 3.1 F1 基础框架
+以下原阶段 4/7 项目尚未实现，但不属于当前上传白名单或运行时 Provider 范围，因此不阻塞进入阶段 16：
 
-- [x] 创建 Vue 3、TypeScript strict、Vite、Vue Router、Pinia、Element Plus 和 Vitest 工程。
-- [x] 实现 AppShell、桌面/平板/移动基础响应式、设计 token、403 和 404 页面。
-- [x] 新增 `GET /v1/auth/session` 共享 Zod/OpenAPI 契约，刷新后重新取得服务端身份与 capability。
-- [x] 路由 guard 区分未认证与无权限，导航隐藏只作为体验层权限控制。
-- [x] 统一 API client 的 credentials、超时、运行时响应校验和安全错误映射。
+- PPTX、HTML、DOC、RTF 和 EML 解析与预览。
+- OpenAI、Google Embedding 的运行时配置、Factory 接入和契约测试。
+- 同一向量空间内基于完整配置指纹的文本哈希 Embedding 复用。
+- Embedding 批次级 checkpoint；当前仅承诺 `local_prepared` 步骤级恢复和稳定 chunk ID upsert，不承诺从失败批次的下一批继续。
 
-### 3.2 F2 知识问答核心切片
+这些项目不得被描述为已交付。阶段 16 的压测、恢复演练或获批业务需求如证明其中任一项是生产上线前置条件，必须先提高优先级并完成实现、测试与文档；详细勾选项见 [开发任务清单](./docs/05-开发任务清单.md#阶段-16-前遗留与明确延期)。
 
-- [x] 实现问答欢迎空态、示例问题、Enter/Shift+Enter 和输入长度限制。
-- [x] 对接正式 `POST /v1/knowledge/query` 契约，不发送 tenant、角色、部门或检索过滤器。
-- [x] 实现检索中、无答案、429/网络/服务错误、保留问题与重试状态。
-- [x] 回答按受控 Markdown 渲染，展示仅由正文 `[来源N]` 实际引用的紧凑来源卡片、trace ID 和实际模型摘要；当前登录会话跨导航连续保留已完成问答轮次，直至点击“新建问答”。
-- [x] 来源抽屉只展示后端返回的授权 metadata，并声明后续查看内容需要重新鉴权。
+## 4. 已完成基线
 
-### 3.3 测试与视觉 QA
+- 前端交付：Vue 前端、知识问答与来源、文档生命周期、管理后台、响应式与可访问性已完成。
+- 本地 RAG 链路已覆盖受控 Ollama Embedding、可配置 LLM、待建立索引恢复、DXF/DWG 解析和统一预览。
+- API、Parser Worker、前端与 Compose 的安全边界、共享 OpenAPI/Zod 契约、迁移和自动化测试已建立。
+- 文档职责已收敛：当前任务在本文，阶段路线图在任务清单，配置在 `.env.example`，接口字段在 OpenAPI。
 
-- [x] 覆盖 API 成功/错误映射和 AskComposer 键盘行为。
-- [x] 1440×900 验证空态、提问、回答和来源抽屉；控制台无新增运行错误。
-- [x] Element Plus 按需导入，避免完整组件库进入首屏包。
+历史实现细节、验证命令和提交记录以 Git 历史为准；当前架构、产品体验、运维与 API 规则分别见 `docs/01` 至 `docs/07`。
 
-### 3.4 F3 文档管理与生命周期
+## 5. 最近确认
 
-- [x] 新增 ACL 约束下的正式文档列表、分页、文件名/状态/敏感度/部门/格式筛选契约。
-- [x] 新增服务端上传大小、格式以及签名身份 metadata 选项接口，不接受客户端 tenant、角色或部门覆盖。
-- [x] 实现 Vue 文档表格、URL query 筛选、空态/错误重试、分页和单文件上传入口。
-- [x] 上传继续使用服务端身份的部门与默认敏感度，前端不把界面权限控制当作后端鉴权。
-- [x] 新增 ACL 约束的入库任务列表/详情/重试，以及文档详情、版本、重建、永久删除和分块详情运行时契约。
-- [x] 实现真实任务步骤、失败技术详情、条件轮询、可重试失败任务，以及文档版本和索引摘要页面；版本索引摘要提供 collection 标识、向量数（分块数）和写入时间。文档详情可进入按版本、服务端分页的分块详情页，展示原始/脱敏文本与位置等 metadata，但不返回向量值。
-- [x] 任务重试只允许可写、失败且明确可重试的任务；文档重建保留旧版本直至新索引激活。
-- [x] 文档详情与入库任务保留安全的来源路由，支持上下文返回；任务筛选支持明确状态选项和一键重置。
-- [x] 用户与角色、部门权限侧栏入口补充真实点击回归覆盖；窄屏导航仍保留两个入口。
+- 2026-08-10：同源 PDF/Office 预览的 iframe 允许策略与跨域嵌入防护已落地。
+- 2026-08-11：问答上下文联动、行内来源和历史来源详情已完成安全回归。
+- 2026-08-11：完成第二轮全量 Markdown 审查，修正文档与运行时事实漂移，并将格式、链接、端点、Provider 与断点检查纳入 `pnpm docs:check` 和 CI。
+- 2026-08-11：阶段 4/7 未完成项从“已完成阶段”折叠区移出，明确为不阻塞阶段 16 的延期增强与优化；Embedding 遥测按现有实现更正为已完成。
 
-### 3.5 F4 审计中心切片
+## 6. 交付要求
 
-- [x] 对接正式 `GET /v1/audit/events` 运行时契约，不接受客户端 tenant 或权限范围覆盖。
-- [x] 实现事件类型 URL 筛选、游标加载、空状态、错误重试和结构化事件详情。
-- [x] 问答正文、回答、文档片段、来源 chunk ID 和内部 collection 不进入审计页面展示。
-
-### 3.6 F4 Provider 与系统状态切片
-
-- [x] 新增独立 `system:read` capability，并由服务端身份与路由双层执行体验/强制鉴权。
-- [x] 对接正式 `GET /v1/system/providers`，只返回 Provider/model、域名摘要、区域、配置状态和索引指纹。
-- [x] 对接正式 `GET /v1/system/status`，返回脱敏依赖健康、入库队列和原始文档磁盘使用率。
-- [x] 实现 Provider 与系统状态页面；刷新状态不会触发付费模型合成调用。
-
-### 3.7 F4 用户目录切片
-
-- [x] 新增 `UserDirectoryEntry` migration，在会话接口只同步经过验证的 tenant、用户、部门、角色和认证时间。
-- [x] 新增独立 `access:read` capability 与 `GET /v1/access/users` 正式契约；管理员限当前 tenant，其他调用者固定到自身部门。
-- [x] 实现用户 ID 搜索、管理员部门筛选、分页、空态、错误重试与响应式用户目录页面。
-- [x] 角色 mutation 使用应用托管覆盖，并在认证 guard 中参与真实授权；capability 仍来自已验证身份，不能通过角色编辑扩权。
-- [x] 角色和部门策略变更写入独立访问审计，并保护最后一个有效管理员。
-- [x] 应用角色收敛为 `user`/`admin`，保留 capability 与 ACL 独立校验，并提供旧角色的降权迁移。
-- [x] `user` 侧栏与前端路由只保留知识问答、问答历史；管理页面同时要求 `admin` 和对应 capability。
-- [x] 管理员全权账号管理：`admin` 自动获得当前 tenant 的全部应用 capability 与敏感度范围；本地密码账号在数据库以 scrypt 摘要保存，首次仅从受保护的 `PASSWORD_AUTH_USERS_JSON` 引导，之后可在“用户与角色”页面创建、编辑、禁用、重置密码和删除。所有变更撤销必要会话并写入访问审计；最后一个管理员不可删除、禁用或降级，管理员也不能删除、禁用或降级自己；tenant 隔离与 confidential 数据出网策略保持强制执行。
-- [x] 管理员配置发布：Provider/问答/上传入库/Parser/Tika/CAD/DWG 运行参数由前端创建加密的不可变配置版本，密钥只写入不回显；独立 `deployment-agent` 仅按服务端计算的 `api`、`parser-worker`、`parser-worker-dwg`、`reranker-worker` 白名单执行 Compose 重建，readiness 失败自动恢复上一版本，页面显示含变更原因的结果并支持受控回滚。Embedding 向量空间配置不进入普通重启流程。
-- [x] 配置发布一致性与 Provider 页面收敛：所有仓库 Compose 入口按 `.env → config/runtime.env` 顺序参与插值，基础模式固定关闭 DWG，避免手动重建后网页激活值与 API 上传能力漂移；运行配置增加响应式 Anchor，Parser、CAD/DWG、Tika 独立分区，发布记录固定表头并在块内滚动。
-  - [x] 修复 Anchor 响应式排版：901–1279px 与 `<=900px` 均使用顶部单栏横向导航，非桌面标签与间距紧凑化，消除平板 168px 容器溢出和手机末端入口裁切。
-
-### 3.8 F2–F5 收尾
-
-- [x] 问答历史由服务端按 tenant + user 强制隔离，支持搜索、日期筛选、详情与幂等删除；浏览器不持久化正文。
-- [x] 多文件上传为每个文件维护独立状态与重试；授权 metadata 修改触发安全的新版本重建流程。
-- [x] 部门敏感度策略只能收紧已验证身份声明；用量页基于现有查询审计汇总，不可用 token/成本保持未知。
-- [x] Playwright 使用脱敏固定数据覆盖有来源回答、拒答、无权限路由、768px 和 Axe WCAG 2 A/AA。
-
-### 3.9 阶段 15 后续登录与布局收尾
-
-- [x] 前端间距规范收敛：`tokens.css` 建立 4px 基础间距、页面/组件/元素语义 token 与 375px、768px、1440px、1920px 的映射；`main.css` 的 gap/padding/margin 已统一引用 token（0/auto 与受上下界保护的流式 `clamp()` 除外），不新增既定响应式断点。
-- [x] 配置文档收敛：根目录 `.env.example` 为唯一完整可复制配置清单，每个配置项均有紧邻的中文用途说明；技术设计、开发规范与部署手册已同步到现行变量命名，场景文档不再维护重复全量配置。
-
-- [x] 新增受控账号密码认证模式、服务端 session migration、登录限速、HttpOnly Cookie、退出登录和共享 Zod/OpenAPI 契约；密码、原始 token 和账号配置不进入浏览器持久化、日志或数据库明文。
-- [x] 登录页根据公开的登录方式摘要显示账号密码表单，密码提交后立即清空；OIDC/JWT 与 development 身份模式保留。
-- [x] `app-main` 与所有 `xxxx-page` 填满可用视口；页面标题与工具栏位于非滚动区，文档、入库、审计、用户、历史和系统页面的正文在各自内容块内滚动，移除 toolbar sticky 定位。
-- [x] 移动端布局回归：移除页面标题中的重复“知枢 NexusKB”文案，来源路由返回操作统一置于 `h1` 最右侧；375px下底部导航、日期范围、Provider、系统说明与用量布局保持在容器内。表格与可滚动列表仅在内容块内滚动，并冻结表头或标题；`page-content` 与文档详情不再整体横向滚动。
-- [x] 前端信息架构与移动端收尾：桌面端采用分组侧边栏、顶部面包屑和高密度卡片内容区；移动端改为完整权限入口的 Drawer、44px 触控控件和单列卡片表格。`document-detail-page` 按侧栏后的实际内容宽度连续重排操作区与信息卡，所有页面标题统一为分类、标题、说明和返回操作结构。
-- [x] 响应式细节收尾：文档管理在 901–1279px 使用弹性筛选 Grid 且内容块内固定表头；375px Drawer/弹框遮罩覆盖 shell、顶部高度统一，工具栏查询与重置保持成组。详情信息改用 Element 描述组件或 `div + Flex/Grid`，详情操作区使用独立卡片外观。
-- [x] 截图回归修复：全断点弹框遮罩覆盖侧栏，审计表由表格自身滚动以固定表头；375px 下历史、文档与审计筛选均保持可读的紧凑网格，移动断点切换不保留桌面侧栏折叠状态。
-- [x] 窄屏导航回归：768–900px 统一使用 Drawer，删除难以操作的图标侧栏；所有 Dialog 通过 body Teleport 全局遮罩，并在移动端限制为安全视口宽高。
-- [x] 上传体验回归：文本文件使用流式 UTF-8 校验，避免多字节字符跨 8 KiB 边界时误报；上传弹窗每次打开清空上次选择，整批成功进入队列后自动关闭。
-- [x] 入库体验与复杂 CAD 回归：上传状态标签列对齐，进行中任务耗时每秒刷新并在结束后冻结；实测 `E-一区一层照明平面图.dwg` 遍历 348,256 个实体、输出 3,321 个元素后，将受 schema 硬上限保护的 `MAX_CAD_ENTITIES` 默认值从 200,000 调整为 500,000；手动重试重新计算本轮耗时。
-- [x] 实测 `2、2#教学楼弱电平面图20200530.dwg` 遍历 774,303 个实体、输出 989 个元素，将默认 `MAX_CAD_ENTITIES` 受控提高至 1,000,000（schema 硬上限仍为 2,000,000）；Worker 资源限制错误通过 allowlist 稳定码传至 API 和任务详情，不再全部显示为 `PARSER_INVALID_REQUEST`。
-
-### 3.10 本地 Provider 与待建立索引恢复
-
-- [x] 新增受控本机 Ollama Embedding Provider，支持 `bge-m3:latest` / 1024 维度，无需 API Key；容器仅可访问 `host.docker.internal:11434` 或内部 `ollama:11434`，并有配置、Provider、云策略和 Factory 测试。
-- [x] Google `gemini-3.5-flash-lite` 请求省略该模型已废弃的 `temperature` 参数。
-- [x] `prepared` 文档可在配置 Embedding 后通过“继续建立索引”恢复为 `local_prepared`，复用本地分块而不重新上传或解析。
-- [x] 文档状态由容易误解的“待激活”调整为“待建立索引”，并补充本地启动、Ollama、Gemini、DWG、数据存储与 Vetur/Volar 指南。
-
-### 3.11 DWG 本地优先验证
-
-- [x] 新增 `compose.dwg.yaml` 与受控 ODA 派生 Parser Worker：仅从本地忽略目录安装经批准的 Linux x64 Debian 包，Apple Silicon Mac 通过 Docker Desktop 的 `linux/amd64` 兼容层运行；不会将 ODA 二进制、许可证或凭据纳入 Git。
-- [x] 已从 ODA 官方页面取得 Linux x64 Debian 包（`odafileconverter` `27.1.0.0`，SHA-256 `c71363cd54758177af47a365154f180dc50a1e2b52a131994fda541c13a36766`），并在 `linux/amd64` 派生镜像中验证启动器、运行库和 Worker readiness；本地 `.env` 已使用该实际版本启用转换。
-- [x] 已在最终只读 Worker 中实际转换并解析已上传的 `Drawing1.dwg`：得到 9 个元素，parser version 为 `oda-27.1.0.0+ezdxf-1.4.4`；ODA 使用私有 tmpfs 源副本和官方 `*.dwg` 过滤器，不扫描其他上传文件。
-- [x] 已以 `compose.yaml + compose.dwg.yaml` 重建本地 API 与 Worker；Worker `/health/ready` 报告 `dwgConverter.status=up`，修复了仅使用基础 Compose 镜像导致的 `PARSER_UNAVAILABLE`。
-- [x] DWG 转换改为本地默认启动路径：`.env.example`、配置默认值、Compose fallback 与 README 均要求使用 `compose.yaml + compose.dwg.yaml` 的 ODA 派生 Worker；没有 ODA 时默认失败关闭，不能静默降级。
-- [x] 在已登录的 Web 页面触发 `Drawing1.dwg` 重新索引：v2 在 7 秒内完成 ODA→DXF→ezdxf 解析、生成 2 个分块并原子激活；随后在服务端鉴权开启时完成真实来源问答，当前主 LLM `deepseek/deepseek-v4-flash` 仅在检索到来源后调用，回答返回 `Drawing1.dwg` v2 引用和 Trace ID。Gemini 已配置为备用 LLM，未为验收改写用户当前 Provider 配置。
-- [x] 无有效 `[来源N]` 的知识库 LLM 文本不再作为 Provider 502 返回；严格模式安全拒答，混合模式切换为不携带文档上下文、明确标记的通用知识补充。
-- [x] 若 Gemini 已调用但因“资料不足”或缺少有效引用而安全拒答，`QueryAudit` 仍保留实际 LLM Provider/model；未进入 LLM 的检索拒答仅显示 Embedding Provider。
-- [x] 修复 `vue2` / `vue 2` 等语义等价问法结果不一致：查询链路统一产品版本号空格，引用不可核验时使用相同授权上下文受控修复一次，仍失败则记录 `LLM_ANSWER_UNVERIFIABLE` 并安全拒答。
-- [x] 上传多文件时限制 `upload-file-list` 高度并在弹框块内独立滚动，避免撑高页面产生 Y 轴滚动。
-- [x] 问答正文中的 `[来源N]` 改为小号次要色行内标记，与正文建立清晰视觉层级。
-- [x] `answer-text` 与 `history-answer` 统一使用严格清洗的 Markdown 渲染：支持标题、段落、列表、引用、代码、表格、强调和安全链接；禁用原始 HTML、图片、脚本、iframe、事件属性、内联样式和危险协议，外链统一增加 `noopener noreferrer`，并保留 `[来源N]` 行内标记。
-- [x] 查询默认改为混合回答模式：有知识库依据时保持来源强校验；无充分依据或引用修复仍失败时，只发送经过出网策略检查的问题并返回 `answerMode=general`。实时回答、历史和审计明确标记“通用知识补充”，权限变化、confidential 阻止与正式质量评测仍保持严格模式。
-
-### 3.12 本地启动与数据库调试文档
-
-- [x] README 与部署运维手册明确：执行 DWG Worker 的 `docker compose build` 前必须启动 Docker Desktop，并先通过 `docker info` / `docker compose version` 验证 Docker Engine；两处均补齐专用 Worker 构建、合并配置校验、整套服务启动和状态检查的完整命令序列。
-- [x] 明确 `.env` 变更按实际读取服务重建：主服务配置重建 `api`，解析/CAD 配置重建 `parser-worker` 与 `parser-worker-dwg`， `PARSER_INTERNAL_TOKEN` 同时重建两端；普通运行配置变化不要求重新构建镜像。
-- [x] 明确 PostgreSQL 初始化账号、数据库和密码在已有 volume 上不会因重建容器自动变更，禁止使用 `down -v` 作为配置重载方式。
-- [x] 新增仅绑定 `127.0.0.1:15432` 的 `compose.db-gui.yaml` 和 DBeaver 只读查看说明；生产环境仍不暴露 PostgreSQL。
-- [x] README 补全基础、DWG、DBeaver 及组合模式的固定 Compose 文件前缀，完善依赖健康分项诊断、已有 volume 的数据库密码同步流程、URL 密码编码提示和 PostgreSQL/Chroma 数据归属说明。
-
-### 3.13 API 使用说明
-
-- [x] 新增 `docs/07-API使用说明.md`，将 README 的接口调用清单迁入，并补全认证模式、trace ID、错误结构、capability/ACL、全部公开端点、分页、状态语义、重试规则和安全调用示例。
-- [x] README 收敛为 API 文档与 OpenAPI 契约入口，不再维护重复的 curl 端点清单。
-- [x] 修正 OpenAPI 文档漂移：补充 live/ready 健康端点、密码会话 Cookie security scheme，以及知识问答和历史轮次的 `answerMode` 字段。
-- [x] 同步 AGENTS、实施规格、技术设计、前端设计、开发规范、任务清单和运维手册中的 API 文档索引。
-- [x] 重构 README 的信息层级，新增零模型/零 ODA 的新手基础模式、分步骤启动流程和常见问题 FAQ，并将 Ollama、完整 RAG、DWG 与数据库调试下沉为按需章节。
-- [x] 新增 `apps/README.md` 及 API、Web、Parser Worker 目录级 README，集中说明模块入口、调用关系、开发命令、安全边界和当前解析算法，避免为每个源文件维护易漂移的独立说明。
-
-### 3.14 已支持文件的统一预览
-
-- [x] 新增受 `documents:read` 与实时文档 ACL 保护的 preview manifest 和内容流接口；响应不包含 storage key/内部路径，PDF 支持单一 byte range。
-- [x] TXT/Markdown/PDF/PNG/JPEG 直接预览；DOCX/XLSX 在 Parser Worker 内使用固定 LibreOffice 命令生成 PDF；DXF/DWG 根据渲染成本生成清洗 SVG 或版本化 PNG 瓦片 bundle。产物与 `documentId` 强绑定并使用独立 `preview_artifacts` volume。
-- [x] 预览生成失败只记录 warning，不阻断 RAG 入库；Web 预览页降级为 ACL 保护的解析原文，来源抽屉携带 page/sheet/version 定位。
-- [x] 文档删除同步清理预览产物；API/Worker readiness 检查预览目录，常规 Worker 额外检查 LibreOffice。
-- [x] 修复中文 Office/CAD 预览方块字：两个 Parser 镜像预置 Noto CJK，LibreOffice PDF 嵌入中文字形，ezdxf 在默认 DejaVu 缺字时显式使用 CJK 字体生成 SVG 路径，并覆盖 Ubuntu runner 的 DejaVu Sans Condensed 字体族变体。
-- [x] DXF/DWG SVG 与瓦片预览统一支持 50%–25600%（相对总览 256×）缩放，按钮与 Ctrl/Command + 滚轮分别使用 1.5 与 1.25 倍率；两者均支持重置、鼠标拖拽平移和浏览器全屏。权限说明收敛为文件名同行的“实时权限校验”标记，释放预览高度。
-- [x] 修复 CAD 线路在百万级 SVG viewBox 下因亚像素线宽不可见的问题；几何路径使用非缩放线宽，零宽 hairline 提升为屏幕 1px。超大型 CAD 的原始 SVG 超过 200 MiB 时自动 gzip 存储并由 API 透明解码，压缩后仍超限才降级解析文本。
-- [x] 完成本轮全量 lint、typecheck、单元测试、构建、Parser 容器测试和 Compose 配置校验。
-
-### 3.15 超大 CAD 深度预览
-
-- [x] 以源文件字节和按实体类型加权的 `renderCostScore` 分流：成本递归计入嵌套块及阵列实例，小图保留清洗 SVG，超大/高成本图纸改用版本化 PNG 瓦片 bundle。
-- [x] 入库只同步生成总览图、z0、实体/扁平图元 R-Tree 和带 CAD bounds / `worldToPixel` 的 manifest；不全量预生成细节 PNG，细节瓦片在缓存未命中时按视口懒渲染，原子写入并由磁盘 LRU 清理。
-- [x] Worker 渲染子进程增加超时/内存硬上限；API 增加无路径 manifest、总览和瓦片端点，瓦片渲染前后复核 ACL，删除文档递归清理 bundle。
-- [x] Vue Canvas 查看器支持默认最大层级 8（256× / 25,600%）、平移/全屏、最终视口防抖请求、可见瓦片优先、最多 2 并发、边缘一圈预取、`AbortController` 竞态取消和 `ImageBitmap` LRU 回收。
-- [x] 受控运行配置、OpenAPI、架构/前端/开发/运维/API 文档与 Prometheus 瓦片延迟、缓存命中和层级分布指标同步。
-- [x] 使用两份真实复杂 DWG 定位并修复预览慢路径：bundle 初始化预算扩展到单瓦片的 3 倍并封顶 180 秒，z0 复用总览，缓存命中绕过文档渲染锁，可见瓦片按视口中心优先；超时/资源失败使用稳定细分 warning，父进程回收被强杀子进程遗留的 UUID 临时 bundle。
-- [x] 使用 `E-一区一层照明平面图.dwg` 继续定位冷瓦片慢路径：移除每次请求约 20–23 秒的 91 MiB DXF 重解析，bundle 新增非可执行 SQLite/R-Tree 扁平图元索引，旧 bundle 首次请求原子补建；3×3 metatile 改为一次查询、一次组合绘制后裁图。z4 冷 3×3 从约 31 秒降至 2.97 秒，z8 冷 3×3 为 1.10 秒；一次性旧缓存升级 72.34 秒并受 180 秒硬上限保护。
-
-### 3.16 产品定位与 Lite 预留
-
-- [x] 品牌、界面、提示词和项目文档统一使用“知识库 / 知识中心 / 知识助手”，保留多租户、ACL、审计等完整能力的真实语义。
-- [x] 明确 Lite 为后续规划而非当前已实现功能；Lite 必须复用共享 RAG 核心，并由服务端能力边界收敛功能。
-- [x] 区分产品模式与现有 `docker:full` Compose 拓扑命名，避免后续 Lite 实现时概念冲突。
-
----
-
-## 4. 阶段 15 验证状态
-
-- [x] `pnpm lint`、`pnpm typecheck`、`pnpm test` 和 `pnpm build` 通过。
-- [x] `pnpm --filter @nexus-kb/web test:e2e` 18/18 通过，覆盖账号密码登录、知识问答与来源、权限路由、固定 shell、管理页面块内滚动、375/768/900/1280px 响应式布局与核心页面 WCAG AA 自动检查。
-- [x] Docker API 镜像构建、Prisma migration、ready 检查和 PostgreSQL/Redis/Chroma 集成测试通过；本轮使用隔离端口与 tmpfs 临时服务重新执行 16 个迁移及 API integration 10/10，测试容器已清理，现有完整 Compose 服务保持健康。
-- [x] 只读、无网络 Parser 测试容器 40/40 通过，覆盖固定 PDF/OCR 样本、解析、预览与 CAD 瓦片。
-
----
-
-## 5. 阶段 14 保留未完成
-
-仍需业务方提供 30–100 条真实脱敏标注集、实际 ACL identity profile、两轮受控 Provider 运行和成本归属。Rerank 继续默认关闭；后续取得数据时返回阶段 14 完成正式验收。
-
----
-
-## 6. 下一开发入口
-
-阶段 15 和第 3.11 节真实 `Drawing1.dwg` Web 端到端验证已完成。本地 Ollama Embedding、DeepSeek 主 LLM、Gemini 备用 LLM 与待建立索引恢复均已验证。阶段 14 的真实数据质量验收仍按第 5 节保留：仓库及 `nexus-kb-local-tests` 当前没有经批准的 30–100 条真实标注集和 ACL identity profile，取得受控数据后才能执行两轮付费 Provider 评测；除此之外，下一入口为阶段 16 服务器上线准备。
-
-- [x] P0 解析能力补齐第一批：API/契约/Web 已接受 PDF、PNG、JPG、JPEG；Worker 使用本地 Unstructured 与 EasyOCR，增加 PDF 页数、图片像素、离线模型和 OCR 置信度限制，并通过 ARM64 镜像内真实 PDF/OCR 冒烟验证。EasyOCR 用户网络目录固定为 Parser tmpfs，避免最终只读 Worker 写入 `~/.EasyOCR` 导致图片任务失败。
-- [x] Parser Worker 首次构建加固：常规依赖显式使用官方 PyPI 并配置有限重试/超时；EasyOCR 模型下载与依赖层分离，断流时清理残包并有限重试。ARM64 与 ODA `linux/amd64` 镜像均完成重建，`pnpm docker:up:all` 与 API readiness 验证通过。
-- [x] Apple Silicon 本地 DWG/OCR Worker 拆分：常规文件由原生 `parser-worker` 处理，API 仅把 DWG 路由到 `linux/amd64` 的 ODA `parser-worker-dwg`；两个内部 Worker 都通过独立 readiness 验证，避免 x86 模拟拖慢图片 OCR。
-- [x] P0 受控 Tika 兜底：固定版本服务只连接内网；Unstructured 非安全校验失败或空结果时 fallback，含 readiness、超时、返回体上限、warning 和真实 PDF 冒烟验证。
-- [x] P0 解析能力后续（样本与 Parser 容器）：提交确定性生成且已纳入版本控制的 PDF/PNG 样本；新增只读、无网络的 `parser-worker-tests` 容器，真实运行 Unstructured PDF、EasyOCR 图片及 DWG 解析契约测试。
-- [x] P0 解析能力后续（已授权全链路执行）：已在本地完整 RAG 环境以管理员会话运行 `pnpm smoke:ingestion`，验证固定 PDF/PNG 的上传、解析、Embedding、Chroma 索引与受控清理；两份样本均成功建立索引。
-
-- [x] 新增 Stylelint CSS 声明语义排序配置及独立检查/自动修复命令，覆盖 CSS、SCSS 和 Vue SFC；现有大文件样式不在本次配置变更中批量重排。
-- [x] 为 Playwright E2E 增加独立 TypeScript project reference，修复编辑器 ESLint Project Service 无法解析 `apps/web/e2e` 测试文件的问题。
-- [x] 修复 LLM 响应正文读取期间的超时分类：主模型故障切换备用模型后，备用模型的 `AbortError` 现返回可重试的 `LLM_TIMEOUT`，不再误报 `LLM_INVALID_RESPONSE`；Google 与 OpenAI-compatible adapter 均覆盖回归测试。
-- [x] 新增默认关闭的本地 BGE Rerank：独立内网 `reranker-worker` 运行 `BAAI/bge-reranker-v2-m3`，主服务经 ACL/策略检查后仅发送有限候选文本，Worker 仅返回原始索引与相关度分数；本机与云端配置/Provider 测试覆盖，失败安全降级为向量排序。
-- [x] Provider 页面将本地 BGE Rerank 的凭据状态与本机 Ollama Embedding 对齐，显示“本地无需凭据”；内部 Worker token 仍只用于服务间认证且不回显。
-- [x] 回答来源卡片与来源详情抽屉仅展示服务端实际返回的位置和章节 metadata；无位置时保留文档名与版本，移除“位置未标注”等无效占位，并将查看文档操作固定在抽屉底部以预留后续预览区域。
-
-### 6.1 Web 与移动端兼容规范收敛（2026-07-26）
-
-- [x] 新增唯一 `breakpoints.scss` 与 `useBreakpoint()`；壳层不再自行调用 `matchMedia`。
-- [x] 文档、审计、用户、版本和用量表格按同一数据源在 `<=900px` 切换为移动端卡片，不保留 CSS 隐藏的桌面表格。
-- [x] 文档、入库、审计、用户与历史筛选在移动端收纳为底部 Drawer；上传、角色编辑和文档高风险确认按手机 Drawer 规则切换。
-- [x] 来源、部门权限与入库步骤条补齐手机全屏/垂直布局；文档危险操作保留输入文件名的强确认。
-- [x] Playwright 回归：375px、768px、900px、1280px，覆盖无横向溢出、Drawer 导航、卡片/表格结构切换和可访问性。
-- [x] 截图显示回归：修复审计/用户桌面表格与空状态并存、历史列表分页未固定、文档/Provider 受限宽度换行、手机纵向步骤条撑高和部门卡片自动行拉伸；430px 回归断言步骤条紧凑、部门卡片间距固定。
-  - [x] 分页与筛选体验收敛：文档、分块、入库、审计、用户和历史共用底部 `list-pagination` 样式与位置，并统一使用 `prev, pager, next` 分页格式；审计 cursor 记录通过受控游标页栈呈现页码翻页。手机端筛选统一置于工具栏右侧，筛选 Drawer 统一为 `72%` 视口高度；用户与部门摘要改为折叠卡片。
-  - [x] 审计分页总数修复：接口按 tenant 与事件类型返回准确 `total`，前端分页绑定真实记录总数，同时保留 cursor 页栈的顺序翻页约束。
-  - [x] 权限编辑体验收敛：手机端“编辑角色”和“编辑权限”在已展开的用户/部门卡片内直接编辑并保存，不再额外打开 Drawer；桌面端角色编辑使用标准 `el-dialog`。空问答历史不渲染分页，审计表与底部分页合并为同一内容卡片，避免表格列与分页背景被裁切。
-  - [x] 移动端浮层层级：`el-config-provider` 将 Element Plus 浮层基线设为 `5000`，移除覆盖组件层级的全局 Overlay 强制值；确保筛选 Drawer、文档权限 metadata 弹框中的 Select、日期选择器等 `el-popper` 位于所属 Overlay 之上。
-  - [x] 弹框基础样式回归：动态 `ElDialog/ElDrawer` 显式引入 Element Plus Dialog/Drawer CSS；上传与权限 metadata 弹框恢复桌面居中限宽、手机安全高度、正文独立滚动和固定 footer，手机上传入口不显示拖放文案。
-  - [x] 文档 metadata 编辑：将“修改权限 metadata”从动态 Dialog/Drawer 组件改为明确的桌面 Dialog 与手机全屏 Drawer，统一表单控件宽度和页脚操作组，避免弹框内容渲染异常。
-  - [x] 移动端标签与输入收敛：展示性 `p`、`dl/dt/dd`、`ul/li`（包括受控 Markdown 输出）统一为 `div + class`；问答改用 Element Plus 多行输入，手机端可聚焦输入控件至少 `16px`，防止 iOS 聚焦自动缩放页面。
-  - [x] 文档详情移动端回归：权限、重建与删除操作在两列网格中自动换行，删除操作独占一行；详情卡片标题支持换行，避免 393px 视口截断内容。
-  - [x] 移动端历史与标题收敛：历史页拆分为会话列表和详情的独立滚动区，增大行与删除触控区；展示性标题（包括 Markdown）统一为带无障碍层级的 `div + class`，页面区块采用统一移动端间距 token。
-  - [x] 手机横屏回归：为 `<=900px`、高度 `<=500px` 的横屏低高度场景增加压缩顶栏、标题区和双栏内容规则；375px 及 852×393 横屏回归均检查全部已授权页面无横向溢出。
-  - [x] 移动端时间与介绍区回归：日期范围控件与弹层限制在安全视口内，筛选 Drawer 统一提升至 `72%` 高度并可滚动；审计、用户目录、Provider 和系统状态顶部介绍区共用同一视觉规格。
-  - [x] 桌面内容区回归：文档筛选不再将侧栏后的可用宽度误判为完整视口；详情页由统一间距 token 控制区块距离，并在浏览器实时缩放时按实际内容宽度重排，窄桌面操作组不再被裁切。
-- [x] 页面布局收敛：顶部留白移至 `app-main`，统一各管理页工具栏面板和紧凑无分割线分页；620px 文档详情操作区不再被 Flex 基准高度撑开，手机历史筛选日期控件与 Provider 介绍/卡片保持容器内可读。
-- [x] 移动端介绍与筛选收敛：Provider 与系统状态分别使用自适应高度的专属 intro 类，不复用带最小高度的系统介绍布局；历史、审计、用户、文档与入库的“筛选”入口统一位于对应 `xxxx-toolbar` 面板内。
-  - [x] 日期与筛选文案收敛：历史与用量页面的时间范围改为“开始时间 / 结束时间”两个独立日期时间选择器，移除 `datetimerange`；所有提交筛选操作统一命名为“筛选”，不再混用“查询”或“应用”。
-  - [x] 移动端补充回归：文档分块页在手机上使用紧凑页码且保持不透明底部分页栏；用量与成本的时间筛选收纳至底部 Drawer，横屏低高度场景压缩介绍区并保留内容块滚动空间。
-  - [x] 横屏可操作性回归：用户目录与部门权限使用独立可滚动内容容器；历史筛选右对齐；导航 Drawer 顶栏与应用顶栏统一为 48px；用量、Provider、系统状态及各工具栏收敛为低高度单行布局。Playwright 使用长列表实际验证 `scrollTop` 可写入。
-  - [x] 管理页工具栏命名与层级收敛：用户目录身份摘要和筛选合并为单一 `access-toolbar`；Provider、系统状态和用量统一采用 `xxxx-toolbar` 命名；用量桌面端与审计中心一致采用左侧介绍、右侧筛选的左右布局，移动端任务、审计、Provider、系统状态和用量工具栏保持单行操作。
-  - [x] 问答历史布局收敛：桌面端 `history-layout` 使用可伸展的主行填满筛选栏以下空间，左侧会话列表与右侧详情保持独立滚动。
-  - [x] 问答历史的标题与会话列表合并为同一内容卡片；分页位于下方独立卡片，与其他列表页面保持一致。
-  - [x] Parser Worker CI 在真实 PDF/OCR 样本测试前预载受控 EasyOCR 与 NLTK 资源；runner 启动后通过 `RUNNER_TEMP` 与 `GITHUB_ENV` 初始化模型目录，模型下载脚本遵从 `OCR_MODEL_STORAGE_PATH`，避免 workflow 调度失败或新 runner 缺少模型；预览资源异常分类使用 Python 3.11 联合类型语法并通过 Ruff `UP038` 检查。
-  - [x] Parser Worker 内部 Pydantic 模型统一使用 snake_case Python 字段名构造，camelCase alias 仅用于外部 JSON 契约；保持 Pydantic mypy plugin、运行时属性和对外契约一致。
-  - [x] 用户与角色工具栏收敛为左右两列：标题/说明在左，新增后台账号/筛选在右；“新增后台账号”固定在右上角。
-
-### 6.2 域名部署预览修复（2026-08-10）
-
-- [x] Caddy 将全局 `X-Frame-Options` 从 `DENY` 收敛为 `SAMEORIGIN`，并追加 `Content-Security-Policy: frame-ancestors 'self'`；PDF/Office 同源 `iframe` 可正常加载，跨域嵌入仍被阻止，配置回归测试已补充。
-
-### 6.3 问答上下文联动与回复提速（2026-08-11）
-
-- [x] 续问在任何 Provider 调用前按 tenant + user 校验 `conversationId`，读取最近 4 个、服务端记录敏感度与当前 `defaultSensitivity` 一致的用户问题并限制为 4,000 字符；旧轮次敏感度未知时不参与联动。仅在“它”“前者”“后者”“上述”等指代出现时扩展 Embedding/Rerank 查询，LLM 同轮接收有边界的不可信前序用户问题。
-- [x] 历史助手答案不作为联动上下文重新发送到云端；独立问题不无条件拼接历史，问题、回答和上下文仍不进入普通日志或查询审计正文。
-- [x] 新增 `QUERY_MAX_LLM_CONTEXT_CHARS=32000` 独立生成上下文预算，按 Rerank 相关度优先保留；Rerank 候选仍可使用最高 120,000 字符。移除 active/ACL 分块查询已覆盖的早期重复数据库鉴权，保留 LLM 前和回答返回前的两次强制复核。
-
-### 6.4 行内来源与历史来源详情（2026-08-11）
-
-- [x] 实时回答与问答历史的行内 `[来源N]` 改为更小的可访问按钮，点击、触摸或键盘操作均打开同编号来源抽屉；两处均保留回答底部来源卡片。
-- [x] 历史详情返回每轮来源 metadata，并在返回前按当前 ACL、文档 active 状态和 active version 重新授权；任一引用失效或持久化结构异常时整轮旧回答按 `authorization_changed` 安全失效。
-- [x] 修复 Web 与 API 滚动升级期间旧历史 turn 缺少 `sources` 导致“服务响应格式不正确”：客户端兼容缺失字段但安全隐藏未重新鉴权的 grounded 旧回答，实际浏览器列表点击回归通过。
-- [x] 问答历史将选中会话、页码与筛选写入 URL，来源抽屉的文档预览保留完整返回地址；从预览返回或刷新后重新加载并选中同一会话，实际浏览器回归通过。
+完成本阶段前必须更新本文、[开发任务清单](./docs/05-开发任务清单.md) 和受影响的规格/技术/运维文档，并如实记录实际验证结果与未完成风险。

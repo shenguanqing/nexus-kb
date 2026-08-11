@@ -1,6 +1,6 @@
 # ODA File Converter 安装包（仅本地）
 
-将已获组织批准的官方 Linux x64 Debian 安装包放入此目录，并使用以下固定文件名：
+将已获组织批准的官方 Linux x64 Debian 安装包放入此目录，并使用以下固定文件名。构建前必须按[部署运维手册](../../../../docs/06-部署运维手册.md#91-cad--dwg-转换流程)完成许可证审批、恶意代码扫描、SHA-256 校验和登记及版本固定：
 
 ```text
 oda-file-converter.deb

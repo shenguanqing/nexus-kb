@@ -4,7 +4,7 @@
 
 Web 只负责用户体验。真正的身份、tenant、ACL、敏感度和 capability 校验始终由 NestJS API 执行。
 
-## 关键入口
+## 阅读路径
 
 | 路径                                                           | 作用                                                   |
 | -------------------------------------------------------------- | ------------------------------------------------------ |
@@ -19,21 +19,31 @@ Web 只负责用户体验。真正的身份、tenant、ACL、敏感度和 capabi
 
 ## 目录结构
 
-| 目录                       | 职责                                  |
-| -------------------------- | ------------------------------------- |
-| `src/api`                  | 按业务域封装 API 调用和运行时响应校验 |
-| `src/views`                | 路由页面                              |
-| `src/components/common`    | 通用、安全渲染组件                    |
-| `src/components/knowledge` | 提问、回答、历史回答和来源抽屉        |
-| `src/components/documents` | 文档列表与移动端卡片                  |
-| `src/layouts`              | 应用壳层与全局导航                    |
-| `src/router`               | 路由、权限体验和安全返回导航          |
-| `src/stores`               | Pinia 会话状态                        |
-| `src/composables`          | 响应式断点等可复用逻辑                |
-| `src/styles`               | 设计 token、全局样式和断点            |
-| `src/utils`                | Markdown 等纯工具函数                 |
-| `src/test`                 | Vitest 公共测试环境                   |
-| `e2e`                      | Playwright 完整流程和响应式回归       |
+```text
+apps/web/
+├── src/
+│   ├── api/                 # 按业务域封装 API 调用和运行时校验
+│   ├── components/
+│   │   ├── common/          # 通用、安全渲染组件
+│   │   ├── documents/       # 文档列表、预览和 CAD 查看器
+│   │   └── knowledge/       # 提问、回答、历史回答和来源抽屉
+│   ├── composables/         # useBreakpoint 等复用逻辑
+│   ├── layouts/             # 应用壳层与全局导航
+│   ├── router/              # 路由、权限体验和安全返回导航
+│   ├── stores/              # Pinia 会话与问答状态
+│   ├── styles/              # 设计 token、全局样式和唯一断点
+│   ├── test/                # Vitest 公共测试环境
+│   ├── utils/               # Markdown 等纯工具函数
+│   ├── views/               # 路由页面与展示层数据整理
+│   ├── App.vue
+│   └── main.ts
+├── e2e/                     # Playwright 完整流程和响应式回归
+├── public/
+├── index.html
+├── playwright.config.ts
+├── vite.config.ts
+└── vitest.config.ts
+```
 
 同目录的 `*.test.ts` 是对应模块的单元或组件测试；展示层数据整理通常放在 `*-presentation.ts`，避免把复杂转换散落在 Vue 模板中。
 
@@ -43,7 +53,7 @@ Web 只负责用户体验。真正的身份、tenant、ACL、敏感度和 capabi
 
 - `KnowledgeAskView`：知识问答、严格/通用回答模式和来源。
 - `HistoryView`：当前登录用户的问答历史。
-- `DocumentsView`、`DocumentDetailView`、`DocumentChunksView`、`DocumentPreviewView`：文档、版本、授权分块和全格式预览；小型 CAD SVG 支持 50%–3200% 缩放，超大 CAD 使用按视口加载的 Canvas 瓦片查看器（默认相对总览最大 256×），全部预览支持全屏。
+- `DocumentsView`、`DocumentDetailView`、`DocumentChunksView`、`DocumentPreviewView`：文档、版本、授权分块和全格式预览；小型 CAD SVG 支持 50%–25,600% 缩放，超大 CAD 使用按视口加载的 Canvas 瓦片查看器（默认相对总览最大 256×），全部预览支持全屏。
 - `IngestionJobsView`：入库状态、步骤、失败详情和安全重试。
 - `UsersView`、`DepartmentsView`：角色与部门权限。
 - `AuditView`：无正文结构化审计。

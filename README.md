@@ -6,7 +6,7 @@
 
 当前 Vue 前端与本地 RAG 主链路已经完成；真实业务数据质量评测仍等待获批的脱敏数据集。详细进度见 [`TASK.md`](./TASK.md)。
 
-## 快速导航
+## 阅读路径
 
 - [第一次启动](#第一次启动推荐本地开发模式)
 - [启用本机向量索引](#启用本机向量索引ollama)
@@ -377,7 +377,7 @@ curl --fail-with-body http://127.0.0.1:3000/health/ready
 
 DWG 转换依赖独立授权的 ODA File Converter。仓库与基础镜像不包含安装包、许可证或二进制。
 
-从 [ODA 官方下载页](https://www.opendesign.com/guestfiles/oda_File_Converter) 获取经组织许可的 **Linux x64 Debian (`.deb`)** 安装包，并将它放到：
+从 [ODA 官方下载页](https://www.opendesign.com/guestfiles/oda_file_converter) 获取经组织许可的 **Linux x64 Debian (`.deb`)** 安装包，并将它放到：
 
 ```text
 apps/parser-worker/vendor/oda/oda-file-converter.deb
@@ -604,6 +604,7 @@ DBeaver 使用 `127.0.0.1:15432`，数据库和用户名读取 `.env` 的 `POSTG
 文档修改和日常代码检查：
 
 ```bash
+pnpm docs:check
 pnpm lint
 pnpm typecheck
 pnpm test
@@ -620,27 +621,12 @@ pnpm --filter @nexus-kb/web test:e2e
 
 需要在已授权的本地完整 RAG 环境中验证固定 PDF/图片的“上传 → 解析 → 向量索引”链路时，使用受显式开关保护的 `pnpm smoke:ingestion`。它需要交互提供的本地账号密码，完成后会删除本次创建的测试文档并登出；具体命令见 [API 使用说明](./docs/07-API使用说明.md#62-读取上传限制并上传)。
 
-## 文档索引
+## 文档导航
 
-| 文档                                                               | 内容                               |
-| ------------------------------------------------------------------ | ---------------------------------- |
-| [`TASK.md`](./TASK.md)                                             | 当前阶段、完成状态与下一步         |
-| [`docs/01-项目实施规格.md`](./docs/01-项目实施规格.md)             | 项目范围、安全边界与验收标准       |
-| [`docs/02-技术设计.md`](./docs/02-技术设计.md)                     | 架构、模块、数据结构与关键实现     |
-| [`docs/03-前端产品与界面设计.md`](./docs/03-前端产品与界面设计.md) | 页面、交互、权限与响应式规范       |
-| [`docs/04-开发规范.md`](./docs/04-开发规范.md)                     | 编码、测试、Git 与协作规范         |
-| [`docs/05-开发任务清单.md`](./docs/05-开发任务清单.md)             | 完整阶段任务                       |
-| [`docs/06-部署运维手册.md`](./docs/06-部署运维手册.md)             | 部署、配置、备份、监控与故障处理   |
-| [`docs/07-API使用说明.md`](./docs/07-API使用说明.md)               | 认证、权限、端点、错误码与调用示例 |
-| [`apps/README.md`](./apps/README.md)                               | Web、API 与 Parser Worker 应用索引 |
-| [`apps/api/README.md`](./apps/api/README.md)                       | NestJS API 模块、链路与安全边界    |
-| [`apps/web/README.md`](./apps/web/README.md)                       | Vue 页面、目录、响应式与前端边界   |
-| [`apps/parser-worker/README.md`](./apps/parser-worker/README.md)   | 文档解析算法、限制与开发方式       |
+完整的阅读路径、事实源和模块入口统一维护在 [docs/README.md](./docs/README.md)，避免根目录 README 与文档目录重复维护两份索引。
 
-机器可读契约：
-
-- [公开 API OpenAPI](./packages/contracts/openapi/api.v1.yaml)
-- [Parser Worker OpenAPI](./packages/contracts/openapi/parser-worker.v1.yaml)
+- 当前工作、验证记录和阻塞项：[TASK.md](./TASK.md)。
+- 机器可读字段契约：[公开 API OpenAPI](./packages/contracts/openapi/api.v1.yaml) 与 [Parser Worker OpenAPI](./packages/contracts/openapi/parser-worker.v1.yaml)。
 
 ## 安全提示
 

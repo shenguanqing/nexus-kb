@@ -29,6 +29,18 @@ Parser Worker 的 `/internal/v1/parse` 不是公开 API。其契约位于 [parse
 
 ---
 
+## 阅读路径
+
+| 场景 | 先读 |
+| --- | --- |
+| 选择认证方式或处理 401/403 | 第 2–4 节 |
+| 查找可用端点 | 第 5 节 |
+| 上传、查看任务、问答或删除 | 第 6 节对应流程 |
+| 处理分页、重试与敏感数据 | 第 7–8 节 |
+| 调试 API 与 Parser Worker 的边界 | 第 9 节和 [技术设计](./02-技术设计.md) |
+
+---
+
 ## 2. 通用调用约定
 
 ### 2.1 地址与内容类型
@@ -241,9 +253,14 @@ unset NEXUSKB_ACCESS_TOKEN
 
 `GET /v1/documents/{documentId}/chunks` 支持 `version`、`page` 和 `pageSize`。分块响应包含原始文本，属于权限敏感数据；不得写入浏览器持久化、普通日志、analytics 或错误上报。
 
-预览 manifest 的 `status` 为 `ready|fallback|unavailable`。`kind=pdf|image|text|markdown|svg` 的 ready 预览使用 `/preview/content`；该接口支持单一 `Range: bytes=...`，不支持多段 range。`kind=cad_tiles` 时 manifest 额外返回 `cad`，其中包含 `tileSize`、`minZoom/maxZoom`、总览/基础像素尺寸、CAD `bounds`、六参数 `worldToPixel`、`entityCount` 和 `renderCostScore`；客户端应请求 `/preview/overview` 和视口需要的 `/preview/tiles/...`，不得猜测内部存储路径。瓦片响应的 `X-Cad-Tile-Cache: hit|miss` 仅用于调试/指标，不改变权限语义；`hit` 直接读取现有瓦片，不等待同文档的未命中渲染锁。一次 `miss` 可能在服务端同时生成相邻 3×3 metatile；旧 bundle 的首次 `miss` 还可能原子补建内部几何索引，因此客户端必须继续使用现有超时、总览打底和可取消请求，不得依赖内部缓存文件。
+预览规则：
 
-`fallback` 时使用 `fallbackVersion` 调用 chunks 接口展示解析原文。所有 manifest、总览和瓦片请求都使用当前服务端身份执行 tenant 与文档 ACL；瓦片在缓存未命中的渲染完成后还会再查一次，以阻止渲染期间撤权后返回内容。这里不使用 5 分钟预览 token，因为项目现有安全规范要求立即撤权可见。响应始终不返回 storage key 或内部路径。
+- manifest `status` 为 `ready|fallback|unavailable`。
+- `kind=pdf|image|text|markdown|svg` 且 ready 时，通过 `/preview/content` 读取；仅支持单一 `Range: bytes=...`，不支持多段 range。
+- `kind=cad_tiles` 时，manifest 的 `cad` 包含 `tileSize`、`minZoom/maxZoom`、总览/基础像素尺寸、`bounds`、`worldToPixel`、`entityCount` 和 `renderCostScore`。客户端请求 `/preview/overview` 与视口所需的 `/preview/tiles/...`，不得猜测内部路径。
+- `X-Cad-Tile-Cache: hit|miss` 只用于调试和指标，不改变权限语义。`hit` 直接读取已有瓦片；一次 `miss` 可能同时生成相邻 3×3 metatile，并可能为旧 bundle 原子补建几何索引。客户端继续使用既有超时、总览打底和可取消请求，不依赖内部缓存文件。
+- `fallback` 时，用 `fallbackVersion` 调用 chunks 接口展示解析原文。
+- manifest、总览和瓦片均以当前身份执行 tenant 与文档 ACL；缓存未命中渲染完成后再检查一次，确保撤权立即生效。响应不返回 storage key 或内部路径，也不使用短时预览 token。
 
 `GET /v1/ingestion-jobs` 支持 `documentId`、`status`、`page` 和 `pageSize`。
 
@@ -256,7 +273,13 @@ unset NEXUSKB_ACCESS_TOKEN
 | `GET`    | `/v1/history/conversations/{conversationId}` | 会话所有者       | 会话与问答轮次                    |
 | `DELETE` | `/v1/history/conversations/{conversationId}` | 会话所有者       | 幂等删除个人会话                  |
 
-历史列表支持 `query`、`from`、`to`、`offset` 和 `limit`。`from` 必须早于或等于 `to`，`limit` 最大 100。历史详情的每个 turn 返回 `sources` 与 `sourceCount`；`sources` 仅包含按当前身份重新校验文档 ACL、active 状态和 active version 后仍可访问的来源。grounded 历史回答的任一持久化来源无效或失权时，该 turn 返回 `noAnswer=true`、`reason=authorization_changed`、`answerMode=null`、`sources=[]`，且不会返回旧回答正文。滚动升级期间，Web 可接受旧 API 暂未返回 `sources` 的 turn，但必须在客户端按同一 `authorization_changed` 语义隐藏旧 grounded 回答，直至 API 完成升级。
+历史列表支持 `query`、`from`、`to`、`offset` 和 `limit`；`from <= to`，`limit` 最大 100。
+
+历史详情规则：
+
+- 每个 turn 返回 `sources` 和 `sourceCount`；来源必须在返回前按当前身份重新检查 ACL、active 状态和 active version。
+- grounded 回答的任一持久化来源无效或失权时，整个 turn 返回 `noAnswer=true`、`reason=authorization_changed`、`answerMode=null`、`sources=[]`，不返回旧回答正文。
+- 滚动升级期间，Web 若收到缺少 `sources` 的旧 turn，也按同一 `authorization_changed` 语义隐藏 grounded 回答，直至 API 完成升级。
 
 ### 5.4 审计、访问和系统管理
 
@@ -284,7 +307,13 @@ unset NEXUSKB_ACCESS_TOKEN
 
 用户目录使用 `offset`/`limit` 分页，支持 `query` 和 `department`。管理员可以管理本地密码账号；外部 OIDC 身份账号仅可查看，应在身份源中增删。普通用户即使有 `access:read`，也不能通过 `department` 查看其他部门。用量接口要求同时提供 `from` 和 `to`。
 
-配置版本请求只接受共享契约列出的 LLM、Rerank、问答与限流、上传入库、Parser/Tika/CAD/DWG 受控字段。API Key 位于 `secrets` 写入字段，响应永不回显，只返回 `secretConfigured`。客户端不能提交 tenant、服务名、Docker 命令、Compose 文件、callback URL 或 Embedding Provider/模型/维度。Parser、Tika 或 CAD/DWG 字段变更时，服务端固定选择 `parser-worker` 和 `parser-worker-dwg`；发布返回 HTTP 202；客户端轮询 deployment，终态为 `succeeded|rolled_back|failed`，其中每条记录包含生成该配置版本时填写的 `changeReason`。`rolled_back` 表示目标 readiness 失败但上一配置已自动恢复；`failed` 需要运维介入。
+配置发布规则：
+
+- 请求只接受共享契约列出的 LLM、Rerank、问答与限流、上传入库、Parser/Tika/CAD/DWG 字段。
+- API Key 只能写入 `secrets`，响应仅以 `secretConfigured` 表示状态，绝不回显。
+- 客户端不能提交 tenant、服务名、Docker 命令、Compose 文件、callback URL 或 Embedding Provider/模型/维度。
+- Parser、Tika 或 CAD/DWG 变更时，服务端固定选择 `parser-worker` 与 `parser-worker-dwg`。
+- 发布返回 HTTP 202，客户端轮询 deployment。终态为 `succeeded|rolled_back|failed`，每条记录保留创建版本时的 `changeReason`；`rolled_back` 表示自动恢复上一配置，`failed` 需要运维介入。
 
 ---
 

@@ -4,7 +4,7 @@
 
 Worker 不负责认证业务、tenant/ACL、分块、脱敏、Embedding、Rerank、LLM 或 Chroma 写入，也不持有模型 API Key。
 
-## 关键入口与文件
+## 阅读路径与关键文件
 
 | 路径                                                                         | 作用                                                  |
 | ---------------------------------------------------------------------------- | ----------------------------------------------------- |
@@ -64,7 +64,13 @@ POST /internal/v1/parse
 | PNG / JPG / JPEG              | 已实现               | EasyOCR（CPU、离线模型）                     |
 | PPTX / HTML / DOC / RTF / EML | 未实现               | 后续阶段                                     |
 
-预览与文本解析独立：DOCX/XLSX 使用镜像内固定 LibreOffice 与 Noto CJK 字体转 PDF。DXF/DWG 先根据源字节数和按实体类型加权的渲染成本分流：小图生成受限 SVG，超大/高成本图纸同步生成总览图、z0、实体 R-Tree、非可执行 SQLite/R-Tree 扁平图元索引和 manifest，其他 PNG 瓦片由内部端点按需渲染并使用磁盘 LRU 清理。一个 3×3 metatile 只查询和绘制一次，再裁成相邻瓦片；旧 bundle 在首次冷请求时原子补建图元索引，之后不再重复解析完整 DXF。manifest 包含 CAD bounds 和 `worldToPixel`；瓦片渲染子进程受超时与内存上限保护。SVG 路径仍保留 CJK 字形替换、非缩放线宽和受控 gzip 兼容逻辑。产物只写入 `PREVIEW_ARTIFACTS_PATH`，预览失败不使解析任务失败。
+预览与文本解析独立：
+
+- DOCX/XLSX 使用镜像内固定 LibreOffice 与 Noto CJK 字体转 PDF。
+- DXF/DWG 按源字节数和实体类型加权渲染成本分流：小图生成受限 SVG；超大或高成本图生成总览图、z0、实体 R-Tree、非可执行 SQLite/R-Tree 图元索引和 manifest，细节 PNG 由内部端点按需渲染并以磁盘 LRU 清理。
+- 一个 3×3 metatile 只查询、绘制一次，再裁成相邻瓦片。旧 bundle 首次冷请求原子补建图元索引，之后不再重复解析完整 DXF。
+- manifest 包含 CAD bounds 和 `worldToPixel`；瓦片渲染子进程受超时和内存上限保护。SVG 保留 CJK 字形替换、非缩放线宽和受控 gzip 兼容逻辑。
+- 产物只写入 `PREVIEW_ARTIFACTS_PATH`；预览失败不使解析任务失败。
 
 ## 解析器算法
 
