@@ -37,6 +37,12 @@ describe('return navigation', () => {
       to: '/history?page=2',
       label: '返回问答历史',
     });
+    expect(
+      documentPreviewReturn('/history?page=2&conversationId=5b9fd225-a565-42cd-8d63-1fc3f19b745d'),
+    ).toEqual({
+      to: '/history?page=2&conversationId=5b9fd225-a565-42cd-8d63-1fc3f19b745d',
+      label: '返回问答历史',
+    });
     expect(documentPreviewReturn('https://example.com')).toEqual({
       to: '/ask',
       label: '返回知识问答',

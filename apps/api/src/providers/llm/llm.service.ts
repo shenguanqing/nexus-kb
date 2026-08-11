@@ -30,19 +30,26 @@ export class LlmService {
   async answer(input: {
     identity: Identity;
     question: string;
+    conversationQuestions?: string[];
     contexts: RetrievedChunk[];
     traceId: string;
   }): Promise<SecuredLlmAnswer> {
-    return this.answerWithFallback({ ...input, mode: 'grounded' });
+    return this.answerWithFallback({
+      ...input,
+      conversationQuestions: input.conversationQuestions ?? [],
+      mode: 'grounded',
+    });
   }
 
   async answerGeneral(input: {
     identity: Identity;
     question: string;
+    conversationQuestions?: string[];
     traceId: string;
   }): Promise<SecuredLlmAnswer> {
     const answer = await this.answerWithFallback({
       ...input,
+      conversationQuestions: input.conversationQuestions ?? [],
       mode: 'general',
       contexts: [],
     });
@@ -58,6 +65,7 @@ export class LlmService {
     identity: Identity;
     mode: 'grounded' | 'general';
     question: string;
+    conversationQuestions: string[];
     contexts: RetrievedChunk[];
     traceId: string;
   }): Promise<SecuredLlmAnswer> {
@@ -86,6 +94,7 @@ export class LlmService {
     input: {
       identity: Identity;
       question: string;
+      conversationQuestions: string[];
       contexts: RetrievedChunk[];
       traceId: string;
       mode: 'grounded' | 'general';

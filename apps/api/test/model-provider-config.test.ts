@@ -22,6 +22,7 @@ describe('model provider configuration', () => {
       RERANK_TOP_K: 5,
       QUERY_MAX_DISTANCE: 0.45,
       QUERY_ANSWER_MODE: 'hybrid',
+      QUERY_MAX_LLM_CONTEXT_CHARS: 32_000,
       MODEL_PRICING_USD_PER_MILLION_TOKENS_JSON: {},
     });
   });
@@ -57,6 +58,15 @@ describe('model provider configuration', () => {
         QUERY_MAX_RERANK_INPUT_CHARS: '10000',
       }),
     ).toThrow('QUERY_MAX_MERGED_CONTEXT_CHARS <= QUERY_MAX_RERANK_INPUT_CHARS');
+    expect(() =>
+      parseEnvironment({
+        ...baseEnvironment,
+        QUERY_MAX_LLM_CONTEXT_CHARS: '130000',
+        QUERY_MAX_RERANK_INPUT_CHARS: '120000',
+      }),
+    ).toThrow(
+      'QUERY_MAX_MERGED_CONTEXT_CHARS <= QUERY_MAX_LLM_CONTEXT_CHARS <= QUERY_MAX_RERANK_INPUT_CHARS',
+    );
   });
 
   it('requires the selected LLM model, key and HTTPS endpoint', () => {

@@ -11,18 +11,35 @@ const turn: ConversationTurn = {
   reason: null,
   answerMode: 'grounded',
   traceId: '83fcad07-64b0-4d94-9fd4-42cb82038db9',
+  sources: [
+    {
+      index: 1,
+      documentId: '6769af9a-a4d0-4dc2-a97d-942584a9c826',
+      documentVersion: 1,
+      chunkIds: ['1'.repeat(64)],
+      sourceName: 'vue.md',
+      page: 2,
+      sheet: null,
+      sectionPath: ['响应式'],
+    },
+  ],
   sourceCount: 1,
   createdAt: '2026-07-26T04:00:00.000Z',
 };
 
 describe('HistoryAnswer', () => {
-  it('renders a stored answer as safe Markdown', () => {
+  it('renders interactive citations and matching historical source cards', async () => {
     const wrapper = mount(HistoryAnswer, { props: { turn } });
 
     expect(wrapper.get('.history-answer .markdown-heading--h3').text()).toBe('主要特性');
     expect(wrapper.get('.markdown-content strong').text()).toBe('Composition API');
     expect(wrapper.get('.answer-citation').text()).toBe('[来源1]');
+    expect(wrapper.get('.source-card').text()).toContain('vue.md');
     expect(wrapper.get('.history-answer-meta').text()).toContain('1 个历史来源');
+    await wrapper.get('button.answer-citation').trigger('click');
+    expect(wrapper.emitted('selectSource')?.[0]?.[0]).toMatchObject({ index: 1 });
+    await wrapper.get('.source-card').trigger('click');
+    expect(wrapper.emitted('selectSource')?.[1]?.[0]).toMatchObject({ index: 1 });
   });
 
   it('labels a historical general-knowledge answer', () => {
@@ -32,6 +49,7 @@ describe('HistoryAnswer', () => {
           ...turn,
           answer: 'Vue 3 使用 Proxy 实现响应式。',
           answerMode: 'general',
+          sources: [],
           sourceCount: 0,
         },
       },

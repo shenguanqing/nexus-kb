@@ -1038,7 +1038,18 @@ components:
       type: object
       additionalProperties: false
       required:
-        [id, question, answer, noAnswer, reason, answerMode, traceId, sourceCount, createdAt]
+        [
+          id,
+          question,
+          answer,
+          noAnswer,
+          reason,
+          answerMode,
+          traceId,
+          sources,
+          sourceCount,
+          createdAt,
+        ]
       properties:
         id: { type: string, format: uuid }
         question: { type: string, minLength: 1, maxLength: 2000 }
@@ -1048,6 +1059,10 @@ components:
           { type: [string, 'null'], enum: [insufficient_relevance, authorization_changed, null] }
         answerMode: { type: [string, 'null'], enum: [grounded, general, null] }
         traceId: { type: string, format: uuid }
+        sources:
+          type: array
+          maxItems: 100
+          items: { $ref: '#/components/schemas/KnowledgeSource' }
         sourceCount: { type: integer, minimum: 0 }
         createdAt: { type: string, format: date-time }
     ConversationDetail:

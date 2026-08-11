@@ -108,6 +108,7 @@ describe('SystemConfigurationService', () => {
       MAX_IMAGE_PIXELS: '40000000',
       OCR_LANGUAGES: 'ch_sim,en',
       OCR_CONFIDENCE_WARNING_THRESHOLD: '0.5',
+      QUERY_MAX_LLM_CONTEXT_CHARS: '32000',
     });
     expect(response.current?.values).toMatchObject({
       MAX_PDF_PAGES: '500',

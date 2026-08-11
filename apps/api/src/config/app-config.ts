@@ -330,6 +330,7 @@ const environmentSchema = z
     QUERY_ANSWER_MODE: z.enum(['strict', 'hybrid']).default('hybrid'),
     QUERY_NEIGHBOR_WINDOW: z.coerce.number().int().min(0).max(3).default(1),
     QUERY_MAX_MERGED_CONTEXT_CHARS: z.coerce.number().int().min(1000).max(100_000).default(20_000),
+    QUERY_MAX_LLM_CONTEXT_CHARS: z.coerce.number().int().min(1000).max(1_000_000).default(32_000),
     QUERY_MAX_RERANK_INPUT_CHARS: z.coerce.number().int().min(1000).max(1_000_000).default(120_000),
     QUERY_USER_RATE_LIMIT_PER_MINUTE: z.coerce.number().int().min(1).max(1000).default(20),
     QUERY_TENANT_RATE_LIMIT_PER_MINUTE: z.coerce.number().int().min(1).max(100_000).default(200),
@@ -664,6 +665,14 @@ export function parseEnvironment(input: NodeJS.ProcessEnv): Environment {
   if (parsed.data.QUERY_MAX_MERGED_CONTEXT_CHARS > parsed.data.QUERY_MAX_RERANK_INPUT_CHARS) {
     throw new Error(
       'Invalid application configuration: QUERY_MAX_MERGED_CONTEXT_CHARS <= QUERY_MAX_RERANK_INPUT_CHARS',
+    );
+  }
+  if (
+    parsed.data.QUERY_MAX_MERGED_CONTEXT_CHARS > parsed.data.QUERY_MAX_LLM_CONTEXT_CHARS ||
+    parsed.data.QUERY_MAX_LLM_CONTEXT_CHARS > parsed.data.QUERY_MAX_RERANK_INPUT_CHARS
+  ) {
+    throw new Error(
+      'Invalid application configuration: QUERY_MAX_MERGED_CONTEXT_CHARS <= QUERY_MAX_LLM_CONTEXT_CHARS <= QUERY_MAX_RERANK_INPUT_CHARS',
     );
   }
   if (parsed.data.NODE_ENV === 'production' && !parsed.data.AUTH_REQUIRED) {

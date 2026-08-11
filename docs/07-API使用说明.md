@@ -256,7 +256,7 @@ unset NEXUSKB_ACCESS_TOKEN
 | `GET`    | `/v1/history/conversations/{conversationId}` | 会话所有者       | 会话与问答轮次                    |
 | `DELETE` | `/v1/history/conversations/{conversationId}` | 会话所有者       | 幂等删除个人会话                  |
 
-历史列表支持 `query`、`from`、`to`、`offset` 和 `limit`。`from` 必须早于或等于 `to`，`limit` 最大 100。
+历史列表支持 `query`、`from`、`to`、`offset` 和 `limit`。`from` 必须早于或等于 `to`，`limit` 最大 100。历史详情的每个 turn 返回 `sources` 与 `sourceCount`；`sources` 仅包含按当前身份重新校验文档 ACL、active 状态和 active version 后仍可访问的来源。grounded 历史回答的任一持久化来源无效或失权时，该 turn 返回 `noAnswer=true`、`reason=authorization_changed`、`answerMode=null`、`sources=[]`，且不会返回旧回答正文。滚动升级期间，Web 可接受旧 API 暂未返回 `sources` 的 turn，但必须在客户端按同一 `authorization_changed` 语义隐藏旧 grounded 回答，直至 API 完成升级。
 
 ### 5.4 审计、访问和系统管理
 
@@ -449,6 +449,8 @@ curl --fail-with-body \
   "question": "请补充上一条答案的依据。"
 }
 ```
+
+服务端会先确认该会话属于当前 tenant + user；不存在或不属于当前用户时返回统一 404，并且不会继续调用 Embedding、Rerank 或 LLM。合法续问最多使用最近 4 个、服务端记录敏感度与当前 `defaultSensitivity` 一致的用户问题，总计 4,000 字符，来理解“它”“前者”“后者”等指代；旧版本敏感度未知的轮次不参与联动。历史助手答案和来源正文不会因上下文联动被重新发送到云端；不含指代表达的独立问题仍按本轮问题检索。
 
 知识库依据回答：
 

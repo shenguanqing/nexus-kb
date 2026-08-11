@@ -18,6 +18,22 @@ describe('SafeMarkdown', () => {
     ]);
     expect(wrapper.get('code').text()).toBe('setup()');
     expect(wrapper.get('.answer-citation').text()).toBe('[来源1]');
+    expect(wrapper.get('.answer-citation').element.tagName).toBe('SMALL');
+  });
+
+  it('emits only generated interactive citation indexes', async () => {
+    const wrapper = mount(SafeMarkdown, {
+      props: { content: '付款周期为 30 天。[来源2]', interactiveCitations: true },
+    });
+
+    const citation = wrapper.get('button.answer-citation');
+    expect(citation.attributes()).toMatchObject({
+      'aria-label': '查看来源 2',
+      'data-source-index': '2',
+      type: 'button',
+    });
+    await citation.trigger('click');
+    expect(wrapper.emitted('selectCitation')).toEqual([[2]]);
   });
 
   it('escapes raw HTML and rejects active content and dangerous links', () => {

@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   authLoginOptionsSchema,
   authSessionSchema,
+  conversationDetailSchema,
   ingestionPayloadSchema,
   knowledgeQueryRequestSchema,
   knowledgeQueryResponseSchema,
@@ -263,6 +264,40 @@ describe('knowledge query contract', () => {
         rerankDegraded: false,
       }),
     ).toMatchObject({ noAnswer: false, answerMode: 'general', sources: [] });
+  });
+});
+
+describe('conversation history contract', () => {
+  it('fails closed while accepting a rolling-upgrade response without sources', () => {
+    const result = conversationDetailSchema.parse({
+      id,
+      title: '付款周期',
+      messageCount: 2,
+      createdAt: '2026-08-11T00:00:00.000Z',
+      updatedAt: '2026-08-11T00:01:00.000Z',
+      turns: [
+        {
+          id,
+          question: '付款周期是多少？',
+          answer: '付款周期为 30 天。[来源1]',
+          noAnswer: false,
+          reason: null,
+          answerMode: 'grounded',
+          traceId: id,
+          sourceCount: 1,
+          createdAt: '2026-08-11T00:01:00.000Z',
+        },
+      ],
+    });
+
+    expect(result.turns[0]).toMatchObject({
+      answer: '该历史回答的来源尚未完成重新鉴权，请刷新后重试。',
+      noAnswer: true,
+      reason: 'authorization_changed',
+      answerMode: null,
+      sources: [],
+      sourceCount: 0,
+    });
   });
 });
 

@@ -49,8 +49,10 @@ describe('AssistantAnswer', () => {
     ]);
     expect(wrapper.get('.source-card').text()).toContain('v1');
     expect(wrapper.get('.source-card').text()).not.toContain('位置未标注');
-    await wrapper.findAll('.source-card')[1]!.trigger('click');
+    await wrapper.findAll('button.answer-citation')[1]!.trigger('click');
     expect(wrapper.emitted('selectSource')?.[0]?.[0]).toMatchObject({ index: 2 });
+    await wrapper.findAll('.source-card')[1]!.trigger('click');
+    expect(wrapper.emitted('selectSource')?.[1]?.[0]).toMatchObject({ index: 2 });
   });
 
   it('labels a source-free general-knowledge answer', () => {

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { knowledgeSourceSchema } from './knowledge-query';
 
 export const conversationListRequestSchema = z
   .object({
@@ -30,6 +31,8 @@ export const conversationListResponseSchema = z
   })
   .strict();
 
+const LEGACY_SOURCE_UNAVAILABLE_TEXT = '该历史回答的来源尚未完成重新鉴权，请刷新后重试。';
+
 export const conversationTurnSchema = z
   .object({
     id: z.uuid(),
@@ -39,10 +42,25 @@ export const conversationTurnSchema = z
     reason: z.enum(['insufficient_relevance', 'authorization_changed']).nullable(),
     answerMode: z.enum(['grounded', 'general']).nullable(),
     traceId: z.uuid(),
+    sources: z.array(knowledgeSourceSchema).max(100).optional(),
     sourceCount: z.number().int().nonnegative(),
     createdAt: z.iso.datetime({ offset: true }),
   })
-  .strict();
+  .strict()
+  .transform((turn) => {
+    if (turn.sources === undefined && turn.answerMode === 'grounded') {
+      return {
+        ...turn,
+        answer: LEGACY_SOURCE_UNAVAILABLE_TEXT,
+        noAnswer: true,
+        reason: 'authorization_changed' as const,
+        answerMode: null,
+        sources: [],
+        sourceCount: 0,
+      };
+    }
+    return { ...turn, sources: turn.sources ?? [] };
+  });
 
 export const conversationDetailSchema = conversationSummarySchema
   .extend({ turns: z.array(conversationTurnSchema).max(500) })

@@ -2,7 +2,11 @@ import DOMPurify from 'dompurify';
 import MarkdownIt from 'markdown-it';
 
 const SAFE_LINK_PATTERN = /^(?:(?:https?|mailto):|\/(?!\/)|\.{1,2}\/|#|\?)/i;
-const CITATION_PATTERN = /\[来源\d+\]/g;
+const CITATION_PATTERN = /\[来源(\d+)\]/g;
+
+interface SafeMarkdownOptions {
+  interactiveCitations?: boolean;
+}
 
 const markdown = new MarkdownIt({
   breaks: true,
@@ -20,7 +24,10 @@ const defaultTextRenderer =
 markdown.renderer.rules.text = (tokens, index, options, environment, renderer): string =>
   defaultTextRenderer(tokens, index, options, environment, renderer).replace(
     CITATION_PATTERN,
-    '<small class="answer-citation">$&</small>',
+    (citation, sourceIndex: string) =>
+      (environment as SafeMarkdownOptions).interactiveCitations
+        ? `<button type="button" class="answer-citation" data-source-index="${sourceIndex}" aria-label="查看来源 ${sourceIndex}">${citation}</button>`
+        : `<small class="answer-citation">${citation}</small>`,
   );
 
 markdown.renderer.rules.paragraph_open = () => '<div class="markdown-paragraph">';
@@ -38,12 +45,13 @@ markdown.renderer.rules.heading_open = (tokens, index): string => {
 };
 markdown.renderer.rules.heading_close = () => '</div>';
 
-export function renderSafeMarkdown(source: string): string {
-  const sanitized = DOMPurify.sanitize(markdown.render(source), {
+export function renderSafeMarkdown(source: string, options: SafeMarkdownOptions = {}): string {
+  const sanitized = DOMPurify.sanitize(markdown.render(source, options), {
     ALLOWED_TAGS: [
       'a',
       'blockquote',
       'br',
+      'button',
       'code',
       'del',
       'div',
@@ -60,7 +68,16 @@ export function renderSafeMarkdown(source: string): string {
       'thead',
       'tr',
     ],
-    ALLOWED_ATTR: ['aria-level', 'class', 'href', 'role', 'title'],
+    ALLOWED_ATTR: [
+      'aria-label',
+      'aria-level',
+      'class',
+      'data-source-index',
+      'href',
+      'role',
+      'title',
+      'type',
+    ],
     ALLOWED_URI_REGEXP: SAFE_LINK_PATTERN,
     ALLOW_UNKNOWN_PROTOCOLS: false,
     FORBID_TAGS: ['embed', 'form', 'iframe', 'img', 'object', 'script', 'style', 'svg'],
@@ -68,6 +85,9 @@ export function renderSafeMarkdown(source: string): string {
   });
   const template = document.createElement('template');
   template.innerHTML = sanitized;
+  template.content.querySelectorAll('button.answer-citation').forEach((citation) => {
+    citation.setAttribute('type', 'button');
+  });
   template.content.querySelectorAll('a').forEach((link) => {
     link.setAttribute('target', '_blank');
     link.setAttribute('rel', 'noopener noreferrer');

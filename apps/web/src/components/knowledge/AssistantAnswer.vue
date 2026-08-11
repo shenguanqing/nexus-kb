@@ -4,7 +4,7 @@ import { computed } from 'vue';
 import SafeMarkdown from '@/components/common/SafeMarkdown.vue';
 
 const props = defineProps<{ response: KnowledgeQueryResponse }>();
-defineEmits<{ selectSource: [source: KnowledgeSource] }>();
+const emit = defineEmits<{ selectSource: [source: KnowledgeSource] }>();
 
 const displaySources = computed(() =>
   props.response.sources.map((source, index) => ({ ...source, index: index + 1 })),
@@ -18,6 +18,11 @@ const displayAnswer = computed(() =>
     return compactIndex === undefined ? citation : `[来源${compactIndex}]`;
   }),
 );
+
+function selectCitation(sourceIndex: number): void {
+  const source = displaySources.value.find((candidate) => candidate.index === sourceIndex);
+  if (source) emit('selectSource', source);
+}
 </script>
 
 <template>
@@ -40,7 +45,12 @@ const displayAnswer = computed(() =>
           <strong>通用知识补充</strong>
           <span>以下内容来自模型通用知识，不是知识库资料，仅供参考。</span>
         </div>
-        <SafeMarkdown class="answer-text" :content="displayAnswer" />
+        <SafeMarkdown
+          class="answer-text"
+          :content="displayAnswer"
+          interactive-citations
+          @select-citation="selectCitation"
+        />
       </template>
       <section v-if="displaySources.length" class="answer-sources" aria-label="回答来源">
         <div class="answer-sources-label">回答来源</div>

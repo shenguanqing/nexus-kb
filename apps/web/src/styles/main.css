@@ -1810,12 +1810,28 @@ a {
 .answer-citation {
   display: inline-block;
   margin-inline: var(--kb-space-1);
+  padding: 0;
+  border: 0;
   color: var(--kb-color-text-secondary);
-  font-size: 0.7em;
+  background: transparent;
+  font: inherit;
+  font-size: 0.6em;
   font-weight: 600;
   line-height: 1;
   vertical-align: 0.08em;
   white-space: nowrap;
+}
+.answer-citation:is(button) {
+  cursor: pointer;
+}
+.answer-citation:is(button):hover {
+  color: var(--kb-color-primary);
+  text-decoration: underline;
+}
+.answer-citation:is(button):focus-visible {
+  border-radius: 3px;
+  outline: 2px solid var(--kb-color-primary);
+  outline-offset: 2px;
 }
 .no-answer {
   padding: var(--kb-space-4);
@@ -2346,6 +2362,10 @@ a {
 .history-answer-content {
   grid-column: 2;
   min-width: 0;
+}
+.history-answer > .answer-sources {
+  grid-column: 2;
+  margin-top: 0;
 }
 .history-answer-content > .markdown-content {
   line-height: 1.6;

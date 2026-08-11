@@ -18,6 +18,7 @@ import type { EmbeddingService } from '../src/providers/embedding/embedding.serv
 import type { LlmService } from '../src/providers/llm/llm.service';
 import { LlmProviderError } from '../src/providers/llm/llm-provider-error';
 import type { RerankService } from '../src/providers/rerank/rerank.service';
+import type { KnowledgeHistoryService } from '../src/history/knowledge-history.service';
 
 const traceId = 'd26720b3-1f78-40df-868d-8ca8510dca26';
 const documentId = '6769af9a-a4d0-4dc2-a97d-942584a9c826';
@@ -66,6 +67,8 @@ function dependencies(
     candidates?: RetrievedChunk[];
     finalAuthorized?: boolean;
     queryAnswerMode?: 'strict' | 'hybrid';
+    recentQuestions?: string[];
+    maxLlmContextChars?: number;
   } = {},
 ) {
   const candidates = options.candidates ?? [context];
@@ -102,9 +105,16 @@ function dependencies(
       RERANK_PROVIDER: 'none',
       RERANK_MODEL: 'qwen3-rerank',
       RERANK_TOP_K: 5,
+      QUERY_MAX_LLM_CONTEXT_CHARS: options.maxLlmContextChars ?? 32_000,
       QUERY_ANSWER_MODE: options.queryAnswerMode ?? 'hybrid',
     },
   } as AppConfig;
+  const recentQuestions = vi.fn().mockResolvedValue(options.recentQuestions ?? []);
+  const recordTurn = vi.fn().mockResolvedValue('11111111-1111-4111-8111-111111111111');
+  const history =
+    options.recentQuestions === undefined
+      ? undefined
+      : ({ recentQuestions, recordTurn } as unknown as KnowledgeHistoryService);
   const service = new KnowledgeQueryService(
     config,
     new AclPolicy(),
@@ -116,6 +126,7 @@ function dependencies(
     { retainActiveAuthorizedSources } as unknown as SourceAuthorizationService,
     { record } as unknown as QueryAuditService,
     new AnswerSourceValidator(),
+    history,
   );
   return {
     service,
@@ -126,6 +137,7 @@ function dependencies(
     answer,
     answerGeneral,
     record,
+    recentQuestions,
   };
 }
 
@@ -171,6 +183,63 @@ describe('KnowledgeQueryService', () => {
     expect(compact.answer).toHaveBeenCalledWith(
       expect.objectContaining({ question: 'vue 2和vue 3区别' }),
     );
+  });
+
+  it('uses owned recent questions to resolve references without sending prior answers', async () => {
+    const deps = dependencies({ recentQuestions: ['比较 Vue 2 和 Vue 3。'] });
+    const conversationId = '11111111-1111-4111-8111-111111111111';
+
+    await deps.service.query({ conversationId, question: '前者有什么优势？' }, identity, traceId);
+
+    const contextualQuestion =
+      '对话中的前序问题：\n1. 比较 Vue 2 和 Vue 3。\n\n当前问题：前者有什么优势？';
+    expect(deps.recentQuestions).toHaveBeenCalledWith(conversationId, identity);
+    expect(deps.embedQuery).toHaveBeenCalledWith(contextualQuestion, {
+      sensitivity: 'internal',
+    });
+    expect(deps.rerank).toHaveBeenCalledWith(
+      expect.objectContaining({ query: contextualQuestion }),
+    );
+    expect(deps.answer).toHaveBeenCalledWith(
+      expect.objectContaining({
+        question: '前者有什么优势？',
+        conversationQuestions: ['比较 Vue 2 和 Vue 3。'],
+      }),
+    );
+  });
+
+  it('does not send conversation history for a standalone question', async () => {
+    const deps = dependencies({ recentQuestions: ['比较 Vue 2 和 Vue 3。'] });
+    const conversationId = '11111111-1111-4111-8111-111111111111';
+
+    await deps.service.query(
+      { conversationId, question: '解释 PostgreSQL 的 MVCC。' },
+      identity,
+      traceId,
+    );
+
+    expect(deps.embedQuery).toHaveBeenCalledWith('解释 PostgreSQL 的 MVCC。', {
+      sensitivity: 'internal',
+    });
+    expect(deps.answer).toHaveBeenCalledWith(
+      expect.objectContaining({
+        question: '解释 PostgreSQL 的 MVCC。',
+        conversationQuestions: [],
+      }),
+    );
+  });
+
+  it('limits the post-rerank LLM context while preserving relevance order', async () => {
+    const first = { ...context, text: 'a'.repeat(20) };
+    const second = { ...secondContext, text: 'b'.repeat(20) };
+    const deps = dependencies({
+      candidates: [first, second],
+      maxLlmContextChars: 20,
+    });
+
+    await deps.service.query({ question: '付款依据是什么？' }, identity, traceId);
+
+    expect(deps.answer).toHaveBeenCalledWith(expect.objectContaining({ contexts: [first] }));
   });
 
   it('exposes only source references to the quality observer', async () => {

@@ -6,18 +6,42 @@ import type {
   ConversationDetail,
   ConversationListRequest,
   ConversationListResponse,
+  ConversationTurn,
   KnowledgeQueryResponse,
 } from '@nexus-kb/contracts';
+import { knowledgeSourceSchema } from '@nexus-kb/contracts';
 
 import type { Identity } from '../auth/identity';
 import { ApiException } from '../common/api-exception';
 import { PrismaService } from '../database/prisma.service';
+import { SourceAuthorizationService } from '../knowledge/source-authorization.service';
 
 type StoredQueryResponse = Omit<KnowledgeQueryResponse, 'conversationId'>;
+const RECENT_CONTEXT_TURN_LIMIT = 4;
+const HISTORICAL_SOURCE_UNAVAILABLE_TEXT = '该历史回答的可用来源已发生变化，请重新提问。';
 
 @Injectable()
 export class KnowledgeHistoryService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly sourceAuthorization: SourceAuthorizationService,
+  ) {}
+
+  async recentQuestions(id: string, identity: Identity): Promise<string[]> {
+    const row = await this.prisma.knowledgeConversation.findFirst({
+      where: { id, tenantId: identity.tenantId, userId: identity.userId },
+      select: {
+        turns: {
+          where: { questionSensitivity: identity.defaultSensitivity },
+          orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+          take: RECENT_CONTEXT_TURN_LIMIT,
+          select: { question: true },
+        },
+      },
+    });
+    if (!row) throw new ApiException('CONVERSATION_NOT_FOUND', '会话不存在', 404);
+    return [...row.turns].reverse().map((turn) => turn.question);
+  }
 
   async recordTurn(
     conversationId: string | undefined,
@@ -48,6 +72,7 @@ export class KnowledgeHistoryService {
           id: randomUUID(),
           conversationId: id,
           question,
+          questionSensitivity: identity.defaultSensitivity,
           answer: response.answer,
           noAnswer: response.noAnswer,
           reason: response.reason,
@@ -111,33 +136,59 @@ export class KnowledgeHistoryService {
       include: { turns: { orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] } },
     });
     if (!row) throw new ApiException('CONVERSATION_NOT_FOUND', '会话不存在', 404);
+    const turns = await Promise.all(
+      row.turns.map(async (turn): Promise<ConversationTurn> => {
+        const parsedSources = Array.isArray(turn.sources)
+          ? turn.sources.map((source) => knowledgeSourceSchema.safeParse(source))
+          : [];
+        const storedSources = parsedSources.flatMap((result) =>
+          result.success ? [result.data] : [],
+        );
+        const answerMode =
+          turn.answerMode === 'grounded' || turn.answerMode === 'general'
+            ? turn.answerMode
+            : turn.noAnswer
+              ? null
+              : storedSources.length > 0
+                ? 'grounded'
+                : 'general';
+        const sources =
+          answerMode === 'grounded'
+            ? await this.sourceAuthorization.retainActiveAuthorizedKnowledgeSources(
+                identity,
+                storedSources,
+              )
+            : [];
+        const authorizationChanged =
+          answerMode === 'grounded' &&
+          (parsedSources.some((result) => !result.success) ||
+            storedSources.length === 0 ||
+            sources.length !== storedSources.length);
+        return {
+          id: turn.id,
+          question: turn.question,
+          answer: authorizationChanged ? HISTORICAL_SOURCE_UNAVAILABLE_TEXT : turn.answer,
+          noAnswer: authorizationChanged || turn.noAnswer,
+          reason: authorizationChanged
+            ? ('authorization_changed' as const)
+            : turn.reason === 'insufficient_relevance' || turn.reason === 'authorization_changed'
+              ? turn.reason
+              : null,
+          answerMode: authorizationChanged ? null : answerMode,
+          traceId: turn.traceId,
+          sources: authorizationChanged ? [] : sources,
+          sourceCount: authorizationChanged ? 0 : sources.length,
+          createdAt: turn.createdAt.toISOString(),
+        };
+      }),
+    );
     return {
       id: row.id,
       title: row.title,
       messageCount: row.turns.length * 2,
       createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString(),
-      turns: row.turns.map((turn) => ({
-        id: turn.id,
-        question: turn.question,
-        answer: turn.answer,
-        noAnswer: turn.noAnswer,
-        reason:
-          turn.reason === 'insufficient_relevance' || turn.reason === 'authorization_changed'
-            ? turn.reason
-            : null,
-        answerMode:
-          turn.answerMode === 'grounded' || turn.answerMode === 'general'
-            ? turn.answerMode
-            : turn.noAnswer
-              ? null
-              : Array.isArray(turn.sources) && turn.sources.length > 0
-                ? 'grounded'
-                : 'general',
-        traceId: turn.traceId,
-        sourceCount: Array.isArray(turn.sources) ? turn.sources.length : 0,
-        createdAt: turn.createdAt.toISOString(),
-      })),
+      turns,
     };
   }
 

@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import type { KnowledgeSource } from '@nexus-kb/contracts';
 
 import { AclPolicy } from '../src/auth/acl-policy';
 import type { Identity } from '../src/auth/identity';
@@ -61,6 +62,42 @@ describe('SourceAuthorizationService', () => {
     });
   });
 
+  it('reauthorizes stored history sources against current document ACL and version', async () => {
+    const findMany = vi
+      .fn<
+        (input: {
+          where: { tenantId?: string; status?: string };
+        }) => Promise<Array<{ id: string; activeVersion: number | null }>>
+      >()
+      .mockResolvedValue([{ id: 'document-a', activeVersion: 2 }]);
+    const service = new SourceAuthorizationService(
+      { document: { findMany } } as unknown as PrismaService,
+      new AclPolicy(),
+    );
+    const source = (documentId: string, documentVersion: number): KnowledgeSource => ({
+      index: documentVersion,
+      documentId,
+      documentVersion,
+      chunkIds: ['a'.repeat(64)],
+      sourceName: 'policy.md',
+      page: null,
+      sheet: null,
+      sectionPath: [],
+    });
+
+    await expect(
+      service.retainActiveAuthorizedKnowledgeSources(identity, [
+        source('document-a', 1),
+        source('document-a', 2),
+        source('document-b', 1),
+      ]),
+    ).resolves.toEqual([source('document-a', 2)]);
+    expect(findMany.mock.calls[0]?.[0].where).toMatchObject({
+      tenantId: 'tenant-a',
+      status: 'active',
+    });
+  });
+
   it('expands only active adjacent chunks after ACL-filtered vector retrieval', async () => {
     const vectorQuery = vi.fn().mockResolvedValue([
       {
@@ -115,9 +152,6 @@ describe('SourceAuthorizationService', () => {
       { query: vectorQuery } as unknown as ChromaVectorStore,
       { knowledgeChunk: { findMany: findChunks } } as unknown as PrismaService,
       new AclPolicy(),
-      {
-        retainActiveAuthorizedSources: vi.fn((_: Identity, chunks: RetrievedChunk[]) => chunks),
-      } as unknown as SourceAuthorizationService,
     );
 
     const result = await retrieval.retrieve(identity, [1, 0, 0]);

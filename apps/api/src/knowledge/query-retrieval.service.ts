@@ -10,7 +10,6 @@ import { ChromaVectorStore } from '../vector-store/chroma-vector-store';
 import { VectorStoreError } from '../vector-store/vector-store-error';
 import type { RetrievedVectorChunk } from '../vector-store/vector-store';
 import type { RetrievedChunk } from './retrieved-chunk';
-import { SourceAuthorizationService } from './source-authorization.service';
 
 const metadataSchema = z.object({
   tenantId: z.string().min(1),
@@ -34,7 +33,6 @@ export class QueryRetrievalService {
     private readonly vectorStore: ChromaVectorStore,
     private readonly prisma: PrismaService,
     private readonly acl: AclPolicy,
-    private readonly sourceAuthorization: SourceAuthorizationService,
     @Optional() private readonly metrics?: MetricsService,
   ) {}
 
@@ -45,11 +43,7 @@ export class QueryRetrievalService {
       topK: this.config.values.QUERY_RECALL_TOP_K,
     });
     const mapped = raw.map((chunk) => this.mapVectorChunk(chunk));
-    const authorized = await this.sourceAuthorization.retainActiveAuthorizedSources(
-      identity,
-      mapped,
-    );
-    const relevant = authorized.filter(
+    const relevant = mapped.filter(
       (chunk) => chunk.distance <= this.config.values.QUERY_MAX_DISTANCE,
     );
     if (relevant.length === 0) {

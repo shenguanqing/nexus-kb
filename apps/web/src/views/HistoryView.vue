@@ -1,23 +1,37 @@
 <script setup lang="ts">
-import type { ConversationDetail, ConversationSummary } from '@nexus-kb/contracts';
+import type { ConversationDetail, ConversationSummary, KnowledgeSource } from '@nexus-kb/contracts';
 import { ElMessage, ElMessageBox } from 'element-plus';
-import { onMounted, ref } from 'vue';
+import { computed, onMounted, ref } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
 import { deleteConversation, fetchConversation, listConversations } from '@/api/history';
 import { ApiError } from '@/api/client';
 import HistoryAnswer from '@/components/knowledge/HistoryAnswer.vue';
+import SourceDrawer from '@/components/knowledge/SourceDrawer.vue';
 import { useBreakpoint } from '@/composables/useBreakpoint';
+import { buildHistoryRouteQuery, readHistoryRouteState } from './history-route-state';
 
+const route = useRoute();
+const router = useRouter();
+const initialRouteState = readHistoryRouteState(route.query);
 const conversations = ref<ConversationSummary[]>([]);
 const { isMobile } = useBreakpoint();
 const selected = ref<ConversationDetail | null>(null);
-const query = ref('');
-const startAt = ref<Date | null>(null);
-const endAt = ref<Date | null>(null);
-const page = ref(1);
+const query = ref(initialRouteState.query);
+const startAt = ref<Date | null>(initialRouteState.from);
+const endAt = ref<Date | null>(initialRouteState.to);
+const page = ref(initialRouteState.page);
 const total = ref(0);
 const loading = ref(false);
 const errorMessage = ref('');
 const filtersVisible = ref(false);
+const selectedSource = ref<KnowledgeSource | null>(null);
+const isSourceOpen = ref(false);
+const sourceReturnTo = computed(() => route.fullPath);
+
+function openSource(source: KnowledgeSource): void {
+  selectedSource.value = source;
+  isSourceOpen.value = true;
+}
 
 async function load(): Promise<void> {
   loading.value = true;
@@ -38,11 +52,25 @@ async function load(): Promise<void> {
     loading.value = false;
   }
 }
-async function open(id: string): Promise<void> {
+async function syncRoute(conversationId: string | null): Promise<void> {
+  await router.replace({
+    query: buildHistoryRouteQuery({
+      query: query.value,
+      from: startAt.value,
+      to: endAt.value,
+      page: page.value,
+      conversationId,
+    }),
+  });
+}
+
+async function open(id: string, updateRoute = true): Promise<void> {
   try {
     selected.value = await fetchConversation(id);
+    if (updateRoute) await syncRoute(id);
   } catch (error) {
     ElMessage.error(error instanceof ApiError ? error.message : '会话加载失败');
+    if (!updateRoute) await syncRoute(null);
   }
 }
 async function remove(row: ConversationSummary): Promise<void> {
@@ -50,12 +78,25 @@ async function remove(row: ConversationSummary): Promise<void> {
     type: 'warning',
   });
   await deleteConversation(row.id);
-  if (selected.value?.id === row.id) selected.value = null;
+  if (selected.value?.id === row.id) {
+    selected.value = null;
+    selectedSource.value = null;
+    isSourceOpen.value = false;
+    await syncRoute(null);
+  }
   await load();
 }
-onMounted(load);
+onMounted(async () => {
+  await load();
+  if (initialRouteState.conversationId) {
+    await open(initialRouteState.conversationId, false);
+  } else if (route.query.conversationId !== undefined) {
+    await syncRoute(null);
+  }
+});
 async function search(): Promise<void> {
   page.value = 1;
+  await syncRoute(selected.value?.id ?? null);
   await load();
   filtersVisible.value = false;
 }
@@ -68,6 +109,7 @@ async function resetFilters(): Promise<void> {
 
 async function changePage(nextPage: number): Promise<void> {
   page.value = nextPage;
+  await syncRoute(selected.value?.id ?? null);
   await load();
 }
 </script>
@@ -194,12 +236,13 @@ async function changePage(nextPage: number): Promise<void> {
               <div class="history-question text-block">
                 <strong>用户</strong>{{ turn.question }}
               </div>
-              <HistoryAnswer :turn="turn" />
+              <HistoryAnswer :turn="turn" @select-source="openSource" />
             </div>
           </div>
         </template>
         <el-empty v-else description="选择一个会话查看内容" />
       </article>
     </div>
+    <SourceDrawer v-model="isSourceOpen" :source="selectedSource" :return-to="sourceReturnTo" />
   </section>
 </template>

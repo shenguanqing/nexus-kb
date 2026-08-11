@@ -70,6 +70,7 @@ const numericFields = [
   'INGESTION_RETRY_BASE_DELAY_MS',
   'QUERY_NEIGHBOR_WINDOW',
   'QUERY_MAX_MERGED_CONTEXT_CHARS',
+  'QUERY_MAX_LLM_CONTEXT_CHARS',
   'QUERY_MAX_RERANK_INPUT_CHARS',
   'QUERY_USER_RATE_LIMIT_PER_MINUTE',
   'QUERY_TENANT_RATE_LIMIT_PER_MINUTE',
@@ -560,6 +561,13 @@ onUnmounted(stopPolling);
                       v-model="numericForm.QUERY_MAX_MERGED_CONTEXT_CHARS"
                       :min="1000"
                       :max="100000"
+                    />
+                  </el-form-item>
+                  <el-form-item label="LLM 上下文最大字符数">
+                    <el-input-number
+                      v-model="numericForm.QUERY_MAX_LLM_CONTEXT_CHARS"
+                      :min="1000"
+                      :max="1000000"
                     />
                   </el-form-item>
                   <el-form-item label="Rerank 输入最大字符数">

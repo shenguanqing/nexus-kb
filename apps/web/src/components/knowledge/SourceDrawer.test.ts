@@ -14,9 +14,9 @@ const source: KnowledgeSource = {
   sectionPath: [],
 };
 
-function mountDrawer(overrides: Partial<KnowledgeSource> = {}) {
+function mountDrawer(overrides: Partial<KnowledgeSource> = {}, returnTo = '/ask') {
   return mount(SourceDrawer, {
-    props: { modelValue: true, source: { ...source, ...overrides } },
+    props: { modelValue: true, source: { ...source, ...overrides }, returnTo },
     global: {
       stubs: {
         ElButton: { template: '<button><slot /></button>' },
@@ -53,5 +53,14 @@ describe('SourceDrawer', () => {
 
     expect(wrapper.get('.source-reference').text()).toContain('第 7 页');
     expect(wrapper.get('.source-reference').text()).toContain('第一章 / 概览');
+  });
+
+  it('preserves the selected history conversation in the preview return target', () => {
+    const conversationId = '5b9fd225-a565-42cd-8d63-1fc3f19b745d';
+    const wrapper = mountDrawer({}, `/history?page=2&conversationId=${conversationId}`);
+
+    expect(wrapper.get('.source-drawer__document-link').attributes('data-from')).toBe(
+      `/history?page=2&conversationId=${conversationId}`,
+    );
   });
 });

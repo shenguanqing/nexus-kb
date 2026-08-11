@@ -23,6 +23,11 @@ import { SourceAuthorizationService } from './source-authorization.service';
 import { KnowledgeHistoryService } from '../history/knowledge-history.service';
 import { AnswerCitationError, AnswerSourceValidator } from './answer-source-validator';
 import { normalizeKnowledgeQuestion } from './knowledge-question';
+import {
+  buildRetrievalQuestion,
+  needsConversationContext,
+  selectConversationQuestions,
+} from './conversation-context';
 
 const NO_ANSWER_TEXT = '当前知识库中没有找到足够可靠且有权限访问的依据。';
 type QueryResult = Omit<KnowledgeQueryResponse, 'conversationId'>;
@@ -72,7 +77,16 @@ export class KnowledgeQueryService {
     };
     try {
       await this.rateLimiter.assertAllowed(identity);
-      const queryVector = await this.embedding.embedQuery(normalizedQuestion, {
+      const recentQuestions = request.conversationId
+        ? selectConversationQuestions(
+            (await this.history?.recentQuestions(request.conversationId, identity)) ?? [],
+          ).map((question) => normalizeKnowledgeQuestion(question))
+        : [];
+      const conversationQuestions = needsConversationContext(normalizedQuestion)
+        ? recentQuestions
+        : [];
+      const retrievalQuestion = buildRetrievalQuestion(normalizedQuestion, conversationQuestions);
+      const queryVector = await this.embedding.embedQuery(retrievalQuestion, {
         sensitivity: identity.defaultSensitivity,
       });
       const candidates = await this.retrieval.retrieve(identity, queryVector);
@@ -86,6 +100,7 @@ export class KnowledgeQueryService {
             auditBase,
             identity,
             normalizedQuestion,
+            conversationQuestions,
             traceId,
             false,
             startedAt,
@@ -94,14 +109,14 @@ export class KnowledgeQueryService {
       }
       const reranked = await this.rerank.rerank({
         identity,
-        query: normalizedQuestion,
+        query: retrievalQuestion,
         chunks: candidates,
         topK: Math.min(this.config.values.RERANK_TOP_K, candidates.length),
         traceId,
       });
       const contexts = await this.sourceAuthorization.retainActiveAuthorizedSources(
         identity,
-        reranked.chunks,
+        this.limitLlmContexts(reranked.chunks),
       );
       if (contexts.length === 0) {
         observer?.recordFinalSources([]);
@@ -123,6 +138,7 @@ export class KnowledgeQueryService {
         answer = await this.llm.answer({
           identity,
           question: normalizedQuestion,
+          conversationQuestions,
           contexts,
           traceId,
         });
@@ -141,6 +157,7 @@ export class KnowledgeQueryService {
               },
               identity,
               normalizedQuestion,
+              conversationQuestions,
               traceId,
               reranked.degraded,
               startedAt,
@@ -260,6 +277,7 @@ export class KnowledgeQueryService {
     >,
     identity: Identity,
     question: string,
+    conversationQuestions: string[],
     traceId: string,
     rerankDegraded: boolean,
     startedAt: number,
@@ -272,7 +290,12 @@ export class KnowledgeQueryService {
     }
     let answer: Awaited<ReturnType<LlmService['answerGeneral']>>;
     try {
-      answer = await this.llm.answerGeneral({ identity, question, traceId });
+      answer = await this.llm.answerGeneral({
+        identity,
+        question,
+        conversationQuestions,
+        traceId,
+      });
     } catch (error) {
       if (error instanceof LlmProviderError && error.kind === 'policy_denied') {
         return this.noAnswer(
@@ -319,6 +342,17 @@ export class KnowledgeQueryService {
       llmProvider: this.config.values.LLM_PROVIDER,
       ...(this.config.values.LLM_MODEL ? { llmModel: this.config.values.LLM_MODEL } : {}),
     };
+  }
+
+  private limitLlmContexts(contexts: RetrievedChunk[]): RetrievedChunk[] {
+    let characters = 0;
+    return contexts.filter((context) => {
+      if (characters + context.text.length > this.config.values.QUERY_MAX_LLM_CONTEXT_CHARS) {
+        return false;
+      }
+      characters += context.text.length;
+      return true;
+    });
   }
 
   private async withHistory(

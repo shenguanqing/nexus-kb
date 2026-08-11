@@ -9,6 +9,7 @@ export interface ModelUsage {
 export interface LlmAnswerInput {
   mode: 'grounded' | 'general';
   question: string;
+  conversationQuestions?: string[];
   contexts: RetrievedChunk[];
   traceId: string;
   citationRepair?: true;

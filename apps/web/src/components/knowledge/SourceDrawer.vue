@@ -3,7 +3,10 @@ import type { KnowledgeSource } from '@nexus-kb/contracts';
 import { computed } from 'vue';
 import { useBreakpoint } from '@/composables/useBreakpoint';
 
-const props = defineProps<{ modelValue: boolean; source: KnowledgeSource | null }>();
+const props = withDefaults(
+  defineProps<{ modelValue: boolean; source: KnowledgeSource | null; returnTo?: string }>(),
+  { returnTo: '/ask' },
+);
 defineEmits<{ 'update:modelValue': [value: boolean] }>();
 const { isPhone } = useBreakpoint();
 const sourceLocation = computed(() => {
@@ -14,7 +17,7 @@ const sourceLocation = computed(() => {
 const previewTarget = computed(() => {
   if (!props.source) return '/ask';
   const query: Record<string, string> = {
-    from: window.location.pathname === '/history' ? '/history' : '/ask',
+    from: props.returnTo,
     version: String(props.source.documentVersion),
   };
   if (props.source.page) query.page = String(props.source.page);
