@@ -18,6 +18,9 @@ module.exports = {
     },
   ],
   rules: {
+    'declaration-property-value-disallowed-list': {
+      opacity: [/^(?:0(?:\.\d+)?|1(?:\.0+)?)$/],
+    },
     'order/properties-order': [
       [
         group('位置 / 布局', [

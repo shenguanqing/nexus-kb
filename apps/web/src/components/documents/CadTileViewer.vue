@@ -1,3 +1,24 @@
+<template>
+  <div class="cad-tile-viewer" :class="{ 'is-loading': loading }">
+    <canvas
+      ref="canvas"
+      class="cad-tile-canvas"
+      tabindex="0"
+      role="img"
+      :aria-label="`${sourceName} CAD 瓦片预览`"
+      @wheel="handleWheel"
+      @pointerdown="startPan"
+      @pointermove="movePan"
+      @pointerup="stopPan"
+      @pointercancel="stopPan"
+      @lostpointercapture="stopPan"
+      @keydown="handleKeydown"
+    >
+    </canvas>
+    <span v-if="statusMessage" class="cad-tile-status" role="status">{{ statusMessage }}</span>
+  </div>
+</template>
+
 <script setup lang="ts">
 import type { CadPreviewManifest } from '@nexus-kb/contracts';
 import { nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
@@ -435,22 +456,39 @@ onBeforeUnmount(() => {
 defineExpose({ reset, zoomIn, zoomOut });
 </script>
 
-<template>
-  <div class="cad-tile-viewer" :class="{ 'is-loading': loading }">
-    <canvas
-      ref="canvas"
-      class="cad-tile-canvas"
-      tabindex="0"
-      role="img"
-      :aria-label="`${sourceName} CAD 瓦片预览`"
-      @wheel="handleWheel"
-      @pointerdown="startPan"
-      @pointermove="movePan"
-      @pointerup="stopPan"
-      @pointercancel="stopPan"
-      @lostpointercapture="stopPan"
-      @keydown="handleKeydown"
-    />
-    <span v-if="statusMessage" class="cad-tile-status" role="status">{{ statusMessage }}</span>
-  </div>
-</template>
+<style scoped>
+.cad-tile-viewer {
+  position: relative;
+  overflow: hidden;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  background: #212830;
+}
+.cad-tile-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  outline-offset: -2px;
+  cursor: grab;
+  touch-action: none;
+}
+.cad-tile-canvas:active {
+  cursor: grabbing;
+}
+.cad-tile-status {
+  position: absolute;
+  bottom: var(--kb-space-element);
+  left: 50%;
+  max-width: calc(100% - var(--kb-space-6));
+  padding: var(--kb-space-2) var(--kb-block-padding);
+  border-radius: var(--kb-radius-sm);
+  color: #fff;
+  background: rgb(0 0 0 / 68%);
+  font-size: 12px;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+</style>

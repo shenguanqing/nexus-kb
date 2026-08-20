@@ -12,6 +12,7 @@
     "typecheck": "vue-tsc -b --noEmit"
   },
   "dependencies": {
+    "@element-plus/icons-vue": "2.3.2",
     "@nexus-kb/contracts": "workspace:*",
     "@vueuse/core": "^14.3.0",
     "dompurify": "^3.4.12",

@@ -10,5 +10,6 @@ import { router } from './router';
 import './styles/tokens.css';
 import './styles/breakpoints.scss';
 import './styles/main.css';
+import './styles/element.css';
 
 createApp(App).use(createPinia()).use(router).mount('#app');

@@ -1,3 +1,46 @@
+<template>
+  <div class="history-answer">
+    <strong>知枢</strong>
+    <div class="history-answer-content">
+      <div v-if="turn.answerMode === 'general'" class="answer-notice">
+        <strong>通用知识补充</strong>
+        <span>非知识库资料，仅供参考。</span>
+      </div>
+      <SafeMarkdown
+        :content="displayAnswer"
+        interactive-citations
+        @select-citation="selectCitation"
+      />
+    </div>
+    <section v-if="displaySources.length" class="answer-sources" aria-label="历史回答来源">
+      <div class="answer-sources-label">回答来源</div>
+      <div class="answer-source-list">
+        <button
+          v-for="source in displaySources"
+          :key="source.index"
+          type="button"
+          class="answer-source-card kb-block kb-block--compact kb-block--interactive"
+          @click="$emit('selectSource', source)"
+        >
+          <span class="answer-source-card-index">来源 {{ source.index }}</span>
+          <strong class="answer-source-card-name" :title="source.sourceName">{{
+            source.sourceName
+          }}</strong>
+          <small class="answer-source-card-meta">
+            <template v-if="source.page || source.sheet">
+              {{ source.page ? `第 ${source.page} 页` : `工作表 ${source.sheet}` }} ·
+            </template>
+            v{{ source.documentVersion }}
+          </small>
+        </button>
+      </div>
+    </section>
+    <small class="history-answer-meta">
+      {{ turn.sourceCount }} 个历史来源 · Trace {{ turn.traceId }}
+    </small>
+  </div>
+</template>
+
 <script setup lang="ts">
 import type { ConversationTurn, KnowledgeSource } from '@nexus-kb/contracts';
 import { computed } from 'vue';
@@ -24,43 +67,13 @@ function selectCitation(sourceIndex: number): void {
 }
 </script>
 
-<template>
-  <div class="history-answer">
-    <strong>知枢</strong>
-    <div class="history-answer-content">
-      <div v-if="turn.answerMode === 'general'" class="general-answer-notice">
-        <strong>通用知识补充</strong>
-        <span>非知识库资料，仅供参考。</span>
-      </div>
-      <SafeMarkdown
-        :content="displayAnswer"
-        interactive-citations
-        @select-citation="selectCitation"
-      />
-    </div>
-    <section v-if="displaySources.length" class="answer-sources" aria-label="历史回答来源">
-      <div class="answer-sources-label">回答来源</div>
-      <div class="source-list">
-        <button
-          v-for="source in displaySources"
-          :key="source.index"
-          type="button"
-          class="source-card"
-          @click="$emit('selectSource', source)"
-        >
-          <span>来源 {{ source.index }}</span>
-          <strong :title="source.sourceName">{{ source.sourceName }}</strong>
-          <small>
-            <template v-if="source.page || source.sheet">
-              {{ source.page ? `第 ${source.page} 页` : `工作表 ${source.sheet}` }} ·
-            </template>
-            v{{ source.documentVersion }}
-          </small>
-        </button>
-      </div>
-    </section>
-    <small class="history-answer-meta">
-      {{ turn.sourceCount }} 个历史来源 · Trace {{ turn.traceId }}
-    </small>
-  </div>
-</template>
+<style scoped>
+.history-answer-meta {
+  grid-column: 2;
+  color: var(--kb-color-text-secondary);
+}
+.history-answer-content {
+  grid-column: 2;
+  min-width: 0;
+}
+</style>

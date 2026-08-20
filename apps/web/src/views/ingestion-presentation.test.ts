@@ -1,6 +1,13 @@
 import type { IngestionJob } from '@nexus-kb/contracts';
 import { describe, expect, it } from 'vitest';
-import { formatIngestionElapsed, ingestionErrorMessage } from './ingestion-presentation';
+import {
+  formatIngestionElapsed,
+  ingestionErrorMessage,
+  ingestionKindLabel,
+  ingestionStatusLabel,
+  INGESTION_STATUS_OPTIONS,
+  isRunningIngestionStatus,
+} from './ingestion-presentation';
 
 function job(overrides: Partial<IngestionJob> = {}): IngestionJob {
   return {
@@ -46,6 +53,28 @@ describe('formatIngestionElapsed', () => {
       completedAt: '2026-07-26T03:00:40.000Z',
     });
     expect(formatIngestionElapsed(failed, Date.parse('2026-07-26T04:00:00.000Z'))).toBe('38 秒');
+  });
+});
+
+describe('ingestion labels', () => {
+  it('builds filter options from the shared status dictionary', () => {
+    expect(INGESTION_STATUS_OPTIONS).toContainEqual({
+      value: 'converting',
+      label: 'CAD 格式转换与解析',
+    });
+    expect(INGESTION_STATUS_OPTIONS).toContainEqual({ value: 'policy_blocked', label: '策略阻止' });
+  });
+
+  it('renders terminal statuses and job kinds in Chinese', () => {
+    expect(ingestionStatusLabel('completed')).toBe('完成');
+    expect(ingestionKindLabel('ingestion')).toBe('文档入库');
+    expect(ingestionKindLabel('reindex')).toBe('重建索引');
+    expect(ingestionKindLabel('index_migration')).toBe('索引迁移');
+  });
+
+  it('keeps the shared running-status set available to polling and elapsed-time formatting', () => {
+    expect(isRunningIngestionStatus('parsing')).toBe(true);
+    expect(isRunningIngestionStatus('completed')).toBe(false);
   });
 });
 

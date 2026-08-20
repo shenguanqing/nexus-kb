@@ -1,3 +1,45 @@
+<template>
+  <el-empty
+    v-if="!loading && data.length === 0"
+    class="kb-empty-state"
+    description="暂无符合条件的文档"
+  />
+  <div v-else class="kb-block-list" aria-label="文档列表">
+    <article v-for="document in data" :key="document.id" class="kb-block">
+      <div class="kb-block-header">
+        <div class="kb-block-title">
+          <RouterLink :to="`/documents/${document.id}`">
+            <el-link type="primary" underline="never">{{ document.sourceName }}</el-link>
+          </RouterLink>
+        </div>
+        <el-tag :type="statusType(document.status)" size="small">
+          {{ statusLabel(document.status) }}
+        </el-tag>
+      </div>
+      <div class="kb-data-fields">
+        <div class="kb-data-field">
+          <span class="kb-data-field__label">部门</span>
+          <span class="kb-data-field__value">{{ document.department }}</span>
+        </div>
+        <div class="kb-data-field">
+          <span class="kb-data-field__label">敏感度</span>
+          <span class="kb-data-field__value">{{ document.sensitivity }}</span>
+        </div>
+        <div class="kb-data-field">
+          <span class="kb-data-field__label">版本</span>
+          <span class="kb-data-field__value">
+            {{ document.activeVersion ? `v${document.activeVersion}` : '—' }}
+          </span>
+        </div>
+        <div class="kb-data-field">
+          <span class="kb-data-field__label">更新时间</span>
+          <span class="kb-data-field__value">{{ formatDate(document.updatedAt) }}</span>
+        </div>
+      </div>
+    </article>
+  </div>
+</template>
+
 <script setup lang="ts">
 import type { DocumentListItem } from '@nexus-kb/contracts';
 
@@ -12,29 +54,3 @@ function formatDate(value: string): string {
   return new Date(value).toLocaleString();
 }
 </script>
-
-<template>
-  <el-empty v-if="!loading && data.length === 0" description="暂无符合条件的文档" />
-  <div v-else class="document-card-list" aria-label="文档列表">
-    <article v-for="document in data" :key="document.id" class="document-card">
-      <header class="document-card__header">
-        <RouterLink class="document-link document-card__name" :to="`/documents/${document.id}`">
-          {{ document.sourceName }}
-        </RouterLink>
-        <el-tag :type="statusType(document.status)" size="small">
-          {{ statusLabel(document.status) }}
-        </el-tag>
-      </header>
-      <el-descriptions :column="1" size="small">
-        <el-descriptions-item label="部门">{{ document.department }}</el-descriptions-item>
-        <el-descriptions-item label="敏感度">{{ document.sensitivity }}</el-descriptions-item>
-        <el-descriptions-item label="版本">
-          {{ document.activeVersion ? `v${document.activeVersion}` : '—' }}
-        </el-descriptions-item>
-        <el-descriptions-item label="更新时间">
-          {{ formatDate(document.updatedAt) }}
-        </el-descriptions-item>
-      </el-descriptions>
-    </article>
-  </div>
-</template>

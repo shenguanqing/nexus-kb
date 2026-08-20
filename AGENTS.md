@@ -154,6 +154,7 @@ docs/                     项目文档
 
 - 不在仓库根目录随意堆放业务源文件。
 - TypeScript 开启 strict mode，不使用无说明的 `any`。
+- Element Plus 对所有页面生效的原生类覆盖只能集中写在 `apps/web/src/styles/element.css`，并由前端入口全局引入；默认直接使用 `.el-*` 原生选择器，不得为通用覆盖新增业务 class。只服务于单个页面或组件的“业务 class + `.el-*`”覆盖必须写在对应 Vue SFC 的 `<style scoped>` 中；只有必须命中第三方组件内部 DOM 时才可使用范围最小的 `:deep()`，不得使用 `:global()` 或把业务规则放回全局样式。同一结构已在多个页面稳定复用时，优先抽成直接挂到 Element 组件或 popper 上的语义 class，再由 `element.css` 维护。
 - 外部输入必须做运行时校验，仅有 TypeScript 类型不算输入校验。
 - Python 使用类型注解和 Pydantic schema。
 - 不硬编码 Mac 绝对路径、端口、Provider URL 或模型 ID。

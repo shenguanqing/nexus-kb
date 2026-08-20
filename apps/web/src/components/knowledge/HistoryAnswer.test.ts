@@ -34,11 +34,11 @@ describe('HistoryAnswer', () => {
     expect(wrapper.get('.history-answer .markdown-heading--h3').text()).toBe('主要特性');
     expect(wrapper.get('.markdown-content strong').text()).toBe('Composition API');
     expect(wrapper.get('.answer-citation').text()).toBe('[来源1]');
-    expect(wrapper.get('.source-card').text()).toContain('vue.md');
+    expect(wrapper.get('.answer-source-card').text()).toContain('vue.md');
     expect(wrapper.get('.history-answer-meta').text()).toContain('1 个历史来源');
     await wrapper.get('button.answer-citation').trigger('click');
     expect(wrapper.emitted('selectSource')?.[0]?.[0]).toMatchObject({ index: 1 });
-    await wrapper.get('.source-card').trigger('click');
+    await wrapper.get('.answer-source-card').trigger('click');
     expect(wrapper.emitted('selectSource')?.[1]?.[0]).toMatchObject({ index: 1 });
   });
 
@@ -55,7 +55,7 @@ describe('HistoryAnswer', () => {
       },
     });
 
-    expect(wrapper.get('.general-answer-notice').text()).toContain('非知识库资料');
+    expect(wrapper.get('.answer-notice').text()).toContain('非知识库资料');
     expect(wrapper.get('.markdown-content').text()).toContain('Vue 3 使用 Proxy');
   });
 });

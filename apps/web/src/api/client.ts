@@ -97,3 +97,56 @@ export async function apiTextRequest(
     window.clearTimeout(timeout);
   }
 }
+
+export function apiUploadRequest<T>(
+  path: string,
+  body: FormData,
+  schema: z.ZodType<T>,
+  onProgress: (percentage: number) => void,
+  timeoutMs = 120_000,
+): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const request = new XMLHttpRequest();
+    request.open('POST', path);
+    request.withCredentials = true;
+    request.timeout = timeoutMs;
+    request.setRequestHeader('Accept', 'application/json');
+    request.upload.addEventListener('progress', (event) => {
+      if (!event.lengthComputable || event.total <= 0) return;
+      onProgress(Math.min(100, Math.round((event.loaded / event.total) * 100)));
+    });
+    request.addEventListener('load', () => {
+      let payload: unknown = null;
+      try {
+        payload = JSON.parse(request.responseText) as unknown;
+      } catch {
+        // Invalid JSON is reduced to the same safe response error used by fetch requests.
+      }
+      if (request.status < 200 || request.status >= 300) {
+        const parsedError = apiErrorSchema.safeParse(payload);
+        reject(
+          new ApiError(
+            request.status,
+            parsedError.success ? parsedError.data.error.code : 'HTTP_ERROR',
+            parsedError.success ? parsedError.data.error.message : '请求失败，请稍后重试',
+            parsedError.success ? (parsedError.data.error.traceId ?? null) : null,
+          ),
+        );
+        return;
+      }
+      const parsed = schema.safeParse(payload);
+      if (!parsed.success) {
+        reject(new ApiError(502, 'INVALID_API_RESPONSE', '服务响应格式不正确', null));
+        return;
+      }
+      resolve(parsed.data);
+    });
+    request.addEventListener('timeout', () => {
+      reject(new ApiError(504, 'REQUEST_TIMEOUT', '请求超时，请稍后重试', null));
+    });
+    request.addEventListener('error', () => {
+      reject(new ApiError(0, 'NETWORK_ERROR', '网络连接失败，请检查连接后重试', null));
+    });
+    request.send(body);
+  });
+}

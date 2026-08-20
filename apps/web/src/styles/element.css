@@ -1,0 +1,682 @@
+/*
+ * Element Plus 2.14.3 light theme.
+ * 全局主题优先通过官方 --el-* 变量映射现有 --kb-* token。
+ * 选择器只用于官方未暴露变量的结构性缺口，不包含任何业务 class。
+ */
+
+/* 基础主题变量 */
+:root {
+  --el-color-white: var(--kb-color-surface);
+  --el-color-black: var(--kb-color-text-primary);
+
+  /* Primary 现有四档：dark / base / highlight / soft。7–9 暂时共用 soft。 */
+  --el-color-primary: var(--kb-color-primary);
+  --el-color-primary-dark-2: var(--kb-color-primary-dark);
+  --el-color-primary-light-3: var(--kb-color-brand-highlight);
+  --el-color-primary-light-5: var(--kb-color-nav-accent);
+  --el-color-primary-light-7: var(--kb-color-primary-soft);
+  --el-color-primary-light-8: var(--kb-color-primary-soft);
+  --el-color-primary-light-9: var(--kb-color-primary-soft);
+
+  /* Success / Warning / Info 只有 base / soft；Danger 额外提供 filled hover highlight。 */
+  --el-color-success: var(--kb-color-success);
+  --el-color-success-dark-2: var(--kb-color-success);
+  --el-color-success-light-3: var(--kb-color-success-soft);
+  --el-color-success-light-5: var(--kb-color-success-soft);
+  --el-color-success-light-7: var(--kb-color-success-soft);
+  --el-color-success-light-8: var(--kb-color-success-soft);
+  --el-color-success-light-9: var(--kb-color-success-soft);
+  --el-color-warning: var(--kb-color-warning);
+  --el-color-warning-dark-2: var(--kb-color-warning);
+  --el-color-warning-light-3: var(--kb-color-warning-soft);
+  --el-color-warning-light-5: var(--kb-color-warning-soft);
+  --el-color-warning-light-7: var(--kb-color-warning-soft);
+  --el-color-warning-light-8: var(--kb-color-warning-soft);
+  --el-color-warning-light-9: var(--kb-color-warning-soft);
+  --el-color-danger: var(--kb-color-danger);
+  --el-color-danger-dark-2: var(--kb-color-danger);
+  --el-color-danger-light-3: var(--kb-color-danger-highlight);
+  --el-color-danger-light-5: var(--kb-color-danger-soft);
+  --el-color-danger-light-7: var(--kb-color-danger-soft);
+  --el-color-danger-light-8: var(--kb-color-danger-soft);
+  --el-color-danger-light-9: var(--kb-color-danger-soft);
+  --el-color-error: var(--kb-color-danger);
+  --el-color-error-dark-2: var(--kb-color-danger);
+  --el-color-error-light-3: var(--kb-color-danger-highlight);
+  --el-color-error-light-5: var(--kb-color-danger-soft);
+  --el-color-error-light-7: var(--kb-color-danger-soft);
+  --el-color-error-light-8: var(--kb-color-danger-soft);
+  --el-color-error-light-9: var(--kb-color-danger-soft);
+  --el-color-info: var(--kb-color-text-tertiary);
+  --el-color-info-dark-2: var(--kb-color-text-secondary);
+  --el-color-info-light-3: var(--kb-color-info-soft);
+  --el-color-info-light-5: var(--kb-color-info-soft);
+  --el-color-info-light-7: var(--kb-color-info-soft);
+  --el-color-info-light-8: var(--kb-color-info-soft);
+  --el-color-info-light-9: var(--kb-color-info-soft);
+
+  --el-bg-color: var(--kb-color-surface);
+  --el-bg-color-page: var(--kb-color-canvas);
+  --el-bg-color-overlay: var(--kb-color-surface);
+  --el-fill-color: var(--kb-color-canvas);
+  --el-fill-color-light: var(--kb-color-surface-subtle);
+  --el-fill-color-lighter: var(--kb-color-surface-subtle);
+  --el-fill-color-extra-light: var(--kb-color-surface-subtle);
+  --el-fill-color-dark: var(--kb-color-border-light);
+  --el-fill-color-darker: var(--kb-color-border);
+  --el-fill-color-blank: var(--kb-color-surface);
+
+  --el-text-color-primary: var(--kb-color-text-primary);
+  --el-text-color-regular: var(--kb-color-text-secondary);
+  --el-text-color-secondary: var(--kb-color-text-tertiary);
+  --el-text-color-placeholder: var(--kb-color-text-tertiary);
+  --el-text-color-disabled: var(--kb-color-text-tertiary);
+
+  --el-border-color: var(--kb-color-border);
+  --el-border-color-light: var(--kb-color-border-light);
+  --el-border-color-lighter: var(--kb-color-border-light);
+  --el-border-color-extra-light: var(--kb-color-border-light);
+  --el-border-color-dark: var(--kb-color-border);
+  --el-border-color-darker: var(--kb-color-border);
+  --el-border-color-hover: var(--kb-color-primary);
+
+  --el-border-radius-base: var(--kb-radius-md);
+  --el-border-radius-small: var(--kb-radius-md);
+  --el-border-radius-round: var(--kb-radius-pill);
+  --el-border-radius-circle: var(--kb-radius-pill);
+  --el-popover-border-radius: var(--kb-radius-md);
+
+  --el-box-shadow: var(--kb-shadow-float);
+  --el-box-shadow-light: var(--kb-shadow-subtle);
+  --el-box-shadow-lighter: var(--kb-shadow-subtle);
+  --el-box-shadow-dark: var(--kb-shadow-drawer);
+
+  --el-font-family: var(--kb-font-family-base);
+  --el-font-size-extra-large: var(--kb-font-size-title);
+  --el-font-size-large: var(--kb-font-size-title);
+  --el-font-size-medium: var(--kb-font-size-body);
+  --el-font-size-base: var(--kb-font-size-body);
+  --el-font-size-small: var(--kb-font-size-sm);
+  --el-font-size-extra-small: var(--kb-font-size-xs);
+  --el-font-line-height-primary: var(--kb-line-height-body);
+
+  /* 全站统一使用 default 控件高度，显式 large / small 也不改变外框高度。 */
+  --el-component-size: var(--kb-control-height);
+  --el-component-size-large: var(--kb-control-height);
+  --el-component-size-small: var(--kb-control-height);
+
+  --el-disabled-bg-color: var(--kb-color-surface-subtle);
+  --el-disabled-text-color: var(--kb-color-text-tertiary);
+  --el-disabled-border-color: var(--kb-color-border-light);
+  --el-svg-monochrome-grey: var(--kb-color-border);
+}
+
+/*
+ * Button：2.14.3 的默认 Button 没有读取 --el-component-size，需显式与 Input 对齐。
+ * 三档 size 统一使用 default 高度，并同步覆盖 padding / font / radius / icon gap。
+ */
+.el-button,
+.el-button.el-button--large,
+.el-button.el-button--small {
+  --el-button-size: var(--kb-control-height);
+
+  gap: var(--kb-space-2);
+  height: var(--el-button-size);
+  min-height: var(--el-button-size);
+  padding: var(--kb-space-2) var(--kb-space-4);
+  border-radius: var(--kb-radius-md);
+  /* font-size: var(--kb-font-size-body); */
+}
+/* Filled Primary 默认边框与背景同色，视觉上会膨胀；使用现有柔和品牌色阶显式勾边。 */
+.el-button--primary:not(.is-plain):not(.is-link):not(.is-text) {
+  /* --el-button-border-color: var(--kb-color-brand-highlight);
+  --el-button-hover-border-color: var(--kb-color-primary);
+  --el-button-active-border-color: var(--kb-color-primary); */
+}
+.el-button.is-circle {
+  width: var(--el-button-size);
+}
+.el-button [class*='el-icon'] + span {
+  margin-left: var(--kb-space-0);
+}
+.el-button + .el-button {
+  margin-left: var(--kb-space-0);
+}
+/*
+ * Input / Select / DatePicker / InputNumber：各 size 的 wrapper 默认高度和圆角不同，
+ * 统一映射为 default，并配套统一 padding / font / gap。
+ */
+.el-input__wrapper,
+.el-input--large .el-input__wrapper,
+.el-input--small .el-input__wrapper,
+.el-select__wrapper,
+.el-select--large .el-select__wrapper,
+.el-select--small .el-select__wrapper {
+  gap: var(--kb-space-2);
+  height: var(--kb-control-height);
+  min-height: var(--kb-control-height);
+  padding: var(--kb-space-0) var(--kb-list-row-padding);
+  border-radius: var(--kb-radius-md);
+  /* font-size: var(--kb-font-size-body); */
+}
+.el-input-number,
+.el-input-number--large,
+.el-input-number--small {
+  height: var(--kb-control-height);
+  min-height: var(--kb-control-height);
+  border-radius: var(--kb-radius-md);
+}
+.el-date-editor {
+  --el-date-editor-width: 100%;
+
+  min-width: 0;
+  max-width: 100%;
+}
+.el-date-editor.el-input,
+.el-date-editor.el-input__wrapper {
+  width: 100% !important;
+  min-width: 0;
+  max-width: 100%;
+}
+
+/* Card：这些变量由 Element 在组件选择器内声明，需要同级覆盖。 */
+.el-card {
+  --el-card-bg-color: var(--kb-color-surface);
+  --el-card-border-color: var(--kb-color-border);
+  --el-card-border-radius: var(--kb-radius-md);
+  --el-card-padding: var(--kb-block-padding-spacious);
+
+  box-shadow: var(--kb-shadow-card);
+}
+
+/* Table：单元格纵向 padding 没有公开变量，因此保留一个最小选择器兜底。 */
+.el-table {
+  --el-table-bg-color: var(--kb-color-surface);
+  --el-table-tr-bg-color: var(--kb-color-surface);
+  --el-table-text-color: var(--kb-color-text-primary);
+  --el-table-header-text-color: var(--kb-color-text-secondary);
+  --el-table-header-bg-color: var(--kb-color-surface-subtle);
+  --el-table-border-color: var(--kb-color-border);
+  --el-table-row-hover-bg-color: var(--kb-color-primary-soft);
+  --el-table-current-row-bg-color: var(--kb-color-primary-soft);
+  --el-table-expanded-cell-bg-color: var(--kb-color-surface-subtle);
+}
+.el-table .el-table__cell {
+  padding-block: var(--kb-space-2);
+}
+
+/* Form：FormItem 间距没有公开变量。 */
+.el-form {
+  /* --el-form-label-font-size: var(--kb-font-size-body); */
+}
+.el-form-item {
+  margin-bottom: var(--kb-space-4);
+}
+
+/* PageHeader：项目返回操作固定在 extra，关闭组件内置的左侧返回区。 */
+.el-page-header .el-page-header__header {
+  align-items: flex-start;
+  gap: var(--kb-layout-gap);
+}
+.el-page-header .el-page-header__left {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin-right: var(--kb-space-0);
+}
+.el-page-header .el-page-header__back,
+.el-page-header .el-page-header__left .el-divider--vertical {
+  display: none;
+}
+.el-page-header .el-page-header__content {
+  min-width: 0;
+  font-size: inherit;
+}
+.el-page-header .el-page-header__extra {
+  flex: 0 0 auto;
+}
+
+/* Tabs：只暴露 header 高度，header margin 与 item padding 需选择器补齐。 */
+.el-tabs {
+  --el-tabs-header-height: var(--kb-control-height);
+}
+.el-tabs__header {
+  margin: var(--kb-space-0) var(--kb-space-0) var(--kb-space-4);
+}
+.el-tabs__item {
+  padding-inline: var(--kb-space-4);
+  /* font-size: var(--kb-font-size-body); */
+}
+
+/* Pagination：组件在自身选择器内声明尺寸变量，因此在同级集中重映射。 */
+.el-pagination {
+  --el-pagination-bg-color: var(--kb-color-surface);
+  --el-pagination-button-bg-color: var(--kb-color-surface);
+  --el-pagination-button-color: var(--kb-color-text-secondary);
+  --el-pagination-button-disabled-bg-color: var(--kb-color-surface-subtle);
+  --el-pagination-button-disabled-color: var(--kb-color-text-tertiary);
+  --el-pagination-hover-color: var(--kb-color-primary);
+  --el-pagination-text-color: var(--kb-color-text-secondary);
+  --el-pagination-border-radius: var(--kb-radius-md);
+  --el-pagination-button-height: var(--kb-control-height);
+  --el-pagination-button-width: var(--kb-control-height);
+  --el-pagination-button-height-large: var(--kb-control-height);
+  --el-pagination-button-width-large: var(--kb-control-height);
+  --el-pagination-button-height-small: var(--kb-control-height);
+  --el-pagination-button-width-small: var(--kb-control-height);
+  --el-pagination-font-size: var(--kb-font-size-body);
+  --el-pagination-font-size-small: var(--kb-font-size-sm);
+  --el-pagination-item-gap: var(--kb-space-1);
+}
+
+/*
+ * Popper：Select、DatePicker、Dropdown 与 Tooltip 共用一致的浮层 surface。
+ * 2.14.3 只公开 popover radius；边框和阴影需在各 Popper 原生根节点兜底。
+ */
+.el-popper {
+  --el-popper-border-radius: var(--kb-radius-md);
+
+  border-radius: var(--kb-radius-md);
+  /* font-size: var(--kb-font-size-body); */
+}
+.el-select__popper.el-popper,
+.el-picker__popper.el-popper,
+.el-dropdown__popper.el-popper {
+  border-color: var(--kb-color-border);
+  background: var(--kb-color-surface);
+  box-shadow: var(--kb-shadow-float);
+}
+.el-select__popper.el-popper .el-popper__arrow::before,
+.el-picker__popper.el-popper .el-popper__arrow::before,
+.el-dropdown__popper.el-popper .el-popper__arrow::before {
+  border-color: var(--kb-color-border);
+  background: var(--kb-color-surface);
+}
+.el-select-dropdown__list {
+  padding-block: var(--kb-space-2);
+}
+.el-select-dropdown__item {
+  height: var(--kb-control-height);
+  padding: var(--kb-space-0) var(--kb-space-10) var(--kb-space-0) var(--kb-space-4);
+  line-height: var(--kb-control-height);
+}
+.el-select-dropdown__item.is-hovering {
+  background: var(--kb-color-primary-soft);
+}
+.el-select-dropdown__item.is-selected {
+  color: var(--kb-color-primary);
+}
+.el-picker-panel,
+.el-time-panel {
+  border-radius: var(--kb-radius-md);
+  color: var(--kb-color-text-secondary);
+  background: var(--kb-color-surface);
+}
+.el-picker-panel__footer,
+.el-time-panel__footer {
+  border-color: var(--kb-color-border-light);
+  background: var(--kb-color-surface-subtle);
+}
+
+/* Dropdown：菜单项 padding 没有公开变量。 */
+.el-dropdown-menu {
+  --el-dropdown-menu-box-shadow: var(--kb-shadow-float);
+  --el-dropdown-menuItem-hover-color: var(--kb-color-primary);
+  --el-dropdown-menuItem-hover-fill: var(--kb-color-primary-soft);
+}
+.el-dropdown-menu__item {
+  gap: var(--kb-space-2);
+  padding: var(--kb-space-2) var(--kb-space-4);
+  /* font-size: var(--kb-font-size-body); */
+}
+
+/* Tag：组件在自身选择器内声明主题变量，需要同级覆盖。 */
+.el-tag {
+  /* --el-tag-font-size: var(--kb-font-size-sm); */
+  --el-tag-border-radius: var(--kb-radius-pill);
+  --el-tag-border-radius-rounded: var(--kb-radius-pill);
+}
+
+/* Dialog：官方提供内边距、圆角、字体与阴影变量；滚动边界仍需结构选择器。 */
+.el-dialog {
+  --el-dialog-bg-color: var(--kb-color-surface);
+  --el-dialog-box-shadow: var(--kb-shadow-float);
+  /* --el-dialog-title-font-size: var(--kb-font-size-title); */
+  /* --el-dialog-content-font-size: var(--kb-font-size-body); */
+  --el-dialog-font-line-height: var(--kb-line-height-body);
+  --el-dialog-padding-primary: var(--kb-block-padding-spacious);
+  --el-dialog-border-radius: var(--kb-radius-md);
+
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  max-height: calc(100dvh - var(--kb-space-6));
+  margin: var(--kb-space-element) auto;
+}
+.el-dialog__body {
+  flex: 1 1 auto;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  min-height: 0;
+}
+.el-dialog__header {
+  flex: 0 0 auto;
+  min-height: var(--kb-control-height);
+  padding-right: calc(var(--kb-control-height) + var(--kb-block-padding));
+}
+.el-dialog__footer {
+  display: flex;
+  flex: 0 0 auto;
+  justify-content: flex-end;
+  gap: var(--kb-space-2);
+}
+
+/* Dialog / Drawer Close：共用同一带边框的圆形外观与交互反馈。 */
+.el-dialog__headerbtn,
+.el-drawer__close-btn {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: var(--kb-control-height);
+  height: var(--kb-control-height);
+  margin: var(--kb-space-0);
+  padding: var(--kb-space-0);
+  border: 1px solid var(--kb-color-border);
+  border-radius: var(--kb-radius-pill);
+  color: var(--kb-color-text-secondary);
+  background: var(--kb-color-canvas);
+  /* font-size: var(--kb-font-size-title); */
+  transition:
+    border-color var(--kb-transition-fast),
+    color var(--kb-transition-fast),
+    background var(--kb-transition-fast);
+}
+.el-dialog__headerbtn {
+  top: var(--kb-space-6);
+  right: var(--kb-space-6);
+}
+.el-dialog__headerbtn:hover,
+.el-dialog__headerbtn:focus,
+.el-dialog__headerbtn:focus-visible,
+.el-drawer__close-btn:hover,
+.el-drawer__close-btn:focus,
+.el-drawer__close-btn:focus-visible {
+  border-color: var(--kb-color-border);
+  outline: none;
+  color: var(--kb-color-primary);
+  background: var(--kb-color-primary-soft);
+}
+.el-dialog__headerbtn:active,
+.el-drawer__close-btn:active {
+  border-color: var(--kb-color-border);
+  color: var(--kb-color-primary);
+  background: var(--kb-color-nav-accent);
+}
+.el-dialog__headerbtn .el-dialog__close,
+.el-drawer__close-btn .el-icon {
+  /* font-size: var(--kb-font-size-title); */
+}
+
+/* Drawer：官方只暴露背景与 padding，标题栏和底部 sheet 把手需结构选择器。 */
+.el-drawer {
+  --el-drawer-bg-color: var(--kb-color-surface);
+  --el-drawer-padding-primary: var(--kb-block-padding);
+
+  color: var(--kb-color-text-primary);
+  box-shadow: var(--kb-shadow-drawer);
+}
+.el-drawer__header {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: var(--kb-layout-gap);
+  min-height: var(--kb-drawer-header-height);
+  margin-bottom: var(--kb-space-0);
+  padding: var(--kb-space-2) var(--kb-block-padding);
+  color: var(--kb-color-text-primary);
+}
+.el-drawer__title {
+  min-width: 0;
+  color: var(--kb-color-text-primary);
+  /* font-size: var(--kb-font-size-title); */
+}
+.el-drawer__body {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  overflow-x: hidden;
+  overflow-y: auto;
+  min-height: 0;
+  padding: var(--kb-block-padding);
+  color: var(--kb-color-text-primary);
+  background: var(--kb-color-surface);
+}
+.el-drawer__footer {
+  display: flex;
+  flex: 0 0 auto;
+  justify-content: flex-end;
+  gap: var(--kb-space-2);
+  padding: var(--kb-block-padding) var(--kb-block-padding)
+    max(var(--kb-block-padding), env(safe-area-inset-bottom));
+  background: var(--kb-color-surface);
+}
+.el-drawer.btt {
+  overflow: hidden;
+  border-radius: var(--kb-radius-sheet) var(--kb-radius-sheet) var(--kb-space-0) var(--kb-space-0);
+}
+.el-drawer.btt::before {
+  display: block;
+  flex: 0 0 auto;
+  width: var(--kb-space-10);
+  height: var(--kb-space-1);
+  margin: var(--kb-space-2) auto var(--kb-space-0);
+  border-radius: var(--kb-radius-pill);
+  background: var(--kb-color-border);
+  content: '';
+}
+
+/* Empty / Descriptions / Collapse：组件级变量均由原生选择器局部声明。 */
+.el-empty {
+  --el-empty-padding: var(--kb-space-8) var(--kb-block-padding-spacious);
+  --el-empty-description-margin-top: var(--kb-space-4);
+  --el-empty-bottom-margin-top: var(--kb-space-5);
+}
+.el-descriptions {
+  --el-descriptions-item-bordered-label-background: var(--kb-color-surface-subtle);
+}
+.el-collapse {
+  --el-collapse-border-color: var(--kb-color-border);
+  --el-collapse-header-height: var(--kb-control-height);
+  --el-collapse-header-bg-color: var(--kb-color-surface);
+  --el-collapse-header-text-color: var(--kb-color-text-primary);
+  /* --el-collapse-header-font-size: var(--kb-font-size-body); */
+  --el-collapse-content-bg-color: var(--kb-color-surface);
+  /* --el-collapse-content-font-size: var(--kb-font-size-body); */
+  --el-collapse-content-text-color: var(--kb-color-text-secondary);
+}
+
+/* Upload：Upload 没有统一 size 属性，padding 与触控面积使用 CSS 兜底。 */
+.el-upload-dragger {
+  --el-upload-dragger-padding-horizontal: var(--kb-space-10);
+  --el-upload-dragger-padding-vertical: var(--kb-space-10);
+}
+.el-upload__tip {
+  margin: var(--kb-space-0);
+  color: var(--kb-color-text-secondary);
+  line-height: var(--kb-line-height-body);
+}
+
+/* Steps / Anchor / MessageBox：官方未暴露对应结构间距变量。 */
+.el-steps--vertical {
+  height: auto;
+}
+.el-anchor--horizontal .el-anchor__item:not(:first-child) {
+  padding-left: var(--kb-space-2);
+}
+.el-message-box__btns {
+  gap: var(--kb-space-2);
+}
+
+/* PC（>=1280px）：标准控件 + 宽松容器留白。 */
+@media (min-width: 1280px) {
+  :root {
+    --el-component-size: var(--kb-control-height);
+  }
+  .el-card {
+    --el-card-padding: var(--kb-block-padding-spacious);
+  }
+  .el-dialog {
+    --el-dialog-padding-primary: var(--kb-block-padding-spacious);
+  }
+  .el-table .el-table__cell {
+    padding-block: var(--kb-space-2);
+  }
+}
+
+/* Pad（768px–1279px）：标准控件 + 中等容器留白。 */
+@media (min-width: 768px) and (max-width: 1279px) {
+  :root {
+    --el-component-size: var(--kb-control-height);
+  }
+  .el-card {
+    --el-card-padding: var(--kb-block-padding);
+  }
+  .el-dialog {
+    --el-dialog-padding-primary: var(--kb-block-padding);
+  }
+  .el-table .el-table__cell {
+    padding-block: var(--kb-space-2);
+  }
+}
+
+/* Mobile（<768px）：保持 default 控件高度，只收紧容器留白。 */
+@media (max-width: 767px) {
+  :root {
+    --el-component-size: var(--kb-control-height);
+    --el-component-size-large: var(--kb-control-height);
+    --el-component-size-small: var(--kb-control-height);
+  }
+  .el-input__inner,
+  .el-textarea__inner,
+  .el-select__selected-item,
+  .el-select__placeholder,
+  .el-range-input {
+    font-size: var(--kb-font-size-mobile-input) !important;
+  }
+  .el-input,
+  .el-select,
+  .el-date-editor {
+    width: 100% !important;
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .el-card {
+    --el-card-padding: var(--kb-block-padding);
+  }
+  .el-form-item {
+    margin-bottom: var(--kb-space-element);
+  }
+  .el-table .el-table__cell {
+    padding-block: var(--kb-list-row-padding);
+  }
+  .el-tabs {
+    --el-tabs-header-height: var(--kb-control-height);
+  }
+  .el-tabs__header {
+    margin-bottom: var(--kb-space-element);
+  }
+  .el-tabs__item {
+    padding-inline: var(--kb-list-row-padding);
+    /* font-size: var(--kb-font-size-body); */
+  }
+  .el-tabs__nav-wrap {
+    overflow-x: auto;
+  }
+  .el-tabs__nav-scroll {
+    min-width: max-content;
+  }
+
+  .el-pagination {
+    --el-pagination-button-height: var(--kb-control-height);
+    --el-pagination-button-width: var(--kb-control-height);
+    --el-pagination-button-height-large: var(--kb-control-height);
+    --el-pagination-button-width-large: var(--kb-control-height);
+    --el-pagination-button-height-small: var(--kb-control-height);
+    --el-pagination-button-width-small: var(--kb-control-height);
+    /* --el-pagination-font-size: var(--kb-font-size-body); */
+    --el-pagination-item-gap: var(--kb-space-2);
+  }
+  .el-dropdown-menu__item {
+    gap: var(--kb-space-2);
+    min-height: var(--kb-control-height);
+    padding: var(--kb-block-padding) var(--kb-space-4);
+    /* font-size: var(--kb-font-size-body); */
+  }
+
+  .el-dialog {
+    --el-dialog-padding-primary: var(--kb-block-padding);
+
+    /* width: auto; */
+    max-height: calc(100dvh - var(--kb-space-6));
+    margin: var(--kb-space-element);
+  }
+  .el-drawer {
+    --el-drawer-padding-primary: var(--kb-block-padding);
+  }
+  .el-drawer__header,
+  .el-drawer__body {
+    padding-right: var(--kb-block-padding);
+    padding-left: var(--kb-block-padding);
+  }
+  .el-drawer__footer {
+    padding-right: var(--kb-block-padding);
+    padding-left: var(--kb-block-padding);
+  }
+  .el-empty {
+    --el-empty-padding: var(--kb-space-6) var(--kb-block-padding);
+    --el-empty-description-margin-top: var(--kb-space-element);
+    --el-empty-bottom-margin-top: var(--kb-space-4);
+  }
+  .el-collapse {
+    overflow: hidden;
+    border-radius: var(--kb-radius-md);
+  }
+  .el-collapse-item__header {
+    min-height: var(--kb-control-height);
+    padding: var(--kb-space-0) var(--kb-list-row-padding);
+    /* font-size: var(--kb-font-size-body); */
+  }
+  .el-collapse-item__content {
+    padding: var(--kb-space-0) var(--kb-list-row-padding) var(--kb-list-row-padding);
+    /* font-size: var(--kb-font-size-body); */
+  }
+
+  .el-picker__popper {
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    width: calc(100vw - var(--kb-space-6)) !important;
+    max-width: calc(100vw - var(--kb-space-6)) !important;
+    max-height: calc(100dvh - var(--kb-space-6));
+  }
+  .el-picker__popper .el-picker-panel.el-date-picker,
+  .el-picker__popper .el-picker-panel__body,
+  .el-picker__popper .el-picker-panel__body-wrapper {
+    width: 100%;
+    min-width: 0;
+  }
+  .el-picker__popper .el-date-picker .el-picker-panel__content {
+    width: calc(100% - (var(--kb-space-4) * 2));
+    margin-inline: var(--kb-space-4);
+  }
+
+  .el-upload {
+    gap: var(--kb-space-2);
+    min-height: var(--kb-control-height);
+    padding: var(--kb-space-0) var(--kb-list-row-padding);
+    border-radius: var(--kb-radius-md);
+    color: var(--kb-color-on-primary);
+    background: var(--kb-color-primary);
+    /* font-size: var(--kb-font-size-body); */
+  }
+}

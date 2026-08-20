@@ -1,3 +1,171 @@
+<template>
+  <section v-loading="loading" class="document-chunks-page">
+    <header class="chunks-toolbar kb-block">
+      <div>
+        <div class="kb-block-title" role="heading" aria-level="2">
+          {{ chunks?.sourceName ?? detail?.sourceName ?? '文档分块' }}
+        </div>
+        <div>
+          <el-text> 不展示向量值。每次读取都会按当前文档权限重新鉴权。 </el-text>
+        </div>
+      </div>
+      <div v-if="detail && chunks" class="chunks-summary">
+        <el-select
+          class="chunks-version-select"
+          v-model="selectedVersion"
+          aria-label="选择文档版本"
+          :disabled="loading"
+          @change="changeVersion"
+        >
+          <el-option
+            v-for="version in detail.versions"
+            :key="version.version"
+            :label="`v${version.version} · ${version.chunkCount} 个分块`"
+            :value="version.version"
+          />
+        </el-select>
+        <span>v{{ chunks.documentVersion }} · 共 {{ chunks.total }} 个分块</span>
+        <span v-if="selectedDocumentVersion?.vectorCollection" class="chunk-fingerprint">
+          {{ selectedDocumentVersion.vectorCollection }}
+        </span>
+      </div>
+    </header>
+
+    <div class="kb-block-content">
+      <div class="kb-block-scroll">
+        <div v-if="errorMessage" class="kb-error-state" role="alert">
+          <strong class="kb-text--danger">无法加载文档分块</strong>
+          <span>{{ errorMessage }}</span>
+          <el-button @click="load">重试</el-button>
+        </div>
+        <template v-else-if="chunks">
+          <div v-if="chunks.items.length" class="chunk-list">
+            <article v-for="chunk in chunks.items" :key="chunk.id" class="chunk-card kb-block">
+              <header class="chunk-card__header">
+                <div class="chunk-card__identity">
+                  <div class="chunk-card__title" role="heading" aria-level="3">
+                    分块 {{ chunk.ordinal + 1 }}
+                  </div>
+                  <div class="chunk-card__meta">
+                    {{ chunkLocation(chunk) }} · {{ chunk.tokenCount }} tokens
+                  </div>
+                </div>
+                <span class="chunk-card__id chunk-fingerprint">{{ chunk.id }}</span>
+              </header>
+              <div class="chunk-data-list kb-data-fields kb-data-fields--borderless">
+                <div class="kb-data-field">
+                  <span class="kb-data-field__label">章节路径</span>
+                  <span class="kb-data-field__value">
+                    {{ chunk.sectionPath.join(' / ') || '未标注' }}
+                  </span>
+                </div>
+                <div class="kb-data-field">
+                  <span class="kb-data-field__label">元素类型</span>
+                  <span class="kb-data-field__value">
+                    {{ chunk.elementTypes.join('、') || '未标注' }}
+                  </span>
+                </div>
+                <div class="kb-data-field">
+                  <span class="kb-data-field__label">相邻分块</span>
+                  <span class="kb-data-field__value chunk-neighbor-list">
+                    <span class="chunk-neighbor-item">
+                      <span class="chunk-neighbor-label">上一个</span>
+                      <span class="chunk-neighbor-id chunk-fingerprint">
+                        {{ chunk.previousChunkId ?? '无' }}
+                      </span>
+                    </span>
+                    <span class="chunk-neighbor-item">
+                      <span class="chunk-neighbor-label">下一个</span>
+                      <span class="chunk-neighbor-id chunk-fingerprint">
+                        {{ chunk.nextChunkId ?? '无' }}
+                      </span>
+                    </span>
+                  </span>
+                </div>
+                <div class="kb-data-field">
+                  <span class="kb-data-field__label">脱敏策略</span>
+                  <span class="kb-data-field__value">
+                    {{ chunk.redactionPolicyVersion }}
+                    <span v-if="redactionEntries(chunk).length"> · </span>
+                    <el-tag
+                      v-for="[kind, count] in redactionEntries(chunk)"
+                      :key="kind"
+                      class="chunk-redaction-tag"
+                      size="small"
+                      effect="plain"
+                    >
+                      {{ kind }} × {{ count }}
+                    </el-tag>
+                  </span>
+                </div>
+              </div>
+              <div class="chunk-text-grid">
+                <template v-if="isMobile">
+                  <el-tabs
+                    class="chunk-text-tabs"
+                    :model-value="mobileChunkTextMode(chunk.id)"
+                    stretch
+                    @update:model-value="updateMobileChunkTextMode(chunk.id, $event)"
+                  >
+                    <el-tab-pane label="原始内容" name="original" lazy>
+                      <section
+                        v-if="mobileChunkTextMode(chunk.id) === 'original'"
+                        class="chunk-text-section chunk-text-section--mobile"
+                      >
+                        <pre class="chunk-text-content chunk-text-content--original">{{
+                          chunk.originalText
+                        }}</pre>
+                      </section>
+                    </el-tab-pane>
+                    <el-tab-pane label="脱敏后内容" name="redacted" lazy>
+                      <section
+                        v-if="mobileChunkTextMode(chunk.id) === 'redacted'"
+                        class="chunk-text-section chunk-text-section--mobile"
+                      >
+                        <pre class="chunk-text-content chunk-text-content--redacted">{{
+                          chunk.redactedText
+                        }}</pre>
+                      </section>
+                    </el-tab-pane>
+                  </el-tabs>
+                </template>
+                <template v-else>
+                  <section class="chunk-text-section">
+                    <div class="chunk-text-section__title" role="heading" aria-level="4">
+                      原始内容
+                    </div>
+                    <pre class="chunk-text-content chunk-text-content--original">{{
+                      chunk.originalText
+                    }}</pre>
+                  </section>
+                  <section class="chunk-text-section">
+                    <div class="chunk-text-section__title" role="heading" aria-level="4">
+                      写入向量库的内容（脱敏后）
+                    </div>
+                    <pre class="chunk-text-content chunk-text-content--redacted">{{
+                      chunk.redactedText
+                    }}</pre>
+                  </section>
+                </template>
+              </div>
+            </article>
+          </div>
+          <el-empty v-else description="该版本尚未产生分块" />
+        </template>
+      </div>
+      <div v-if="chunks && chunks.total > pageSize" class="kb-pagination">
+        <el-pagination
+          :layout="isMobile ? 'prev, pager, next' : 'total, prev, pager, next'"
+          :current-page="chunks.page"
+          :page-size="chunks.pageSize"
+          :total="chunks.total"
+          @current-change="changePage"
+        />
+      </div>
+    </div>
+  </section>
+</template>
+
 <script setup lang="ts">
 import type { DocumentChunk, DocumentChunkListResponse, DocumentDetail } from '@nexus-kb/contracts';
 import { computed, onMounted, ref } from 'vue';
@@ -17,7 +185,9 @@ const selectedVersion = ref<number | undefined>(readVersion(route.query.version)
 const page = ref(Math.max(1, Number(route.query.page) || 1));
 const loading = ref(false);
 const errorMessage = ref('');
-const { isPhone } = useBreakpoint();
+const { isMobile } = useBreakpoint();
+type ChunkTextMode = 'original' | 'redacted';
+const mobileChunkTextModes = ref<Record<string, ChunkTextMode>>({});
 const selectedDocumentVersion = computed(() =>
   detail.value?.versions.find((version) => version.version === chunks.value?.documentVersion),
 );
@@ -35,6 +205,18 @@ function chunkLocation(chunk: DocumentChunk): string {
 
 function redactionEntries(chunk: DocumentChunk): Array<[string, number]> {
   return Object.entries(chunk.redactionSummary);
+}
+
+function mobileChunkTextMode(chunkId: string): ChunkTextMode {
+  return mobileChunkTextModes.value[chunkId] ?? 'original';
+}
+
+function setMobileChunkTextMode(chunkId: string, mode: ChunkTextMode): void {
+  mobileChunkTextModes.value[chunkId] = mode;
+}
+
+function updateMobileChunkTextMode(chunkId: string, mode: string | number): void {
+  if (mode === 'original' || mode === 'redacted') setMobileChunkTextMode(chunkId, mode);
 }
 
 async function load(): Promise<void> {
@@ -79,117 +261,195 @@ async function changePage(nextPage: number): Promise<void> {
 onMounted(load);
 </script>
 
-<template>
-  <section v-loading="loading" class="document-chunks-page">
-    <header class="chunks-toolbar">
-      <div>
-        <div class="heading heading--h2" role="heading" aria-level="2">
-          {{ chunks?.sourceName ?? detail?.sourceName ?? '文档分块' }}
-        </div>
-        <div class="text-block">
-          显示原始分块和写入向量库的脱敏文本；不展示向量值。每次读取都会按当前文档权限重新鉴权。
-        </div>
-      </div>
-      <div v-if="detail && chunks" class="chunks-summary">
-        <el-select
-          v-model="selectedVersion"
-          aria-label="选择文档版本"
-          :disabled="loading"
-          @change="changeVersion"
-        >
-          <el-option
-            v-for="version in detail.versions"
-            :key="version.version"
-            :label="`v${version.version} · ${version.chunkCount} 个分块`"
-            :value="version.version"
-          />
-        </el-select>
-        <span>v{{ chunks.documentVersion }} · 共 {{ chunks.total }} 个分块</span>
-        <span v-if="selectedDocumentVersion?.vectorCollection" class="fingerprint">
-          {{ selectedDocumentVersion.vectorCollection }}
-        </span>
-      </div>
-    </header>
-
-    <div class="chunks-content">
-      <div class="chunks-list-scroll">
-        <div v-if="errorMessage" class="document-error" role="alert">
-          <strong>无法加载文档分块</strong><span>{{ errorMessage }}</span>
-          <el-button @click="load">重试</el-button>
-        </div>
-        <template v-else-if="chunks">
-          <div v-if="chunks.items.length" class="chunk-list">
-            <article v-for="chunk in chunks.items" :key="chunk.id" class="chunk-card">
-              <header>
-                <div>
-                  <div class="heading heading--h3" role="heading" aria-level="3">
-                    分块 {{ chunk.ordinal + 1 }}
-                  </div>
-                  <div class="text-block">
-                    {{ chunkLocation(chunk) }} · {{ chunk.tokenCount }} tokens
-                  </div>
-                </div>
-                <span class="fingerprint">{{ chunk.id }}</span>
-              </header>
-              <div class="data-list">
-                <div>
-                  <span>章节路径</span>
-                  <strong>{{ chunk.sectionPath.join(' / ') || '未标注' }}</strong>
-                </div>
-                <div>
-                  <span>元素类型</span>
-                  <strong>{{ chunk.elementTypes.join('、') || '未标注' }}</strong>
-                </div>
-                <div>
-                  <span>相邻分块</span>
-                  <strong class="fingerprint">
-                    上一个：{{ chunk.previousChunkId ?? '无' }}
-                    <br />
-                    下一个：{{ chunk.nextChunkId ?? '无' }}
-                  </strong>
-                </div>
-                <div>
-                  <span>脱敏策略</span>
-                  <strong>
-                    {{ chunk.redactionPolicyVersion }}
-                    <span v-if="redactionEntries(chunk).length"> · </span>
-                    <el-tag
-                      v-for="[kind, count] in redactionEntries(chunk)"
-                      :key="kind"
-                      size="small"
-                      effect="plain"
-                    >
-                      {{ kind }} × {{ count }}
-                    </el-tag>
-                  </strong>
-                </div>
-              </div>
-              <div class="chunk-text-grid">
-                <section>
-                  <div class="heading heading--h4" role="heading" aria-level="4">原始内容</div>
-                  <pre>{{ chunk.originalText }}</pre>
-                </section>
-                <section>
-                  <div class="heading heading--h4" role="heading" aria-level="4">
-                    写入向量库的内容（脱敏后）
-                  </div>
-                  <pre>{{ chunk.redactedText }}</pre>
-                </section>
-              </div>
-            </article>
-          </div>
-          <el-empty v-else description="该版本尚未产生分块" />
-        </template>
-      </div>
-      <div v-if="chunks && chunks.total > pageSize" class="list-pagination document-pagination">
-        <el-pagination
-          :layout="isPhone ? 'prev, pager, next' : 'total, prev, pager, next'"
-          :current-page="chunks.page"
-          :page-size="chunks.pageSize"
-          :total="chunks.total"
-          @current-change="changePage"
-        />
-      </div>
-    </div>
-  </section>
-</template>
+<style scoped>
+.chunks-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: start;
+  gap: var(--kb-layout-gap);
+}
+.chunks-summary {
+  display: grid;
+  justify-items: end;
+  gap: var(--kb-space-2);
+  color: var(--kb-color-text-secondary);
+  font-size: 13px;
+}
+.chunks-version-select {
+  width: 220px;
+}
+.chunk-redaction-tag + .chunk-redaction-tag {
+  margin-left: var(--kb-space-2);
+}
+.chunk-list {
+  display: grid;
+  gap: var(--kb-layout-gap);
+}
+.chunk-card {
+  display: grid;
+  gap: var(--kb-layout-gap);
+  overflow: hidden;
+}
+.chunk-card__header {
+  display: grid;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--kb-layout-gap);
+  grid-template-columns: minmax(0, 1fr) minmax(180px, 0.55fr);
+}
+.chunk-card__identity {
+  display: grid;
+  gap: var(--kb-space-1);
+  min-width: 0;
+}
+.chunk-card__title {
+  color: var(--kb-color-text-primary);
+  font-size: 16px;
+  font-weight: 650;
+  line-height: 1.4;
+}
+.chunk-card__meta {
+  color: var(--kb-color-text-secondary);
+  font-size: 12px;
+}
+.chunk-card__id {
+  justify-self: end;
+  max-width: 100%;
+  padding: var(--kb-space-1) var(--kb-space-2);
+  border: 1px solid var(--kb-color-border-light);
+  border-radius: var(--kb-radius-sm);
+  color: var(--kb-color-text-secondary);
+  background: var(--kb-color-surface-subtle);
+}
+.chunk-data-list {
+  column-gap: var(--kb-space-6);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  padding: var(--kb-block-padding);
+  border: 1px solid var(--kb-color-border-light);
+  border-radius: var(--kb-radius-md);
+  background: var(--kb-color-surface-subtle);
+}
+.chunk-neighbor-list {
+  display: grid;
+  gap: var(--kb-space-1);
+  text-align: left;
+}
+.chunk-neighbor-item {
+  display: grid;
+  align-items: start;
+  gap: var(--kb-space-2);
+  grid-template-columns: 48px minmax(0, 1fr);
+  min-width: 0;
+}
+.chunk-neighbor-label {
+  color: var(--kb-color-text-secondary);
+  font-size: 12px;
+  white-space: nowrap;
+}
+.chunk-neighbor-id {
+  min-width: 0;
+}
+.chunk-text-grid {
+  display: grid;
+  gap: var(--kb-space-4);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.chunk-text-tabs :deep(.el-tabs__header) {
+  overflow: hidden;
+  margin: 0 0 var(--kb-space-element);
+  border: 1px solid var(--kb-color-border);
+  border-radius: var(--kb-radius-md);
+  background: var(--kb-color-surface);
+}
+.chunk-text-tabs :deep(.el-tabs__nav-wrap::after),
+.chunk-text-tabs :deep(.el-tabs__active-bar) {
+  display: none;
+}
+.chunk-text-tabs :deep(.el-tabs__item) {
+  padding: 0;
+  color: var(--kb-color-text-secondary);
+  transition:
+    color var(--kb-transition-fast),
+    background-color var(--kb-transition-fast);
+}
+.chunk-text-tabs :deep(.el-tabs__item + .el-tabs__item) {
+  border-left: 1px solid var(--kb-color-border);
+}
+.chunk-text-tabs :deep(.el-tabs__item.is-active) {
+  color: var(--kb-color-primary-dark);
+  background: var(--kb-color-primary-soft);
+}
+.chunk-text-section {
+  display: grid;
+  align-content: start;
+  grid-template-rows: auto minmax(120px, 1fr);
+  min-width: 0;
+}
+.chunk-text-section--mobile {
+  grid-template-rows: minmax(120px, 1fr);
+}
+.chunk-text-section__title {
+  margin-bottom: var(--kb-space-2);
+  color: var(--kb-color-text-secondary);
+  font-size: 13px;
+  font-weight: 650;
+}
+.chunk-text-content {
+  overflow: auto;
+  overflow-wrap: anywhere;
+  min-height: 120px;
+  max-height: 360px;
+  margin: 0;
+  padding: var(--kb-block-padding);
+  border: 1px solid var(--kb-color-border-light);
+  border-radius: var(--kb-radius-md);
+  color: var(--kb-color-text-primary);
+  font-size: 12px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  line-height: 1.65;
+  white-space: pre-wrap;
+}
+.chunk-text-content--original {
+  background: color-mix(in srgb, var(--kb-color-text-secondary) 7%, var(--kb-color-canvas));
+}
+.chunk-text-content--redacted {
+  background: color-mix(in srgb, var(--kb-color-primary) 7%, var(--kb-color-canvas));
+}
+.document-chunks-page {
+  display: grid;
+  gap: var(--kb-space-4);
+  grid-template-rows: auto minmax(0, 1fr);
+  height: 100%;
+  min-height: 0;
+}
+.chunk-fingerprint {
+  overflow-wrap: anywhere;
+  font-size: 12px;
+  font-family: ui-monospace, monospace;
+  text-align: right;
+}
+/* 响应式：紧凑布局（<1280px） */
+@media (max-width: 1279px) {
+  .chunks-toolbar {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .chunk-card__header {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .chunk-card__id {
+    justify-self: start;
+  }
+  .chunk-data-list {
+    grid-template-columns: 1fr;
+  }
+}
+/* 响应式：Mobile（<768px） */
+@media (max-width: 767px) {
+  .chunks-toolbar {
+    display: grid;
+  }
+  .chunk-text-grid {
+    grid-template-columns: 1fr;
+  }
+}
+</style>

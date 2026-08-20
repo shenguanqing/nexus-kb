@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { AuditEvent } from '@nexus-kb/contracts';
 
 import {
+  auditEventLabel,
   auditOutcomeLabel,
   auditProvider,
   cloudEgressLabel,
@@ -29,6 +30,26 @@ const event: AuditEvent = {
 };
 
 describe('audit presentation', () => {
+  it.each([
+    ['roles_updated', '用户角色已更新'],
+    ['user_created', '用户已创建'],
+    ['user_updated', '用户已更新'],
+    ['user_deleted', '用户已删除'],
+    ['department_policy_updated', '部门策略已更新'],
+  ])('renders the access-change action %s in Chinese', (action, label) => {
+    expect(
+      auditEventLabel({
+        ...event,
+        type: 'access_change',
+        event: action,
+      }),
+    ).toBe(label);
+  });
+
+  it('uses a Chinese fallback for an unknown action', () => {
+    expect(auditEventLabel({ ...event, event: 'future_event' })).toBe('未识别操作');
+  });
+
   it('renders provider summaries without exposing source chunk identifiers', () => {
     expect(auditProvider(event)).toBe('LLM：deepseek/model-a');
     expect(visibleAuditAttributes(event)).toEqual([

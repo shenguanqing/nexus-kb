@@ -1,7 +1,120 @@
+<template>
+  <section class="page">
+    <article v-if="isMobile && selected" class="history-detail history-detail--mobile kb-block">
+      <header class="mobile-detail-header">
+        <div class="mobile-detail-title" :title="selected.title">{{ selected.title }}</div>
+      </header>
+      <div class="history-detail-body">
+        <div v-for="turn in selected.turns" :key="turn.id" class="history-turn">
+          <div class="history-question"><strong>用户</strong>{{ turn.question }}</div>
+          <HistoryAnswer :turn="turn" @select-source="openSource" />
+        </div>
+      </div>
+    </article>
+    <template v-else>
+      <form
+        v-if="!isMobile"
+        class="history-toolbar"
+        aria-label="历史记录筛选"
+        @submit.prevent="search"
+      >
+        <el-input v-model="query" clearable maxlength="200" placeholder="搜索会话标题" />
+        <div class="filter-actions">
+          <el-button native-type="submit">筛选</el-button>
+          <el-button native-type="button" @click="resetFilters"> 重置 </el-button>
+        </div>
+      </form>
+      <form
+        v-else
+        class="history-toolbar history-toolbar--mobile"
+        aria-label="搜索历史记录"
+        @submit.prevent="search"
+      >
+        <el-input v-model="query" clearable maxlength="200" placeholder="搜索会话标题" />
+        <div class="filter-actions">
+          <el-button native-type="button" @click="resetFilters"> 重置 </el-button>
+        </div>
+      </form>
+      <div v-if="errorMessage" class="kb-error-state" role="alert">
+        <strong class="kb-text--danger">无法加载历史</strong><span>{{ errorMessage }}</span>
+        <el-button @click="reload">重试</el-button>
+      </div>
+      <div v-else class="history-layout kb-split-layout" v-loading="loading">
+        <section class="history-list-panel kb-block kb-block--flush">
+          <div class="history-list-card">
+            <div class="history-list" role="list" aria-label="问答会话列表">
+              <div class="history-list-scroll" @scroll.passive="handleListScroll">
+                <div
+                  v-for="row in conversations"
+                  :key="row.id"
+                  class="history-list-row"
+                  :class="{ 'is-active': selected?.id === row.id }"
+                  role="listitem"
+                >
+                  <button
+                    type="button"
+                    class="history-list-item"
+                    :aria-pressed="selected?.id === row.id"
+                    @click="openFromList(row.id)"
+                  >
+                    <strong class="history-item-title">{{ row.title }}</strong>
+                    <span class="history-item-subtitle">
+                      {{ row.messageCount }} 条消息 · {{ formatUpdatedAt(row.updatedAt) }}
+                    </span>
+                  </button>
+                  <el-button
+                    class="history-delete"
+                    :icon="Delete"
+                    text
+                    circle
+                    :aria-label="`删除会话：${row.title}`"
+                    @click.stop="remove(row)"
+                  >
+                  </el-button>
+                </div>
+                <el-empty
+                  v-if="!loading && conversations.length === 0"
+                  class="history-list-empty kb-empty-state"
+                  description="暂无个人问答历史"
+                />
+                <div
+                  v-else-if="loadingMore || loadMoreError || !hasMore"
+                  class="history-load-state"
+                  aria-live="polite"
+                >
+                  <span v-if="loadingMore">正在加载更多…</span>
+                  <template v-else-if="loadMoreError">
+                    <span>{{ loadMoreError }}</span>
+                    <el-button text @click="loadMore">重试</el-button>
+                  </template>
+                  <span v-else-if="conversations.length > 0">已加载全部</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+        <article v-if="!isMobile" class="history-detail kb-block">
+          <template v-if="selected">
+            <div class="history-detail-body">
+              <div v-for="turn in selected.turns" :key="turn.id" class="history-turn">
+                <div class="history-question"><strong>用户</strong>{{ turn.question }}</div>
+                <HistoryAnswer :turn="turn" @select-source="openSource" />
+              </div>
+            </div>
+          </template>
+          <el-empty v-else class="history-detail-empty" description="选择一个会话查看内容" />
+        </article>
+      </div>
+    </template>
+    <SourceDrawer v-model="isSourceOpen" :source="selectedSource" :return-to="sourceReturnTo" />
+  </section>
+</template>
+
 <script setup lang="ts">
 import type { ConversationDetail, ConversationSummary, KnowledgeSource } from '@nexus-kb/contracts';
+import { Delete } from '@element-plus/icons-vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
-import { computed, onMounted, ref } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { deleteConversation, fetchConversation, listConversations } from '@/api/history';
 import { ApiError } from '@/api/client';
@@ -17,48 +130,77 @@ const conversations = ref<ConversationSummary[]>([]);
 const { isMobile } = useBreakpoint();
 const selected = ref<ConversationDetail | null>(null);
 const query = ref(initialRouteState.query);
-const startAt = ref<Date | null>(initialRouteState.from);
-const endAt = ref<Date | null>(initialRouteState.to);
-const page = ref(initialRouteState.page);
 const total = ref(0);
 const loading = ref(false);
+const loadingMore = ref(false);
+const reachedEnd = ref(false);
 const errorMessage = ref('');
-const filtersVisible = ref(false);
+const loadMoreError = ref('');
 const selectedSource = ref<KnowledgeSource | null>(null);
 const isSourceOpen = ref(false);
 const sourceReturnTo = computed(() => route.fullPath);
+const hasMore = computed(() => !reachedEnd.value && conversations.value.length < total.value);
+const PAGE_SIZE = 20;
+const LOAD_MORE_THRESHOLD = 96;
+let loadVersion = 0;
 
 function openSource(source: KnowledgeSource): void {
   selectedSource.value = source;
   isSourceOpen.value = true;
 }
 
-async function load(): Promise<void> {
-  loading.value = true;
-  errorMessage.value = '';
+async function load(append = false): Promise<void> {
+  if (append && (loading.value || loadingMore.value || !hasMore.value)) return;
+  if (!append) {
+    loadVersion += 1;
+    loading.value = true;
+    loadingMore.value = false;
+    errorMessage.value = '';
+    loadMoreError.value = '';
+    reachedEnd.value = false;
+  } else {
+    loadingMore.value = true;
+    loadMoreError.value = '';
+  }
+  const currentVersion = loadVersion;
+  const offset = append ? conversations.value.length : 0;
   try {
     const result = await listConversations({
       query: query.value.trim() || undefined,
-      from: startAt.value?.toISOString(),
-      to: endAt.value?.toISOString(),
-      offset: (page.value - 1) * 20,
-      limit: 20,
+      offset,
+      limit: PAGE_SIZE,
     });
-    conversations.value = result.conversations;
+    if (currentVersion !== loadVersion) return;
+    if (append) {
+      const previousLength = conversations.value.length;
+      const existingIds = new Set(conversations.value.map((conversation) => conversation.id));
+      conversations.value = [
+        ...conversations.value,
+        ...result.conversations.filter((conversation) => !existingIds.has(conversation.id)),
+      ];
+      if (conversations.value.length === previousLength) reachedEnd.value = true;
+    } else {
+      conversations.value = result.conversations;
+    }
     total.value = result.total;
+    reachedEnd.value =
+      reachedEnd.value ||
+      result.conversations.length < PAGE_SIZE ||
+      conversations.value.length >= result.total;
   } catch (error) {
-    errorMessage.value = error instanceof ApiError ? error.message : '历史记录加载失败';
+    if (currentVersion !== loadVersion) return;
+    const message = error instanceof ApiError ? error.message : '历史记录加载失败';
+    if (append) loadMoreError.value = message;
+    else errorMessage.value = message;
   } finally {
-    loading.value = false;
+    if (append) loadingMore.value = false;
+    else if (currentVersion === loadVersion) loading.value = false;
   }
 }
 async function syncRoute(conversationId: string | null): Promise<void> {
   await router.replace({
     query: buildHistoryRouteQuery({
       query: query.value,
-      from: startAt.value,
-      to: endAt.value,
-      page: page.value,
       conversationId,
     }),
   });
@@ -74,175 +216,313 @@ async function open(id: string, updateRoute = true): Promise<void> {
   }
 }
 async function remove(row: ConversationSummary): Promise<void> {
-  await ElMessageBox.confirm(`确认删除“${row.title}”及其全部问答？`, '删除会话', {
-    type: 'warning',
-  });
-  await deleteConversation(row.id);
-  if (selected.value?.id === row.id) {
-    selected.value = null;
-    selectedSource.value = null;
-    isSourceOpen.value = false;
-    await syncRoute(null);
+  try {
+    await ElMessageBox.confirm(`确认删除“${row.title}”及其全部问答？`, '删除会话', {
+      type: 'warning',
+      confirmButtonText: '删除',
+      cancelButtonText: '取消',
+      confirmButtonClass: 'el-button--danger',
+    });
+  } catch {
+    return;
   }
-  await load();
+  try {
+    await deleteConversation(row.id);
+    const removedSelectedConversation = selected.value?.id === row.id;
+    if (removedSelectedConversation) {
+      selected.value = null;
+      selectedSource.value = null;
+      isSourceOpen.value = false;
+    }
+    const loadPromise = load();
+    if (removedSelectedConversation) await syncRoute(null);
+    await loadPromise;
+  } catch (error) {
+    ElMessage.error(error instanceof ApiError ? error.message : '会话删除失败');
+  }
 }
 onMounted(async () => {
   await load();
   if (initialRouteState.conversationId) {
     await open(initialRouteState.conversationId, false);
-  } else if (route.query.conversationId !== undefined) {
-    await syncRoute(null);
+  }
+  if (
+    route.query.page !== undefined ||
+    route.query.from !== undefined ||
+    route.query.to !== undefined ||
+    (route.query.conversationId !== undefined && !initialRouteState.conversationId)
+  ) {
+    await syncRoute(selected.value?.id ?? null);
   }
 });
 async function search(): Promise<void> {
-  page.value = 1;
-  await syncRoute(selected.value?.id ?? null);
-  await load();
-  filtersVisible.value = false;
+  clearSelectedConversation();
+  const loadPromise = load();
+  await syncRoute(null);
+  await loadPromise;
 }
 async function resetFilters(): Promise<void> {
   query.value = '';
-  startAt.value = null;
-  endAt.value = null;
   await search();
 }
 
-async function changePage(nextPage: number): Promise<void> {
-  page.value = nextPage;
-  await syncRoute(selected.value?.id ?? null);
-  await load();
+function clearSelectedConversation(): void {
+  selected.value = null;
+  selectedSource.value = null;
+  isSourceOpen.value = false;
+}
+
+watch(
+  () => readHistoryRouteState(route.query).conversationId,
+  async (conversationId) => {
+    if (!conversationId) {
+      clearSelectedConversation();
+      return;
+    }
+    if (selected.value?.id !== conversationId) await open(conversationId, false);
+  },
+);
+
+function formatUpdatedAt(value: string): string {
+  return new Date(value).toLocaleString('zh-CN', { hour12: false });
+}
+
+async function openFromList(id: string): Promise<void> {
+  await open(id);
+}
+
+function loadMore(): void {
+  void load(true);
+}
+
+function reload(): void {
+  void load();
+}
+
+function handleListScroll(event: Event): void {
+  const target = event.currentTarget;
+  if (!(target instanceof HTMLElement)) return;
+  const distanceToBottom = target.scrollHeight - target.scrollTop - target.clientHeight;
+  if (distanceToBottom <= LOAD_MORE_THRESHOLD) loadMore();
 }
 </script>
 
-<template>
-  <section class="history-page">
-    <form
-      v-if="!isMobile"
-      class="history-toolbar"
-      aria-label="历史记录筛选"
-      @submit.prevent="search"
-    >
-      <el-input v-model="query" clearable maxlength="200" placeholder="搜索会话标题" />
-      <el-date-picker v-model="startAt" type="datetime" placeholder="开始时间" />
-      <el-date-picker v-model="endAt" type="datetime" placeholder="结束时间" />
-      <el-button native-type="submit">筛选</el-button>
-    </form>
-    <div v-else class="history-toolbar">
-      <div class="mobile-filter-bar">
-        <el-button class="filter-trigger" @click="filtersVisible = true">筛选</el-button>
-      </div>
-      <el-drawer
-        v-model="filtersVisible"
-        class="mobile-filter-drawer"
-        direction="btt"
-        size="72%"
-        title="筛选问答历史"
-        append-to-body
-        :z-index="4000"
-      >
-        <form class="mobile-filter-form" aria-label="历史记录筛选" @submit.prevent="search">
-          <el-input v-model="query" clearable maxlength="200" placeholder="搜索会话标题" />
-          <el-date-picker
-            v-model="startAt"
-            type="datetime"
-            :placement="isMobile ? 'top-start' : 'bottom-start'"
-            popper-class="mobile-date-picker-popper"
-            placeholder="开始时间"
-          />
-          <el-date-picker
-            v-model="endAt"
-            type="datetime"
-            :placement="isMobile ? 'top-start' : 'bottom-start'"
-            popper-class="mobile-date-picker-popper"
-            placeholder="结束时间"
-          />
-          <div class="mobile-filter-actions">
-            <el-button native-type="button" @click="resetFilters">重置</el-button>
-            <el-button type="primary" native-type="submit">筛选</el-button>
-          </div>
-        </form>
-      </el-drawer>
-    </div>
-    <div v-if="errorMessage" class="document-error" role="alert">
-      <strong>无法加载历史</strong><span>{{ errorMessage }}</span>
-      <el-button @click="load">重试</el-button>
-    </div>
-    <div v-else class="history-layout" v-loading="loading">
-      <section class="history-list-panel">
-        <div class="history-list-card">
-          <div
-            class="heading heading--h2 scroll-section-title history-head"
-            role="heading"
-            aria-level="2"
-          >
-            会话列表
-          </div>
-          <div class="history-list" role="list" aria-label="问答会话列表">
-            <div class="history-list-scroll">
-              <div
-                v-for="row in conversations"
-                :key="row.id"
-                class="history-list-row"
-                :class="{ active: selected?.id === row.id }"
-                role="listitem"
-              >
-                <div
-                  class="history-list-item"
-                  :class="{ active: selected?.id === row.id }"
-                  role="button"
-                  tabindex="0"
-                  :aria-pressed="selected?.id === row.id"
-                  @click="open(row.id)"
-                  @keydown.enter="open(row.id)"
-                  @keydown.space.prevent="open(row.id)"
-                >
-                  <strong>{{ row.title }}</strong>
-                  <span>
-                    {{ row.messageCount }} 条消息 · {{ new Date(row.updatedAt).toLocaleString() }}
-                  </span>
-                </div>
-                <el-button
-                  class="history-delete"
-                  text
-                  type="danger"
-                  :aria-label="`删除会话：${row.title}`"
-                  @click="remove(row)"
-                >
-                  删除
-                </el-button>
-              </div>
-              <el-empty
-                v-if="!loading && conversations.length === 0"
-                description="暂无个人问答历史"
-              />
-            </div>
-          </div>
-        </div>
-        <el-pagination
-          v-if="conversations.length > 0 && total > 20"
-          class="list-pagination history-pagination"
-          layout="total, prev, pager, next"
-          :current-page="page"
-          :page-size="20"
-          :total="total"
-          @current-change="changePage"
-        />
-      </section>
-      <article class="history-detail">
-        <template v-if="selected">
-          <div class="heading heading--h2" role="heading" aria-level="2">{{ selected.title }}</div>
-          <div class="history-detail-body">
-            <div v-for="turn in selected.turns" :key="turn.id" class="history-turn">
-              <div class="history-question text-block">
-                <strong>用户</strong>{{ turn.question }}
-              </div>
-              <HistoryAnswer :turn="turn" @select-source="openSource" />
-            </div>
-          </div>
-        </template>
-        <el-empty v-else description="选择一个会话查看内容" />
-      </article>
-    </div>
-    <SourceDrawer v-model="isSourceOpen" :source="selectedSource" :return-to="sourceReturnTo" />
-  </section>
-</template>
+<style scoped>
+/*
+ * 布局：筛选栏（Toolbar / Filter Bar） + 会话列表 + 会话详情。
+ * 移动端选中会话后整页切换为详情视图（history-detail--mobile）。
+ */
+.history-toolbar {
+  display: grid;
+  align-items: center;
+  gap: var(--kb-space-2);
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+/* 列表 + 详情两栏布局 */
+.history-list-panel {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-width: 0;
+  min-height: 0;
+}
+.history-list-card {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  overflow: hidden;
+  min-height: 0;
+}
+.history-list {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  overflow: hidden;
+  min-height: 0;
+}
+.history-list-scroll {
+  flex: 1 1 auto;
+  align-content: start;
+  overflow: auto;
+  overscroll-behavior: contain;
+  min-height: 0;
+  padding: var(--kb-list-row-padding);
+  scrollbar-gutter: stable;
+}
+.history-load-state {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: var(--kb-space-2);
+  min-height: 44px;
+  color: var(--kb-color-text-tertiary);
+  font-size: 12px;
+}
+
+/* 会话行：标题/摘要 + 常驻删除按钮，不再依赖滑动手势 */
+.history-list-row {
+  display: flex;
+  align-items: stretch;
+  gap: var(--kb-space-1);
+  min-width: 0;
+}
+.history-list-row + .history-list-row {
+  margin-top: var(--kb-space-1);
+}
+.history-list-row.is-active {
+  border-radius: var(--kb-radius-md);
+  background: var(--kb-color-primary-soft);
+}
+.history-list-item {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  overflow: hidden;
+  min-width: 0;
+  padding: var(--kb-list-row-padding);
+  border-radius: var(--kb-radius-md);
+  color: inherit;
+  background: transparent;
+  text-align: left;
+  transition: background-color var(--kb-transition-fast);
+  cursor: pointer;
+}
+.history-list-item:hover {
+  background: var(--kb-color-canvas);
+}
+.history-list-row.is-active .history-list-item:hover {
+  background: transparent;
+}
+.history-list-item:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--kb-color-primary);
+}
+.history-item-title,
+.history-item-subtitle {
+  overflow: hidden;
+  min-width: 0;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.history-item-subtitle {
+  color: var(--kb-color-text-secondary);
+  font-size: 12px;
+}
+
+/*
+ * 删除按钮显示策略按输入方式区分，而不是按断点区分：
+ * - 支持真实 hover 的设备（PC 鼠标）：默认完全隐藏，鼠标悬浮该行或键盘聚焦该行时才
+ *   显示为红色，符合桌面端“悬浮 / 选中才出现”的操作习惯。
+ * - 不支持 hover 的设备（Pad / Mobile 触屏）：常驻显示，但默认弱化为不起眼的灰色小图标，
+ *   按下时才变红加深，避免整屏都是醒目的红色删除按钮。
+ */
+.history-delete {
+  flex: 0 0 auto;
+  align-self: center;
+  width: var(--kb-space-8);
+  height: var(--kb-space-8);
+  margin-right: var(--kb-space-1);
+  border-radius: var(--kb-radius-sm);
+  color: var(--kb-color-text-tertiary);
+  background: transparent;
+  font-size: 15px;
+  opacity: var(--kb-opacity-muted);
+  transition:
+    color var(--kb-transition-fast),
+    background-color var(--kb-transition-fast),
+    opacity var(--kb-transition-fast);
+}
+.history-delete:hover,
+.history-delete:focus-visible,
+.history-delete:active {
+  color: var(--kb-color-danger);
+  background: var(--kb-color-danger-soft);
+  opacity: var(--kb-opacity-visible);
+}
+/* 详情区（桌面右侧栏 / 移动端整页） */
+.history-detail {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-width: 0;
+  min-height: 0;
+  padding: 0;
+}
+.history-detail-empty {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+.history-detail-body {
+  flex: 1 1 auto;
+  overflow: auto;
+  min-height: 0;
+  padding: var(--kb-block-padding);
+}
+.history-turn {
+  display: flex;
+  flex-direction: column;
+  gap: var(--kb-layout-gap);
+  padding: var(--kb-space-2) 0;
+}
+.history-turn + .history-turn {
+  border-top: 1px solid var(--kb-color-border);
+}
+.history-question,
+.history-answer {
+  display: grid;
+  gap: var(--kb-layout-gap);
+  grid-template-columns: 50px minmax(0, 1fr);
+}
+
+/* 响应式：Mobile（<768px） */
+@media (max-width: 767px) {
+  .history-toolbar--mobile {
+    display: grid;
+    align-items: center;
+    gap: var(--kb-space-2);
+    grid-template-columns: minmax(0, 1fr) auto;
+    border-radius: var(--kb-radius-lg);
+  }
+  .history-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .history-delete {
+    width: var(--kb-space-10);
+    height: var(--kb-space-10);
+    font-size: 17px;
+  }
+  .history-detail--mobile {
+    height: 100%;
+  }
+  .mobile-detail-header {
+    display: flex;
+    flex: 0 0 auto;
+    justify-content: center;
+    align-items: center;
+    min-height: 48px;
+    padding: 0 var(--kb-list-row-padding);
+    border-bottom: 1px solid var(--kb-color-border);
+  }
+  .mobile-detail-title {
+    overflow: hidden;
+    min-width: 0;
+    font-size: 15px;
+    font-weight: 600;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+/* 交互能力：仅在精确指针设备悬停时隐藏会话删除入口。 */
+@media (hover: hover) and (pointer: fine) {
+  .history-delete {
+    opacity: var(--kb-opacity-hidden);
+  }
+  .history-list-row:hover .history-delete,
+  .history-list-row:focus-within .history-delete,
+  .history-delete:focus-visible {
+    color: var(--kb-color-danger);
+    opacity: var(--kb-opacity-visible);
+  }
+}
+</style>

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   documentDetailReturn,
   documentPreviewReturn,
+  historyDetailReturn,
   ingestionJobsReturn,
 } from './return-navigation';
 
@@ -30,6 +31,23 @@ describe('return navigation', () => {
       label: '返回文档详情',
     });
     expect(ingestionJobsReturn('/documents')).toBeNull();
+  });
+
+  it('removes only the authorized conversation id when returning to the history list', () => {
+    expect(
+      historyDetailReturn(
+        '/history?query=%E6%9C%BA%E6%88%BF&page=2&conversationId=5b9fd225-a565-42cd-8d63-1fc3f19b745d',
+      ),
+    ).toEqual({
+      to: '/history?query=%E6%9C%BA%E6%88%BF&page=2',
+      label: '返回会话列表',
+    });
+    expect(historyDetailReturn('/history?conversationId=untrusted')).toBeNull();
+    expect(
+      historyDetailReturn(
+        '//example.com/history?conversationId=5b9fd225-a565-42cd-8d63-1fc3f19b745d',
+      ),
+    ).toBeNull();
   });
 
   it('returns previews only to safe in-app knowledge or document routes', () => {

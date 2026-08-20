@@ -9,6 +9,8 @@ const documentPath =
 const knowledgePath = /^\/(?:ask|history)(?:[?#]|$)/;
 const documentDetailPath =
   /^\/documents\/[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}(?:[?#]|$)/i;
+const conversationIdPattern =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 export function documentDetailReturn(value: unknown): ReturnNavigation {
   if (typeof value === 'string' && ingestionPath.test(value)) {
@@ -22,6 +24,22 @@ export function ingestionJobsReturn(value: unknown): ReturnNavigation | null {
     return { to: value, label: '返回文档详情' };
   }
   return null;
+}
+
+export function historyDetailReturn(value: unknown): ReturnNavigation | null {
+  if (typeof value !== 'string' || !value.startsWith('/history?')) return null;
+  const pathAndQuery = value.split('#', 1)[0] ?? '';
+  const [path, query = ''] = pathAndQuery.split('?', 2);
+  if (path !== '/history') return null;
+  const params = new URLSearchParams(query);
+  const conversationId = params.get('conversationId');
+  if (!conversationId || !conversationIdPattern.test(conversationId)) return null;
+  params.delete('conversationId');
+  const listQuery = params.toString();
+  return {
+    to: listQuery ? `/history?${listQuery}` : '/history',
+    label: '返回会话列表',
+  };
 }
 
 export function documentPreviewReturn(value: unknown): ReturnNavigation {

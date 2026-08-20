@@ -1,3 +1,155 @@
+<template>
+  <section ref="previewPage" v-loading="loading" class="document-preview-page">
+    <div v-if="errorMessage" class="kb-error-state" role="alert">
+      <strong class="kb-text--danger">无法加载文档预览</strong><span>{{ errorMessage }}</span>
+      <el-button @click="load">重试</el-button>
+    </div>
+
+    <template v-else-if="preview">
+      <header class="preview-toolbar">
+        <div class="preview-toolbar__identity">
+          <div>{{ preview.sourceName }}</div>
+          <span
+            class="preview-security-badge"
+            title="每次读取都会重新校验租户、部门与敏感度权限。"
+            aria-label="实时权限校验：每次读取都会重新校验租户、部门与敏感度权限。"
+          >
+            实时权限校验
+          </span>
+        </div>
+        <div class="preview-toolbar__actions">
+          <div v-if="sourcePage || sourceSheet" class="preview-location" aria-label="引用位置">
+            <span class="preview-location__label">引用位置</span>
+            <strong v-if="sourcePage"> 第 {{ sourcePage }} 页 </strong>
+            <strong v-if="sourceSheet"> 工作表 {{ sourceSheet }} </strong>
+          </div>
+          <div v-if="isCadPreview" class="preview-zoom-controls" aria-label="CAD 预览缩放">
+            <el-button
+              size="small"
+              aria-label="缩小 CAD 预览"
+              :disabled="!cadCanZoomOut"
+              @click="changeCadZoom(-1)"
+            >
+              缩小
+            </el-button>
+            <el-button size="small" aria-label="重置 CAD 预览缩放" @click="resetCadZoom">
+              {{ cadZoomPercent }}%
+            </el-button>
+            <el-button
+              size="small"
+              aria-label="放大 CAD 预览"
+              :disabled="!cadCanZoomIn"
+              @click="changeCadZoom(1)"
+            >
+              放大
+            </el-button>
+          </div>
+          <el-button
+            size="small"
+            :disabled="!canFullscreen"
+            :aria-label="isFullscreen ? '退出全屏预览' : '全屏预览'"
+            @click="toggleFullscreen"
+          >
+            {{ isFullscreen ? '退出全屏' : '全屏' }}
+          </el-button>
+        </div>
+        <span v-if="interactionMessage" class="preview-control-error" role="status">
+          {{ interactionMessage }}
+        </span>
+      </header>
+
+      <div v-if="preview.status === 'ready'" class="preview-surface kb-block kb-block--flush">
+        <iframe
+          v-if="preview.kind === 'pdf'"
+          class="preview-pdf"
+          :src="pdfUrl"
+          :title="`${preview.sourceName} PDF 预览`"
+        >
+        </iframe>
+        <CadTileViewer
+          v-if="preview.kind === 'cad_tiles' && preview.cad"
+          ref="cadTileViewer"
+          :document-id="documentId"
+          :manifest="preview.cad"
+          :source-name="preview.sourceName"
+          @zoom-change="handleCadTileZoomChange"
+          @error="handleCadTileError"
+        />
+        <div
+          v-else-if="preview.kind === 'image' || preview.kind === 'svg'"
+          ref="cadViewport"
+          class="preview-image-viewport"
+          :class="{
+            'is-zoomable': preview.kind === 'svg',
+            'is-pannable': canPanCad,
+            'is-dragging': isCadDragging,
+          }"
+          :title="canPanCad ? '按住鼠标左键拖拽查看 CAD 细节' : undefined"
+          @wheel="handleCadWheel"
+          @pointerdown="startCadPan"
+          @pointermove="moveCadPan"
+          @pointerup="stopCadPan"
+          @pointercancel="stopCadPan"
+          @lostpointercapture="stopCadPan"
+        >
+          <img
+            class="preview-image"
+            draggable="false"
+            :style="preview.kind === 'svg' ? cadImageStyle : undefined"
+            :src="contentUrl"
+            :alt="`${preview.sourceName} 预览`"
+          />
+        </div>
+        <SafeMarkdown
+          v-else-if="preview.kind === 'markdown'"
+          class="preview-text preview-markdown"
+          :content="textContent"
+        />
+        <pre v-else-if="preview.kind === 'text'" class="preview-text">{{ textContent }}</pre>
+      </div>
+
+      <div v-else-if="preview.status === 'fallback'" class="preview-fallback kb-block-content">
+        <div class="preview-fallback__content kb-block kb-block-scroll">
+          <div class="preview-fallback__notice">
+            <strong>原格式预览暂不可用</strong>
+            <span class="preview-fallback__description">
+              已降级显示经解析的原始文本，版式可能与源文件不同。
+            </span>
+          </div>
+          <div v-if="chunks?.items.length" class="preview-chunk-list">
+            <article
+              v-for="chunk in chunks.items"
+              :key="chunk.id"
+              class="preview-chunk kb-block"
+              :class="{ 'is-referenced': isReferencedChunk(chunk) }"
+            >
+              <header class="preview-chunk__header">
+                <strong>
+                  {{ chunk.sectionPath.join(' / ') || `分块 ${chunk.ordinal + 1}` }}
+                </strong>
+                <span class="preview-chunk__location">{{ chunkLocation(chunk) }}</span>
+              </header>
+              <pre class="preview-chunk__content">{{ chunk.originalText }}</pre>
+            </article>
+          </div>
+          <el-empty v-else description="当前版本没有可显示的解析文本" />
+        </div>
+        <div v-if="chunks && chunks.total > fallbackPageSize" class="kb-pagination">
+          <el-pagination
+            :layout="isMobile ? 'prev, pager, next' : 'total, prev, pager, next'"
+            :current-page="chunks.page"
+            :page-size="chunks.pageSize"
+            :total="chunks.total"
+            @current-change="changeFallbackPage"
+          />
+        </div>
+      </div>
+
+      <el-empty v-else description="文档尚未完成解析，暂时无法预览" />
+    </template>
+  </section>
+</template>
+
 <script setup lang="ts">
 import type { DocumentChunkListResponse, DocumentPreview } from '@nexus-kb/contracts';
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
@@ -53,7 +205,7 @@ const canPanCad = computed(
 );
 const cadZoomPercent = computed(() => Math.round(cadZoom.value * 100));
 const cadImageStyle = computed(() => ({ width: `${cadZoomPercent.value}%` }));
-const { isPhone } = useBreakpoint();
+const { isMobile } = useBreakpoint();
 
 const cadZoomMinimum = 0.5;
 const cadZoomMaximum = 256;
@@ -239,150 +391,220 @@ onBeforeUnmount(() => {
 });
 </script>
 
-<template>
-  <section ref="previewPage" v-loading="loading" class="document-preview-page">
-    <div v-if="errorMessage" class="document-error" role="alert">
-      <strong>无法加载文档预览</strong><span>{{ errorMessage }}</span>
-      <el-button @click="load">重试</el-button>
-    </div>
-
-    <template v-else-if="preview">
-      <header class="preview-toolbar">
-        <div class="preview-toolbar__identity">
-          <div class="heading heading--h2" role="heading" aria-level="2">
-            {{ preview.sourceName }}
-          </div>
-          <span
-            class="preview-security-badge"
-            title="每次读取都会重新校验租户、部门与敏感度权限。"
-            aria-label="实时权限校验：每次读取都会重新校验租户、部门与敏感度权限。"
-          >
-            实时权限校验
-          </span>
-        </div>
-        <div class="preview-toolbar__actions">
-          <div v-if="sourcePage || sourceSheet" class="preview-location" aria-label="引用位置">
-            <span>引用位置</span>
-            <strong v-if="sourcePage">第 {{ sourcePage }} 页</strong>
-            <strong v-if="sourceSheet">工作表 {{ sourceSheet }}</strong>
-          </div>
-          <div v-if="isCadPreview" class="preview-zoom-controls" aria-label="CAD 预览缩放">
-            <el-button
-              size="small"
-              aria-label="缩小 CAD 预览"
-              :disabled="!cadCanZoomOut"
-              @click="changeCadZoom(-1)"
-            >
-              缩小
-            </el-button>
-            <el-button size="small" aria-label="重置 CAD 预览缩放" @click="resetCadZoom">
-              {{ cadZoomPercent }}%
-            </el-button>
-            <el-button
-              size="small"
-              aria-label="放大 CAD 预览"
-              :disabled="!cadCanZoomIn"
-              @click="changeCadZoom(1)"
-            >
-              放大
-            </el-button>
-          </div>
-          <el-button
-            size="small"
-            :disabled="!canFullscreen"
-            :aria-label="isFullscreen ? '退出全屏预览' : '全屏预览'"
-            @click="toggleFullscreen"
-          >
-            {{ isFullscreen ? '退出全屏' : '全屏' }}
-          </el-button>
-        </div>
-        <span v-if="interactionMessage" class="preview-control-error" role="status">
-          {{ interactionMessage }}
-        </span>
-      </header>
-
-      <div v-if="preview.status === 'ready'" class="preview-surface">
-        <iframe
-          v-if="preview.kind === 'pdf'"
-          class="preview-pdf"
-          :src="pdfUrl"
-          :title="`${preview.sourceName} PDF 预览`"
-        >
-        </iframe>
-        <CadTileViewer
-          v-if="preview.kind === 'cad_tiles' && preview.cad"
-          ref="cadTileViewer"
-          :document-id="documentId"
-          :manifest="preview.cad"
-          :source-name="preview.sourceName"
-          @zoom-change="handleCadTileZoomChange"
-          @error="handleCadTileError"
-        />
-        <div
-          v-else-if="preview.kind === 'image' || preview.kind === 'svg'"
-          ref="cadViewport"
-          class="preview-image-viewport"
-          :class="{
-            'is-zoomable': preview.kind === 'svg',
-            'is-pannable': canPanCad,
-            'is-dragging': isCadDragging,
-          }"
-          :title="canPanCad ? '按住鼠标左键拖拽查看 CAD 细节' : undefined"
-          @wheel="handleCadWheel"
-          @pointerdown="startCadPan"
-          @pointermove="moveCadPan"
-          @pointerup="stopCadPan"
-          @pointercancel="stopCadPan"
-          @lostpointercapture="stopCadPan"
-        >
-          <img
-            class="preview-image"
-            draggable="false"
-            :style="preview.kind === 'svg' ? cadImageStyle : undefined"
-            :src="contentUrl"
-            :alt="`${preview.sourceName} 预览`"
-          />
-        </div>
-        <SafeMarkdown
-          v-else-if="preview.kind === 'markdown'"
-          class="preview-text preview-markdown"
-          :content="textContent"
-        />
-        <pre v-else-if="preview.kind === 'text'" class="preview-text">{{ textContent }}</pre>
-      </div>
-
-      <div v-else-if="preview.status === 'fallback'" class="preview-fallback">
-        <div class="preview-fallback__notice">
-          <strong>原格式预览暂不可用</strong>
-          <span>已降级显示经解析的原始文本，版式可能与源文件不同。</span>
-        </div>
-        <div v-if="chunks?.items.length" class="preview-chunk-list">
-          <article
-            v-for="chunk in chunks.items"
-            :key="chunk.id"
-            class="preview-chunk"
-            :class="{ 'is-referenced': isReferencedChunk(chunk) }"
-          >
-            <header>
-              <strong>{{ chunk.sectionPath.join(' / ') || `分块 ${chunk.ordinal + 1}` }}</strong>
-              <span>{{ chunkLocation(chunk) }}</span>
-            </header>
-            <pre>{{ chunk.originalText }}</pre>
-          </article>
-        </div>
-        <el-empty v-else description="当前版本没有可显示的解析文本" />
-        <div v-if="chunks && chunks.total > fallbackPageSize" class="preview-pagination">
-          <el-pagination
-            :layout="isPhone ? 'prev, pager, next' : 'total, prev, pager, next'"
-            :current-page="chunks.page"
-            :page-size="chunks.pageSize"
-            :total="chunks.total"
-            @current-change="changeFallbackPage"
-          />
-        </div>
-      </div>
-
-      <el-empty v-else description="文档尚未完成解析，暂时无法预览" />
-    </template>
-  </section>
-</template>
+<style scoped>
+.document-preview-page {
+  display: grid;
+  gap: var(--kb-layout-gap);
+  grid-template-rows: auto minmax(0, 1fr);
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+}
+.document-preview-page:fullscreen {
+  max-width: none;
+  padding: var(--kb-block-padding);
+  background: var(--kb-color-canvas);
+}
+.preview-toolbar {
+  position: relative;
+  display: grid;
+  align-items: center;
+  gap: var(--kb-layout-gap);
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+.preview-toolbar__identity {
+  display: flex;
+  align-items: center;
+  gap: var(--kb-space-2);
+  min-width: 0;
+}
+.preview-security-badge {
+  flex: 0 0 auto;
+  padding: var(--kb-space-1) var(--kb-space-2);
+  border-radius: var(--kb-radius-pill);
+  color: var(--kb-color-success);
+  background: var(--kb-color-success-soft);
+  font-size: 11px;
+  white-space: nowrap;
+}
+.preview-toolbar__actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: var(--kb-space-2);
+}
+.preview-zoom-controls {
+  display: flex;
+  align-items: center;
+  gap: var(--kb-space-1);
+}
+.preview-control-error {
+  position: absolute;
+  right: var(--kb-block-padding);
+  bottom: -18px;
+  z-index: 1;
+  color: var(--kb-color-danger);
+  font-size: 12px;
+}
+.preview-location {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: var(--kb-space-2);
+  padding: var(--kb-space-1) var(--kb-space-2);
+  border-radius: var(--kb-radius-sm);
+  color: var(--kb-color-primary-dark);
+  background: var(--kb-color-primary-soft);
+  font-size: 13px;
+}
+.preview-location__label {
+  color: var(--kb-color-text-secondary);
+  font-size: 11px;
+}
+.preview-surface,
+.preview-fallback {
+  overflow: auto;
+  min-width: 0;
+  min-height: 0;
+}
+.preview-surface {
+  display: grid;
+  place-items: stretch;
+}
+.preview-pdf {
+  width: 100%;
+  height: 100%;
+  min-height: 640px;
+  border: 0;
+  background: var(--kb-color-canvas);
+}
+.preview-image-viewport {
+  display: grid;
+  place-items: center;
+  overflow: auto;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+}
+.preview-image-viewport.is-zoomable {
+  display: block;
+}
+.preview-image-viewport.is-pannable {
+  cursor: grab;
+}
+.preview-image-viewport.is-dragging {
+  cursor: grabbing;
+  user-select: none;
+}
+.preview-image {
+  display: block;
+  max-width: 100%;
+  max-height: 100%;
+  margin: auto;
+  object-fit: contain;
+}
+.preview-image-viewport.is-zoomable .preview-image {
+  max-width: none;
+  max-height: none;
+  margin: 0 auto;
+  object-fit: initial;
+}
+.preview-text {
+  overflow: auto;
+  overflow-wrap: anywhere;
+  min-height: 100%;
+  margin: 0;
+  padding: clamp(var(--kb-space-4), 3vw, var(--kb-space-10));
+  color: var(--kb-color-text-primary);
+  background: var(--kb-color-surface);
+  font:
+    14px/1.75 ui-monospace,
+    SFMono-Regular,
+    Consolas,
+    monospace;
+  white-space: pre-wrap;
+}
+.preview-markdown {
+  font-family: inherit;
+  white-space: normal;
+}
+.preview-fallback {
+  display: flex;
+  flex-direction: column;
+  gap: var(--kb-space-4);
+}
+.preview-fallback__content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--kb-space-4);
+}
+.preview-fallback__notice {
+  display: grid;
+  gap: var(--kb-space-1);
+  padding: var(--kb-block-padding) var(--kb-space-4);
+  border-radius: var(--kb-radius-sm);
+  color: var(--kb-color-warning);
+  background: var(--kb-color-warning-soft);
+}
+.preview-fallback__description {
+  color: var(--kb-color-text-secondary);
+  font-size: 13px;
+}
+.preview-chunk-list {
+  display: grid;
+  gap: var(--kb-layout-gap);
+}
+.preview-chunk.is-referenced {
+  border-color: var(--kb-color-primary);
+  box-shadow: 0 0 0 2px var(--kb-color-primary-soft);
+}
+.preview-chunk__header {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--kb-layout-gap);
+  margin-bottom: var(--kb-space-2);
+}
+.preview-chunk__location {
+  flex: 0 0 auto;
+  color: var(--kb-color-text-secondary);
+  font-size: 12px;
+}
+.preview-chunk__content {
+  overflow-wrap: anywhere;
+  margin: 0;
+  color: var(--kb-color-text-primary);
+  font:
+    13px/1.7 ui-monospace,
+    SFMono-Regular,
+    Consolas,
+    monospace;
+  white-space: pre-wrap;
+}
+/* 响应式：Mobile（<768px） */
+@media (max-width: 767px) {
+  .document-preview-page {
+    gap: var(--kb-space-2);
+  }
+  .preview-toolbar {
+    gap: var(--kb-space-2);
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .preview-toolbar__actions {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    justify-self: end;
+  }
+  .preview-location {
+    flex-wrap: wrap;
+  }
+  .preview-pdf {
+    min-height: 65vh;
+  }
+  .preview-chunk__header {
+    flex-direction: column;
+    gap: var(--kb-space-1);
+  }
+}
+</style>

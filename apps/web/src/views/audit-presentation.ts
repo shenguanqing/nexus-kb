@@ -10,10 +10,28 @@ export const auditTypeLabels: Record<AuditEventType, string> = {
 const eventLabels: Record<string, string> = {
   knowledge_query: '知识问答查询',
   cloud_egress_policy: '云端数据出网检查',
+  roles_updated: '用户角色已更新',
+  user_created: '用户已创建',
+  user_updated: '用户已更新',
+  user_deleted: '用户已删除',
+  department_policy_updated: '部门策略已更新',
   document_reindex_requested: '请求重建索引',
+  document_prepared_index_resume_requested: '请求继续建立索引',
+  document_metadata_updated: '文档权限已更新',
   document_version_activated: '文档版本已激活',
+  document_version_failed: '文档版本处理失败',
   document_deleted: '文档已永久删除',
   ingestion_retry_requested: '请求重试入库任务',
+  index_candidate_requested: '请求构建候选索引',
+  index_candidate_ready: '候选索引已就绪',
+  index_collection_switched: '索引集合已切换',
+  system_config_version_created: '运行配置版本已创建',
+  system_deployment_requested: '请求发布运行配置',
+  system_deployment_queued: '运行配置发布已排队',
+  system_deployment_running: '运行配置正在发布',
+  system_deployment_succeeded: '运行配置已发布',
+  system_deployment_rolled_back: '运行配置已自动回滚',
+  system_deployment_failed: '运行配置发布失败',
 };
 
 const outcomeLabels: Record<string, string> = {
@@ -28,7 +46,7 @@ const outcomeLabels: Record<string, string> = {
 };
 
 export function auditEventLabel(event: AuditEvent): string {
-  return eventLabels[event.event] ?? event.event.replaceAll('_', ' ');
+  return eventLabels[event.event] ?? '未识别操作';
 }
 
 export function auditResource(event: AuditEvent): string {

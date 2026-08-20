@@ -1,7 +1,13 @@
 import type { KnowledgeSource } from '@nexus-kb/contracts';
 import { mount } from '@vue/test-utils';
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import SourceDrawer from './SourceDrawer.vue';
+
+const phoneViewport = vi.hoisted(() => ({ __v_isRef: true, value: false }));
+
+vi.mock('@/composables/useBreakpoint', () => ({
+  useBreakpoint: () => ({ isMobile: phoneViewport }),
+}));
 
 const source: KnowledgeSource = {
   index: 1,
@@ -21,7 +27,9 @@ function mountDrawer(overrides: Partial<KnowledgeSource> = {}, returnTo = '/ask'
       stubs: {
         ElButton: { template: '<button><slot /></button>' },
         ElDrawer: {
-          template: '<section><slot /><footer><slot name="footer" /></footer></section>',
+          props: ['direction', 'size', 'title', 'withHeader'],
+          template:
+            '<section class="drawer-stub" :data-direction="direction" :data-size="size" :data-title="title" :data-with-header="withHeader"><slot /><footer><slot name="footer" /></footer></section>',
         },
         RouterLink: {
           props: ['to'],
@@ -34,10 +42,18 @@ function mountDrawer(overrides: Partial<KnowledgeSource> = {}, returnTo = '/ask'
 }
 
 describe('SourceDrawer', () => {
+  beforeEach(() => {
+    phoneViewport.value = false;
+  });
+
   it('omits unavailable location and section metadata', () => {
     const wrapper = mountDrawer();
 
     expect(wrapper.get('.source-detail__header').text()).toContain('vue.md');
+    expect(wrapper.get('.source-detail__title').attributes()).toMatchObject({
+      role: 'heading',
+      'aria-level': '2',
+    });
     expect(wrapper.find('.source-reference').exists()).toBe(false);
     expect(wrapper.text()).not.toContain('未标注');
     expect(wrapper.get('.source-drawer__document-link').attributes('data-path')).toBe(
@@ -53,6 +69,9 @@ describe('SourceDrawer', () => {
 
     expect(wrapper.get('.source-reference').text()).toContain('第 7 页');
     expect(wrapper.get('.source-reference').text()).toContain('第一章 / 概览');
+    expect(wrapper.get('.source-reference').classes()).toEqual(
+      expect.arrayContaining(['kb-block', 'kb-block--flush']),
+    );
   });
 
   it('preserves the selected history conversation in the preview return target', () => {
@@ -62,5 +81,19 @@ describe('SourceDrawer', () => {
     expect(wrapper.get('.source-drawer__document-link').attributes('data-from')).toBe(
       `/history?page=2&conversationId=${conversationId}`,
     );
+  });
+
+  it('uses the shared titled bottom-sheet surface on phones', () => {
+    phoneViewport.value = true;
+    const wrapper = mountDrawer();
+
+    expect(wrapper.get('.drawer-stub').attributes()).toMatchObject({
+      'data-direction': 'btt',
+      'data-size': 'auto',
+      'data-title': '来源详情',
+      'data-with-header': '',
+    });
+    expect(wrapper.find('.source-sheet__handle').exists()).toBe(false);
+    expect(wrapper.find('.source-sheet__header').exists()).toBe(false);
   });
 });

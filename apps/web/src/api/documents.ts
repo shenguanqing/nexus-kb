@@ -24,7 +24,7 @@ import {
   type DocumentPreview,
   type Sensitivity,
 } from '@nexus-kb/contracts';
-import { apiRequest, apiTextRequest } from './client';
+import { apiRequest, apiTextRequest, apiUploadRequest } from './client';
 
 export function listDocuments(
   request: Partial<DocumentListRequest>,
@@ -41,9 +41,21 @@ export function fetchDocumentUploadOptions(): Promise<DocumentUploadOptions> {
   return apiRequest('/v1/documents/upload-options', documentUploadOptionsSchema);
 }
 
-export function uploadDocument(file: File): Promise<DocumentUploadAccepted> {
+export function uploadDocument(
+  file: File,
+  onProgress?: (percentage: number) => void,
+): Promise<DocumentUploadAccepted> {
   const body = new FormData();
   body.set('file', file);
+  if (onProgress) {
+    return apiUploadRequest(
+      '/v1/documents',
+      body,
+      documentUploadAcceptedSchema,
+      onProgress,
+      120_000,
+    );
+  }
   return apiRequest(
     '/v1/documents',
     documentUploadAcceptedSchema,

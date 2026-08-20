@@ -117,7 +117,7 @@ describe('DocumentPreviewView', () => {
       documentVersion: 2,
       page: 1,
       pageSize: 20,
-      total: 1,
+      total: 21,
       items: [
         {
           id: 'a'.repeat(64),
@@ -149,6 +149,10 @@ describe('DocumentPreviewView', () => {
     });
     expect(wrapper.get('.preview-chunk').classes()).toContain('is-referenced');
     expect(wrapper.text()).toContain('付款周期为 30 天');
+    expect(wrapper.get('.preview-fallback').classes()).toContain('kb-block-content');
+    const paginationParent = wrapper.get('.kb-pagination').element.parentElement?.classList;
+    expect(paginationParent).toContain('kb-block-content');
+    expect(paginationParent).not.toContain('kb-block');
   });
 
   it('matches the tiled CAD zoom range and keeps the security explanation compact', async () => {

@@ -116,7 +116,7 @@ describe('ProviderSettingsView configuration layout', () => {
     expect(wrapper.get('[data-test="configuration-anchor"]').attributes('data-direction')).toBe(
       'vertical',
     );
-    expect(wrapper.get('[data-test="configuration-anchor"]').attributes('data-offset')).toBe('112');
+    expect(wrapper.get('[data-test="configuration-anchor"]').attributes('data-offset')).toBe('0');
     expect(wrapper.get('a[href="#configuration-parser"]').text()).toBe('Parser');
     expect(wrapper.get('a[href="#configuration-cad"]').text()).toBe('CAD / DWG');
     expect(wrapper.get('a[href="#configuration-tika"]').text()).toBe('Tika');
@@ -132,6 +132,33 @@ describe('ProviderSettingsView configuration layout', () => {
     expect(wrapper.get('[data-test="deployment-table"]').attributes('data-height')).toBe('360');
   });
 
+  it('uses the shared card and field classes for provider facts', async () => {
+    api.getProviderStatuses.mockResolvedValue({
+      providers: [
+        {
+          kind: 'llm',
+          provider: 'deepseek',
+          model: 'deepseek-chat',
+          configurationStatus: 'configured',
+          endpointHost: 'api.deepseek.com',
+          region: 'cn',
+          dimensions: null,
+          credentialConfigured: true,
+          fingerprint: null,
+        },
+      ],
+      syntheticCheck: { status: 'not_configured', checkedAt: null },
+    });
+    const wrapper = mountView();
+    await flushPromises();
+
+    const providerCard = wrapper.get('.provider-card-list > .kb-block');
+    expect(providerCard.text()).toContain('deepseek / deepseek-chat');
+    expect(providerCard.findAll('.kb-data-field')).toHaveLength(3);
+    expect(wrapper.find('.provider-card-heading').exists()).toBe(false);
+    expect(wrapper.find('.provider-data-item').exists()).toBe(false);
+  });
+
   it('uses compact horizontal labels outside the desktop breakpoint', async () => {
     const wrapper = mountView({ desktop: false, mobile: true });
     await flushPromises();
@@ -139,7 +166,7 @@ describe('ProviderSettingsView configuration layout', () => {
     expect(wrapper.get('[data-test="configuration-anchor"]').attributes('data-direction')).toBe(
       'horizontal',
     );
-    expect(wrapper.get('[data-test="configuration-anchor"]').attributes('data-offset')).toBe('64');
+    expect(wrapper.get('[data-test="configuration-anchor"]').attributes('data-offset')).toBe('40');
     expect(wrapper.get('a[href="#configuration-rerank"]').text()).toBe('Rerank');
     expect(wrapper.get('a[href="#configuration-ingestion"]').text()).toBe('入库');
     expect(wrapper.get('a[href="#configuration-cad"]').text()).toBe('CAD');

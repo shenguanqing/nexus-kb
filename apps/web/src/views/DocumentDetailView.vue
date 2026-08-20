@@ -1,5 +1,423 @@
+<template>
+  <section v-loading="loading" class="document-detail-page">
+    <div class="page-content">
+      <div v-if="errorMessage" class="kb-error-state" role="alert">
+        <strong class="kb-text--danger">无法加载文档详情</strong>
+        <span>{{ errorMessage }}</span>
+        <el-button @click="load">重试</el-button>
+      </div>
+      <template v-else-if="document">
+        <header class="detail-actions kb-block">
+          <div class="detail-title">
+            <div class="detail-title-name kb-heading" role="heading" aria-level="2">
+              {{ document.sourceName }}
+            </div>
+            <div class="detail-title-value">{{ document.mimeType }}</div>
+          </div>
+          <el-button
+            v-if="isMobile"
+            class="mobile-actions-trigger"
+            text
+            circle
+            aria-label="打开文档操作面板"
+            @click="mobileActionsVisible = true"
+          >
+            <el-icon><MoreFilled /></el-icon>
+          </el-button>
+          <div v-else class="detail-action-buttons">
+            <RouterLink
+              :to="{ path: `/documents/${document.id}/preview`, query: { from: route.fullPath } }"
+            >
+              <el-button>预览文档</el-button>
+            </RouterLink>
+            <el-button
+              v-if="canWrite"
+              :disabled="document.status !== 'active'"
+              @click="openMetadata"
+            >
+              修改权限
+            </el-button>
+            <el-button
+              v-if="canWrite"
+              :loading="mutating"
+              :disabled="document.status !== 'active' && document.status !== 'prepared'"
+              @click="requestReindex"
+            >
+              {{ document.status === 'prepared' ? '继续建立索引' : '重新索引' }}
+            </el-button>
+            <el-button
+              v-if="canDelete"
+              class="delete-document-button"
+              type="danger"
+              :loading="mutating"
+              @click="requestRemoval"
+            >
+              删除文档
+            </el-button>
+          </div>
+        </header>
+
+        <div class="kb-block-list detail-grid">
+          <article class="kb-block">
+            <div class="kb-block-header">
+              <div class="kb-block-title">基本信息</div>
+            </div>
+            <div class="kb-data-fields">
+              <div class="kb-data-field">
+                <span class="kb-data-field__label">文档 ID</span>
+                <span
+                  class="kb-data-field__value document-id-copy"
+                  :aria-label="`复制文档 ID ${document.id}`"
+                  title="点击复制文档 ID"
+                  @click="copyDocumentId"
+                >
+                  {{ document.id }}
+                </span>
+              </div>
+              <div class="kb-data-field">
+                <span class="kb-data-field__label">状态</span>
+                <span class="kb-data-field__value">{{ documentStatusLabel(document.status) }}</span>
+              </div>
+              <div class="kb-data-field">
+                <span class="kb-data-field__label">部门</span>
+                <span class="kb-data-field__value">{{ document.department }}</span>
+              </div>
+              <div class="kb-data-field">
+                <span class="kb-data-field__label">敏感度</span>
+                <span class="kb-data-field__value">{{ document.sensitivity }}</span>
+              </div>
+              <div class="kb-data-field">
+                <span class="kb-data-field__label">所有者</span>
+                <span class="kb-data-field__value">{{ document.ownerId }}</span>
+              </div>
+              <div class="kb-data-field">
+                <span class="kb-data-field__label">当前版本</span>
+                <span class="kb-data-field__value">
+                  {{ document.activeVersion ? `v${document.activeVersion}` : '尚未激活' }}
+                </span>
+              </div>
+              <div class="kb-data-field">
+                <span class="kb-data-field__label">更新时间</span>
+                <span class="kb-data-field__value">
+                  {{ new Date(document.updatedAt).toLocaleString() }}
+                </span>
+              </div>
+            </div>
+          </article>
+          <article class="kb-block">
+            <div class="kb-block-header">
+              <div class="kb-block-title">当前向量索引</div>
+              <RouterLink
+                v-if="activeVersion?.chunkCount"
+                class="card-title__link"
+                :to="chunksTarget"
+              >
+                查看全部分块
+              </RouterLink>
+            </div>
+            <div class="kb-data-fields">
+              <div class="kb-data-field">
+                <span class="kb-data-field__label">向量库</span>
+                <span class="kb-data-field__value">
+                  {{ activeVersion?.vectorCollection ?? '尚未写入' }}
+                </span>
+              </div>
+              <div class="kb-data-field">
+                <span class="kb-data-field__label">向量数（分块）</span>
+                <span class="kb-data-field__value">{{ activeVersion?.chunkCount ?? 0 }}</span>
+              </div>
+              <div class="kb-data-field">
+                <span class="kb-data-field__label">解析器</span>
+                <span class="kb-data-field__value">
+                  {{ activeVersion?.parser ?? '—' }}
+                  {{ activeVersion?.parserVersion ?? '' }}
+                </span>
+              </div>
+              <div class="kb-data-field">
+                <span class="kb-data-field__label">Embedding 指纹</span>
+                <span class="kb-data-field__value">
+                  {{ activeVersion?.embeddingFingerprint ?? '尚未生成' }}
+                </span>
+              </div>
+              <div class="kb-data-field">
+                <span class="kb-data-field__label">写入时间</span>
+                <span class="kb-data-field__value">
+                  {{
+                    activeVersion?.indexedAt
+                      ? new Date(activeVersion.indexedAt).toLocaleString()
+                      : '—'
+                  }}
+                </span>
+              </div>
+            </div>
+            <div v-if="hasDwgConversion" class="conversion-note">
+              <div class="conversion-label">格式转换说明</div>
+              <div class="conversion-value">
+                原始 DWG<span v-if="dwgSourceVersion">（版本 {{ dwgSourceVersion }}）</span>
+                已自动转换为 DXF 后解析入库
+              </div>
+            </div>
+            <div v-if="visibleIndexWarnings.length" class="index-warning-list">
+              <div v-for="warning in visibleIndexWarnings" :key="warning" class="recent-jobs-item">
+                {{ warning }}
+              </div>
+            </div>
+          </article>
+        </div>
+
+        <article class="kb-block">
+          <div class="kb-block-header">
+            <div class="kb-block-title">版本历史</div>
+            <RouterLink class="card-title__link" :to="allTasksTarget">查看全部任务</RouterLink>
+          </div>
+          <el-table
+            v-if="!isMobile"
+            class="desktop-data-table"
+            :data="document.versions"
+            row-key="version"
+          >
+            <el-table-column label="版本" width="90">
+              <template #default="scope">v{{ scope.row.version }}</template>
+            </el-table-column>
+            <el-table-column label="状态" width="100">
+              <template #default="scope">
+                <el-tag :type="documentStatusType(scope.row.status)" effect="plain">
+                  {{ documentStatusLabel(scope.row.status) }}
+                </el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column prop="chunkCount" label="分块" width="100" />
+            <el-table-column label="向量库" min-width="400">
+              <template #default="scope">
+                <span>{{ scope.row.vectorCollection ?? '—' }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column prop="parserVersion" label="解析器版本" min-width="200" />
+            <el-table-column label="创建时间" min-width="180">
+              <template #default="scope">
+                {{ new Date(scope.row.createdAt).toLocaleString() }}
+              </template>
+            </el-table-column>
+          </el-table>
+          <div v-else-if="document.versions.length" class="kb-block-list" aria-label="版本历史">
+            <article v-for="version in document.versions" :key="version.version" class="kb-block">
+              <div class="kb-block-header">
+                <div class="kb-block-title">版本 v{{ version.version }}</div>
+                <el-tag :type="documentStatusType(version.status)" effect="plain">
+                  {{ documentStatusLabel(version.status) }}
+                </el-tag>
+              </div>
+              <div class="kb-data-fields">
+                <div class="kb-data-field">
+                  <span class="kb-data-field__label">分块</span>
+                  <span class="kb-data-field__value">{{ version.chunkCount }}</span>
+                </div>
+                <div class="kb-data-field">
+                  <span class="kb-data-field__label">解析器</span>
+                  <span class="kb-data-field__value">{{ version.parserVersion }}</span>
+                </div>
+                <div class="kb-data-field">
+                  <span class="kb-data-field__label">向量库</span>
+                  <span class="kb-data-field__value">
+                    {{ version.vectorCollection ?? '—' }}
+                  </span>
+                </div>
+                <div class="kb-data-field">
+                  <span class="kb-data-field__label">创建时间</span>
+                  <span class="kb-data-field__value">
+                    {{ new Date(version.createdAt).toLocaleString() }}
+                  </span>
+                </div>
+              </div>
+            </article>
+          </div>
+        </article>
+        <el-dialog
+          v-if="!isMobile"
+          v-model="metadataVisible"
+          class="metadata-dialog"
+          title="修改权限"
+          width="min(480px, calc(100vw - 28px))"
+          align-center
+          append-to-body
+        >
+          <el-form label-position="top">
+            <el-form-item label="部门">
+              <el-input v-model="metadataDepartment" maxlength="128" />
+            </el-form-item>
+            <el-form-item label="敏感度">
+              <el-select v-model="metadataSensitivity">
+                <el-option label="公开" value="public" />
+                <el-option label="内部" value="internal" />
+                <el-option label="机密" value="confidential" />
+              </el-select>
+            </el-form-item>
+          </el-form>
+          <div class="upload-warning kb-text">
+            修改后会创建新版本并重建索引；旧向量在激活前仍受 PostgreSQL 最新 ACL 二次鉴权。
+          </div>
+          <template #footer>
+            <el-button @click="metadataVisible = false">取消</el-button>
+            <el-button type="primary" :loading="mutating" @click="saveMetadata">
+              保存并重建
+            </el-button>
+          </template>
+        </el-dialog>
+
+        <el-drawer
+          v-else
+          v-model="metadataVisible"
+          direction="rtl"
+          size="100%"
+          title="修改权限"
+          append-to-body
+        >
+          <el-form label-position="top">
+            <el-form-item label="部门">
+              <el-input v-model="metadataDepartment" maxlength="128" />
+            </el-form-item>
+            <el-form-item label="敏感度">
+              <el-select v-model="metadataSensitivity">
+                <el-option label="公开" value="public" />
+                <el-option label="内部" value="internal" />
+                <el-option label="机密" value="confidential" />
+              </el-select>
+            </el-form-item>
+          </el-form>
+          <div class="upload-warning kb-text">
+            修改后会创建新版本并重建索引；旧向量在激活前仍受 PostgreSQL 最新 ACL 二次鉴权。
+          </div>
+          <template #footer>
+            <el-button @click="metadataVisible = false">取消</el-button>
+            <el-button type="primary" :loading="mutating" @click="saveMetadata">
+              保存并重建
+            </el-button>
+          </template>
+        </el-drawer>
+
+        <component
+          :is="isMobile ? ElDrawer : ElDialog"
+          :model-value="dangerAction !== null"
+          title="确认高风险操作"
+          :width="isMobile ? undefined : 'min(520px, calc(100vw - 28px))'"
+          align-center
+          :size="isMobile ? '90%' : undefined"
+          :direction="isMobile ? 'btt' : undefined"
+          append-to-body
+          @update:model-value="
+            (visible: boolean) => {
+              if (!visible) dangerAction = null;
+            }
+          "
+        >
+          <template v-if="document && dangerAction">
+            <div v-if="dangerAction === 'delete'" class="danger-confirmation-copy kb-text">
+              删除将永久移除原文件、全部版本向量和可识别缓存，且无法撤销。
+            </div>
+            <div v-else class="danger-confirmation-copy kb-text">
+              将创建新的索引版本；旧版本会持续服务，直至新版本通过验证并原子激活。
+            </div>
+            <div>
+              <el-text tag="sub">
+                请输入文档名 <strong>{{ document.sourceName }}</strong> 以确认。
+              </el-text>
+            </div>
+            <el-input v-model="confirmationName" aria-label="输入文档名确认" />
+          </template>
+          <template #footer>
+            <el-button @click="dangerAction = null">取消</el-button>
+            <el-button
+              :type="dangerAction === 'delete' ? 'danger' : 'primary'"
+              :disabled="confirmationName !== document?.sourceName"
+              :loading="mutating"
+              @click="confirmDangerAction"
+            >
+              {{ dangerAction === 'delete' ? '永久删除' : '开始重建' }}
+            </el-button>
+          </template>
+        </component>
+
+        <article v-if="jobs.length" class="kb-block">
+          <div class="kb-block-header">
+            <div class="kb-block-title">最近任务</div>
+          </div>
+          <div class="recent-jobs">
+            <div v-for="job in jobs.slice(0, 5)" :key="job.id" class="recent-jobs-item">
+              <RouterLink :to="allTasksTarget">
+                <span class="recent-job-name__link">
+                  v{{ job.version }} · {{ job.status }} · {{ job.step }}
+                </span>
+              </RouterLink>
+              <time class="recent-job-time">{{ new Date(job.updatedAt).toLocaleString() }}</time>
+            </div>
+          </div>
+        </article>
+
+        <el-drawer
+          v-if="isMobile"
+          v-model="mobileActionsVisible"
+          class="mobile-action-drawer"
+          direction="btt"
+          size="auto"
+          title="文档操作"
+          append-to-body
+        >
+          <div class="mobile-action-list" role="menu" aria-label="文档操作">
+            <RouterLink
+              class="mobile-action-item"
+              role="menuitem"
+              :to="{ path: `/documents/${document.id}/preview`, query: { from: route.fullPath } }"
+              @click="closeMobileActions"
+            >
+              <el-icon class="mobile-action-icon"><View /></el-icon>
+              <span>预览文档</span>
+              <span class="mobile-action-chevron" aria-hidden="true">›</span>
+            </RouterLink>
+            <button
+              v-if="canWrite"
+              class="mobile-action-item"
+              type="button"
+              role="menuitem"
+              :disabled="document.status !== 'active'"
+              @click="openMetadataFromMobile"
+            >
+              <el-icon class="mobile-action-icon"><Lock /></el-icon>
+              <span>修改权限</span>
+              <span class="mobile-action-chevron" aria-hidden="true">›</span>
+            </button>
+            <button
+              v-if="canWrite"
+              class="mobile-action-item"
+              type="button"
+              role="menuitem"
+              :disabled="document.status !== 'active' && document.status !== 'prepared'"
+              @click="requestReindexFromMobile"
+            >
+              <el-icon class="mobile-action-icon"><Refresh /></el-icon>
+              <span>{{ document.status === 'prepared' ? '继续建立索引' : '重新索引' }}</span>
+              <span class="mobile-action-chevron" aria-hidden="true">›</span>
+            </button>
+            <button
+              v-if="canDelete"
+              class="mobile-action-item mobile-action-item--danger"
+              type="button"
+              role="menuitem"
+              @click="requestRemovalFromMobile"
+            >
+              <el-icon class="mobile-action-icon"><Delete /></el-icon>
+              <span>删除文档</span>
+              <span class="mobile-action-chevron" aria-hidden="true">›</span>
+            </button>
+          </div>
+        </el-drawer>
+      </template>
+    </div>
+  </section>
+</template>
+
 <script setup lang="ts">
 import type { DocumentDetail, IngestionJob, Sensitivity } from '@nexus-kb/contracts';
+import { Delete, Lock, MoreFilled, Refresh, View } from '@element-plus/icons-vue';
 import { ElDialog, ElDrawer, ElMessage } from 'element-plus';
 import { computed, onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
@@ -17,7 +435,7 @@ import { useBreakpoint } from '@/composables/useBreakpoint';
 const route = useRoute();
 const router = useRouter();
 const auth = useAuthStore();
-const { isMobile, isPhone } = useBreakpoint();
+const { isMobile } = useBreakpoint();
 const documentId = String(route.params.id);
 const document = ref<DocumentDetail | null>(null);
 const jobs = ref<IngestionJob[]>([]);
@@ -25,6 +443,7 @@ const loading = ref(false);
 const errorMessage = ref('');
 const mutating = ref(false);
 const metadataVisible = ref(false);
+const mobileActionsVisible = ref(false);
 const metadataDepartment = ref('');
 const metadataSensitivity = ref<Sensitivity>('internal');
 const dangerAction = ref<'reindex' | 'delete' | null>(null);
@@ -34,6 +453,7 @@ const documentStatusLabels: Record<string, string> = {
   processing: '处理中',
   prepared: '待建立索引',
   active: '已生效',
+  superseded: '已被替代',
   policy_blocked: '策略阻止',
   failed: '失败',
   deleted: '已删除',
@@ -54,9 +474,60 @@ const chunksTarget = computed(() => ({
   path: `/documents/${documentId}/chunks`,
   query: activeVersion.value ? { version: String(activeVersion.value.version) } : {},
 }));
+const dwgSourceVersion = computed(() => {
+  const warning = activeVersion.value?.warnings.find((item) =>
+    item.startsWith('DWG_SOURCE_VERSION:'),
+  );
+  return warning?.slice('DWG_SOURCE_VERSION:'.length) ?? null;
+});
+const hasDwgConversion = computed(
+  () => activeVersion.value?.warnings.includes('DWG_CONVERTED_TO_DXF') ?? false,
+);
+const visibleIndexWarnings = computed(
+  () =>
+    activeVersion.value?.warnings.filter(
+      (warning) => warning !== 'DWG_CONVERTED_TO_DXF' && !warning.startsWith('DWG_SOURCE_VERSION:'),
+    ) ?? [],
+);
 
 function documentStatusLabel(status: string): string {
   return documentStatusLabels[status] ?? status;
+}
+
+async function copyDocumentId(): Promise<void> {
+  if (!document.value) return;
+  try {
+    await navigator.clipboard.writeText(document.value.id);
+    ElMessage.success('文档 ID 已复制');
+  } catch {
+    ElMessage.error('复制失败，请手动选择文档 ID');
+  }
+}
+
+function documentStatusType(status: string): 'success' | 'warning' | 'danger' | 'info' {
+  if (status === 'active') return 'success';
+  if (status === 'prepared' || status === 'processing') return 'warning';
+  if (status === 'failed' || status === 'policy_blocked' || status === 'deleted') return 'danger';
+  return 'info';
+}
+
+function closeMobileActions(): void {
+  mobileActionsVisible.value = false;
+}
+
+function openMetadataFromMobile(): void {
+  closeMobileActions();
+  openMetadata();
+}
+
+function requestReindexFromMobile(): void {
+  closeMobileActions();
+  requestReindex();
+}
+
+function requestRemovalFromMobile(): void {
+  closeMobileActions();
+  requestRemoval();
 }
 
 async function load(): Promise<void> {
@@ -157,306 +628,190 @@ async function saveMetadata(): Promise<void> {
 onMounted(load);
 </script>
 
-<template>
-  <section v-loading="loading" class="document-detail-page">
-    <div class="page-content">
-      <div v-if="errorMessage" class="document-error" role="alert">
-        <strong>无法加载文档详情</strong><span>{{ errorMessage }}</span>
-        <el-button @click="load">重试</el-button>
-      </div>
-      <template v-else-if="document">
-        <header class="detail-actions">
-          <div>
-            <div class="heading heading--h2" role="heading" aria-level="2">
-              {{ document.sourceName }}
-            </div>
-            <div class="text-block">{{ document.mimeType }}</div>
-          </div>
-          <div class="detail-action-buttons">
-            <RouterLink
-              :to="{ path: `/documents/${document.id}/preview`, query: { from: route.fullPath } }"
-            >
-              <el-button>预览文档</el-button>
-            </RouterLink>
-            <el-button
-              v-if="canWrite"
-              :disabled="document.status !== 'active'"
-              @click="openMetadata"
-            >
-              修改权限 metadata
-            </el-button>
-            <el-button
-              v-if="canWrite"
-              :loading="mutating"
-              :disabled="document.status !== 'active' && document.status !== 'prepared'"
-              @click="requestReindex"
-            >
-              {{ document.status === 'prepared' ? '继续建立索引' : '重新索引' }}
-            </el-button>
-            <el-button
-              v-if="canDelete"
-              class="delete-document-button"
-              type="danger"
-              :loading="mutating"
-              @click="requestRemoval"
-            >
-              删除文档
-            </el-button>
-          </div>
-        </header>
+<style scoped>
+/* 根容器 */
+.document-detail-page {
+  display: flex;
+  flex-direction: column;
+}
 
-        <div class="detail-grid">
-          <article class="detail-card">
-            <div class="heading heading--h3" role="heading" aria-level="3">基本信息</div>
-            <div class="data-list">
-              <div>
-                <span>状态</span><strong>{{ documentStatusLabel(document.status) }}</strong>
-              </div>
-              <div>
-                <span>部门</span><strong>{{ document.department }}</strong>
-              </div>
-              <div>
-                <span>敏感度</span><strong>{{ document.sensitivity }}</strong>
-              </div>
-              <div>
-                <span>所有者</span><strong>{{ document.ownerId }}</strong>
-              </div>
-              <div>
-                <span>当前版本</span
-                ><strong>{{
-                  document.activeVersion ? `v${document.activeVersion}` : '尚未激活'
-                }}</strong>
-              </div>
-              <div>
-                <span>更新时间</span
-                ><strong>{{ new Date(document.updatedAt).toLocaleString() }}</strong>
-              </div>
-            </div>
-          </article>
-          <article class="detail-card">
-            <div class="card-title">
-              <div class="heading heading--h3" role="heading" aria-level="3">当前向量索引</div>
-              <RouterLink v-if="activeVersion?.chunkCount" :to="chunksTarget">
-                查看全部分块
-              </RouterLink>
-            </div>
-            <div class="data-list">
-              <div>
-                <span>向量库</span>
-                <strong class="fingerprint">
-                  {{ activeVersion?.vectorCollection ?? '尚未写入' }}
-                </strong>
-              </div>
-              <div>
-                <span>向量数（分块）</span><strong>{{ activeVersion?.chunkCount ?? 0 }}</strong>
-              </div>
-              <div>
-                <span>解析器</span>
-                <strong>
-                  {{ activeVersion?.parser ?? '—' }}
-                  {{ activeVersion?.parserVersion ?? '' }}
-                </strong>
-              </div>
-              <div>
-                <span>Embedding 指纹</span>
-                <strong class="fingerprint">
-                  {{ activeVersion?.embeddingFingerprint ?? '尚未生成' }}
-                </strong>
-              </div>
-              <div>
-                <span>写入时间</span>
-                <strong>
-                  {{
-                    activeVersion?.indexedAt
-                      ? new Date(activeVersion.indexedAt).toLocaleString()
-                      : '—'
-                  }}
-                </strong>
-              </div>
-            </div>
-            <div v-if="activeVersion?.warnings.length" class="list-block">
-              <div v-for="warning in activeVersion.warnings" :key="warning" class="list-item">
-                {{ warning }}
-              </div>
-            </div>
-          </article>
-        </div>
+/* 顶部操作栏（标题 + 桌面按钮 / 移动端触发器） */
+.detail-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--kb-block-padding);
+}
+.detail-title {
+  flex: 1 1 auto;
+  overflow: hidden;
+  min-width: 0;
+}
+.detail-title-name {
+  overflow-wrap: anywhere;
+  margin: 0 0 var(--kb-space-1);
+}
+.detail-title-value {
+  margin: 0;
+  color: var(--kb-color-text-secondary);
+}
+.mobile-actions-trigger {
+  flex: 0 0 var(--kb-space-12);
+  width: var(--kb-space-12);
+  height: var(--kb-space-12);
+  min-width: var(--kb-space-12);
+  color: var(--kb-color-text-primary);
+}
+.detail-action-buttons {
+  display: flex;
+  flex: 0 0 auto;
+  justify-content: flex-end;
+  align-items: center;
+  gap: var(--kb-space-2);
+  width: fit-content;
+}
+.delete-document-button {
+  min-width: 96px;
+}
 
-        <article class="detail-card">
-          <div class="card-title">
-            <div class="heading heading--h3" role="heading" aria-level="3">版本历史</div>
-            <RouterLink :to="allTasksTarget">查看全部任务</RouterLink>
-          </div>
-          <el-table
-            v-if="!isMobile"
-            class="desktop-data-table"
-            :data="document.versions"
-            row-key="version"
-          >
-            <el-table-column label="版本" width="90">
-              <template #default="scope">v{{ scope.row.version }}</template>
-            </el-table-column>
-            <el-table-column label="状态" width="140">
-              <template #default="scope">
-                {{ documentStatusLabel(scope.row.status) }}
-              </template>
-            </el-table-column>
-            <el-table-column prop="chunkCount" label="分块" width="100" />
-            <el-table-column label="向量库" min-width="220">
-              <template #default="scope">
-                <span class="fingerprint">{{ scope.row.vectorCollection ?? '—' }}</span>
-              </template>
-            </el-table-column>
-            <el-table-column prop="parserVersion" label="解析器版本" />
-            <el-table-column label="创建时间">
-              <template #default="scope">
-                {{ new Date(scope.row.createdAt).toLocaleString() }}
-              </template>
-            </el-table-column>
-          </el-table>
-          <div v-else-if="document.versions.length" class="mobile-data-list" aria-label="版本历史">
-            <article
-              v-for="version in document.versions"
-              :key="version.version"
-              class="mobile-data-card"
-            >
-              <header>
-                <strong>版本 v{{ version.version }}</strong>
-                <el-tag>{{ documentStatusLabel(version.status) }}</el-tag>
-              </header>
-              <div class="mobile-data-fields">
-                <div>
-                  <span>分块</span><strong>{{ version.chunkCount }}</strong>
-                </div>
-                <div>
-                  <span>解析器</span><strong>{{ version.parserVersion }}</strong>
-                </div>
-                <div>
-                  <span>向量库</span>
-                  <strong class="fingerprint">{{ version.vectorCollection ?? '—' }}</strong>
-                </div>
-                <div>
-                  <span>创建时间</span>
-                  <strong>{{ new Date(version.createdAt).toLocaleString() }}</strong>
-                </div>
-              </div>
-            </article>
-          </div>
-        </article>
-        <el-dialog
-          v-if="!isPhone"
-          v-model="metadataVisible"
-          class="metadata-dialog"
-          title="修改权限 metadata"
-          width="min(480px, calc(100vw - 28px))"
-          append-to-body
-        >
-          <el-form label-position="top">
-            <el-form-item label="部门">
-              <el-input v-model="metadataDepartment" maxlength="128" />
-            </el-form-item>
-            <el-form-item label="敏感度">
-              <el-select v-model="metadataSensitivity">
-                <el-option label="公开" value="public" />
-                <el-option label="内部" value="internal" />
-                <el-option label="机密" value="confidential" />
-              </el-select>
-            </el-form-item>
-          </el-form>
-          <div class="upload-warning text-block">
-            修改后会创建新版本并重建索引；旧向量在激活前仍受 PostgreSQL 最新 ACL 二次鉴权。
-          </div>
-          <template #footer>
-            <el-button @click="metadataVisible = false">取消</el-button>
-            <el-button type="primary" :loading="mutating" @click="saveMetadata">
-              保存并重建
-            </el-button>
-          </template>
-        </el-dialog>
+/* 基本信息 / 索引信息 */
+.detail-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.document-id-copy {
+  cursor: pointer;
+}
+.document-id-copy:hover {
+  color: var(--kb-color-primary);
+}
+.card-title__link {
+  flex: 0 0 auto;
+  color: var(--kb-color-primary);
+  white-space: nowrap;
+}
+.conversion-note {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--kb-block-padding);
+  padding: var(--kb-list-row-padding);
+  border-radius: var(--kb-radius-md);
+  color: var(--kb-color-primary-dark);
+  background: var(--kb-color-nav-accent);
+}
+.conversion-label {
+  font-weight: bold;
+}
+.conversion-value {
+  text-align: right;
+}
+.index-warning-list {
+  display: grid;
+  gap: var(--kb-space-2);
+  margin-top: var(--kb-list-row-padding);
+}
+.index-warning-list .recent-jobs-item {
+  padding: var(--kb-list-row-padding);
+  border-radius: var(--kb-radius-md);
+  color: var(--kb-color-warning);
+  background: color-mix(in srgb, var(--kb-color-warning) 10%, var(--kb-color-surface));
+}
 
-        <el-drawer
-          v-else
-          v-model="metadataVisible"
-          class="metadata-drawer"
-          direction="rtl"
-          size="100%"
-          title="修改权限 metadata"
-          append-to-body
-        >
-          <el-form label-position="top">
-            <el-form-item label="部门">
-              <el-input v-model="metadataDepartment" maxlength="128" />
-            </el-form-item>
-            <el-form-item label="敏感度">
-              <el-select v-model="metadataSensitivity">
-                <el-option label="公开" value="public" />
-                <el-option label="内部" value="internal" />
-                <el-option label="机密" value="confidential" />
-              </el-select>
-            </el-form-item>
-          </el-form>
-          <div class="upload-warning text-block">
-            修改后会创建新版本并重建索引；旧向量在激活前仍受 PostgreSQL 最新 ACL 二次鉴权。
-          </div>
-          <template #footer>
-            <el-button @click="metadataVisible = false">取消</el-button>
-            <el-button type="primary" :loading="mutating" @click="saveMetadata">
-              保存并重建
-            </el-button>
-          </template>
-        </el-drawer>
+/* 危险操作确认弹窗文案 */
+.danger-confirmation-copy {
+  color: var(--kb-color-danger);
+  line-height: 1.5;
+}
 
-        <component
-          :is="isPhone ? ElDrawer : ElDialog"
-          :model-value="dangerAction !== null"
-          title="确认高风险操作"
-          :width="isPhone ? undefined : 'min(520px, calc(100vw - 28px))'"
-          :size="isPhone ? '90%' : undefined"
-          :direction="isPhone ? 'btt' : undefined"
-          append-to-body
-          @update:model-value="
-            (visible: boolean) => {
-              if (!visible) dangerAction = null;
-            }
-          "
-        >
-          <template v-if="document && dangerAction">
-            <div v-if="dangerAction === 'delete'" class="danger-confirmation-copy text-block">
-              删除将永久移除原文件、全部版本向量和可识别缓存，且无法撤销。
-            </div>
-            <div v-else class="danger-confirmation-copy text-block">
-              将创建新的索引版本；旧版本会持续服务，直至新版本通过验证并原子激活。
-            </div>
-            <div class="text-block">
-              请输入文档名 <strong>{{ document.sourceName }}</strong> 以确认。
-            </div>
-            <el-input v-model="confirmationName" aria-label="输入文档名确认" />
-          </template>
-          <template #footer>
-            <el-button @click="dangerAction = null">取消</el-button>
-            <el-button
-              :type="dangerAction === 'delete' ? 'danger' : 'primary'"
-              :disabled="confirmationName !== document?.sourceName"
-              :loading="mutating"
-              @click="confirmDangerAction"
-            >
-              {{ dangerAction === 'delete' ? '永久删除' : '开始重建' }}
-            </el-button>
-          </template>
-        </component>
+/* 最近任务 */
+.recent-jobs {
+  display: flex;
+  flex-direction: column;
+}
+.recent-jobs .recent-jobs-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--kb-space-4);
+  padding: var(--kb-space-2) 0;
+  border-bottom: 1px solid var(--kb-color-border);
+}
+.recent-jobs .recent-jobs-item:last-child {
+  border-bottom: 0;
+}
+.recent-job-name__link {
+  color: var(--kb-color-primary);
+}
+.recent-job-time {
+  color: var(--kb-color-text-secondary);
+  font-size: 13px;
+}
 
-        <article v-if="jobs.length" class="detail-card">
-          <div class="heading heading--h3" role="heading" aria-level="3">最近任务</div>
-          <div class="recent-jobs list-block">
-            <div v-for="job in jobs.slice(0, 5)" :key="job.id" class="list-item">
-              <RouterLink :to="allTasksTarget">
-                v{{ job.version }} · {{ job.status }} · {{ job.step }}
-              </RouterLink>
-              <time>{{ new Date(job.updatedAt).toLocaleString() }}</time>
-            </div>
-          </div>
-        </article>
-      </template>
-    </div>
-  </section>
-</template>
+/* 移动端底部操作面板 */
+.mobile-action-list {
+  display: grid;
+  gap: var(--kb-space-2);
+}
+.mobile-action-item {
+  display: grid;
+  align-items: center;
+  gap: var(--kb-layout-gap);
+  grid-template-columns: 28px minmax(0, 1fr) auto;
+  width: 100%;
+  min-height: 48px;
+  padding: 0 var(--kb-list-row-padding);
+  border: 1px solid var(--kb-color-border-light);
+  border-radius: var(--kb-radius-md);
+  color: var(--kb-color-text-primary);
+  background: var(--kb-color-canvas);
+  font: inherit;
+  font-weight: 600;
+  text-align: left;
+  /* 触屏上按下要有即时反馈，用 transform+transition 而非依赖 hover */
+  transition:
+    background-color 0.12s ease,
+    transform 0.06s ease;
+}
+.mobile-action-item:active {
+  background: var(--kb-color-primary-soft);
+  transform: scale(0.98);
+}
+.mobile-action-item:disabled {
+  opacity: var(--kb-opacity-disabled);
+  cursor: not-allowed;
+}
+.mobile-action-item--danger {
+  border-color: color-mix(in srgb, var(--kb-color-danger) 28%, var(--kb-color-border));
+  color: var(--kb-color-danger);
+  background: var(--kb-color-danger-soft);
+}
+.mobile-action-item--danger:active {
+  background: color-mix(in srgb, var(--kb-color-danger) 14%, var(--kb-color-surface));
+}
+.mobile-action-icon {
+  flex: 0 0 auto;
+  font-size: 18px;
+}
+.mobile-action-chevron {
+  color: var(--kb-color-text-secondary);
+  font-size: 21px;
+  font-style: normal;
+}
+
+/* 响应式：Pad（768px–1279px） */
+@media (min-width: 768px) and (max-width: 1279px) {
+  .detail-actions {
+    flex-wrap: wrap;
+  }
+}
+/* 响应式：Mobile（<768px） */
+@media (max-width: 767px) {
+  .detail-actions {
+    align-items: flex-start;
+    gap: var(--kb-space-2);
+    padding: var(--kb-block-padding);
+  }
+  .detail-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+</style>

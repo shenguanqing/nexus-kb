@@ -1,40 +1,253 @@
+<template>
+  <div class="app-shell">
+    <header class="app-header">
+      <button
+        type="button"
+        class="mobile-menu-trigger"
+        aria-label="打开导航菜单"
+        @click="mobileSidebarOpen = true"
+      >
+        <span class="mobile-menu-trigger__bar" aria-hidden="true"></span>
+        <span class="mobile-menu-trigger__bar" aria-hidden="true"></span>
+        <span class="mobile-menu-trigger__bar" aria-hidden="true"></span>
+      </button>
+      <RouterLink to="/ask" class="brand" aria-label="知枢 NexusKB 首页">
+        <span class="brand-mark">N</span>
+        <span class="brand-copy">
+          <strong class="brand-name">知枢</strong>
+          <small class="brand-product">NexusKB</small>
+        </span>
+      </RouterLink>
+      <strong class="mobile-page-title">{{ pageTitle }}</strong>
+      <div class="header-context"><span class="status-dot" aria-hidden="true"></span>知识服务</div>
+      <el-breadcrumb class="top-breadcrumb" separator="/" aria-label="当前位置">
+        <el-breadcrumb-item>{{ pageSection }}</el-breadcrumb-item>
+        <el-breadcrumb-item class="top-breadcrumb__current">{{ pageTitle }}</el-breadcrumb-item>
+      </el-breadcrumb>
+      <div class="user-summary">
+        <span class="avatar" aria-hidden="true">
+          {{ auth.identity?.userId.slice(0, 1).toUpperCase() }}
+        </span>
+        <span class="user-details">
+          <strong>{{ auth.identity?.userId }}</strong>
+          <small class="user-context">
+            {{ auth.identity?.department }} · {{ auth.identity?.tenantId }}</small
+          >
+        </span>
+        <button
+          v-if="auth.mode === 'password'"
+          class="logout-button"
+          type="button"
+          aria-label="退出登录"
+          @click="signOut"
+        >
+          退出
+        </button>
+      </div>
+    </header>
+
+    <aside class="app-sidebar">
+      <nav v-if="isDesktop" class="sidebar-navigation" aria-label="主导航">
+        <section
+          v-for="group in visibleNavigationGroups"
+          :key="group.id"
+          class="navigation-group"
+          :aria-label="group.label"
+        >
+          <div class="navigation-label">{{ group.label }}</div>
+          <RouterLink
+            v-for="item in group.items"
+            :key="item.to"
+            class="sidebar-navigation-link"
+            :class="{ 'is-active': activeNavigation === item.to }"
+            :to="item.to"
+            :aria-current="activeNavigation === item.to ? 'page' : undefined"
+          >
+            <span class="sidebar-navigation-icon" aria-hidden="true">
+              <AppNavIcon :name="item.icon" />
+            </span>
+            <span class="sidebar-navigation-label">{{ item.label }}</span>
+          </RouterLink>
+        </section>
+      </nav>
+      <nav
+        v-else-if="isTablet"
+        class="sidebar-navigation tablet-group-navigation"
+        aria-label="主导航分组"
+      >
+        <section
+          v-for="group in visibleNavigationGroups"
+          :key="group.id"
+          class="tablet-navigation-group"
+        >
+          <el-tooltip
+            v-for="item in group.items"
+            :key="item.to"
+            :content="item.label"
+            effect="light"
+            placement="right"
+            :show-after="0"
+            :hide-after="0"
+          >
+            <RouterLink
+              class="sidebar-navigation-link tablet-navigation-link"
+              :class="{ 'is-active': activeNavigation === item.to }"
+              :to="item.to"
+              :aria-label="item.label"
+              :aria-current="activeNavigation === item.to ? 'page' : undefined"
+            >
+              <AppNavIcon :name="item.icon" />
+            </RouterLink>
+          </el-tooltip>
+        </section>
+      </nav>
+    </aside>
+
+    <main class="app-main">
+      <el-page-header
+        v-if="route.path !== '/ask' && (!isMobile || returnNavigation)"
+        class="page-header"
+      >
+        <template #content>
+          <div v-if="!isMobile" class="page-header-copy">
+            <div class="kb-heading kb-heading--h1" role="heading" aria-level="1">
+              {{ pageTitle }}
+            </div>
+            <div v-if="pageDescription">
+              <el-text>{{ pageDescription }}</el-text>
+            </div>
+          </div>
+        </template>
+        <template #extra>
+          <div class="page-header-actions">
+            <RouterLink v-if="returnNavigation" :to="returnNavigation.to" class="page-return-link">
+              <el-button>{{ returnNavigation.label }}</el-button>
+            </RouterLink>
+          </div>
+        </template>
+      </el-page-header>
+      <RouterView />
+    </main>
+
+    <el-drawer
+      v-if="isMobile"
+      v-model="mobileSidebarOpen"
+      class="mobile-navigation-drawer"
+      direction="ltr"
+      size="min(84vw, 280px)"
+      title="主导航"
+      :show-close="false"
+      append-to-body
+    >
+      <template #header="{ close, titleId, titleClass }">
+        <div :id="titleId" :class="[titleClass, 'mobile-sidebar-header']">
+          <div class="mobile-sidebar-header__top">
+            <RouterLink
+              to="/ask"
+              class="mobile-sidebar-brand"
+              aria-label="知枢 NexusKB 首页"
+              @click="closeMobileSidebar"
+            >
+              <span class="brand-mark">N</span>
+              <span class="brand-copy">
+                <strong class="brand-name">知枢</strong>
+                <small class="brand-product">NexusKB</small></span
+              >
+            </RouterLink>
+            <button
+              class="mobile-sidebar-close"
+              type="button"
+              aria-label="关闭导航菜单"
+              @click="close"
+            >
+              <el-icon class="mobile-sidebar-close__icon"><Close /></el-icon>
+            </button>
+          </div>
+          <div class="mobile-sidebar-identity">
+            <span class="avatar mobile-sidebar-identity__avatar" aria-hidden="true">
+              {{ auth.identity?.userId.slice(0, 1).toUpperCase() }}
+            </span>
+            <span class="mobile-sidebar-identity__copy">
+              <strong class="mobile-sidebar-identity__user">{{ auth.identity?.userId }}</strong>
+              <small class="mobile-sidebar-identity__context">
+                {{ auth.identity?.department }}
+              </small>
+            </span>
+          </div>
+        </div>
+      </template>
+      <nav class="mobile-sidebar-navigation" aria-label="移动端主导航">
+        <section
+          v-for="group in visibleNavigationGroups"
+          :key="group.id"
+          class="navigation-group"
+          :aria-label="group.label"
+        >
+          <div class="navigation-label">{{ group.label }}</div>
+          <RouterLink
+            v-for="item in group.items"
+            :key="item.to"
+            class="sidebar-navigation-link"
+            :class="{ 'is-active': activeNavigation === item.to }"
+            :to="item.to"
+            :aria-current="activeNavigation === item.to ? 'page' : undefined"
+            @click="closeMobileSidebar"
+          >
+            <span class="sidebar-navigation-icon" aria-hidden="true">
+              <AppNavIcon :name="item.icon" />
+            </span>
+            <span class="sidebar-navigation-label">{{ item.label }}</span>
+          </RouterLink>
+        </section>
+      </nav>
+      <div v-if="auth.mode === 'password'" class="mobile-sidebar-footer">
+        <el-button class="mobile-sidebar-logout" native-type="button" @click="signOut">
+          退出登录
+        </el-button>
+      </div>
+    </el-drawer>
+  </div>
+</template>
+
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue';
+import { Close } from '@element-plus/icons-vue';
+import { computed, ref } from 'vue';
+import AppNavIcon, { type NavIconName } from '@/components/common/AppNavIcon.vue';
 import { useRoute, useRouter } from 'vue-router';
 import { logout } from '@/api/auth';
 import { useAuthStore } from '@/stores/auth';
 import { useKnowledgeConversationStore } from '@/stores/knowledge-conversation';
 import { useBreakpoint } from '@/composables/useBreakpoint';
+import type { NavigationTarget } from '@/router/navigation';
 import {
   documentDetailReturn,
   documentPreviewReturn,
+  historyDetailReturn,
   ingestionJobsReturn,
   type ReturnNavigation,
 } from '@/router/return-navigation';
 
 interface NavigationItem {
-  to: string;
+  to: NavigationTarget;
   label: string;
-  icon: string;
+  icon: NavIconName;
   capability?: 'documents:read' | 'audit:read' | 'access:read' | 'system:read';
   adminOnly?: boolean;
+}
+
+interface NavigationGroup {
+  id: 'ask' | 'knowledge' | 'security' | 'system';
+  label: string;
+  items: NavigationItem[];
 }
 
 const route = useRoute();
 const router = useRouter();
 const auth = useAuthStore();
 const conversation = useKnowledgeConversationStore();
-const { isMobile } = useBreakpoint();
-const isCollapsed = ref(false);
-const mobileMenuOpen = ref(false);
-watch(
-  isMobile,
-  (mobile) => {
-    if (mobile) isCollapsed.value = false;
-    else mobileMenuOpen.value = false;
-  },
-  { immediate: true },
-);
+const { isDesktop, isMobile, isTablet } = useBreakpoint();
+const mobileSidebarOpen = ref(false);
+const activeNavigation = computed(() => route.meta.activeNavigation);
 const pageTitle = computed(() => String(route.meta.title ?? '知枢'));
 const pageSection = computed(() => {
   if (route.path.startsWith('/documents') || route.path === '/ingestion-jobs') return '知识资产';
@@ -55,72 +268,104 @@ const pageDescription = computed(() => {
   if (route.path.startsWith('/documents/')) return '查看文档版本、索引与处理状态';
   return '';
 });
-const primaryNavigation: NavigationItem[] = [
-  { to: '/ask', label: '知识问答', icon: '✦' },
-  { to: '/history', label: '问答历史', icon: '◷' },
+const navigationGroups: NavigationGroup[] = [
   {
-    to: '/documents',
-    label: '文档管理',
-    icon: '▤',
-    capability: 'documents:read',
-    adminOnly: true,
+    id: 'ask',
+    label: '问答',
+    items: [
+      { to: '/ask', label: '知识问答', icon: 'ask' },
+      { to: '/history', label: '问答历史', icon: 'history' },
+    ],
   },
   {
-    to: '/ingestion-jobs',
-    label: '入库任务',
-    icon: '⇄',
-    capability: 'documents:read',
-    adminOnly: true,
-  },
-];
-const managementNavigation: NavigationItem[] = [
-  { to: '/audit', label: '审计中心', icon: '⌁', capability: 'audit:read', adminOnly: true },
-  {
-    to: '/access/users',
-    label: '用户与角色',
-    icon: '♙',
-    capability: 'access:read',
-    adminOnly: true,
-  },
-  {
-    to: '/access/departments',
-    label: '部门权限',
-    icon: '⌘',
-    capability: 'access:read',
-    adminOnly: true,
+    id: 'knowledge',
+    label: '知识库',
+    items: [
+      {
+        to: '/documents',
+        label: '文档管理',
+        icon: 'documents',
+        capability: 'documents:read',
+        adminOnly: true,
+      },
+      {
+        to: '/ingestion-jobs',
+        label: '入库任务',
+        icon: 'ingestion',
+        capability: 'documents:read',
+        adminOnly: true,
+      },
+    ],
   },
   {
-    to: '/settings/providers',
-    label: '模型 Provider',
-    icon: '◇',
-    capability: 'system:read',
-    adminOnly: true,
+    id: 'security',
+    label: '安全与权限',
+    items: [
+      {
+        to: '/audit',
+        label: '审计中心',
+        icon: 'audit',
+        capability: 'audit:read',
+        adminOnly: true,
+      },
+      {
+        to: '/access/users',
+        label: '用户与角色',
+        icon: 'users',
+        capability: 'access:read',
+        adminOnly: true,
+      },
+      {
+        to: '/access/departments',
+        label: '部门权限',
+        icon: 'departments',
+        capability: 'access:read',
+        adminOnly: true,
+      },
+    ],
   },
   {
-    to: '/system/usage',
-    label: '用量与成本',
-    icon: '▥',
-    capability: 'system:read',
-    adminOnly: true,
-  },
-  {
-    to: '/system/status',
-    label: '系统状态',
-    icon: '●',
-    capability: 'system:read',
-    adminOnly: true,
+    id: 'system',
+    label: '系统',
+    items: [
+      {
+        to: '/settings/providers',
+        label: '模型 Provider',
+        icon: 'provider',
+        capability: 'system:read',
+        adminOnly: true,
+      },
+      {
+        to: '/system/usage',
+        label: '用量与成本',
+        icon: 'usage',
+        capability: 'system:read',
+        adminOnly: true,
+      },
+      {
+        to: '/system/status',
+        label: '系统状态',
+        icon: 'status',
+        capability: 'system:read',
+        adminOnly: true,
+      },
+    ],
   },
 ];
 function canShow(item: NavigationItem): boolean {
   if (item.adminOnly && !auth.identity?.roles.includes('admin')) return false;
   return item.capability === undefined || auth.hasCapability(item.capability);
 }
-const visiblePrimaryNavigation = computed(() => primaryNavigation.filter(canShow));
-const visibleManagementNavigation = computed(() => managementNavigation.filter(canShow));
-function closeMobileMenu(): void {
-  mobileMenuOpen.value = false;
+const visibleNavigationGroups = computed(() =>
+  navigationGroups
+    .map((group) => ({ ...group, items: group.items.filter(canShow) }))
+    .filter((group) => group.items.length > 0),
+);
+function closeMobileSidebar(): void {
+  mobileSidebarOpen.value = false;
 }
 const returnNavigation = computed<ReturnNavigation | null>(() => {
+  if (route.path === '/history' && isMobile.value) return historyDetailReturn(route.fullPath);
   if (/^\/documents\/[^/]+\/preview$/.test(route.path)) {
     return documentPreviewReturn(route.query.from);
   }
@@ -143,129 +388,424 @@ async function signOut(): Promise<void> {
 }
 </script>
 
-<template>
-  <div class="app-shell" :class="{ 'is-collapsed': isCollapsed && !isMobile }">
-    <header class="app-header">
-      <button
-        class="mobile-menu-button"
-        type="button"
-        aria-label="打开导航菜单"
-        @click="mobileMenuOpen = true"
-      >
-        ☰
-      </button>
-      <RouterLink to="/ask" class="brand" aria-label="知枢 NexusKB 首页">
-        <span class="brand-mark">N</span>
-        <span class="brand-copy"><strong>知枢</strong><small>NexusKB</small></span>
-      </RouterLink>
-      <div class="header-context"><span class="status-dot" aria-hidden="true"></span>知识服务</div>
-      <div class="top-breadcrumb" aria-label="当前位置">
-        <span>{{ pageSection }}</span>
-        <i aria-hidden="true">/</i><strong>{{ pageTitle }}</strong>
-      </div>
-      <div class="user-summary">
-        <span class="avatar" aria-hidden="true">
-          {{ auth.identity?.userId.slice(0, 1).toUpperCase() }}
-        </span>
-        <span
-          ><strong>{{ auth.identity?.userId }}</strong
-          ><small>{{ auth.identity?.department }} · {{ auth.identity?.tenantId }}</small></span
-        >
-        <button
-          v-if="auth.mode === 'password'"
-          class="logout-button"
-          type="button"
-          aria-label="退出登录"
-          @click="signOut"
-        >
-          退出
-        </button>
-      </div>
-    </header>
+<style scoped>
+.app-shell {
+  --app-sidebar-width: 248px;
+  min-height: 100vh;
+}
+.app-header {
+  position: fixed;
+  inset: 0 0 auto;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  height: 56px;
+  padding: 0 var(--kb-list-row-padding);
+  border-bottom: 1px solid var(--kb-color-border);
+  color: var(--kb-color-text-primary);
+  background: var(--kb-color-surface);
+}
+.brand {
+  display: flex;
+  align-items: center;
+  gap: var(--kb-space-2);
+  width: 230px;
+  min-width: 0;
+}
+.brand-copy {
+  display: grid;
+  line-height: 1.05;
+}
+.brand-name {
+  font-size: 15px;
+  letter-spacing: 0.02em;
+}
+.brand-product {
+  color: var(--kb-color-text-secondary);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+}
+.mobile-page-title {
+  display: none;
+}
+.header-context {
+  display: flex;
+  align-items: center;
+  gap: var(--kb-space-2);
+  color: var(--kb-color-text-secondary);
+  font-size: 13px;
+}
+.status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--kb-color-success);
+  box-shadow: 0 0 0 var(--kb-space-1) color-mix(in srgb, var(--kb-color-success) 10%, transparent);
+}
+.top-breadcrumb {
+  margin-left: var(--kb-space-6);
+  padding-left: var(--kb-space-6);
+  border-left: 1px solid var(--kb-color-border);
+  font-size: 12px;
+}
+:deep(.el-breadcrumb__item:last-child .el-breadcrumb__inner) {
+  font-weight: 600;
+}
+.user-summary {
+  display: flex;
+  align-items: center;
+  gap: var(--kb-space-2);
+  margin-left: auto;
+  font-size: 12px;
+}
+.user-details {
+  display: grid;
+}
+.user-context {
+  color: var(--kb-color-text-secondary);
+}
+.avatar {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  color: var(--kb-color-primary);
+  background: var(--kb-color-primary-soft);
+  font-weight: 700;
+}
+.logout-button {
+  padding: var(--kb-space-1) var(--kb-space-2);
+  border-radius: var(--kb-radius-sm);
+  color: var(--kb-color-text-secondary);
+  background: transparent;
+  cursor: pointer;
+}
+.logout-button:hover,
+.logout-button:focus-visible {
+  outline: none;
+  color: var(--kb-color-primary);
+  background: var(--kb-color-primary-soft);
+}
+.app-sidebar {
+  position: fixed;
+  top: 56px;
+  bottom: 0;
+  left: 0;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  width: var(--app-sidebar-width);
+  padding: var(--kb-space-5) var(--kb-block-padding) var(--kb-space-4);
+  border-right: 1px solid var(--kb-color-border);
+  background: var(--kb-color-surface);
+  transition:
+    width 0.18s ease,
+    padding 0.18s ease;
+}
+.sidebar-navigation {
+  display: grid;
+  flex: 1 1 auto;
+  align-content: start;
+  gap: var(--kb-layout-gap);
+  overflow: auto;
+  overscroll-behavior: contain;
+  min-height: 0;
+}
+.navigation-group {
+  display: grid;
+  gap: var(--kb-space-1);
+}
+.navigation-group + .navigation-group {
+  padding-top: var(--kb-block-padding);
+}
+.navigation-label {
+  padding: 0 var(--kb-list-row-padding) var(--kb-space-1);
+  color: var(--kb-color-text-secondary);
+  font-size: 11px;
+  font-weight: 650;
+}
+.sidebar-navigation-link {
+  display: flex;
+  align-items: center;
+  gap: var(--kb-layout-gap);
+  min-height: 44px;
+  padding: 0 var(--kb-list-row-padding);
+  border-radius: var(--kb-radius-md);
+  color: var(--kb-color-text-secondary);
+  white-space: nowrap;
+}
+.sidebar-navigation-link:hover {
+  color: var(--kb-color-text-primary);
+  background: var(--kb-color-canvas);
+}
+.sidebar-navigation-link.is-active {
+  color: var(--kb-color-primary);
+  background: var(--kb-color-nav-accent);
+}
+.sidebar-navigation-icon {
+  width: 20px;
+  color: currentColor;
+  font-size: 19px;
+  line-height: 1;
+  text-align: center;
+}
+.sidebar-navigation-label {
+  font-size: 14px;
+  font-weight: 550;
+}
+.app-main {
+  position: fixed;
+  top: 56px;
+  right: 0;
+  bottom: 0;
+  left: var(--app-sidebar-width);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-width: 0;
+  padding: var(--kb-space-page);
+  background: var(--kb-color-surface);
+  transition: left 0.18s ease;
+}
+.app-main > :not(.page-header) {
+  flex: 1 1 auto;
+  width: 100%;
+  min-width: 0;
+  max-width: var(--kb-content-max-width);
+  min-height: 0;
+  margin-inline: auto;
+}
+.page-return-link {
+  display: inline-flex;
+  align-items: center;
+  font-size: 13px;
+}
+.page-return-link:hover {
+  border-color: color-mix(in srgb, var(--kb-color-primary) 40%, var(--kb-color-border));
+  background: var(--kb-color-primary-soft);
+}
+.mobile-menu-trigger,
+.tablet-group-navigation {
+  display: none;
+}
 
-    <aside class="app-sidebar">
-      <nav aria-label="主导航">
-        <div class="navigation-label">工作台</div>
-        <RouterLink v-for="item in visiblePrimaryNavigation" :key="item.to" :to="item.to">
-          <span aria-hidden="true">{{ item.icon }}</span>
-          <b>{{ item.label }}</b>
-        </RouterLink>
-        <div v-if="visibleManagementNavigation.length > 0" class="navigation-label">管理</div>
-        <RouterLink v-for="item in visibleManagementNavigation" :key="item.to" :to="item.to">
-          <span aria-hidden="true">{{ item.icon }}</span>
-          <b>{{ item.label }}</b>
-        </RouterLink>
-      </nav>
-      <button
-        class="collapse-button"
-        type="button"
-        :aria-label="isCollapsed ? '展开侧栏' : '折叠侧栏'"
-        @click="isCollapsed = !isCollapsed"
-      >
-        {{ isCollapsed ? '›' : '‹' }}<span>{{ isCollapsed ? '' : '收起导航' }}</span>
-      </button>
-    </aside>
-
-    <main class="app-main">
-      <div v-if="route.path !== '/ask'" class="page-heading">
-        <div class="page-heading-copy">
-          <!-- <span class="page-heading-eyebrow">{{ pageSection }}</span> -->
-          <div class="heading heading--h1" role="heading" aria-level="1">{{ pageTitle }}</div>
-          <div v-if="pageDescription" class="text-block">{{ pageDescription }}</div>
-        </div>
-        <div class="page-heading-actions">
-          <RouterLink v-if="returnNavigation" :to="returnNavigation.to" class="page-return-link">
-            ← {{ returnNavigation.label }}
-          </RouterLink>
-        </div>
-      </div>
-      <RouterView />
-    </main>
-
-    <el-drawer
-      v-if="isMobile"
-      v-model="mobileMenuOpen"
-      class="mobile-navigation-drawer"
-      direction="ltr"
-      size="min(86vw, 280px)"
-      :with-header="false"
-    >
-      <div class="mobile-drawer-header">
-        <RouterLink to="/ask" class="brand" aria-label="知枢 NexusKB 首页" @click="closeMobileMenu">
-          <span class="brand-mark">N</span>
-          <span class="brand-copy"><strong>知枢</strong><small>NexusKB</small></span>
-        </RouterLink>
-        <button
-          type="button"
-          class="mobile-drawer-close"
-          aria-label="关闭导航菜单"
-          @click="closeMobileMenu"
-        >
-          ×
-        </button>
-      </div>
-      <nav class="mobile-drawer-nav" aria-label="移动端主导航">
-        <div>工作台</div>
-        <RouterLink
-          v-for="item in visiblePrimaryNavigation"
-          :key="item.to"
-          :to="item.to"
-          @click="closeMobileMenu"
-        >
-          <span aria-hidden="true">{{ item.icon }}</span>
-          <b>{{ item.label }}</b>
-        </RouterLink>
-        <div v-if="visibleManagementNavigation.length > 0">管理</div>
-        <RouterLink
-          v-for="item in visibleManagementNavigation"
-          :key="item.to"
-          :to="item.to"
-          @click="closeMobileMenu"
-        >
-          <span aria-hidden="true">{{ item.icon }}</span>
-          <b>{{ item.label }}</b>
-        </RouterLink>
-      </nav>
-    </el-drawer>
-  </div>
-</template>
+/* 响应式：Pad（768px–1279px） */
+@media (min-width: 768px) and (max-width: 1279px) {
+  .app-shell {
+    --app-sidebar-width: 68px;
+  }
+  .brand {
+    width: 140px;
+  }
+  .app-sidebar {
+    overflow-x: hidden;
+    overflow-y: auto;
+    padding-inline: var(--kb-space-2);
+    overscroll-behavior-y: contain;
+  }
+  .app-sidebar .tablet-group-navigation {
+    display: grid;
+    flex: 0 0 auto;
+    gap: 0;
+    overflow: visible;
+    width: 100%;
+  }
+  .tablet-navigation-group {
+    display: grid;
+    place-items: center;
+    gap: var(--kb-space-1);
+    padding-block: var(--kb-space-2);
+  }
+  .tablet-navigation-group + .tablet-navigation-group {
+    border-top: 1px solid var(--kb-color-border);
+  }
+  .app-sidebar .tablet-navigation-link {
+    display: grid;
+    place-items: center;
+    width: 100%;
+    height: 52px;
+    max-width: 52px;
+    min-height: 52px;
+    padding: 0;
+    border: 0;
+    border-radius: var(--kb-radius-md);
+    color: var(--kb-color-text-secondary);
+    background: transparent;
+    cursor: pointer;
+  }
+  .app-sidebar .tablet-navigation-link :deep(.nav-icon) {
+    width: 22px;
+    height: 22px;
+  }
+  .app-sidebar .tablet-navigation-link:hover,
+  .app-sidebar .tablet-navigation-link:focus-visible,
+  .app-sidebar .tablet-navigation-link.is-active {
+    color: var(--kb-color-primary);
+    background: var(--kb-color-nav-accent);
+  }
+  .app-main {
+    padding: var(--kb-space-6);
+  }
+}
+/* 响应式：Pad 横屏（768px–1279px） */
+@media (min-width: 768px) and (max-width: 1279px) and (orientation: landscape) {
+  .app-main {
+    padding: var(--kb-block-padding);
+  }
+}
+/* 响应式：Mobile（<768px） */
+@media (max-width: 767px) {
+  .brand {
+    display: none;
+  }
+  .header-context,
+  .top-breadcrumb,
+  .user-details,
+  .logout-button {
+    display: none;
+  }
+  .mobile-page-title {
+    display: block;
+    min-width: 0;
+    margin-left: var(--kb-space-element);
+  }
+  .mobile-menu-trigger {
+    display: grid;
+    place-content: center;
+    gap: var(--kb-space-1);
+    width: 32px;
+    height: 44px;
+    color: var(--kb-color-text-primary);
+    background: transparent;
+    cursor: pointer;
+  }
+  .mobile-menu-trigger__bar {
+    display: block;
+    width: 20px;
+    height: 2px;
+    border-radius: 2px;
+    background: currentColor;
+  }
+  .user-summary {
+    margin-left: auto;
+  }
+  .app-sidebar {
+    display: none;
+  }
+  .app-main {
+    left: 0;
+  }
+  .page-return-link {
+    font-size: 12px;
+  }
+  .mobile-sidebar-header {
+    display: grid;
+    gap: var(--kb-layout-gap);
+    width: 100%;
+    min-width: 0;
+  }
+  .mobile-sidebar-header__top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: var(--kb-space-2);
+  }
+  .mobile-sidebar-brand {
+    display: flex;
+    align-items: center;
+    gap: var(--kb-space-2);
+    width: fit-content;
+    min-width: 0;
+  }
+  .mobile-sidebar-identity {
+    display: flex;
+    align-items: center;
+    gap: var(--kb-space-2);
+    min-width: 0;
+    padding: var(--kb-space-2) var(--kb-block-padding);
+    border: 1px solid var(--kb-color-border);
+    border-radius: var(--kb-radius-md);
+    background: var(--kb-color-canvas);
+  }
+  .mobile-sidebar-identity__avatar {
+    flex: 0 0 auto;
+  }
+  .mobile-sidebar-identity__copy {
+    display: grid;
+    min-width: 0;
+    line-height: 1.3;
+  }
+  .mobile-sidebar-identity__user,
+  .mobile-sidebar-identity__context {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .mobile-sidebar-identity__user {
+    color: var(--kb-color-text-primary);
+    font-size: 13px;
+  }
+  .mobile-sidebar-identity__context {
+    color: var(--kb-color-text-secondary);
+    font-size: 11px;
+  }
+  .mobile-sidebar-close {
+    display: grid;
+    flex: 0 0 auto;
+    place-items: center;
+    width: var(--kb-control-height);
+    height: var(--kb-control-height);
+    border: 1px solid var(--kb-color-border);
+    border-radius: var(--kb-radius-pill);
+    color: var(--kb-color-text-secondary);
+    background: var(--kb-color-canvas);
+    line-height: 1;
+    transition:
+      border-color var(--kb-transition-fast),
+      color var(--kb-transition-fast),
+      background var(--kb-transition-fast);
+    cursor: pointer;
+  }
+  .mobile-sidebar-close__icon {
+    font-size: 20px;
+  }
+  .mobile-sidebar-close:hover,
+  .mobile-sidebar-close:focus,
+  .mobile-sidebar-close:focus-visible {
+    border-color: var(--kb-color-border);
+    outline: none;
+    color: var(--kb-color-primary);
+    background: var(--kb-color-primary-soft);
+  }
+  .mobile-sidebar-close:active {
+    border-color: var(--kb-color-border);
+    color: var(--kb-color-primary);
+    background: var(--kb-color-nav-accent);
+  }
+  .mobile-sidebar-navigation {
+    display: grid;
+    flex: 1 1 auto;
+    align-content: start;
+    gap: var(--kb-layout-gap);
+    overflow: auto;
+    overscroll-behavior: contain;
+    min-height: 0;
+  }
+  .mobile-sidebar-footer {
+    flex: 0 0 auto;
+    padding: var(--kb-space-2) 0 max(var(--kb-space-2), env(safe-area-inset-bottom));
+  }
+  .mobile-sidebar-logout {
+    width: 100%;
+    min-height: 48px;
+    border: 1px solid var(--kb-color-border);
+    border-radius: var(--kb-radius-md);
+    color: var(--kb-color-text-secondary);
+    background: var(--kb-color-surface);
+    font: inherit;
+    cursor: pointer;
+  }
+}
+</style>

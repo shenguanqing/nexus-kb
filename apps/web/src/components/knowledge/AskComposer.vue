@@ -1,3 +1,29 @@
+<template>
+  <div class="ask-composer">
+    <label class="sr-only" for="knowledge-question">输入问题</label>
+    <el-input
+      id="knowledge-question"
+      ref="textarea"
+      type="textarea"
+      :model-value="modelValue"
+      :autosize="{ minRows: 1, maxRows: 5 }"
+      maxlength="2000"
+      placeholder="输入问题，Enter 发送，Shift + Enter 换行"
+      @update:model-value="emit('update:modelValue', $event)"
+      @keydown="onKeydown"
+    />
+    <div class="composer-footer">
+      <span class="scope-pill">全部可访问知识</span>
+      <span class="character-count" :class="{ 'is-danger': modelValue.length > 2000 }">
+        {{ modelValue.length }}/2000
+      </span>
+      <el-button type="primary" round :loading="isSubmitting" :disabled="isInvalid" @click="submit">
+        发送
+      </el-button>
+    </div>
+  </div>
+</template>
+
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
 
@@ -33,29 +59,47 @@ watch(
 );
 </script>
 
-<template>
-  <div class="ask-composer">
-    <label class="sr-only" for="knowledge-question">输入知识库问题</label>
-    <el-input
-      id="knowledge-question"
-      ref="textarea"
-      class="ask-composer-input"
-      type="textarea"
-      :model-value="modelValue"
-      :autosize="{ minRows: 2, maxRows: 5 }"
-      maxlength="2000"
-      placeholder="输入问题，Enter 发送，Shift + Enter 换行"
-      @update:model-value="emit('update:modelValue', $event)"
-      @keydown="onKeydown"
-    />
-    <div class="composer-footer">
-      <span class="scope-pill">全部可访问知识</span>
-      <span class="character-count" :class="{ danger: modelValue.length > 2000 }">
-        {{ modelValue.length }}/2000
-      </span>
-      <el-button type="primary" round :loading="isSubmitting" :disabled="isInvalid" @click="submit">
-        发送
-      </el-button>
-    </div>
-  </div>
-</template>
+<style scoped>
+.ask-composer {
+  padding: var(--kb-space-2);
+  border: 1px solid var(--kb-color-border);
+  border-radius: var(--kb-radius-lg);
+  background: var(--kb-color-surface);
+}
+.ask-composer :deep(.el-textarea__inner) {
+  width: 100%;
+  min-height: var(--kb-control-height-textarea);
+  resize: none;
+  border: 0;
+  outline: 0;
+  color: var(--kb-color-text-primary);
+  line-height: var(--kb-line-height-body);
+  box-shadow: none;
+}
+.composer-footer {
+  display: flex;
+  align-items: center;
+  gap: var(--kb-layout-gap);
+}
+.scope-pill {
+  padding: var(--kb-space-1) var(--kb-space-2);
+  border-radius: var(--kb-radius-pill);
+  color: var(--kb-color-text-secondary);
+  background: var(--kb-color-canvas);
+  font-size: 11px;
+}
+.character-count {
+  margin-left: auto;
+  color: var(--kb-color-text-tertiary);
+  font-size: 10px;
+}
+.character-count.is-danger {
+  color: var(--kb-color-danger);
+}
+/* 响应式：Mobile（<768px） */
+@media (max-width: 767px) {
+  .ask-composer {
+    padding-bottom: calc(var(--kb-block-padding) + env(safe-area-inset-bottom));
+  }
+}
+</style>

@@ -1,5 +1,258 @@
+<template>
+  <section class="page">
+    <form
+      v-if="!isMobile"
+      class="task-toolbar"
+      aria-label="入库任务筛选"
+      @submit.prevent="applyFilters"
+    >
+      <label class="task-document-filter">
+        <span class="sr-only">文档 ID</span>
+        <el-input
+          v-model="filters.documentId"
+          clearable
+          maxlength="36"
+          placeholder="文档 ID"
+          :aria-invalid="Boolean(documentIdError)"
+          @input="documentIdError = ''"
+        />
+        <span v-if="documentIdError" class="task-filter-error" role="alert">
+          {{ documentIdError }}
+        </span>
+      </label>
+      <el-select
+        class="task-status-filter"
+        v-model="filters.status"
+        clearable
+        placeholder="全部状态"
+      >
+        <el-option
+          v-for="option in INGESTION_STATUS_OPTIONS"
+          :key="option.value"
+          :label="option.label"
+          :value="option.value"
+        />
+      </el-select>
+      <div class="filter-actions">
+        <el-button native-type="submit">筛选</el-button>
+        <el-button native-type="button" @click="resetFilters"> 重置 </el-button>
+      </div>
+    </form>
+    <form
+      v-else
+      class="task-toolbar task-toolbar--mobile"
+      aria-label="搜索入库任务"
+      @submit.prevent="applyFilters"
+    >
+      <label class="task-document-filter">
+        <span class="sr-only">文档 ID</span>
+        <el-input
+          v-model="filters.documentId"
+          clearable
+          maxlength="36"
+          placeholder="文档 ID"
+          :aria-invalid="Boolean(documentIdError)"
+          @input="documentIdError = ''"
+        />
+        <span v-if="documentIdError" class="task-filter-error" role="alert">
+          {{ documentIdError }}
+        </span>
+      </label>
+      <el-button
+        class="filter-trigger"
+        :class="{ 'is-active': hasStatusFilter }"
+        aria-label="筛选"
+        @click="filtersVisible = true"
+      >
+        筛选
+      </el-button>
+    </form>
+    <el-drawer
+      v-if="isMobile"
+      v-model="filtersVisible"
+      class="mobile-filter-drawer"
+      direction="btt"
+      size="auto"
+      title="筛选入库任务"
+      append-to-body
+    >
+      <form class="mobile-filter-form" aria-label="入库任务状态筛选" @submit.prevent="applyFilters">
+        <el-select v-model="filters.status" clearable placeholder="全部状态">
+          <el-option
+            v-for="option in INGESTION_STATUS_OPTIONS"
+            :key="option.value"
+            :label="option.label"
+            :value="option.value"
+          />
+        </el-select>
+        <div class="mobile-filter-actions">
+          <el-button native-type="button" @click="resetFilters"> 重置 </el-button>
+          <el-button type="primary" native-type="submit">筛选</el-button>
+        </div>
+      </form>
+    </el-drawer>
+    <div class="kb-block-content">
+      <div v-if="errorMessage" class="kb-error-state" role="alert">
+        <strong class="kb-text--danger">无法加载入库任务</strong>
+        <span>{{ errorMessage }}</span>
+        <el-button @click="load()">重试</el-button>
+      </div>
+      <div v-else v-loading="loading" class="task-list kb-block kb-block--flush kb-block-scroll">
+        <article
+          v-for="job in items"
+          :key="job.id"
+          class="task-card"
+          :class="{ 'is-expanded': isExpanded(job) }"
+        >
+          <header
+            class="task-summary"
+            role="button"
+            tabindex="0"
+            :aria-expanded="isExpanded(job)"
+            :aria-controls="`task-details-${job.id}`"
+            @click="toggleExpanded(job)"
+            @keydown.enter.prevent="toggleExpanded(job)"
+            @keydown.space.prevent="toggleExpanded(job)"
+          >
+            <div class="task-summary-title">
+              <RouterLink
+                :to="{
+                  path: `/documents/${job.documentId}`,
+                  query: { from: route.fullPath },
+                }"
+              >
+                <span class="task-source-name">{{ job.sourceName }}</span>
+              </RouterLink>
+              <span class="task-source-meta">
+                v{{ job.version }} · {{ ingestionKindLabel(job.kind) }}
+              </span>
+            </div>
+            <div class="task-summary-meta">
+              <div
+                class="task-progress-dots"
+                role="img"
+                :aria-label="`任务进度：${Math.min(activeStep(job) + 1, stepOrder.length)} / ${stepOrder.length}`"
+              >
+                <span
+                  v-for="index in progressDots"
+                  :key="index"
+                  class="task-progress-dot"
+                  :class="`is-${progressDotState(job, index)}`"
+                >
+                </span>
+              </div>
+              <el-tag :type="statusTagType(job)">
+                {{ summaryStatusLabel(job) }}
+              </el-tag>
+              <el-icon
+                class="task-chevron"
+                :class="{ 'is-expanded': isExpanded(job) }"
+                aria-hidden="true"
+              >
+                <ArrowDown />
+              </el-icon>
+            </div>
+          </header>
+          <div v-if="isExpanded(job)" :id="`task-details-${job.id}`" class="task-details">
+            <el-progress
+              v-if="job.status === 'converting'"
+              class="task-progress"
+              :percentage="50"
+              :indeterminate="true"
+              :show-text="false"
+            />
+            <div v-else class="task-steps-scroll" tabindex="0" aria-label="入库步骤">
+              <el-steps
+                class="task-steps"
+                :simple="!isMobile"
+                :direction="isMobile ? 'vertical' : 'horizontal'"
+                :active="activeStep(job)"
+                :process-status="job.status === 'failed' ? 'error' : 'process'"
+                :finish-status="job.status === 'completed' ? 'success' : 'finish'"
+              >
+                <el-step title="排队" />
+                <el-step title="解析" />
+                <el-step title="分块/脱敏" />
+                <el-step title="策略" />
+                <el-step title="Embedding" />
+                <el-step title="索引" />
+                <el-step title="完成" />
+              </el-steps>
+            </div>
+            <div class="task-data-list">
+              <div class="task-data-item">
+                <span class="task-data-label">耗时</span>
+                <span class="task-data-value">{{ elapsed(job) }}</span>
+              </div>
+              <div class="task-data-item">
+                <span class="task-data-label">尝试次数</span>
+                <span class="task-data-value">{{ job.attempts }}</span>
+              </div>
+              <div v-if="job.embeddingTotalChunks !== null" class="task-data-item">
+                <span class="task-data-label">Embedding 进度</span>
+                <span class="task-data-value">
+                  {{ job.embeddingCompletedChunks }} / {{ job.embeddingTotalChunks }}
+                </span>
+              </div>
+              <div class="task-data-item">
+                <span class="task-data-label">更新时间</span>
+                <span class="task-data-value">
+                  {{ new Date(job.updatedAt).toLocaleString() }}
+                </span>
+              </div>
+            </div>
+            <div v-if="job.warnings.length" class="task-warning">
+              <span class="task-warning-title">Warning</span>
+              <div>
+                <div v-for="warning in job.warnings" :key="warning">
+                  {{ warning }}
+                </div>
+              </div>
+            </div>
+            <div v-if="job.errorCode" class="task-error">
+              <div>
+                <el-text>{{ ingestionErrorMessage(job.errorCode) }}</el-text>
+              </div>
+              <details class="task-error-details">
+                <span>技术详情：</span>
+                <code>{{ job.errorCode }}</code>
+                <span>Trace ID：{{ job.traceId }}</span>
+              </details>
+              <el-button
+                v-if="canRetry && job.status === 'failed' && job.retryable"
+                :loading="retryingId === job.id"
+                @click="retry(job)"
+              >
+                重试任务
+              </el-button>
+            </div>
+          </div>
+        </article>
+        <el-empty v-if="!loading && items.length === 0" description="暂无符合条件的入库任务" />
+      </div>
+      <div
+        v-if="!errorMessage && !documentIdError && total > filters.pageSize"
+        class="kb-pagination"
+      >
+        <el-pagination
+          layout="total, prev, pager, next"
+          :current-page="filters.page"
+          :page-size="filters.pageSize"
+          :total="total"
+          @current-change="changePage"
+        />
+      </div>
+    </div>
+  </section>
+</template>
+
 <script setup lang="ts">
-import type { IngestionJob, IngestionJobListRequest } from '@nexus-kb/contracts';
+import {
+  ingestionJobListRequestSchema,
+  type IngestionJob,
+  type IngestionJobListRequest,
+} from '@nexus-kb/contracts';
+import { ArrowDown } from '@element-plus/icons-vue';
 import { ElMessage } from 'element-plus';
 import { computed, onMounted, onUnmounted, reactive, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
@@ -8,18 +261,27 @@ import { listIngestionJobs, retryIngestionJob } from '@/api/ingestion';
 import { ingestionJobsReturn } from '@/router/return-navigation';
 import { useAuthStore } from '@/stores/auth';
 import { useBreakpoint } from '@/composables/useBreakpoint';
-import { formatIngestionElapsed, ingestionErrorMessage } from './ingestion-presentation';
+import {
+  formatIngestionElapsed,
+  ingestionErrorMessage,
+  ingestionKindLabel,
+  ingestionStatusLabel,
+  INGESTION_STATUS_OPTIONS,
+  isRunningIngestionStatus,
+} from './ingestion-presentation';
 
 const route = useRoute();
 const router = useRouter();
 const auth = useAuthStore();
-const { isMobile, isPhone } = useBreakpoint();
+const { isMobile } = useBreakpoint();
 const items = ref<IngestionJob[]>([]);
 const total = ref(0);
 const loading = ref(false);
 const errorMessage = ref('');
+const documentIdError = ref('');
 const retryingId = ref<string | null>(null);
 const filtersVisible = ref(false);
+const expansionOverrides = ref<Record<string, boolean>>({});
 const filters = reactive({
   status: typeof route.query.status === 'string' ? route.query.status : '',
   documentId: typeof route.query.documentId === 'string' ? route.query.documentId : '',
@@ -27,58 +289,37 @@ const filters = reactive({
   pageSize: Number(route.query.pageSize) || 20,
 });
 const canRetry = computed(() => auth.hasCapability('documents:write'));
+const hasStatusFilter = computed(() => filters.status !== '');
 const returnNavigation = computed(() => ingestionJobsReturn(route.query.returnTo));
 const nowMs = ref(Date.now());
 let pollingTimer: number | undefined;
 let elapsedTimer: number | undefined;
-const runningStatuses = new Set([
-  'queued',
-  'converting',
-  'parsing',
-  'chunking',
-  'policy_check',
-  'embedding',
-  'indexing',
-]);
-const stepLabels: Record<string, string> = {
-  queued: '排队',
-  converting: 'CAD 格式转换与解析',
-  parsing: '解析',
-  chunking: '分块与脱敏',
-  policy_check: '出网策略检查',
-  prepared: '本地准备完成',
-  embedding: 'Embedding',
-  indexing: '建立索引',
-  completed: '完成',
-  failed: '失败',
-  policy_blocked: '策略阻止',
-};
-const statusOptions: Array<{
-  value: NonNullable<IngestionJobListRequest['status']>;
-  label: string;
-}> = [
-  { value: 'queued', label: '排队' },
-  { value: 'converting', label: 'CAD 格式转换与解析' },
-  { value: 'parsing', label: '解析' },
-  { value: 'chunking', label: '分块与脱敏' },
-  { value: 'policy_check', label: '出网策略检查' },
-  { value: 'embedding', label: 'Embedding' },
-  { value: 'indexing', label: '建立索引' },
-  { value: 'completed', label: '完成' },
-  { value: 'failed', label: '失败' },
-  { value: 'policy_blocked', label: '策略阻止' },
-];
-
 function request(): Partial<IngestionJobListRequest> {
   return {
     status: (filters.status || undefined) as IngestionJobListRequest['status'],
-    documentId: filters.documentId || undefined,
+    documentId: filters.documentId.trim() || undefined,
     page: filters.page,
     pageSize: filters.pageSize,
   };
 }
 
+function validateDocumentId(): boolean {
+  const documentId = filters.documentId.trim();
+  if (!documentId) {
+    documentIdError.value = '';
+    return true;
+  }
+  const parsed = ingestionJobListRequestSchema.safeParse({ documentId });
+  documentIdError.value = parsed.success ? '' : '请输入完整的文档 ID（UUID）';
+  return parsed.success;
+}
+
 async function load(quiet = false): Promise<void> {
+  if (!validateDocumentId()) {
+    errorMessage.value = '';
+    loading.value = false;
+    return;
+  }
   if (!quiet) loading.value = true;
   errorMessage.value = '';
   try {
@@ -93,6 +334,7 @@ async function load(quiet = false): Promise<void> {
 }
 
 async function applyFilters(): Promise<void> {
+  if (!validateDocumentId()) return;
   filters.page = 1;
   await syncAndLoad();
   filtersVisible.value = false;
@@ -108,8 +350,10 @@ async function syncAndLoad(): Promise<void> {
 async function resetFilters(): Promise<void> {
   filters.status = '';
   filters.documentId = '';
+  documentIdError.value = '';
   filters.page = 1;
   await syncAndLoad();
+  filtersVisible.value = false;
 }
 
 async function changePage(nextPage: number): Promise<void> {
@@ -141,6 +385,7 @@ const stepOrder = [
   'indexing',
   'completed',
 ] as const;
+const progressDots = Array.from({ length: stepOrder.length }, (_, index) => index);
 
 function activeStep(job: IngestionJob): number {
   if (job.status === 'completed') return stepOrder.length;
@@ -153,13 +398,53 @@ function activeStep(job: IngestionJob): number {
   return checkpoint >= 0 ? checkpoint : 0;
 }
 
+function isExpanded(job: IngestionJob): boolean {
+  return (
+    expansionOverrides.value[job.id] ??
+    (isRunningIngestionStatus(job.status) || job.status === 'failed')
+  );
+}
+
+function toggleExpanded(job: IngestionJob): void {
+  expansionOverrides.value = {
+    ...expansionOverrides.value,
+    [job.id]: !isExpanded(job),
+  };
+}
+
+function summaryStatusLabel(job: IngestionJob): string {
+  if (isRunningIngestionStatus(job.status)) return '进行中';
+  return ingestionStatusLabel(job.status);
+}
+
+function statusTagType(job: IngestionJob): 'success' | 'danger' | 'warning' | 'info' {
+  if (job.status === 'completed') return 'success';
+  if (job.status === 'failed') return 'danger';
+  if (job.status === 'policy_blocked') return 'warning';
+  return 'info';
+}
+
+function progressDotState(
+  job: IngestionJob,
+  index: number,
+): 'complete' | 'current' | 'error' | 'pending' {
+  if (job.status === 'completed') return 'complete';
+
+  const current = Math.min(activeStep(job), stepOrder.length - 1);
+  if (index < current) return 'complete';
+  if (index > current) return 'pending';
+  if (job.status === 'failed') return 'error';
+  if (isRunningIngestionStatus(job.status)) return 'current';
+  return 'pending';
+}
+
 onMounted(async () => {
   await load();
   elapsedTimer = window.setInterval(() => {
     nowMs.value = Date.now();
   }, 1000);
   pollingTimer = window.setInterval(() => {
-    if (items.value.some((job) => runningStatuses.has(job.status))) void load(true);
+    if (items.value.some((job) => isRunningIngestionStatus(job.status))) void load(true);
   }, 5000);
 });
 onUnmounted(() => {
@@ -168,175 +453,203 @@ onUnmounted(() => {
 });
 </script>
 
-<template>
-  <section class="ingestion-page">
-    <div class="task-controls">
-      <div class="task-toolbar">
-        <div class="text-block">共 {{ total }} 个可访问任务</div>
-        <form
-          v-if="!isMobile"
-          class="task-filter-form"
-          aria-label="入库任务筛选"
-          @submit.prevent="applyFilters"
-        >
-          <el-select v-model="filters.status" clearable placeholder="全部状态">
-            <el-option
-              v-for="option in statusOptions"
-              :key="option.value"
-              :label="option.label"
-              :value="option.value"
-            />
-          </el-select>
-          <el-button native-type="submit">筛选</el-button>
-          <el-button class="reset-button" native-type="button" @click="resetFilters">
-            重置
-          </el-button>
-        </form>
-        <template v-else>
-          <div class="mobile-filter-bar">
-            <el-button class="filter-trigger" @click="filtersVisible = true">筛选</el-button>
-          </div>
-          <el-drawer
-            v-model="filtersVisible"
-            class="mobile-filter-drawer"
-            direction="btt"
-            size="72%"
-            title="筛选入库任务"
-            append-to-body
-            :z-index="4000"
-          >
-            <form
-              class="mobile-filter-form"
-              aria-label="入库任务筛选"
-              @submit.prevent="applyFilters"
-            >
-              <el-select v-model="filters.status" clearable placeholder="全部状态">
-                <el-option
-                  v-for="option in statusOptions"
-                  :key="option.value"
-                  :label="option.label"
-                  :value="option.value"
-                />
-              </el-select>
-              <el-input v-model="filters.documentId" clearable placeholder="文档 ID" />
-              <div class="mobile-filter-actions">
-                <el-button native-type="button" @click="resetFilters">重置</el-button>
-                <el-button type="primary" native-type="submit">筛选</el-button>
-              </div>
-            </form>
-          </el-drawer>
-        </template>
-      </div>
-    </div>
-    <div class="task-content">
-      <div v-if="errorMessage" class="document-error" role="alert">
-        <strong>无法加载入库任务</strong><span>{{ errorMessage }}</span>
-        <el-button @click="load()">重试</el-button>
-      </div>
-      <div v-else v-loading="loading" class="task-list">
-        <article v-for="job in items" :key="job.id" class="task-card">
-          <header>
-            <div>
-              <RouterLink
-                :to="{
-                  path: `/documents/${job.documentId}`,
-                  query: { from: route.fullPath },
-                }"
-              >
-                {{ job.sourceName }}
-              </RouterLink>
-              <span>v{{ job.version }} · {{ job.kind }}</span>
-            </div>
-            <el-tag
-              :type="
-                job.status === 'completed'
-                  ? 'success'
-                  : job.status === 'failed'
-                    ? 'danger'
-                    : job.status === 'policy_blocked'
-                      ? 'warning'
-                      : 'info'
-              "
-            >
-              {{ stepLabels[job.status] ?? job.status }}
-            </el-tag>
-          </header>
-          <el-progress
-            v-if="job.status === 'converting'"
-            :percentage="50"
-            :indeterminate="true"
-            :show-text="false"
-          />
-          <el-steps
-            v-else
-            class="task-steps"
-            :simple="!isPhone"
-            :direction="isPhone ? 'vertical' : 'horizontal'"
-            :active="activeStep(job)"
-            :process-status="job.status === 'failed' ? 'error' : 'process'"
-            :finish-status="job.status === 'completed' ? 'success' : 'finish'"
-          >
-            <el-step title="排队" />
-            <el-step title="解析" />
-            <el-step title="分块/脱敏" />
-            <el-step title="策略" />
-            <el-step title="Embedding" />
-            <el-step title="索引" />
-            <el-step title="完成" />
-          </el-steps>
-          <div class="data-list">
-            <div>
-              <span>当前步骤</span><strong>{{ stepLabels[job.step] ?? job.step }}</strong>
-            </div>
-            <div>
-              <span>耗时</span><strong>{{ elapsed(job) }}</strong>
-            </div>
-            <div>
-              <span>尝试次数</span><strong>{{ job.attempts }}</strong>
-            </div>
-            <div v-if="job.embeddingTotalChunks !== null">
-              <span>Embedding 进度</span>
-              <strong>{{ job.embeddingCompletedChunks }} / {{ job.embeddingTotalChunks }}</strong>
-            </div>
-            <div>
-              <span>更新时间</span><strong>{{ new Date(job.updatedAt).toLocaleString() }}</strong>
-            </div>
-          </div>
-          <div v-if="job.warnings.length" class="task-warning">
-            <strong>Warning</strong>
-            <div class="list-block">
-              <div v-for="warning in job.warnings" :key="warning" class="list-item">
-                {{ warning }}
-              </div>
-            </div>
-          </div>
-          <div v-if="job.errorCode" class="task-error">
-            <div class="text-block">{{ ingestionErrorMessage(job.errorCode) }}</div>
-            <details>
-              <summary>技术详情</summary>
-              <code>{{ job.errorCode }}</code>
-              <span>Trace ID：{{ job.traceId }}</span>
-            </details>
-            <el-button
-              v-if="canRetry && job.status === 'failed' && job.retryable"
-              :loading="retryingId === job.id"
-              @click="retry(job)"
-            >
-              重试任务
-            </el-button>
-          </div>
-        </article>
-        <el-empty v-if="!loading && items.length === 0" description="暂无符合条件的入库任务" />
-      </div>
-      <div v-if="total > filters.pageSize" class="list-pagination">
-        <el-pagination
-          layout="total, prev, pager, next"
-          :current-page="filters.page"
-          :page-size="filters.pageSize"
-          :total="total"
-          @current-change="changePage"
-        />
-      </div>
-    </div>
-  </section>
-</template>
+<style scoped>
+.task-toolbar {
+  display: grid;
+  align-items: start;
+  gap: var(--kb-space-2);
+  grid-template-columns: minmax(0, 1fr) minmax(160px, 0.6fr) auto;
+}
+.task-document-filter {
+  display: grid;
+  gap: var(--kb-space-1);
+  min-width: 0;
+}
+.task-filter-error {
+  color: var(--kb-color-danger);
+  font-size: var(--kb-font-size-sm);
+}
+.task-progress {
+  margin: var(--kb-space-4) 0 0;
+  padding: var(--kb-block-padding);
+}
+.task-list {
+  display: grid;
+  overflow-x: hidden;
+  overflow-y: auto;
+  min-width: 0;
+}
+.task-card,
+.task-summary,
+.task-details {
+  min-width: 0;
+}
+.task-card + .task-card {
+  border-top: 1px solid var(--kb-color-border);
+}
+.task-summary {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--kb-space-4);
+  min-height: var(--kb-space-16);
+  padding: var(--kb-block-padding);
+  cursor: pointer;
+}
+.task-summary:hover {
+  background: var(--kb-color-primary-soft);
+}
+.task-summary:focus-visible {
+  outline: 2px solid var(--kb-color-primary);
+  outline-offset: -2px;
+}
+.task-summary-title {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--kb-space-1);
+  overflow: hidden;
+  min-width: 0;
+}
+.task-source-name {
+  overflow: hidden;
+  max-width: 100%;
+  color: var(--kb-color-primary);
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.task-source-meta {
+  color: var(--kb-color-text-secondary);
+  font-size: 12px;
+}
+.task-summary-meta {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: var(--kb-layout-gap);
+}
+.task-progress-dots {
+  display: flex;
+  align-items: center;
+  gap: var(--kb-space-1);
+}
+.task-progress-dot {
+  width: var(--kb-space-2);
+  height: var(--kb-space-2);
+  border-radius: 50%;
+  background: var(--kb-color-border);
+}
+.task-progress-dot.is-complete {
+  background: var(--kb-color-success);
+}
+.task-progress-dot.is-current {
+  background: var(--kb-color-primary);
+}
+.task-progress-dot.is-error {
+  background: var(--kb-color-danger);
+}
+.task-chevron {
+  color: var(--kb-color-text-secondary);
+  transition: transform 0.18s ease;
+}
+.task-chevron.is-expanded {
+  transform: rotate(180deg);
+}
+.task-details {
+  display: grid;
+  gap: var(--kb-space-4);
+  padding: var(--kb-block-padding);
+}
+.task-steps-scroll {
+  overflow-x: auto;
+  min-width: 0;
+  border-radius: var(--kb-radius-sm);
+  background: var(--kb-color-canvas);
+  overscroll-behavior-x: contain;
+  scrollbar-gutter: stable;
+}
+.task-steps {
+  margin: 0;
+  padding: var(--kb-block-padding);
+  background: transparent;
+}
+.task-data-list {
+  display: grid;
+  gap: var(--kb-layout-gap);
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  padding: 0 var(--kb-block-padding);
+}
+.task-data-item {
+  display: grid;
+  gap: var(--kb-space-1);
+  min-width: 0;
+}
+.task-data-label {
+  color: var(--kb-color-text-secondary);
+  font-size: 12px;
+}
+.task-data-value {
+  overflow-wrap: anywhere;
+  min-width: 0;
+  font-weight: 600;
+}
+.task-warning,
+.task-error {
+  display: grid;
+  gap: var(--kb-space-2);
+  padding: var(--kb-block-padding);
+  border-radius: var(--kb-radius-sm);
+}
+.task-warning {
+  color: var(--kb-color-warning);
+  background: var(--kb-color-warning-soft);
+}
+.task-warning-title {
+  font-weight: 600;
+}
+.task-error {
+  color: var(--kb-color-danger);
+  background: var(--kb-color-danger-soft);
+}
+.task-error-details {
+  display: grid;
+}
+/* 响应式：Pad（768px–1279px） */
+@media (min-width: 768px) and (max-width: 1279px) {
+  .task-card .task-steps {
+    width: max-content;
+    min-width: 100%;
+  }
+}
+/* 响应式：Mobile（<768px） */
+@media (max-width: 767px) {
+  .task-toolbar--mobile {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .task-summary-meta {
+    gap: var(--kb-space-2);
+  }
+  .task-progress-dots {
+    display: none;
+  }
+  .task-steps-scroll {
+    overflow: visible;
+    margin: 0;
+    background: transparent;
+    scrollbar-gutter: auto;
+  }
+  .task-steps {
+    min-width: 0;
+    padding: var(--kb-space-2);
+  }
+  .task-data-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .task-details {
+    gap: var(--kb-layout-gap);
+    padding: 0 var(--kb-space-2) var(--kb-block-padding);
+  }
+}
+</style>

@@ -1,9 +1,343 @@
+<template>
+  <section class="page">
+    <form
+      v-if="!isMobile"
+      class="documents-toolbar document-filters"
+      aria-label="文档筛选"
+      @submit.prevent="applyFilters"
+    >
+      <el-input
+        class="document-filter-search"
+        v-model="filters.search"
+        clearable
+        placeholder="搜索文件名"
+      />
+      <el-select
+        class="document-filter-status"
+        v-model="filters.status"
+        clearable
+        placeholder="状态"
+      >
+        <el-option
+          v-for="(label, value) in statusLabels"
+          :key="value"
+          :label="label"
+          :value="value"
+        />
+      </el-select>
+      <el-select v-model="filters.sensitivity" clearable placeholder="敏感度">
+        <el-option label="公开" value="public" />
+        <el-option label="内部" value="internal" />
+        <el-option label="机密" value="confidential" />
+      </el-select>
+      <el-select v-model="filters.format" clearable placeholder="格式">
+        <el-option
+          v-for="format in [
+            'txt',
+            'md',
+            'pdf',
+            'doc',
+            'docx',
+            'xlsx',
+            'png',
+            'jpg',
+            'jpeg',
+            'dxf',
+            'dwg',
+          ]"
+          :key="format"
+          :label="format.toUpperCase()"
+          :value="format"
+        />
+      </el-select>
+      <div class="filter-actions">
+        <el-button native-type="submit">筛选</el-button>
+        <el-button native-type="button" @click="resetFilters"> 重置 </el-button>
+      </div>
+      <el-button
+        v-if="canUpload"
+        class="documents-upload-action"
+        type="primary"
+        native-type="button"
+        @click="openUpload"
+      >
+        上传文档
+      </el-button>
+    </form>
+    <form
+      v-else
+      class="documents-toolbar documents-toolbar--mobile"
+      aria-label="搜索文档"
+      @submit.prevent="applyFilters"
+    >
+      <el-input v-model="filters.search" clearable maxlength="200" placeholder="搜索文件名" />
+      <el-button
+        v-if="canUpload"
+        class="documents-upload-action"
+        type="primary"
+        native-type="button"
+        @click="openUpload"
+      >
+        上传文档
+      </el-button>
+      <el-button
+        class="filter-trigger"
+        :class="{ 'is-active': hasSecondaryFilters }"
+        aria-label="筛选"
+        @click="filtersVisible = true"
+      >
+        筛选
+      </el-button>
+    </form>
+    <template v-if="isMobile">
+      <el-drawer
+        v-model="filtersVisible"
+        class="mobile-filter-drawer"
+        direction="btt"
+        size="auto"
+        title="筛选文档"
+        append-to-body
+      >
+        <form class="mobile-filter-form" aria-label="文档筛选" @submit.prevent="applyFilters">
+          <el-select v-model="filters.status" clearable placeholder="状态">
+            <el-option
+              v-for="(label, value) in statusLabels"
+              :key="value"
+              :label="label"
+              :value="value"
+            />
+          </el-select>
+          <el-select v-model="filters.sensitivity" clearable placeholder="敏感度">
+            <el-option label="公开" value="public" />
+            <el-option label="内部" value="internal" />
+            <el-option label="机密" value="confidential" />
+          </el-select>
+          <el-select v-model="filters.format" clearable placeholder="格式">
+            <el-option
+              v-for="format in [
+                'txt',
+                'md',
+                'pdf',
+                'doc',
+                'docx',
+                'xlsx',
+                'png',
+                'jpg',
+                'jpeg',
+                'dxf',
+                'dwg',
+              ]"
+              :key="format"
+              :label="format.toUpperCase()"
+              :value="format"
+            />
+          </el-select>
+          <div class="mobile-filter-actions">
+            <el-button native-type="button" @click="resetFilters"> 重置 </el-button>
+            <el-button type="primary" native-type="submit"> 筛选 </el-button>
+          </div>
+        </form>
+      </el-drawer>
+    </template>
+
+    <div class="kb-block-content kb-block-content--mobile-inset">
+      <div v-if="errorMessage" class="kb-error-state" role="alert">
+        <strong class="kb-text--danger">无法加载文档</strong><span>{{ errorMessage }}</span>
+        <el-button @click="load">重试</el-button>
+      </div>
+      <div
+        v-else
+        v-loading="loading"
+        class="kb-block--flush kb-block-scroll"
+        :class="!isMobile ? 'kb-block' : ''"
+      >
+        <el-table
+          v-if="!isMobile && items.length > 0"
+          class="desktop-data-table"
+          :data="items"
+          row-key="id"
+          height="100%"
+        >
+          <el-table-column prop="sourceName" label="文件名" min-width="300" fixed="left">
+            <template #default="scope">
+              <RouterLink :to="`/documents/${scope.row.id}`">
+                <el-link type="primary" underline="never">{{ scope.row.sourceName }}</el-link>
+              </RouterLink>
+            </template>
+          </el-table-column>
+          <el-table-column label="状态" width="120">
+            <template #default="scope">
+              <el-tag :type="statusType(scope.row.status)">
+                {{ statusLabels[scope.row.status] ?? scope.row.status }}
+              </el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column prop="department" label="部门" width="120" />
+          <el-table-column prop="sensitivity" label="敏感度" width="100" />
+          <el-table-column label="版本" width="90">
+            <template #default="scope">
+              {{ scope.row.activeVersion ? `v${scope.row.activeVersion}` : '—' }}
+            </template>
+          </el-table-column>
+          <el-table-column label="更新时间" width="180">
+            <template #default="scope">
+              {{ new Date(scope.row.updatedAt).toLocaleString() }}
+            </template>
+          </el-table-column>
+        </el-table>
+        <DocumentCardList
+          v-else-if="isMobile"
+          :data="items"
+          :loading="loading"
+          :status-label="(status) => statusLabels[status] ?? status"
+          :status-type="statusType"
+        />
+        <el-empty v-else-if="!loading" class="kb-empty-state" description="暂无符合条件的文档" />
+      </div>
+      <div v-if="total > filters.pageSize" class="kb-pagination">
+        <el-pagination
+          layout="total, prev, pager, next"
+          :current-page="filters.page"
+          :page-size="filters.pageSize"
+          :total="total"
+          @current-change="changePage"
+        />
+      </div>
+    </div>
+
+    <component
+      :is="isMobile ? ElDrawer : ElDialog"
+      v-model="uploadVisible"
+      :class="isMobile ? 'upload-drawer' : 'upload-dialog'"
+      title="上传文档"
+      :width="
+        isMobile
+          ? undefined
+          : isTablet
+            ? 'min(400px, calc(100vw - 28px))'
+            : 'min(460px, calc(100vw - 28px))'
+      "
+      align-center
+      :size="isMobile ? '90%' : undefined"
+      :direction="isMobile ? 'btt' : undefined"
+      append-to-body
+      :z-index="4000"
+      @closed="resetUploadDialog"
+    >
+      <div v-if="uploadOptionsLoading" v-loading="true" class="upload-options-state">
+        正在读取服务器上传限制…
+      </div>
+      <div v-else-if="uploadOptionsError" class="kb-error-state" role="alert">
+        <strong class="kb-text--danger">上传配置加载失败</strong
+        ><span>{{ uploadOptionsError }}</span>
+        <el-button @click="loadUploadOptions">重试</el-button>
+      </div>
+      <div v-if="uploadOptions" class="upload-form">
+        <el-upload
+          class="upload-picker"
+          v-model:file-list="selectedUploadFiles"
+          :drag="!isMobile"
+          multiple
+          :auto-upload="false"
+          :show-file-list="false"
+          :accept="uploadOptions.acceptedExtensions.map((item) => `.${item}`).join(',')"
+          :on-change="chooseFiles"
+        >
+          <span class="upload-picker-content">
+            <el-icon><UploadFilled /></el-icon>
+            <span>{{ isMobile ? '选择文件' : '选择或拖入文件' }}</span>
+          </span>
+          <template #tip>
+            <div v-if="!isMobile" class="el-upload__tip">
+              文件只会在确认“开始上传”后发送到服务端。
+            </div>
+          </template>
+        </el-upload>
+        <el-text size="small">
+          支持
+          {{
+            uploadOptions.acceptedExtensions.map((item) => item.toUpperCase()).join(' / ')
+          }}，单文件最大 {{ Math.ceil(uploadOptions.maxUploadBytes / 1024 / 1024) }} MB。
+        </el-text>
+        <div class="upload-metadata" aria-label="上传权限信息">
+          <div class="upload-metadata-row">
+            <span class="upload-metadata-label">部门</span>
+            <strong class="upload-metadata-value">{{ uploadOptions.department }}</strong>
+          </div>
+          <div class="upload-metadata-row">
+            <span class="upload-metadata-label">敏感度</span>
+            <strong class="upload-metadata-value">
+              {{ uploadOptions.defaultSensitivity }}
+              <template v-if="!isMobile">（由服务端身份确定）</template>
+            </strong>
+          </div>
+        </div>
+        <div
+          v-if="uploadOptions.defaultSensitivity === 'confidential'"
+          class="upload-warning kb-text"
+        >
+          机密内容默认不会发送到云端 Embedding 服务。
+        </div>
+        <div v-if="uploadRows.length" class="upload-file-list" aria-label="待上传文件" tabindex="0">
+          <div
+            v-for="row in uploadRows"
+            :key="`${row.file.name}-${row.file.lastModified}`"
+            class="upload-file-item"
+            :class="`is-${row.status}`"
+          >
+            <div class="upload-file-heading">
+              <strong class="upload-file-name">{{ row.file.name }}</strong>
+              <small v-if="row.status === 'uploading'" class="upload-file-size">
+                {{ formatFileSize(row.file.size) }}
+              </small>
+              <el-tag v-else-if="row.status === 'failed'" type="danger" size="small">
+                failed
+              </el-tag>
+              <el-tag v-else-if="row.status === 'queued'" type="success" size="small">
+                queued
+              </el-tag>
+              <el-tag v-else type="info" size="small">待上传</el-tag>
+            </div>
+            <template v-if="row.status === 'uploading'">
+              <el-progress
+                class="upload-file-progress"
+                :percentage="row.progress ?? 0"
+                :show-text="false"
+                :stroke-width="5"
+              />
+              <small class="upload-progress-label">上传中 {{ row.progress ?? 0 }}%</small>
+            </template>
+            <div v-else-if="row.status === 'failed'" class="upload-file-failure">
+              <small class="upload-file-error" role="alert">{{ row.error }}</small>
+              <el-button class="upload-file-retry" link type="primary" @click="retryUpload(row)">
+                重试
+              </el-button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <template #footer>
+        <el-button @click="uploadVisible = false">取消</el-button>
+        <el-button
+          type="primary"
+          :disabled="uploadRows.length === 0 || !uploadOptions"
+          :loading="uploading"
+          @click="submitUpload"
+        >
+          开始上传
+        </el-button>
+      </template>
+    </component>
+  </section>
+</template>
+
 <script setup lang="ts">
 import type {
   DocumentListItem,
   DocumentListRequest,
   DocumentUploadOptions,
 } from '@nexus-kb/contracts';
+import { UploadFilled } from '@element-plus/icons-vue';
 import { ElDialog, ElDrawer, ElMessage, type UploadFile, type UploadUserFile } from 'element-plus';
 import { computed, onMounted, reactive, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
@@ -16,7 +350,7 @@ import DocumentCardList from '@/components/documents/DocumentCardList.vue';
 const route = useRoute();
 const router = useRouter();
 const auth = useAuthStore();
-const { isMobile, isPhone } = useBreakpoint();
+const { isMobile, isTablet } = useBreakpoint();
 const loading = ref(false);
 const errorMessage = ref('');
 const items = ref<DocumentListItem[]>([]);
@@ -31,6 +365,7 @@ interface UploadRow {
   file: File;
   status: 'pending' | 'uploading' | 'queued' | 'failed';
   error: string;
+  progress: number | null;
 }
 const uploadRows = ref<UploadRow[]>([]);
 const uploading = ref(false);
@@ -44,9 +379,8 @@ const filters = reactive({
 });
 
 const canUpload = computed(() => auth.hasCapability('documents:write'));
-const activeFilterCount = computed(
-  () =>
-    [filters.search, filters.status, filters.sensitivity, filters.format].filter(Boolean).length,
+const hasSecondaryFilters = computed(
+  () => Boolean(filters.status) || Boolean(filters.sensitivity) || Boolean(filters.format),
 );
 const statusLabels: Record<string, string> = {
   uploaded: '已上传',
@@ -99,6 +433,7 @@ async function syncQueryAndLoad(): Promise<void> {
 async function resetFilters(): Promise<void> {
   Object.assign(filters, { search: '', status: '', sensitivity: '', format: '', page: 1 });
   await syncQueryAndLoad();
+  filtersVisible.value = false;
 }
 
 async function changePage(nextPage: number): Promise<void> {
@@ -133,7 +468,7 @@ async function loadUploadOptions(): Promise<void> {
 
 function chooseFiles(_file: UploadFile, files: UploadFile[]): void {
   uploadRows.value = files.flatMap((entry) =>
-    entry.raw ? [{ file: entry.raw, status: 'pending' as const, error: '' }] : [],
+    entry.raw ? [{ file: entry.raw, status: 'pending' as const, error: '', progress: null }] : [],
   );
 }
 
@@ -171,13 +506,22 @@ async function uploadOne(row: UploadRow): Promise<void> {
   }
   row.status = 'uploading';
   row.error = '';
+  row.progress = 0;
   try {
-    await uploadDocument(row.file);
+    await uploadDocument(row.file, (percentage: number) => {
+      row.progress = percentage;
+    });
     row.status = 'queued';
+    row.progress = 100;
   } catch (error) {
     row.status = 'failed';
     row.error = error instanceof ApiError ? error.message : '上传失败';
   }
+}
+
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024 * 1024) return `${Math.max(1, Math.ceil(bytes / 1024))} KB`;
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }
 
 function statusType(status: string): 'success' | 'warning' | 'danger' | 'info' {
@@ -190,299 +534,153 @@ function statusType(status: string): 'success' | 'warning' | 'danger' | 'info' {
 onMounted(load);
 </script>
 
-<template>
-  <section class="documents-page">
-    <div class="documents-toolbar">
-      <div class="documents-toolbar-heading">
-        <div class="text-block">共 {{ total }} 份可访问文档</div>
-        <div class="documents-toolbar-actions">
-          <el-button v-if="canUpload" type="primary" @click="openUpload">上传文档</el-button>
-          <el-button v-if="isMobile" class="filter-trigger" @click="filtersVisible = true">
-            筛选
-            <el-badge v-if="activeFilterCount" :value="activeFilterCount" />
-          </el-button>
-        </div>
-      </div>
-
-      <form
-        v-if="!isMobile"
-        class="document-filters"
-        aria-label="文档筛选"
-        @submit.prevent="applyFilters"
-      >
-        <el-input
-          class="document-filter-search"
-          v-model="filters.search"
-          clearable
-          placeholder="搜索文件名"
-        />
-        <el-select
-          class="document-filter-status"
-          v-model="filters.status"
-          clearable
-          placeholder="状态"
-        >
-          <el-option
-            v-for="(label, value) in statusLabels"
-            :key="value"
-            :label="label"
-            :value="value"
-          />
-        </el-select>
-        <el-select
-          class="document-filter-sensitivity"
-          v-model="filters.sensitivity"
-          clearable
-          placeholder="敏感度"
-        >
-          <el-option label="公开" value="public" />
-          <el-option label="内部" value="internal" />
-          <el-option label="机密" value="confidential" />
-        </el-select>
-        <el-select
-          class="document-filter-format"
-          v-model="filters.format"
-          clearable
-          placeholder="格式"
-        >
-          <el-option
-            v-for="format in [
-              'txt',
-              'md',
-              'pdf',
-              'doc',
-              'docx',
-              'xlsx',
-              'png',
-              'jpg',
-              'jpeg',
-              'dxf',
-              'dwg',
-            ]"
-            :key="format"
-            :label="format.toUpperCase()"
-            :value="format"
-          />
-        </el-select>
-        <div class="toolbar-actions">
-          <el-button native-type="submit">筛选</el-button>
-          <el-button class="reset-button" native-type="button" @click="resetFilters">
-            重置
-          </el-button>
-        </div>
-      </form>
-      <template v-else>
-        <el-drawer
-          v-model="filtersVisible"
-          class="mobile-filter-drawer"
-          direction="btt"
-          size="72%"
-          title="筛选文档"
-          append-to-body
-          :z-index="4000"
-        >
-          <form class="mobile-filter-form" aria-label="文档筛选" @submit.prevent="applyFilters">
-            <el-input v-model="filters.search" clearable placeholder="搜索文件名" />
-            <el-select v-model="filters.status" clearable placeholder="状态">
-              <el-option
-                v-for="(label, value) in statusLabels"
-                :key="value"
-                :label="label"
-                :value="value"
-              />
-            </el-select>
-            <el-select v-model="filters.sensitivity" clearable placeholder="敏感度">
-              <el-option label="公开" value="public" />
-              <el-option label="内部" value="internal" />
-              <el-option label="机密" value="confidential" />
-            </el-select>
-            <el-select v-model="filters.format" clearable placeholder="格式">
-              <el-option
-                v-for="format in [
-                  'txt',
-                  'md',
-                  'pdf',
-                  'doc',
-                  'docx',
-                  'xlsx',
-                  'png',
-                  'jpg',
-                  'jpeg',
-                  'dxf',
-                  'dwg',
-                ]"
-                :key="format"
-                :label="format.toUpperCase()"
-                :value="format"
-              />
-            </el-select>
-            <div class="mobile-filter-actions">
-              <el-button native-type="button" @click="resetFilters">重置</el-button>
-              <el-button type="primary" native-type="submit">筛选</el-button>
-            </div>
-          </form>
-        </el-drawer>
-      </template>
-    </div>
-
-    <div class="documents-content">
-      <div v-if="errorMessage" class="document-error" role="alert">
-        <strong>无法加载文档</strong><span>{{ errorMessage }}</span>
-        <el-button @click="load">重试</el-button>
-      </div>
-      <div v-loading="loading" class="documents-list">
-        <el-table
-          v-if="!isMobile"
-          class="desktop-data-table"
-          :data="items"
-          row-key="id"
-          height="100%"
-          empty-text="暂无符合条件的文档"
-        >
-          <el-table-column prop="sourceName" label="文件名" min-width="300" fixed="left">
-            <template #default="scope">
-              <RouterLink class="document-link" :to="`/documents/${scope.row.id}`">
-                {{ scope.row.sourceName }}
-              </RouterLink>
-            </template>
-          </el-table-column>
-          <el-table-column label="状态" width="120">
-            <template #default="scope">
-              <el-tag :type="statusType(scope.row.status)">
-                {{ statusLabels[scope.row.status] ?? scope.row.status }}
-              </el-tag>
-            </template>
-          </el-table-column>
-          <el-table-column prop="department" label="部门" width="140" />
-          <el-table-column prop="sensitivity" label="敏感度" width="110" />
-          <el-table-column label="版本" width="90">
-            <template #default="scope">
-              {{ scope.row.activeVersion ? `v${scope.row.activeVersion}` : '—' }}
-            </template>
-          </el-table-column>
-          <el-table-column label="更新时间" min-width="180">
-            <template #default="scope">
-              {{ new Date(scope.row.updatedAt).toLocaleString() }}
-            </template>
-          </el-table-column>
-        </el-table>
-        <DocumentCardList
-          v-else
-          :data="items"
-          :loading="loading"
-          :status-label="(status) => statusLabels[status] ?? status"
-          :status-type="statusType"
-        />
-      </div>
-
-      <div v-if="total > filters.pageSize" class="list-pagination">
-        <el-pagination
-          layout="total, prev, pager, next"
-          :current-page="filters.page"
-          :page-size="filters.pageSize"
-          :total="total"
-          @current-change="changePage"
-        />
-      </div>
-    </div>
-
-    <component
-      :is="isPhone ? ElDrawer : ElDialog"
-      v-model="uploadVisible"
-      class="upload-surface"
-      :class="isPhone ? 'upload-drawer' : 'upload-dialog'"
-      title="上传文档"
-      :width="isPhone ? undefined : 'min(520px, calc(100vw - 28px))'"
-      :size="isPhone ? '90%' : undefined"
-      :direction="isPhone ? 'btt' : undefined"
-      append-to-body
-      :z-index="4000"
-      @closed="resetUploadDialog"
-    >
-      <div v-if="uploadOptionsLoading" v-loading="true" class="upload-options-state">
-        正在读取服务器上传限制…
-      </div>
-      <div v-else-if="uploadOptionsError" class="document-error" role="alert">
-        <strong>上传配置加载失败</strong><span>{{ uploadOptionsError }}</span>
-        <el-button @click="loadUploadOptions">重试</el-button>
-      </div>
-      <div v-if="uploadOptions" class="upload-form">
-        <el-upload
-          v-model:file-list="selectedUploadFiles"
-          :drag="!isPhone"
-          multiple
-          :auto-upload="false"
-          :show-file-list="false"
-          :accept="uploadOptions.acceptedExtensions.map((item) => `.${item}`).join(',')"
-          :on-change="chooseFiles"
-        >
-          <span>{{ isPhone ? '选择文件' : '选择或拖入文件' }}</span>
-          <template #tip>文件只会在确认“开始上传”后发送到服务端。</template>
-        </el-upload>
-        <div class="text-block">
-          支持
-          {{
-            uploadOptions.acceptedExtensions.map((item) => item.toUpperCase()).join(' / ')
-          }}，单文件最大 {{ Math.ceil(uploadOptions.maxUploadBytes / 1024 / 1024) }} MB。
-        </div>
-        <el-descriptions class="upload-options" :column="1" border size="small">
-          <el-descriptions-item label="部门">{{ uploadOptions.department }}</el-descriptions-item>
-          <el-descriptions-item label="敏感度">
-            {{ uploadOptions.defaultSensitivity }}（由服务端身份确定）
-          </el-descriptions-item>
-        </el-descriptions>
-        <div
-          v-if="uploadOptions.defaultSensitivity === 'confidential'"
-          class="upload-warning text-block"
-        >
-          机密内容默认不会发送到云端 Embedding 服务。
-        </div>
-        <div
-          v-if="uploadRows.length"
-          class="upload-file-list list-block"
-          aria-label="待上传文件"
-          tabindex="0"
-        >
-          <div
-            v-for="row in uploadRows"
-            :key="`${row.file.name}-${row.file.lastModified}`"
-            class="list-item"
-          >
-            <span class="upload-file-summary">
-              <strong>{{ row.file.name }}</strong>
-              <small>{{ Math.ceil(row.file.size / 1024) }} KB</small>
-            </span>
-            <el-tag
-              class="upload-file-status"
-              :type="
-                row.status === 'queued' ? 'success' : row.status === 'failed' ? 'danger' : 'info'
-              "
-            >
-              {{ row.status }}
-            </el-tag>
-            <small v-if="row.error" class="upload-file-error" role="alert">{{ row.error }}</small>
-            <el-button
-              v-if="row.status === 'failed'"
-              class="upload-file-retry"
-              text
-              @click="retryUpload(row)"
-            >
-              重试
-            </el-button>
-          </div>
-        </div>
-      </div>
-      <template #footer>
-        <el-button @click="uploadVisible = false">取消</el-button>
-        <el-button
-          type="primary"
-          :disabled="uploadRows.length === 0 || !uploadOptions"
-          :loading="uploading"
-          @click="submitUpload"
-        >
-          开始上传
-        </el-button>
-      </template>
-    </component>
-  </section>
-</template>
+<style scoped>
+.documents-toolbar {
+  display: grid;
+  align-items: center;
+  gap: var(--kb-space-2);
+  grid-template-columns:
+    minmax(190px, 1fr) repeat(3, minmax(92px, 0.7fr))
+    auto auto;
+}
+.upload-dialog {
+  width: 460px;
+}
+.upload-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--kb-space-2);
+  min-height: 0;
+}
+.upload-picker-content {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: var(--kb-space-2);
+  height: 44px;
+  color: var(--kb-color-text-secondary);
+}
+.upload-metadata {
+  overflow: hidden;
+  border: 1px solid var(--kb-color-border);
+  border-radius: var(--kb-radius-md);
+}
+.upload-metadata-row {
+  display: grid;
+  align-items: center;
+  gap: var(--kb-layout-gap);
+  grid-template-columns: 76px minmax(0, 1fr);
+  min-height: var(--kb-space-10);
+  padding: var(--kb-space-2) var(--kb-space-4);
+}
+.upload-metadata-row + .upload-metadata-row {
+  border-top: 1px solid var(--kb-color-border);
+}
+.upload-metadata-label {
+  color: var(--kb-color-text-secondary);
+}
+.upload-metadata-value {
+  overflow-wrap: anywhere;
+  font-weight: 600;
+}
+.upload-warning {
+  padding: var(--kb-space-2) var(--kb-block-padding);
+  border-radius: var(--kb-radius-sm);
+  color: var(--kb-color-warning);
+  background: var(--kb-color-warning-soft);
+}
+.upload-options-state {
+  display: grid;
+  place-items: center;
+  min-height: 180px;
+  color: var(--kb-color-text-secondary);
+}
+.upload-file-list {
+  display: grid;
+  gap: var(--kb-space-2);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  max-height: min(280px, 30dvh);
+  margin-bottom: 0;
+  padding: 0;
+  list-style: none;
+  scrollbar-gutter: stable both-edges;
+}
+.upload-file-item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--kb-space-2);
+  padding: var(--kb-block-padding) var(--kb-space-4);
+  border: 1px solid var(--kb-color-border);
+  border-radius: var(--kb-radius-md);
+  background: var(--kb-color-surface);
+}
+.upload-file-heading {
+  display: flex;
+  align-items: center;
+}
+.upload-file-name {
+  flex: 1 1 auto;
+  overflow: hidden;
+  min-width: 0;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.upload-file-size {
+  flex: 0 0 auto;
+}
+.upload-file-progress {
+  width: 100%;
+}
+.upload-progress-label,
+.upload-file-error {
+  overflow-wrap: anywhere;
+  color: var(--kb-color-text-secondary);
+}
+.upload-file-failure {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--kb-space-2);
+}
+/* 响应式：Pad（768px–1279px） */
+@media (min-width: 768px) and (max-width: 1279px) {
+  .upload-dialog {
+    width: 400px;
+  }
+  .documents-toolbar {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) auto;
+  }
+  .document-filters .document-filter-search {
+    grid-column: 1 / 4;
+  }
+  .documents-upload-action {
+    grid-row: 1;
+    grid-column: 4;
+  }
+}
+/* 响应式：Mobile（<768px） */
+@media (max-width: 767px) {
+  .upload-drawer .upload-picker {
+    margin: 0 auto;
+  }
+  .upload-drawer .upload-picker-content {
+    color: inherit;
+  }
+  .upload-drawer .upload-metadata-row {
+    display: flex;
+    justify-content: space-between;
+  }
+  .upload-drawer .upload-file-list {
+    overflow: visible;
+    max-height: none;
+    scrollbar-gutter: auto;
+  }
+  .upload-drawer .upload-file-name {
+    white-space: normal;
+  }
+  .documents-toolbar--mobile {
+    grid-template-columns: minmax(0, 1fr) auto auto;
+  }
+}
+</style>

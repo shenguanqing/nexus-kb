@@ -4,6 +4,8 @@
 
 Web 只负责用户体验。真正的身份、tenant、ACL、敏感度和 capability 校验始终由 NestJS API 执行。
 
+页面样式中的区块间距、列表行内距和块内距分别优先使用 `--kb-layout-gap`、`--kb-list-row-padding`、`--kb-block-padding`；`--kb-space-3` 只保留在 token 定义或不属于这些布局语义的基础间距中。
+
 ## 阅读路径
 
 | 路径                                                           | 作用                                                   |
@@ -11,10 +13,12 @@ Web 只负责用户体验。真正的身份、tenant、ACL、敏感度和 capabi
 | [`src/main.ts`](./src/main.ts)                                 | 创建 Vue 应用、注册 Router、Pinia 和 Element Plus 配置 |
 | [`src/App.vue`](./src/App.vue)                                 | 应用根组件                                             |
 | [`src/router/index.ts`](./src/router/index.ts)                 | 页面路由与导航守卫                                     |
-| [`src/layouts/AppShell.vue`](./src/layouts/AppShell.vue)       | 桌面侧栏、移动 Drawer、顶栏和内容壳层                  |
+| [`src/layouts/AppShell.vue`](./src/layouts/AppShell.vue)       | PC/Pad 侧栏、移动端侧向 sidebar、顶栏和内容壳层        |
 | [`src/api/client.ts`](./src/api/client.ts)                     | 统一 HTTP client、超时、Cookie 和安全错误映射          |
 | [`src/stores/auth.ts`](./src/stores/auth.ts)                   | 服务端会话、角色和 capability 状态                     |
-| [`src/styles/tokens.css`](./src/styles/tokens.css)             | 共享设计 token                                         |
+| [`src/styles/tokens.css`](./src/styles/tokens.css)             | 仅声明颜色、字体、间距、控件与断点设计 token           |
+| [`src/styles/element.css`](./src/styles/element.css)           | Element Plus 跨页面通用原生类覆盖                      |
+| [`src/styles/main.css`](./src/styles/main.css)                 | Reset、全局基础、公共布局与工具类                      |
 | [`src/styles/breakpoints.scss`](./src/styles/breakpoints.scss) | 唯一响应式断点定义                                     |
 
 ## 目录结构
@@ -71,7 +75,9 @@ apps/web/
 ## 响应式约定
 
 - 断点只从 `breakpoints.scss` 和 `useBreakpoint()` 读取。
-- `<=900px` 使用移动端 Drawer 导航和卡片结构，不保留仅靠 CSS 隐藏的桌面表格。
+- Element Plus 由根级 `ElConfigProvider` 固定使用 `default`；三端表单控件统一为 `--kb-control-height`，页面不重复判断控件尺寸。
+- 页面公共容器使用 `--kb-radius-lg`，普通 Element 控件使用 `--kb-radius-md`；pill、circle、Tag 与 bottom sheet 保留语义圆角。
+- `<768px` 使用可展开/收起的移动端侧向 sidebar 与卡片结构，不保留底部导航或仅靠 CSS 隐藏的桌面表格。
 - 表格、列表和详情正文在各自内容块内滚动，避免整个页面横向溢出。
 - 触控目标至少 44px；手机可聚焦输入控件字号至少 16px。
 
