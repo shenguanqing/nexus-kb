@@ -73,7 +73,7 @@ describe('HistoryView infinite loading', () => {
     expect(wrapper.find('.el-pagination').exists()).toBe(false);
     expect(wrapper.find('el-date-picker-stub').exists()).toBe(false);
 
-    const scroll = wrapper.get('.history-list-scroll');
+    const scroll = wrapper.get('[aria-label="问答会话列表"] > .kb-block-scroll');
     Object.defineProperties(scroll.element, {
       clientHeight: { configurable: true, value: 300 },
       scrollHeight: { configurable: true, value: 1_000 },
@@ -126,7 +126,7 @@ describe('HistoryView infinite loading', () => {
     });
     await flushPromises();
 
-    const scroll = wrapper.get('.history-list-scroll');
+    const scroll = wrapper.get('[aria-label="问答会话列表"] > .kb-block-scroll');
     Object.defineProperties(scroll.element, {
       clientHeight: { configurable: true, value: 300 },
       scrollHeight: { configurable: true, value: 1_000 },
@@ -136,7 +136,7 @@ describe('HistoryView infinite loading', () => {
     await scroll.trigger('scroll');
     expect(api.listConversations).toHaveBeenCalledTimes(2);
 
-    await wrapper.get('.history-toolbar').trigger('submit');
+    await wrapper.get('form[aria-label="历史记录筛选"]').trigger('submit');
     await flushPromises();
     expect(wrapper.findAll('.history-list-row')).toHaveLength(1);
     expect(wrapper.text()).toContain('会话 99');
@@ -179,11 +179,14 @@ describe('HistoryView infinite loading', () => {
     });
     await flushPromises();
 
-    await wrapper.get('.history-list-item').trigger('click');
+    const historyItem = wrapper.get('.history-list-item');
+    expect(historyItem.attributes('tabindex')).toBe('0');
+    expect(historyItem.attributes('role')).toBeUndefined();
+    await historyItem.trigger('keydown', { key: 'Enter' });
     await flushPromises();
     expect(wrapper.find('.history-detail-body').exists()).toBe(true);
 
-    await wrapper.get('.history-toolbar').trigger('submit');
+    await wrapper.get('form[aria-label="历史记录筛选"]').trigger('submit');
     await flushPromises();
     expect(wrapper.find('.history-detail-body').exists()).toBe(false);
     expect(wrapper.get('.history-detail-empty').attributes('description')).toBe(
@@ -207,10 +210,10 @@ describe('HistoryView infinite loading', () => {
     });
     await flushPromises();
 
-    const toolbar = wrapper.get('.history-toolbar--mobile');
+    const toolbar = wrapper.get('form[aria-label="搜索历史记录"]');
     expect(toolbar.text()).toContain('重置');
     expect(toolbar.text()).not.toContain('筛选');
-    expect(toolbar.find('.filter-trigger').exists()).toBe(false);
+    expect(toolbar.find('.kb-filter-trigger').exists()).toBe(false);
     expect(wrapper.find('el-date-picker-stub').exists()).toBe(false);
     expect(wrapper.find('el-drawer-stub').exists()).toBe(false);
   });

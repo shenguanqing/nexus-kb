@@ -1,9 +1,9 @@
 <template>
-  <section class="page">
-    <div class="page-content">
+  <section class="kb-page">
+    <div class="kb-page__content">
       <div class="coming-soon kb-block">
-        <span class="coming-soon__stage">阶段 15 · 后续切片</span>
-        <div class="kb-heading kb-heading--h1" role="heading" aria-level="2">
+        <span class="kb-text kb-text--sm kb-text--secondary">阶段 15 · 后续切片 </span>
+        <div class="kb-heading kb-heading--h1" role="heading" aria-level="1">
           {{ route.meta.title }}
         </div>
         <div class="kb-text">
@@ -26,9 +26,5 @@ const route = useRoute();
   display: grid;
   align-content: start;
   gap: var(--kb-layout-gap);
-}
-.coming-soon__stage {
-  color: var(--kb-color-text-secondary);
-  font-size: var(--kb-font-size-sm);
 }
 </style>

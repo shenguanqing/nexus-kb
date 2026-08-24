@@ -22,12 +22,20 @@ const TableColumnStub = defineComponent({
 });
 
 const DatePickerStub = defineComponent({
+  emits: ['change'],
   props: {
+    editable: Boolean,
+    endPlaceholder: String,
+    format: String,
     popperClass: String,
+    popperOptions: Object,
+    singlePanel: Boolean,
+    startPlaceholder: String,
     teleported: { type: Boolean, default: true },
+    type: String,
   },
   template:
-    '<div data-test="date-picker" :data-popper-class="popperClass" :data-teleported="teleported" />',
+    '<div data-test="date-picker" :data-editable="editable" :data-end-placeholder="endPlaceholder" :data-format="format" :data-has-popper-options="Boolean(popperOptions)" :data-popper-class="popperClass" :data-single-panel="singlePanel" :data-start-placeholder="startPlaceholder" :data-teleported="teleported" :data-type="type" @click="$emit(\'change\')" />',
 });
 
 const ButtonStub = defineComponent({
@@ -97,7 +105,7 @@ describe('UsageView provider facts', () => {
       global: {
         stubs: {
           ElButton: true,
-          ElDrawer: true,
+          ElDatePicker: true,
           ElTag: true,
         },
         directives: { loading: () => undefined },
@@ -111,14 +119,13 @@ describe('UsageView provider facts', () => {
     expect(wrapper.find('.mobile-data-list').exists()).toBe(false);
   });
 
-  it('teleports Mobile Drawer date panels into the shared high-level popper layer', async () => {
+  it('uses one read-only single-panel date range on every viewport and applies it directly on Mobile', async () => {
     screen.isMobile = true;
     const wrapper = mount(UsageView, {
       global: {
         stubs: {
           ElButton: true,
           ElDatePicker: DatePickerStub,
-          ElDrawer: defineComponent({ template: '<div><slot /></div>' }),
           ElTag: true,
           ElTable: TableStub,
           ElTableColumn: TableColumnStub,
@@ -129,21 +136,61 @@ describe('UsageView provider facts', () => {
     await flushPromises();
 
     const datePickers = wrapper.findAll('[data-test="date-picker"]');
-    expect(datePickers).toHaveLength(2);
-    for (const datePicker of datePickers) {
-      expect(datePicker.attributes('data-popper-class')).toBe('usage-date-picker-popper');
-      expect(datePicker.attributes('data-teleported')).toBe('true');
-    }
+    expect(datePickers).toHaveLength(1);
+    const datePicker = datePickers[0]!;
+    expect(datePicker.attributes('data-type')).toBe('daterange');
+    expect(datePicker.attributes('data-single-panel')).toBe('true');
+    expect(datePicker.attributes('data-editable')).toBe('false');
+    expect(datePicker.attributes('data-format')).toBe('YYYY-MM-DD');
+    expect(datePicker.attributes('data-start-placeholder')).toBe('开始日期');
+    expect(datePicker.attributes('data-end-placeholder')).toBe('结束日期');
+    expect(datePicker.attributes('data-popper-class')).toBe('usage-date-picker-popper');
+    expect(datePicker.attributes('data-has-popper-options')).toBe('true');
+    expect(datePicker.attributes('data-teleported')).toBe('true');
+
+    await datePicker.trigger('click');
+    await flushPromises();
+    expect(api.fetchUsage).toHaveBeenCalledTimes(2);
   });
 
-  it('reloads the default range immediately when the Mobile Drawer is reset', async () => {
+  it('queries complete local calendar days', async () => {
+    mount(UsageView, {
+      global: {
+        stubs: {
+          ElButton: true,
+          ElDatePicker: DatePickerStub,
+          ElTable: TableStub,
+          ElTableColumn: TableColumnStub,
+        },
+        directives: { loading: () => undefined },
+      },
+    });
+    await flushPromises();
+
+    const [from, to] = api.fetchUsage.mock.calls[0] as [string, string];
+    const fromDate = new Date(from);
+    const toDate = new Date(to);
+    expect([
+      fromDate.getHours(),
+      fromDate.getMinutes(),
+      fromDate.getSeconds(),
+      fromDate.getMilliseconds(),
+    ]).toEqual([0, 0, 0, 0]);
+    expect([
+      toDate.getHours(),
+      toDate.getMinutes(),
+      toDate.getSeconds(),
+      toDate.getMilliseconds(),
+    ]).toEqual([23, 59, 59, 999]);
+  });
+
+  it('reloads the default range immediately when the Mobile range is reset', async () => {
     screen.isMobile = true;
     const wrapper = mount(UsageView, {
       global: {
         stubs: {
           ElButton: ButtonStub,
           ElDatePicker: DatePickerStub,
-          ElDrawer: defineComponent({ template: '<div><slot /></div>' }),
           ElTag: true,
           ElTable: TableStub,
           ElTableColumn: TableColumnStub,

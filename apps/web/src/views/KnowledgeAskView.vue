@@ -1,35 +1,35 @@
 <template>
-  <section class="page">
-    <el-page-header class="page-header">
+  <section class="kb-page">
+    <el-page-header class="kb-page-header">
       <template #content>
-        <div class="page-header-copy">
+        <div class="kb-title-group">
           <div class="kb-heading kb-heading--h1" role="heading" aria-level="1">
             从资料中找到答案
           </div>
-          <div>
-            <el-text>知识助手</el-text>
-          </div>
+          <span class="kb-text kb-text--secondary">知识助手</span>
         </div>
       </template>
       <template #extra>
-        <div class="page-header-actions">
+        <div class="kb-action-group">
           <el-button @click="startNewChat">新建问答</el-button>
         </div>
       </template>
     </el-page-header>
     <div ref="conversationPanel" class="conversation" :class="{ 'is-empty': !hasConversation }">
       <div v-if="!hasConversation" class="welcome-state">
-        <span class="brand-mark welcome-mark">N</span>
-        <div class="welcome-state__title">今天想从知识库了解什么？</div>
-        <div>
-          <el-text size="large">回答仅基于您有权访问的资料，并附带可核验来源。</el-text>
+        <span class="kb-brand-mark welcome-mark">N</span>
+        <div class="welcome-state__title kb-heading kb-heading--h2" role="heading" aria-level="2">
+          今天想从知识库了解什么？
+        </div>
+        <div class="kb-text kb-text--md kb-text--secondary">
+          回答仅基于您有权访问的资料，并附带可核验来源。
         </div>
       </div>
       <template v-for="turn in conversation.turns" :key="turn.response.traceId">
         <div class="user-message">
           <!-- <span class="user-message-avatar">用户</span> -->
           <div class="user-message-value">
-            <el-text>{{ turn.question }}</el-text>
+            <div class="kb-text kb-text--secondary">{{ turn.question }}</div>
           </div>
         </div>
         <AssistantAnswer :response="turn.response" @select-source="openSource" />
@@ -37,7 +37,7 @@
       <div v-if="conversation.pendingQuestion" class="user-message">
         <!-- <span class="user-message-avatar">用户</span> -->
         <div class="user-message-value">
-          <el-text>{{ conversation.pendingQuestion }}</el-text>
+          <div class="kb-text kb-text--secondary">{{ conversation.pendingQuestion }}</div>
         </div>
       </div>
       <div v-if="conversation.isSubmitting" class="retrieving-state" aria-live="polite">
@@ -45,7 +45,7 @@
         <div>
           <strong>正在检索资料</strong>
           <div>
-            <el-text>正在从您有权访问的知识中查找依据…</el-text>
+            <span class="kb-text kb-text--secondary">正在从您有权访问的知识中查找依据…</span>
           </div>
         </div>
       </div>
@@ -53,7 +53,9 @@
         <div>
           <strong>{{ error.status === 429 ? '请求较多，请稍后重试' : error.message }}</strong>
           <div v-if="error.traceId">
-            <el-text>Trace ID：{{ error.traceId }}</el-text>
+            <span class="kb-text kb-text--md kb-text--secondary">
+              Trace ID：{{ error.traceId }}
+            </span>
           </div>
         </div>
         <el-button @click="submit">重试</el-button>
@@ -66,7 +68,9 @@
       @submit="submit"
     />
     <div class="composer-caption">
-      <el-text size="small">问题与回答不会保存到浏览器持久化存储。</el-text>
+      <small class="kb-text kb-text--xs kb-text--secondary">
+        问题与回答不会保存到浏览器持久化存储。
+      </small>
     </div>
     <SourceDrawer v-model="isSourceOpen" :source="selectedSource" />
   </section>
@@ -142,7 +146,7 @@ async function startNewChat(): Promise<void> {
 </script>
 
 <style scoped>
-.page-header {
+.kb-page-header {
   padding-bottom: 0;
 }
 .conversation {
@@ -168,6 +172,7 @@ async function startNewChat(): Promise<void> {
 .welcome-state__title {
   margin-bottom: var(--kb-space-2);
   font-size: 27px;
+  font-weight: 400;
 }
 .user-message {
   display: flex;
@@ -191,7 +196,6 @@ async function startNewChat(): Promise<void> {
   padding: var(--kb-block-padding) var(--kb-space-4);
   border-radius: var(--kb-radius-lg) var(--kb-radius-sm) var(--kb-radius-lg) var(--kb-radius-lg);
   background: var(--kb-color-primary-soft);
-  line-height: 1.5;
 }
 .retrieving-state,
 .inline-error {
@@ -226,6 +230,7 @@ async function startNewChat(): Promise<void> {
   background: var(--kb-color-danger-soft);
 }
 .composer-caption {
+  margin-top: -8px;
   line-height: 1;
   text-align: center;
 }

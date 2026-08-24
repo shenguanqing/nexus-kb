@@ -94,11 +94,11 @@ describe('AuditView pagination', () => {
     });
     await flushPromises();
 
-    const toolbar = wrapper.get('.audit-toolbar');
+    const toolbar = wrapper.get('.kb-control-toolbar');
     const mobileFilter = toolbar.get('.audit-filter-form--mobile');
     expect(mobileFilter.find('el-select-stub').exists()).toBe(true);
     expect(mobileFilter.text()).toContain('重置');
     expect(wrapper.find('el-drawer-stub').exists()).toBe(false);
-    expect(wrapper.find('.filter-trigger').exists()).toBe(false);
+    expect(wrapper.find('.kb-filter-trigger').exists()).toBe(false);
   });
 });

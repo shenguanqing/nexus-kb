@@ -16,7 +16,7 @@ const renderedContent = computed(() =>
 
 function selectCitation(event: MouseEvent): void {
   if (!props.interactiveCitations || !(event.target instanceof Element)) return;
-  const citation = event.target.closest<HTMLElement>('.answer-citation[data-source-index]');
+  const citation = event.target.closest<HTMLElement>('.kb-answer-citation[data-source-index]');
   if (!citation) return;
   const sourceIndex = Number(citation.dataset.sourceIndex);
   if (Number.isSafeInteger(sourceIndex) && sourceIndex > 0) emit('selectCitation', sourceIndex);

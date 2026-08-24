@@ -1,10 +1,10 @@
 <template>
-  <section class="page">
-    <div class="provider-toolbar kb-status-toolbar">
+  <section class="kb-page">
+    <div class="kb-status-toolbar">
       <div>
-        <strong class="provider-toolbar__title">模型与运行配置</strong>
-        <div>
-          <el-text>密钥只写入、不回显；发布由内部白名单代理执行并验证 readiness。</el-text>
+        <div class="kb-heading kb-heading--h2" role="heading" aria-level="1">模型与运行配置</div>
+        <div class="provider-toolbar__description kb-text kb-text--secondary">
+          密钥只写入、不回显；发布由内部白名单代理执行并验证 readiness。
         </div>
       </div>
       <el-button :loading="loading" @click="load">刷新状态</el-button>
@@ -13,12 +13,12 @@
     <div
       ref="pageContent"
       v-loading="publishing"
-      class="page-content"
+      class="kb-page__content"
       :element-loading-text="publishingText"
       element-loading-background="rgba(255, 255, 255, 0.78)"
     >
       <div v-if="errorMessage && !result" class="kb-error-state" role="alert">
-        <strong class="kb-text--danger">无法加载 Provider 配置</strong>
+        <strong class="kb-text kb-text--danger">无法加载 Provider 配置</strong>
         <span>{{ errorMessage }}</span>
         <el-button @click="load">重试</el-button>
       </div>
@@ -30,13 +30,17 @@
             :key="provider.kind"
             class="kb-block"
           >
-            <div class="kb-block-header">
-              <span class="kb-block-title">{{ providerKindLabels[provider.kind] }}</span>
+            <div class="kb-block__header">
+              <div class="kb-block__title kb-heading kb-heading--h4">
+                {{ providerKindLabels[provider.kind] }}
+              </div>
               <el-tag :type="provider.configurationStatus === 'configured' ? 'success' : 'info'">
                 {{ provider.configurationStatus === 'configured' ? '已配置' : '未启用' }}
               </el-tag>
             </div>
-            <div class="kb-block-title">{{ providerTitle(provider) }}</div>
+            <div class="kb-block__title kb-heading kb-heading--h4">
+              {{ providerTitle(provider) }}
+            </div>
             <div class="kb-data-fields">
               <div class="kb-data-field">
                 <span class="kb-data-field__label">服务域名</span>
@@ -77,7 +81,7 @@
           <div class="configuration-heading">
             <div class="configuration-heading__content">
               <strong>编辑运行配置</strong>
-              <span class="configuration-heading__description">
+              <span class="configuration-heading__description kb-text kb-text--secondary">
                 保存后会创建不可变版本，并仅重建受影响的白名单服务。
               </span>
             </div>
@@ -114,7 +118,7 @@
 
             <el-form label-position="top" class="configuration-form">
               <div id="configuration-llm" class="configuration-section">
-                <div role="heading" aria-level="3">LLM</div>
+                <div>LLM</div>
                 <div class="configuration-fields">
                   <el-form-item label="主 Provider">
                     <el-select v-model="form.LLM_PROVIDER">
@@ -257,7 +261,7 @@
               </div>
 
               <div id="configuration-rerank" class="configuration-section">
-                <div role="heading" aria-level="3">Rerank 与问答</div>
+                <div>Rerank 与问答</div>
                 <div class="configuration-fields">
                   <el-form-item label="Rerank Provider">
                     <el-select v-model="form.RERANK_PROVIDER">
@@ -348,7 +352,7 @@
               </div>
 
               <div id="configuration-ingestion" class="configuration-section">
-                <div role="heading" aria-level="3">上传与入库</div>
+                <div>上传与入库</div>
                 <div class="configuration-fields">
                   <el-form-item label="上传文件最大字节">
                     <el-input-number
@@ -382,7 +386,7 @@
               </div>
 
               <div id="configuration-parser" class="configuration-section">
-                <div role="heading" aria-level="3">Parser</div>
+                <div>Parser</div>
                 <div class="configuration-fields">
                   <el-form-item label="API 等待超时（ms）">
                     <el-input-number
@@ -447,7 +451,7 @@
               </div>
 
               <div id="configuration-cad" class="configuration-section">
-                <div role="heading" aria-level="3">CAD / DWG</div>
+                <div>CAD / DWG</div>
                 <div class="configuration-fields">
                   <el-form-item label="CAD 最大实体数">
                     <el-input-number
@@ -572,7 +576,7 @@
               </div>
 
               <div id="configuration-tika" class="configuration-section">
-                <div role="heading" aria-level="3">Tika</div>
+                <div>Tika</div>
                 <div class="configuration-fields">
                   <el-form-item label="启用 Tika PDF 兜底">
                     <el-switch
@@ -629,7 +633,7 @@
           <div class="configuration-heading">
             <div class="configuration-heading__content">
               <strong>发布记录</strong>
-              <span class="configuration-heading__description">
+              <span class="configuration-heading__description kb-text kb-text--secondary">
                 显示变更原因、受影响服务、readiness 结果与回滚入口。
               </span>
             </div>
@@ -690,11 +694,15 @@
                   {{ deploymentStatus(deployment.status) }}
                 </el-tag>
               </div>
-              <span class="deployment-card__detail">
+              <span class="deployment-card__detail kb-text kb-text--secondary">
                 服务：{{ deployment.services.join('、') }}
               </span>
-              <span class="deployment-card__detail">原因：{{ deployment.changeReason }}</span>
-              <span class="deployment-card__detail">结果码：{{ deployment.errorCode ?? '—' }}</span>
+              <span class="deployment-card__detail kb-text kb-text--secondary">
+                原因：{{ deployment.changeReason }}
+              </span>
+              <span class="deployment-card__detail kb-text kb-text--secondary">
+                结果码：{{ deployment.errorCode ?? '—' }}
+              </span>
               <el-button
                 v-if="deployment.rollbackAvailable && !activeDeployment"
                 text
@@ -964,22 +972,18 @@ onUnmounted(stopPolling);
 </script>
 
 <style scoped>
-.provider-toolbar__title {
-  font-size: 17px;
-}
 .configuration-heading {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  gap: var(--kb-space-4);
-  margin-bottom: var(--kb-space-4);
+  gap: var(--kb-layout-gap);
+  margin-bottom: var(--kb-layout-gap);
 }
 .configuration-heading__content {
   display: grid;
   gap: var(--kb-space-1);
 }
 .configuration-heading__description {
-  color: var(--kb-color-text-secondary);
   font-size: 13px;
 }
 .configuration-form,
@@ -1007,7 +1011,7 @@ onUnmounted(stopPolling);
   z-index: 3;
   align-self: start;
   min-width: 0;
-  padding: var(--kb-space-2);
+  padding: var(--kb-space-2) 0;
   background: var(--kb-color-surface);
 }
 .configuration-section {
@@ -1047,7 +1051,6 @@ onUnmounted(stopPolling);
 }
 .deployment-card__detail {
   overflow-wrap: anywhere;
-  color: var(--kb-color-text-secondary);
   font-size: 13px;
 }
 .embedding-migration-alert {
@@ -1060,7 +1063,7 @@ onUnmounted(stopPolling);
 }
 /* 响应式：紧凑布局（<1280px） */
 @media (max-width: 1279px) {
-  .provider-toolbar .el-text {
+  .provider-toolbar__description {
     display: none;
   }
   .configuration-fields {
@@ -1073,8 +1076,6 @@ onUnmounted(stopPolling);
   .configuration-anchor {
     overflow-x: auto;
     max-width: 100%;
-    padding-right: var(--kb-space-2);
-    padding-left: var(--kb-space-2);
   }
 }
 

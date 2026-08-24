@@ -1,19 +1,19 @@
 <template>
   <main class="login-page">
     <section class="login-brand">
-      <span class="brand-mark">N</span>
+      <span class="kb-brand-mark">N</span>
       <div class="brand-text">知枢 NexusKB</div>
       <div class="login-text1">让知识<br />可信、可查、可追溯</div>
       <div class="login-text2">每个回答都有依据，每次访问都经过权限验证。</div>
     </section>
     <section class="login-panel">
       <div class="login-card kb-block kb-block--spacious">
-        <div class="login-card__title">登录知枢</div>
+        <div class="login-card__title kb-heading" role="heading" aria-level="1">登录知枢</div>
         <div>
-          <el-text>使用已配置的身份方式继续访问。</el-text>
+          <div class="kb-text kb-text--secondary">使用已配置的身份方式继续访问。</div>
         </div>
         <form v-if="options?.passwordEnabled" class="login-form" @submit.prevent="submit">
-          <label class="login-form-field">
+          <label class="login-form-field kb-text kb-text--primary kb-text--strong">
             账号
             <el-input
               v-model="username"
@@ -22,7 +22,7 @@
               placeholder="输入账号"
             />
           </label>
-          <label class="login-form-field">
+          <label class="login-form-field kb-text kb-text--primary kb-text--strong">
             密码
             <el-input
               v-model="password"
@@ -33,7 +33,7 @@
               placeholder="输入密码"
             />
           </label>
-          <div v-if="errorMessage" class="login-error kb-text" role="alert">
+          <div v-if="errorMessage" class="login-error kb-text kb-text--danger" role="alert">
             {{ errorMessage }}
           </div>
           <el-button
@@ -47,14 +47,19 @@
           </el-button>
         </form>
         <template v-else>
-          <div v-if="errorMessage" class="login-error kb-text" role="alert">
+          <div v-if="errorMessage" class="login-error kb-text kb-text--danger" role="alert">
             {{ errorMessage }}
           </div>
           <el-button class="login-submit" type="primary" size="large" disabled>SSO 登录</el-button>
-          <small v-if="options?.mode === 'development'" class="login-help">
+          <small
+            v-if="options?.mode === 'development'"
+            class="kb-text kb-text--sm kb-text--secondary"
+          >
             本地开发模式会由服务端自动建立受控身份。
           </small>
-          <small v-else class="login-help">请使用已配置的身份服务获取访问权限。</small>
+          <small v-else class="kb-text kb-text--sm kb-text--secondary">
+            请使用已配置的身份服务获取访问权限。
+          </small>
         </template>
       </div>
     </section>
@@ -155,10 +160,6 @@ async function submit(): Promise<void> {
   margin: 0;
   font-size: 30px;
 }
-.login-card .kb-text,
-.login-help {
-  color: var(--kb-color-text-secondary);
-}
 .login-form {
   display: grid;
   gap: var(--kb-space-4);
@@ -169,13 +170,10 @@ async function submit(): Promise<void> {
 .login-form-field {
   display: grid;
   gap: var(--kb-space-2);
-  color: var(--kb-color-text-primary);
   font-size: 13px;
-  font-weight: 700;
 }
 .login-error {
   margin: 0;
-  color: var(--kb-color-danger) !important;
   font-size: 13px;
 }
 /* 响应式：紧凑布局（<1280px） */

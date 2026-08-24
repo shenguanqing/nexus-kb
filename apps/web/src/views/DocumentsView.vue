@@ -1,5 +1,5 @@
 <template>
-  <section class="page">
+  <section class="kb-page">
     <form
       v-if="!isMobile"
       class="documents-toolbar document-filters"
@@ -12,12 +12,7 @@
         clearable
         placeholder="搜索文件名"
       />
-      <el-select
-        class="document-filter-status"
-        v-model="filters.status"
-        clearable
-        placeholder="状态"
-      >
+      <el-select v-model="filters.status" clearable placeholder="状态">
         <el-option
           v-for="(label, value) in statusLabels"
           :key="value"
@@ -50,15 +45,14 @@
           :value="format"
         />
       </el-select>
-      <div class="filter-actions">
+      <div class="kb-filter-actions">
         <el-button native-type="submit">筛选</el-button>
-        <el-button native-type="button" @click="resetFilters"> 重置 </el-button>
+        <el-button @click="resetFilters">重置 </el-button>
       </div>
       <el-button
         v-if="canUpload"
         class="documents-upload-action"
         type="primary"
-        native-type="button"
         @click="openUpload"
       >
         上传文档
@@ -75,14 +69,13 @@
         v-if="canUpload"
         class="documents-upload-action"
         type="primary"
-        native-type="button"
         @click="openUpload"
       >
         上传文档
       </el-button>
       <el-button
-        class="filter-trigger"
-        :class="{ 'is-active': hasSecondaryFilters }"
+        class="kb-filter-trigger"
+        :class="{ 'kb-filter-trigger--active': hasSecondaryFilters }"
         aria-label="筛选"
         @click="filtersVisible = true"
       >
@@ -92,13 +85,12 @@
     <template v-if="isMobile">
       <el-drawer
         v-model="filtersVisible"
-        class="mobile-filter-drawer"
         direction="btt"
         size="auto"
         title="筛选文档"
         append-to-body
       >
-        <form class="mobile-filter-form" aria-label="文档筛选" @submit.prevent="applyFilters">
+        <form class="kb-filter-form" aria-label="文档筛选" @submit.prevent="applyFilters">
           <el-select v-model="filters.status" clearable placeholder="状态">
             <el-option
               v-for="(label, value) in statusLabels"
@@ -132,24 +124,24 @@
               :value="format"
             />
           </el-select>
-          <div class="mobile-filter-actions">
-            <el-button native-type="button" @click="resetFilters"> 重置 </el-button>
-            <el-button type="primary" native-type="submit"> 筛选 </el-button>
+          <div class="kb-filter-form__actions">
+            <el-button @click="resetFilters">重置</el-button>
+            <el-button type="primary" native-type="submit">筛选</el-button>
           </div>
         </form>
       </el-drawer>
     </template>
 
-    <div class="kb-block-content kb-block-content--mobile-inset">
+    <div class="kb-block-content">
       <div v-if="errorMessage" class="kb-error-state" role="alert">
-        <strong class="kb-text--danger">无法加载文档</strong><span>{{ errorMessage }}</span>
+        <strong class="kb-text kb-text--danger">无法加载文档</strong><span>{{ errorMessage }}</span>
         <el-button @click="load">重试</el-button>
       </div>
       <div
         v-else
         v-loading="loading"
-        class="kb-block--flush kb-block-scroll"
-        :class="!isMobile ? 'kb-block' : ''"
+        class="kb-block-scroll"
+        :class="!isMobile ? 'kb-block kb-block--flush' : ''"
       >
         <el-table
           v-if="!isMobile && items.length > 0"
@@ -160,8 +152,16 @@
         >
           <el-table-column prop="sourceName" label="文件名" min-width="300" fixed="left">
             <template #default="scope">
-              <RouterLink :to="`/documents/${scope.row.id}`">
-                <el-link type="primary" underline="never">{{ scope.row.sourceName }}</el-link>
+              <RouterLink v-slot="{ href, navigate }" :to="`/documents/${scope.row.id}`" custom>
+                <el-link
+                  class="kb-link"
+                  type="primary"
+                  underline="never"
+                  :href="href"
+                  @click="navigate"
+                >
+                  <span class="kb-link__text">{{ scope.row.sourceName }}</span>
+                </el-link>
               </RouterLink>
             </template>
           </el-table-column>
@@ -224,12 +224,16 @@
       :z-index="4000"
       @closed="resetUploadDialog"
     >
-      <div v-if="uploadOptionsLoading" v-loading="true" class="upload-options-state">
+      <div
+        v-if="uploadOptionsLoading"
+        v-loading="true"
+        class="upload-options-state kb-text kb-text--secondary"
+      >
         正在读取服务器上传限制…
       </div>
       <div v-else-if="uploadOptionsError" class="kb-error-state" role="alert">
-        <strong class="kb-text--danger">上传配置加载失败</strong
-        ><span>{{ uploadOptionsError }}</span>
+        <strong class="kb-text kb-text--danger">上传配置加载失败</strong>
+        <span>{{ uploadOptionsError }}</span>
         <el-button @click="loadUploadOptions">重试</el-button>
       </div>
       <div v-if="uploadOptions" class="upload-form">
@@ -243,7 +247,7 @@
           :accept="uploadOptions.acceptedExtensions.map((item) => `.${item}`).join(',')"
           :on-change="chooseFiles"
         >
-          <span class="upload-picker-content">
+          <span class="upload-picker-content kb-text kb-text--secondary">
             <el-icon><UploadFilled /></el-icon>
             <span>{{ isMobile ? '选择文件' : '选择或拖入文件' }}</span>
           </span>
@@ -253,20 +257,22 @@
             </div>
           </template>
         </el-upload>
-        <el-text size="small">
+        <small class="kb-text kb-text--xs kb-text--secondary">
           支持
           {{
             uploadOptions.acceptedExtensions.map((item) => item.toUpperCase()).join(' / ')
           }}，单文件最大 {{ Math.ceil(uploadOptions.maxUploadBytes / 1024 / 1024) }} MB。
-        </el-text>
+        </small>
         <div class="upload-metadata" aria-label="上传权限信息">
           <div class="upload-metadata-row">
-            <span class="upload-metadata-label">部门</span>
-            <strong class="upload-metadata-value">{{ uploadOptions.department }}</strong>
+            <span class="upload-metadata-label kb-text kb-text--secondary">部门</span>
+            <strong class="upload-metadata-value kb-text kb-text--medium">
+              {{ uploadOptions.department }}
+            </strong>
           </div>
           <div class="upload-metadata-row">
-            <span class="upload-metadata-label">敏感度</span>
-            <strong class="upload-metadata-value">
+            <span class="upload-metadata-label kb-text kb-text--secondary">敏感度</span>
+            <strong class="upload-metadata-value kb-text kb-text--medium">
               {{ uploadOptions.defaultSensitivity }}
               <template v-if="!isMobile">（由服务端身份确定）</template>
             </strong>
@@ -274,7 +280,7 @@
         </div>
         <div
           v-if="uploadOptions.defaultSensitivity === 'confidential'"
-          class="upload-warning kb-text"
+          class="upload-warning kb-text kb-text--warning"
         >
           机密内容默认不会发送到云端 Embedding 服务。
         </div>
@@ -305,10 +311,14 @@
                 :show-text="false"
                 :stroke-width="5"
               />
-              <small class="upload-progress-label">上传中 {{ row.progress ?? 0 }}%</small>
+              <small class="upload-progress-label kb-text kb-text--sm kb-text--secondary">
+                上传中 {{ row.progress ?? 0 }}%
+              </small>
             </template>
             <div v-else-if="row.status === 'failed'" class="upload-file-failure">
-              <small class="upload-file-error" role="alert">{{ row.error }}</small>
+              <small class="upload-file-error kb-text kb-text--sm kb-text--secondary" role="alert">
+                {{ row.error }}
+              </small>
               <el-button class="upload-file-retry" link type="primary" @click="retryUpload(row)">
                 重试
               </el-button>
@@ -558,7 +568,6 @@ onMounted(load);
   align-items: center;
   gap: var(--kb-space-2);
   height: 44px;
-  color: var(--kb-color-text-secondary);
 }
 .upload-metadata {
   overflow: hidden;
@@ -576,24 +585,18 @@ onMounted(load);
 .upload-metadata-row + .upload-metadata-row {
   border-top: 1px solid var(--kb-color-border);
 }
-.upload-metadata-label {
-  color: var(--kb-color-text-secondary);
-}
 .upload-metadata-value {
   overflow-wrap: anywhere;
-  font-weight: 600;
 }
 .upload-warning {
   padding: var(--kb-space-2) var(--kb-block-padding);
   border-radius: var(--kb-radius-sm);
-  color: var(--kb-color-warning);
   background: var(--kb-color-warning-soft);
 }
 .upload-options-state {
   display: grid;
   place-items: center;
   min-height: 180px;
-  color: var(--kb-color-text-secondary);
 }
 .upload-file-list {
   display: grid;
@@ -635,7 +638,6 @@ onMounted(load);
 .upload-progress-label,
 .upload-file-error {
   overflow-wrap: anywhere;
-  color: var(--kb-color-text-secondary);
 }
 .upload-file-failure {
   display: flex;

@@ -65,8 +65,8 @@ markdown.renderer.rules.text = (tokens, index, options, environment, renderer): 
     CITATION_PATTERN,
     (citation, sourceIndex: string) =>
       (environment as SafeMarkdownOptions).interactiveCitations
-        ? `<button type="button" class="answer-citation answer-citation--interactive" data-source-index="${sourceIndex}" aria-label="查看来源 ${sourceIndex}">${citation}</button>`
-        : `<small class="answer-citation">${citation}</small>`,
+        ? `<button type="button" class="kb-answer-citation kb-answer-citation--interactive" data-source-index="${sourceIndex}" aria-label="查看来源 ${sourceIndex}">${citation}</button>`
+        : `<small class="kb-answer-citation">${citation}</small>`,
   );
 
 const defaultLinkOpenRenderer =
@@ -137,7 +137,7 @@ markdown.renderer.rules.list_item_open = (tokens, index): string => {
 markdown.renderer.rules.list_item_close = () => '</div>';
 markdown.renderer.rules.heading_open = (tokens, index): string => {
   const level = tokens[index]?.tag.replace('h', '') ?? '2';
-  return `<div class="markdown-heading markdown-heading--h${level}" role="heading" aria-level="${level}">`;
+  return `<div class="markdown-heading markdown-heading--h${level} kb-heading kb-heading--h${level}" role="heading" aria-level="${level}">`;
 };
 markdown.renderer.rules.heading_close = () => '</div>';
 
@@ -185,7 +185,7 @@ export function renderSafeMarkdown(source: string, options: SafeMarkdownOptions 
   });
   const template = document.createElement('template');
   template.innerHTML = sanitized;
-  template.content.querySelectorAll('.answer-citation--interactive').forEach((citation) => {
+  template.content.querySelectorAll('.kb-answer-citation--interactive').forEach((citation) => {
     citation.setAttribute('type', 'button');
   });
   template.content.querySelectorAll('.markdown-table-scroll').forEach((table) => {

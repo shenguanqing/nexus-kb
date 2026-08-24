@@ -85,7 +85,7 @@ describe('DocumentChunksView responsive content comparison', () => {
     expect(wrapper.get('.chunk-data-list').classes()).toEqual(
       expect.arrayContaining(['kb-data-fields', 'kb-data-fields--borderless']),
     );
-    expect(wrapper.get('.chunks-toolbar .kb-block-title').attributes()).toMatchObject({
+    expect(wrapper.get('.chunks-toolbar .kb-block__title').attributes()).toMatchObject({
       role: 'heading',
       'aria-level': '2',
     });

@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Locator, type Page } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 
 const session = (
@@ -67,6 +67,38 @@ async function expectAdjacentButtonsUseParentGap(page: Page, rootSelector: strin
       ).toBeGreaterThanOrEqual(metric.parentGap - 1);
     }
   }
+}
+
+async function expectFlushTableUsesContainerBottomBorder(page: Page): Promise<void> {
+  const metrics = await page
+    .locator('.kb-block--flush:has(> .desktop-data-table)')
+    .evaluate((box) => {
+      const inner = box.querySelector<HTMLElement>(
+        ':scope > .desktop-data-table .el-table__inner-wrapper',
+      );
+      const lastRowCells = Array.from(
+        box.querySelectorAll<HTMLElement>(
+          ':scope > .desktop-data-table .el-table__body tr:last-child > td.el-table__cell',
+        ),
+      );
+      const bottomPatch = box.querySelector<HTMLElement>(
+        ':scope > .desktop-data-table .el-table__border-bottom-patch',
+      );
+      return {
+        containerBorderBottomWidth: getComputedStyle(box).borderBottomWidth,
+        tableBottomRuleDisplay: inner ? getComputedStyle(inner, '::before').display : '',
+        lastRowBorderBottomWidths: [
+          ...new Set(lastRowCells.map((cell) => getComputedStyle(cell).borderBottomWidth)),
+        ],
+        bottomPatchDisplay: bottomPatch ? getComputedStyle(bottomPatch).display : 'absent',
+      };
+    });
+  expect(metrics).toEqual({
+    containerBorderBottomWidth: '1px',
+    tableBottomRuleDisplay: 'none',
+    lastRowBorderBottomWidths: ['0px'],
+    bottomPatchDisplay: 'absent',
+  });
 }
 
 async function expectInputAndButtonHeightsMatch(
@@ -254,8 +286,12 @@ test('asks a grounded question and renders an authorized source', async ({ page 
     });
   });
   await page.goto('/ask');
+  await expect(page.getByRole('button', { name: '发送问题' })).toBeDisabled();
+  await expect(page.locator('.ask-composer')).not.toHaveCSS('box-shadow', 'none');
+  await page.getByLabel('输入问题').focus();
+  await expect(page.locator('.ask-composer')).toHaveCSS('border-color', 'rgb(49, 95, 201)');
   await page.getByLabel('输入问题').fill('付款周期是多久？');
-  await page.getByRole('button', { name: '发送' }).click();
+  await page.getByRole('button', { name: '发送问题' }).click();
   await expect(page.getByText('付款周期为 30 天。')).toBeVisible();
   await expect(page.getByText('付款制度.md')).toBeVisible();
   await page.route('**/v1/history/conversations?**', (route) =>
@@ -264,7 +300,7 @@ test('asks a grounded question and renders an authorized source', async ({ page 
   await page.locator('.sidebar-navigation').getByRole('link', { name: '问答历史' }).click();
   await expect(page).toHaveURL(/\/history$/);
   const historyLayout = await page.evaluate(() => {
-    const page = document.querySelector<HTMLElement>('.app-main > section.page');
+    const page = document.querySelector<HTMLElement>('.app-main > section.kb-page');
     const layout = document.querySelector<HTMLElement>('.history-layout');
     return {
       pageBottom: page?.getBoundingClientRect().bottom ?? Number.NEGATIVE_INFINITY,
@@ -276,7 +312,7 @@ test('asks a grounded question and renders an authorized source', async ({ page 
   await expect(page.getByText('付款周期是多久？')).toBeVisible();
   await expect(page.getByText('付款周期为 30 天。')).toBeVisible();
   await page.getByLabel('输入问题').fill('报销需要准备哪些材料？');
-  await page.getByRole('button', { name: '发送' }).click();
+  await page.getByRole('button', { name: '发送问题' }).click();
   await expect(page.getByText('报销需要准备哪些材料？')).toBeVisible();
   await expect(page.getByText('报销需提交对应材料。')).toBeVisible();
   await expect(page.getByText('付款周期是多久？')).toBeVisible();
@@ -290,7 +326,7 @@ test('renders the ask page header with Element Plus', async ({ page }) => {
   await mockSession(page);
   await page.goto('/ask');
 
-  await expect(page.locator('.page-header')).toHaveClass(/el-page-header/);
+  await expect(page.locator('.kb-page-header')).toHaveClass(/el-page-header/);
   await expect(page.getByRole('heading', { name: '从资料中找到答案' })).toBeVisible();
   await expect(page.getByRole('button', { name: '新建问答' })).toBeVisible();
 });
@@ -316,11 +352,11 @@ test('renders the complete safe Markdown set with applied component styles', asy
 
   await page.goto('/ask');
   await page.getByLabel('输入问题').fill('检查 Markdown 格式');
-  await page.getByRole('button', { name: '发送' }).click();
+  await page.getByRole('button', { name: '发送问题' }).click();
   await expect(page.getByRole('heading', { name: '格式检查', level: 4 })).toBeVisible();
   await expect(page.getByRole('region', { name: 'Markdown 表格' })).toBeVisible();
 
-  const styles = await page.locator('.answer-text.markdown-content').evaluate((root) => {
+  const styles = await page.locator('.answer-content .markdown-content').evaluate((root) => {
     const style = (selector: string) => getComputedStyle(root.querySelector(selector)!);
     const orderedItem = root.querySelector('.markdown-list-item--ordered')!;
     const tableScroll = root.querySelector<HTMLElement>('.markdown-table-scroll')!;
@@ -377,10 +413,11 @@ test('loads more history and keeps compact toolbars without date controls', asyn
   await page.goto('/history');
 
   await expect(page.locator('.history-head')).toHaveCount(0);
-  await expect(page.locator('.history-list-card .history-list')).toBeVisible();
+  const historyList = page.locator('[aria-label="问答会话列表"]');
+  await expect(historyList).toBeVisible();
   await expect(page.locator('.history-list-row')).toHaveCount(20);
-  await expect(page.locator('.history-list-panel .el-pagination')).toHaveCount(0);
-  await page.locator('.history-list-scroll').evaluate((element) => {
+  await expect(historyList.locator('.el-pagination')).toHaveCount(0);
+  await historyList.locator(':scope > .kb-block-scroll').evaluate((element) => {
     element.scrollTop = element.scrollHeight;
     element.dispatchEvent(new Event('scroll'));
   });
@@ -389,10 +426,10 @@ test('loads more history and keeps compact toolbars without date controls', asyn
 
   await page.setViewportSize({ width: 768, height: 887 });
   await page.goto('/history');
-  await expect(page.locator('.history-toolbar .el-date-editor')).toHaveCount(0);
-  const padToolbar = await page.locator('.history-toolbar').evaluate((toolbar) => {
+  await expect(page.locator('form[aria-label="历史记录筛选"] .el-date-editor')).toHaveCount(0);
+  const padToolbar = await page.locator('form[aria-label="历史记录筛选"]').evaluate((toolbar) => {
     const controls = Array.from(
-      toolbar.querySelectorAll<HTMLElement>('.el-input, .filter-actions'),
+      toolbar.querySelectorAll<HTMLElement>('.el-input, .kb-filter-actions'),
     ).map((control) => Math.round(control.getBoundingClientRect().top));
     return { controls };
   });
@@ -400,11 +437,11 @@ test('loads more history and keeps compact toolbars without date controls', asyn
 
   await page.setViewportSize({ width: 375, height: 900 });
   await page.goto('/history');
-  const mobileToolbar = page.locator('.history-toolbar--mobile');
+  const mobileToolbar = page.locator('form[aria-label="搜索历史记录"]');
   await expect(mobileToolbar.getByRole('button', { name: '筛选', exact: true })).toHaveCount(0);
   await expect(mobileToolbar.getByRole('button', { name: '重置', exact: true })).toBeVisible();
   await expect(mobileToolbar.locator('.el-date-editor')).toHaveCount(0);
-  await expect(page.locator('.mobile-filter-drawer')).toHaveCount(0);
+  await expect(page.locator('.el-drawer:visible')).toHaveCount(0);
   const mobileToolbarBounds = await mobileToolbar.evaluate((toolbar) => ({
     clientWidth: toolbar.clientWidth,
     scrollWidth: toolbar.scrollWidth,
@@ -443,7 +480,7 @@ test('omits unavailable source location metadata', async ({ page }) => {
 
   await page.goto('/ask');
   await page.getByLabel('输入问题').fill('Vue 的响应式原理是什么？');
-  await page.getByRole('button', { name: '发送' }).click();
+  await page.getByRole('button', { name: '发送问题' }).click();
   await page.getByRole('button', { name: /来源 1 vue\.md/ }).click();
 
   await expect(page.getByRole('heading', { name: 'vue.md', level: 2 })).toBeVisible();
@@ -477,7 +514,7 @@ test('renders explicit no-answer and blocks unauthorized management routes', asy
   await expect(sidebar.getByRole('link', { name: '入库任务' })).toHaveCount(0);
   await expect(page.getByText('管理', { exact: true })).toHaveCount(0);
   await page.getByLabel('输入问题').fill('不存在的制度？');
-  await page.getByRole('button', { name: '发送' }).click();
+  await page.getByRole('button', { name: '发送问题' }).click();
   await expect(page.getByText('暂时没有找到足够依据')).toBeVisible();
   await page.goto('/documents');
   await expect(page).toHaveURL(/\/403$/);
@@ -505,11 +542,11 @@ test('labels a hybrid general-knowledge answer without knowledge-base sources', 
 
   await page.goto('/ask');
   await page.getByLabel('输入问题').fill('Vue 2 和 Vue 3 的区别？');
-  await page.getByRole('button', { name: '发送' }).click();
+  await page.getByRole('button', { name: '发送问题' }).click();
   await expect(page.getByText('通用知识补充', { exact: true })).toBeVisible();
   await expect(page.getByText('不是知识库资料', { exact: false })).toBeVisible();
   await expect(page.getByText('Vue 3 使用 Proxy', { exact: false })).toBeVisible();
-  await expect(page.locator('.answer-sources')).toHaveCount(0);
+  await expect(page.locator('.kb-answer-sources')).toHaveCount(0);
 });
 
 test('opens access navigation and displays ACL-authorized document chunks', async ({ page }) => {
@@ -666,13 +703,13 @@ test('opens access navigation and displays ACL-authorized document chunks', asyn
     .toEqual({ actionsWrapped: false, cardsStacked: false });
   const detailLayout = await page.evaluate(() => {
     const pageContent = document.querySelector<HTMLElement>(
-      '.document-detail-page > .page-content',
+      '.document-detail-page > .kb-page__content',
     );
     const actions = document.querySelector<HTMLElement>('.detail-actions');
     const actionButtons = document.querySelector<HTMLElement>('.detail-action-buttons');
     const detailGrid = document.querySelector<HTMLElement>('.detail-grid');
     const history = document.querySelector<HTMLElement>(
-      '.document-detail-page > .page-content > .detail-grid + .kb-block',
+      '.document-detail-page > .kb-page__content > .detail-grid + .kb-block',
     );
     const actionsBounds = actions?.getBoundingClientRect();
     const gridBounds = detailGrid?.getBoundingClientRect();
@@ -690,6 +727,23 @@ test('opens access navigation and displays ACL-authorized document chunks', asyn
   expect(detailLayout.actionButtonsScrollWidth).toBeLessThanOrEqual(
     detailLayout.actionButtonsClientWidth,
   );
+  const detailFieldLabels = await page
+    .locator('.detail-grid .kb-data-field__label')
+    .evaluateAll((labels) =>
+      labels.map((label) => {
+        const style = getComputedStyle(label);
+        return {
+          height: label.getBoundingClientRect().height,
+          lineHeight: Number.parseFloat(style.lineHeight),
+          whiteSpace: style.whiteSpace,
+        };
+      }),
+    );
+  expect(detailFieldLabels.length).toBeGreaterThan(0);
+  for (const label of detailFieldLabels) {
+    expect(label.whiteSpace).toBe('nowrap');
+    expect(label.height).toBeLessThanOrEqual(label.lineHeight + 1);
+  }
   expect(Math.round(detailLayout.actionsToGridGap)).toBe(Math.round(detailLayout.pageGap));
   expect(Math.round(detailLayout.gridToHistoryGap)).toBe(Math.round(detailLayout.pageGap));
   await page.getByRole('button', { name: '修改权限', exact: true }).click();
@@ -715,14 +769,71 @@ test('opens access navigation and displays ACL-authorized document chunks', asyn
   await metadataDialog.getByRole('button', { name: '取消' }).click();
 
   await page.setViewportSize({ width: 375, height: 812 });
+  const mobileDetailFieldLabels = await page
+    .locator('.detail-grid .kb-data-field__label')
+    .evaluateAll((labels) =>
+      labels.map((label) => {
+        const style = getComputedStyle(label);
+        return {
+          height: label.getBoundingClientRect().height,
+          lineHeight: Number.parseFloat(style.lineHeight),
+          whiteSpace: style.whiteSpace,
+        };
+      }),
+    );
+  for (const label of mobileDetailFieldLabels) {
+    expect(label.whiteSpace).toBe('nowrap');
+    expect(label.height).toBeLessThanOrEqual(label.lineHeight + 1);
+  }
   await expect(page.locator('.detail-action-buttons')).toHaveCount(0);
   await page.getByRole('button', { name: '打开文档操作面板' }).click();
   const mobileActionDrawer = page.locator('.mobile-action-drawer');
   await expect(mobileActionDrawer).toBeVisible();
-  await expect(mobileActionDrawer.getByRole('menuitem')).toHaveCount(4);
-  await expect(mobileActionDrawer.getByRole('menuitem', { name: '删除文档' })).toHaveClass(
+  await expect(mobileActionDrawer.locator('[role="menu"], [role="menuitem"]')).toHaveCount(0);
+  await expect(mobileActionDrawer.locator('.mobile-action-item')).toHaveCount(4);
+  await expect(mobileActionDrawer.locator('.mobile-action-item.el-button')).toHaveCount(3);
+  await expect(mobileActionDrawer.getByRole('button', { name: '删除文档' })).toHaveClass(
     /mobile-action-item--danger/,
   );
+  const mobileActionChevronRights = await mobileActionDrawer
+    .locator('.mobile-action-chevron')
+    .evaluateAll((chevrons) =>
+      chevrons.map((item) => Math.round(item.getBoundingClientRect().right)),
+    );
+  expect(new Set(mobileActionChevronRights).size).toBe(1);
+  await mobileActionDrawer.getByRole('button', { name: '修改权限' }).click();
+  const metadataDrawer = page.locator('.metadata-drawer.el-drawer');
+  await expect(metadataDrawer).toBeVisible();
+  await expect(metadataDrawer).toHaveClass(/btt/);
+  await expect
+    .poll(() =>
+      metadataDrawer.evaluate((element) => Math.round(element.getBoundingClientRect().bottom)),
+    )
+    .toBe(812);
+  const metadataDrawerBounds = await metadataDrawer.evaluate((element) => {
+    const bounds = element.getBoundingClientRect();
+    return {
+      bottom: Math.round(bounds.bottom),
+      height: Math.round(bounds.height),
+      viewportHeight: window.innerHeight,
+    };
+  });
+  expect(metadataDrawerBounds.bottom).toBe(metadataDrawerBounds.viewportHeight);
+  expect(metadataDrawerBounds.height).toBeLessThan(metadataDrawerBounds.viewportHeight);
+  await metadataDrawer.getByRole('button', { name: '取消' }).click();
+  await page.getByRole('button', { name: '打开文档操作面板' }).click();
+  await mobileActionDrawer.getByRole('button', { name: '删除文档' }).click();
+  const dangerDrawer = page.locator('.el-drawer').filter({ hasText: '确认高风险操作' });
+  await expect(dangerDrawer).toBeVisible();
+  const dialogBodyGap = await dangerDrawer.locator('.document-dialog-body').evaluate((element) => {
+    const style = getComputedStyle(element);
+    return {
+      actual: style.rowGap,
+      expected: style.getPropertyValue('--kb-layout-gap').trim(),
+    };
+  });
+  expect(dialogBodyGap.actual).toBe(dialogBodyGap.expected);
+  await dangerDrawer.getByRole('button', { name: '取消' }).click();
   const mobileCardsStacked = await page.evaluate(() => {
     const cards = document.querySelectorAll<HTMLElement>('.detail-grid > .kb-block');
     return (
@@ -740,6 +851,137 @@ test('opens access navigation and displays ACL-authorized document chunks', asyn
   await page.getByRole('tab', { name: '脱敏后内容' }).click();
   await expect(page.getByText('这是脱敏后分块内容。')).toBeVisible();
   await expect(page.getByText('这是原始分块内容。')).toHaveCount(0);
+});
+
+test('uses one compact Mobile toolbar across CAD, PDF, image, Office, and text previews', async ({
+  page,
+}) => {
+  const documentId = '6769af9a-a4d0-4dc2-a97d-942584a9c826';
+  await page.setViewportSize({ width: 425, height: 832 });
+  await mockSession(page, ['documents:read']);
+  let previewManifest: Record<string, unknown> = {};
+  await page.route(`**/v1/documents/${documentId}/preview/content`, (route) =>
+    route.fulfill({
+      contentType:
+        typeof previewManifest.contentType === 'string'
+          ? previewManifest.contentType
+          : 'text/plain',
+      body:
+        previewManifest.kind === 'svg'
+          ? '<svg xmlns="http://www.w3.org/2000/svg" width="800" height="600"></svg>'
+          : previewManifest.kind === 'markdown'
+            ? '# Preview'
+            : '',
+    }),
+  );
+  await page.route(`**/v1/documents/${documentId}/preview`, (route) =>
+    route.fulfill({ json: previewManifest }),
+  );
+
+  const cases = [
+    {
+      sourceName: '0、目录、说明、系统图（1~3#楼）20200531.dwg',
+      sourceMimeType: 'image/vnd.dwg',
+      kind: 'svg',
+      contentType: 'image/svg+xml',
+      renderer: 'ezdxf-svg',
+      cad: null,
+      isCad: true,
+    },
+    {
+      sourceName: 'Permanent_Record_-_CN_edition_with_underlined_redactions.pdf',
+      sourceMimeType: 'application/pdf',
+      kind: 'pdf',
+      contentType: 'application/pdf',
+      renderer: 'native-pdf',
+      cad: null,
+      isCad: false,
+    },
+    {
+      sourceName: 'IMG_1692.png',
+      sourceMimeType: 'image/png',
+      kind: 'image',
+      contentType: 'image/png',
+      renderer: 'native-image',
+      cad: null,
+      isCad: false,
+    },
+    {
+      sourceName: '动态表单 API.docx',
+      sourceMimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      kind: 'pdf',
+      contentType: 'application/pdf',
+      renderer: 'libreoffice-pdf',
+      cad: null,
+      isCad: false,
+    },
+    {
+      sourceName: '运维手册.md',
+      sourceMimeType: 'text/markdown',
+      kind: 'markdown',
+      contentType: 'text/markdown',
+      renderer: 'local-text',
+      cad: null,
+      isCad: false,
+    },
+  ] as const;
+
+  for (const [index, previewCase] of cases.entries()) {
+    const { isCad, ...manifestCase } = previewCase;
+    previewManifest = {
+      documentId,
+      ...manifestCase,
+      status: 'ready',
+      rendererVersion: '1.0',
+      generatedAt: '2026-08-24T00:00:00.000Z',
+      fallbackVersion: null,
+    };
+    await page.goto(`/documents/${documentId}/preview?case=${index}`);
+    const toolbar = page.locator('.preview-toolbar');
+    await expect(toolbar).toBeVisible();
+    await expect(toolbar.locator('.kb-block__title')).toHaveText(previewCase.sourceName);
+    const layout = await toolbar.evaluate((element) => {
+      const identity = element.querySelector<HTMLElement>('.preview-toolbar__identity');
+      const title = identity?.querySelector<HTMLElement>('.kb-block__title');
+      const fullscreen = element.querySelector<HTMLElement>('.preview-fullscreen-action');
+      const zoom = element.querySelector<HTMLElement>('.preview-zoom-controls');
+      const zoomControls = Array.from(zoom?.querySelectorAll<HTMLElement>('.el-button') ?? []).map(
+        (control) => control.getBoundingClientRect(),
+      );
+      const toolbarBounds = element.getBoundingClientRect();
+      const identityBounds = identity?.getBoundingClientRect();
+      const fullscreenBounds = fullscreen?.getBoundingClientRect();
+      const zoomBounds = zoom?.getBoundingClientRect();
+      return {
+        fullscreenTop: fullscreenBounds?.top ?? 0,
+        identityBottom: identityBounds?.bottom ?? 0,
+        identityTop: identityBounds?.top ?? 0,
+        titleWidth: title?.getBoundingClientRect().width ?? 0,
+        toolbarClientWidth: element.clientWidth,
+        toolbarHeight: toolbarBounds.height,
+        toolbarScrollWidth: element.scrollWidth,
+        toolbarWidth: toolbarBounds.width,
+        zoomColumns: zoom ? getComputedStyle(zoom).gridTemplateColumns.split(' ').length : 0,
+        zoomControlTops: zoomControls.map((control) => Math.round(control.top)),
+        zoomControlWidths: zoomControls.map((control) => Math.round(control.width)),
+        zoomTop: zoomBounds?.top ?? 0,
+      };
+    });
+    expect(Math.abs(layout.fullscreenTop - layout.identityTop)).toBeLessThanOrEqual(1);
+    expect(layout.titleWidth).toBeGreaterThan(layout.toolbarWidth * 0.6);
+    expect(layout.toolbarScrollWidth).toBeLessThanOrEqual(layout.toolbarClientWidth);
+    if (isCad) {
+      expect(layout.zoomColumns).toBe(3);
+      expect(new Set(layout.zoomControlTops).size).toBe(1);
+      expect(
+        Math.max(...layout.zoomControlWidths) - Math.min(...layout.zoomControlWidths),
+      ).toBeLessThanOrEqual(1);
+      expect(layout.zoomTop).toBeGreaterThan(layout.identityBottom);
+    } else {
+      expect(layout.zoomColumns).toBe(0);
+      expect(layout.toolbarHeight).toBeLessThan(130);
+    }
+  }
 });
 
 test('signs in with an enabled account-password session without storing credentials in the page', async ({
@@ -783,7 +1025,7 @@ test('keeps the core shell within a 768px viewport', async ({ page }) => {
     scroll: document.body.scrollWidth,
   }));
   expect(widths.scroll).toBeLessThanOrEqual(768);
-  await expect(page.locator('.page-header')).toHaveClass(/el-page-header/);
+  await expect(page.locator('.kb-page-header')).toHaveClass(/el-page-header/);
   await expect(page.getByRole('heading', { name: '问答历史' })).toBeVisible();
   await expect(page.getByText('知识服务', { exact: true })).toBeVisible();
   await expect(page.getByLabel('当前位置')).toContainText('知识工作台');
@@ -821,11 +1063,15 @@ test('hides the shell heading copy on mobile while preserving return navigation'
   });
 
   await page.goto('/documents');
-  await expect(page.locator('.page-header')).toHaveCount(0);
+  await expect(page.locator('.kb-page-header')).toHaveCount(0);
 
   await page.goto(`/documents/${documentId}`);
-  await expect(page.locator('.page-header')).toBeVisible();
-  await expect(page.locator('.page-return-link')).toHaveAttribute('href', '/documents');
+  await expect(page.locator('.kb-page-header')).toHaveCount(0);
+  await expect(page.locator('.mobile-return-trigger')).toHaveAttribute('href', '/documents');
+  await expect(page.locator('.mobile-return-trigger')).toHaveAttribute(
+    'aria-label',
+    '返回文档列表',
+  );
 
   await page.getByRole('button', { name: '打开导航菜单' }).click();
   const mobileDocumentsLink = page
@@ -893,22 +1139,24 @@ test('adapts history filters, navigation, deletion, and pagination across pad an
 
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto('/history');
-  await expect(page.locator('.history-toolbar')).toBeVisible();
+  await expect(page.locator('form[aria-label="历史记录筛选"]')).toBeVisible();
   await expect(
-    page.locator('.history-toolbar').getByRole('button', { name: '重置' }),
+    page.locator('form[aria-label="历史记录筛选"]').getByRole('button', { name: '重置' }),
   ).toBeVisible();
-  await expect(page.locator('.history-toolbar .el-date-editor')).toHaveCount(0);
-  const desktopControls = await page.locator('.history-toolbar').evaluate((toolbar) => {
-    const controls = Array.from(
-      toolbar.querySelectorAll<HTMLElement>('.el-input, .filter-actions'),
-    ).map((control) => control.getBoundingClientRect());
-    const wrapper = toolbar.querySelector<HTMLElement>('.el-input__wrapper');
-    return {
-      tops: controls.map((control) => Math.round(control.top)),
-      controlHeight: wrapper?.getBoundingClientRect().height ?? 0,
-      toolbarHeight: toolbar.getBoundingClientRect().height,
-    };
-  });
+  await expect(page.locator('form[aria-label="历史记录筛选"] .el-date-editor')).toHaveCount(0);
+  const desktopControls = await page
+    .locator('form[aria-label="历史记录筛选"]')
+    .evaluate((toolbar) => {
+      const controls = Array.from(
+        toolbar.querySelectorAll<HTMLElement>('.el-input, .kb-filter-actions'),
+      ).map((control) => control.getBoundingClientRect());
+      const wrapper = toolbar.querySelector<HTMLElement>('.el-input__wrapper');
+      return {
+        tops: controls.map((control) => Math.round(control.top)),
+        controlHeight: wrapper?.getBoundingClientRect().height ?? 0,
+        toolbarHeight: toolbar.getBoundingClientRect().height,
+      };
+    });
   expect(new Set(desktopControls.tops).size).toBe(1);
   expect(desktopControls.controlHeight).toBe(40);
   expect(desktopControls.toolbarHeight).toBe(40);
@@ -921,14 +1169,14 @@ test('adapts history filters, navigation, deletion, and pagination across pad an
 
   await page.setViewportSize({ width: 768, height: 887 });
   await page.goto('/history');
-  await expect(page.locator('.history-toolbar')).toBeVisible();
+  await expect(page.locator('form[aria-label="历史记录筛选"]')).toBeVisible();
   await expect(page.locator('.history-list-item')).toBeVisible();
   const padLayout = await page.evaluate(() => {
-    const toolbar = document.querySelector<HTMLElement>('.history-toolbar');
+    const toolbar = document.querySelector<HTMLElement>('form[aria-label="历史记录筛选"]');
     const search = toolbar?.querySelector<HTMLElement>('.el-input');
-    const list = document.querySelector<HTMLElement>('.history-list-panel');
+    const list = document.querySelector<HTMLElement>('[aria-label="问答会话列表"]');
     const detail = document.querySelector<HTMLElement>('.history-detail');
-    const actions = toolbar?.querySelector<HTMLElement>('.filter-actions');
+    const actions = toolbar?.querySelector<HTMLElement>('.kb-filter-actions');
     const wrapper = search?.querySelector<HTMLElement>('.el-input__wrapper');
     const toolbarBounds = toolbar?.getBoundingClientRect();
     const searchBounds = search?.getBoundingClientRect();
@@ -961,24 +1209,24 @@ test('adapts history filters, navigation, deletion, and pagination across pad an
   await expect(page.getByPlaceholder('搜索会话标题')).toBeVisible();
   await expect(page.getByRole('button', { name: '重置', exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: '筛选', exact: true })).toHaveCount(0);
-  await expect(page.locator('.history-toolbar .el-date-editor')).toHaveCount(0);
-  await expect(page.locator('.mobile-filter-drawer')).toHaveCount(0);
+  await expect(page.locator('form[aria-label="搜索历史记录"] .el-date-editor')).toHaveCount(0);
+  await expect(page.locator('.el-drawer:visible')).toHaveCount(0);
   await expect(page.locator('.history-detail')).toHaveCount(0);
 
   await expect(page.getByRole('button', { name: `删除会话：${longTitle}` })).toBeVisible();
 
   await page.reload();
   await page.locator('.history-list-item').click();
-  await expect(page.locator('.history-list-panel')).toHaveCount(0);
+  await expect(page.locator('[aria-label="问答会话列表"]')).toHaveCount(0);
   const historyBackButton = page.getByRole('link', { name: '返回会话列表' });
   await expect(historyBackButton).toBeVisible();
-  await expect(page.locator('.page-header-actions .page-return-link')).toHaveCount(1);
+  await expect(historyBackButton).toHaveClass(/mobile-return-trigger/);
   await expect(page.locator('.mobile-tabbar')).toHaveCount(0);
-  await expect(page.locator('.page-header')).toBeVisible();
+  await expect(page.locator('.kb-page-header')).toHaveCount(0);
   await expect(page.locator('.history-question')).toContainText('信息机房有哪些设备？');
   await expect(page).toHaveURL(new RegExp(`conversationId=${conversationId}`));
   await historyBackButton.click();
-  await expect(page.locator('.history-list-panel')).toBeVisible();
+  await expect(page.locator('[aria-label="问答会话列表"]')).toBeVisible();
   await expect(page.getByRole('button', { name: '筛选', exact: true })).toHaveCount(0);
   await expect(page.getByRole('button', { name: '重置', exact: true })).toBeVisible();
 });
@@ -997,7 +1245,7 @@ test('keeps the Provider long form scrollable inside the application shell', asy
   await expect(page.getByRole('heading', { name: '模型 Provider' }).first()).toBeVisible();
   await expect(page.locator('.kb-error-state')).toBeVisible();
 
-  const providerScroll = await page.locator('.page > .page-content').evaluate((content) => {
+  const providerScroll = await page.locator('.kb-page > .kb-page__content').evaluate((content) => {
     const spacer = document.createElement('div');
     spacer.style.flex = '0 0 1600px';
     spacer.setAttribute('aria-hidden', 'true');
@@ -1214,22 +1462,28 @@ test('keeps every authorized page within a 375px mobile viewport', async ({ page
     ['/documents', '.documents-toolbar'],
     ['/ingestion-jobs', '.task-toolbar'],
     ['/access/users', '.access-toolbar'],
-    ['/system/usage', '.usage-toolbar'],
   ] as const) {
     await page.goto(path);
     await expect(page.locator(toolbar).getByRole('button', { name: '筛选' })).toHaveClass(
-      /filter-trigger/,
+      /kb-filter-trigger/,
     );
   }
-  await page.goto('/history');
-  await expect(page.locator('.history-toolbar').getByRole('button', { name: '筛选' })).toHaveCount(
-    0,
-  );
+  await page.goto('/system/usage');
   await expect(
-    page.locator('.history-toolbar').getByRole('button', { name: '重置' }),
+    page.locator('form[aria-label="用量日期范围筛选"]').getByRole('button', { name: '筛选' }),
+  ).toHaveCount(0);
+  await expect(
+    page.locator('form[aria-label="用量日期范围筛选"]').getByPlaceholder('开始日期'),
   ).toBeVisible();
-  await expect(page.locator('.history-list-empty')).toHaveCSS('justify-content', 'center');
-  await expect(page.locator('.history-list-empty')).toHaveCSS('align-items', 'center');
+  await page.goto('/history');
+  await expect(
+    page.locator('form[aria-label="搜索历史记录"]').getByRole('button', { name: '筛选' }),
+  ).toHaveCount(0);
+  await expect(
+    page.locator('form[aria-label="搜索历史记录"]').getByRole('button', { name: '重置' }),
+  ).toBeVisible();
+  await expect(page.locator('.kb-empty-state')).toHaveCSS('justify-content', 'center');
+  await expect(page.locator('.kb-empty-state')).toHaveCSS('align-items', 'center');
 
   await page.goto('/access/users');
   await expect(page.locator('.access-table-wrap')).toHaveCSS(
@@ -1243,15 +1497,19 @@ test('keeps every authorized page within a 375px mobile viewport', async ({ page
   );
 
   await page.goto('/audit');
-  await expect(page.locator('.audit-toolbar .audit-type-filter')).toContainText('全部事件类型');
-  await expect(page.locator('.audit-toolbar').getByRole('button', { name: '重置' })).toBeVisible();
-  await expect(page.locator('.mobile-filter-drawer')).toHaveCount(0);
+  await expect(page.locator('.kb-control-toolbar .audit-type-filter')).toContainText(
+    '全部事件类型',
+  );
+  await expect(
+    page.locator('.kb-control-toolbar').getByRole('button', { name: '重置' }),
+  ).toBeVisible();
+  await expect(page.locator('.el-drawer:visible')).toHaveCount(0);
 
   for (const [path, toolbar] of [
     ['/ingestion-jobs', '.task-toolbar'],
-    ['/settings/providers', '.provider-toolbar'],
-    ['/system/status', '.system-status-toolbar'],
-    ['/system/usage', '.usage-toolbar'],
+    ['/settings/providers', '.kb-status-toolbar'],
+    ['/system/status', '.kb-status-toolbar'],
+    ['/system/usage', 'form[aria-label="用量日期范围筛选"]'],
   ] as const) {
     await page.goto(path);
     await expect(page.locator(toolbar)).toHaveCSS('flex-direction', 'row');
@@ -1275,44 +1533,47 @@ test('keeps every authorized page within a 375px mobile viewport', async ({ page
   });
   expect(chunksPagination.paginationBottom).toBeLessThanOrEqual(chunksPagination.contentBottom);
   expect(chunksPagination.paginationBackground).toBe('rgba(0, 0, 0, 0)');
-
   await page.goto('/system/usage');
   await expect(page.locator('.usage-filter-form')).toHaveCount(0);
-  await page.locator('.usage-toolbar').getByRole('button', { name: '筛选' }).click();
-  await expect(page.locator('.usage-filter-drawer')).toBeVisible();
-  await expect(page.locator('.usage-filter-drawer').getByPlaceholder('开始时间')).toBeVisible();
-  await expect(page.locator('.usage-filter-drawer').getByPlaceholder('结束时间')).toBeVisible();
-  await expect(page.locator('.usage-filter-drawer').getByPlaceholder('开始时间')).toHaveCSS(
-    'font-size',
-    '16px',
-  );
-  await page.locator('.usage-filter-drawer').getByPlaceholder('开始时间').click();
+  await expect(page.locator('.usage-filter-drawer')).toHaveCount(0);
+  const usageMobileToolbar = page.locator('form[aria-label="用量日期范围筛选"]');
+  await expect(usageMobileToolbar.getByPlaceholder('开始日期')).toBeVisible();
+  await expect(usageMobileToolbar.getByPlaceholder('结束日期')).toBeVisible();
+  const usageStartDate = usageMobileToolbar.getByPlaceholder('开始日期');
+  await expect(usageStartDate).toHaveAttribute('readonly', '');
+  await expect(usageStartDate).toHaveCSS('font-size', '16px');
+  await usageStartDate.click();
   const usageDatePopper = page.locator('.usage-date-picker-popper:visible');
   await expect(usageDatePopper).toBeVisible();
   await expect(usageDatePopper).toHaveCSS('border-radius', '10px');
+  await expect(usageDatePopper.locator('.el-date-range-picker.single-panel')).toBeVisible();
   const usageDatePresentation = await usageDatePopper.evaluate((popper) => {
-    const drawer = document.querySelector<HTMLElement>('.usage-filter-drawer');
     const panel = popper.querySelector<HTMLElement>('.el-picker-panel');
     const content = popper.querySelector<HTMLElement>('.el-picker-panel__content');
     const bounds = popper.getBoundingClientRect();
     const panelBounds = panel?.getBoundingClientRect();
     const contentBounds = content?.getBoundingClientRect();
+    const triggerBounds = document
+      .querySelector<HTMLElement>('.usage-date-range-field')
+      ?.getBoundingClientRect();
     const style = getComputedStyle(popper);
     return {
-      isInsideDrawer: drawer?.contains(popper) ?? true,
       left: bounds.left,
       right: bounds.right,
       panelWidth: panelBounds?.width ?? 0,
       popperWidth: bounds.width,
+      triggerLeft: triggerBounds?.left ?? -1,
+      triggerWidth: triggerBounds?.width ?? 0,
       contentLeftGap: contentBounds && panelBounds ? contentBounds.left - panelBounds.left : -1,
       contentRightGap: contentBounds && panelBounds ? panelBounds.right - contentBounds.right : -1,
       background: style.backgroundColor,
       boxShadow: style.boxShadow,
     };
   });
-  expect(usageDatePresentation.isInsideDrawer).toBe(false);
   expect(usageDatePresentation.left).toBeGreaterThanOrEqual(0);
   expect(usageDatePresentation.right).toBeLessThanOrEqual(375);
+  expect(usageDatePresentation.left).toBeCloseTo(usageDatePresentation.triggerLeft, 0);
+  expect(usageDatePresentation.popperWidth).toBeCloseTo(usageDatePresentation.triggerWidth, 0);
   expect(usageDatePresentation.popperWidth - usageDatePresentation.panelWidth).toBeLessThanOrEqual(
     2,
   );
@@ -1326,8 +1587,8 @@ test('keeps every authorized page within a 375px mobile viewport', async ({ page
   await expect(usageDatePopper).toContainText('2026 年');
   await expect(usageDatePopper).toContainText('7 月');
   await expect(usageDatePopper.getByText('日', { exact: true })).toBeVisible();
-  await expect(usageDatePopper.getByRole('button', { name: '此刻' })).toBeVisible();
-  await expect(usageDatePopper.getByRole('button', { name: '确定' })).toBeVisible();
+  await expect(usageDatePopper.getByRole('button', { name: '此刻' })).toHaveCount(0);
+  await expect(usageDatePopper.getByRole('button', { name: '确定' })).toHaveCount(0);
 
   await page.goto('/documents');
   await expect(page.locator('.documents-toolbar--mobile .el-input__inner')).toHaveCSS(
@@ -1343,21 +1604,21 @@ test('keeps every authorized page within a 375px mobile viewport', async ({ page
   }
 
   await page.goto('/settings/providers');
-  await expect(page.locator('.provider-toolbar')).toHaveCSS('flex-direction', 'row');
+  await expect(page.locator('.kb-status-toolbar')).toHaveCSS('flex-direction', 'row');
   await expect(
-    page.locator('.provider-toolbar').getByRole('button', { name: '刷新状态' }),
+    page.locator('.kb-status-toolbar').getByRole('button', { name: '刷新状态' }),
   ).toBeVisible();
   expect(
-    await page.locator('.provider-toolbar').evaluate((element) => element.clientHeight),
+    await page.locator('.kb-status-toolbar').evaluate((element) => element.clientHeight),
   ).toBeLessThanOrEqual(64);
 
   await page.goto('/system/status');
-  await expect(page.locator('.system-status-toolbar')).toHaveCSS('flex-direction', 'row');
+  await expect(page.locator('.kb-status-toolbar')).toHaveCSS('flex-direction', 'row');
   await expect(
-    page.locator('.system-status-toolbar').getByRole('button', { name: '重新检查' }),
+    page.locator('.kb-status-toolbar').getByRole('button', { name: '重新检查' }),
   ).toBeVisible();
   expect(
-    await page.locator('.system-status-toolbar').evaluate((element) => element.clientHeight),
+    await page.locator('.kb-status-toolbar').evaluate((element) => element.clientHeight),
   ).toBeLessThanOrEqual(64);
 
   await page.setViewportSize({ width: 620, height: 985 });
@@ -1371,8 +1632,8 @@ test('keeps every authorized page within a 375px mobile viewport', async ({ page
   await expect(page.getByText('文档 ID 已复制')).toBeVisible();
 
   await page.goto('/settings/providers');
-  await expect(page.locator('.provider-toolbar')).toBeVisible();
-  await expect(page.locator('.provider-toolbar')).toHaveCSS('flex-direction', 'row');
+  await expect(page.locator('.kb-status-toolbar')).toBeVisible();
+  await expect(page.locator('.kb-status-toolbar')).toHaveCSS('flex-direction', 'row');
 
   await page.setViewportSize({ width: 852, height: 393 });
   for (const path of pages) {
@@ -1391,8 +1652,415 @@ test('keeps every authorized page within a 375px mobile viewport', async ({ page
   }
 });
 
+test('lets the Mobile chunks toolbar scroll away and gives the list natural height', async ({
+  page,
+}) => {
+  const documentId = '6769af9a-a4d0-4dc2-a97d-942584a9c826';
+  await page.setViewportSize({ width: 375, height: 812 });
+  await mockSession(page, ['documents:read']);
+  await page.route(`**/v1/documents/${documentId}`, (route) =>
+    route.fulfill({
+      json: {
+        id: documentId,
+        sourceName: '移动端分块测试.md',
+        mimeType: 'text/markdown',
+        department: 'finance',
+        sensitivity: 'internal',
+        ownerId: 'admin.fixture',
+        activeVersion: 1,
+        status: 'active',
+        versions: [
+          {
+            version: 1,
+            status: 'active',
+            parser: 'markdown',
+            parserVersion: '1.0',
+            warnings: [],
+            chunkCount: 2,
+            vectorCollection: 'nexus_mobile_chunks',
+            embeddingFingerprint: 'a'.repeat(64),
+            indexedAt: '2026-07-22T09:00:00.000Z',
+            activatedAt: '2026-07-22T09:00:00.000Z',
+            supersededAt: null,
+            createdAt: '2026-07-22T09:00:00.000Z',
+          },
+        ],
+        createdAt: '2026-07-22T09:00:00.000Z',
+        updatedAt: '2026-07-22T09:00:00.000Z',
+      },
+    }),
+  );
+  await page.route(`**/v1/documents/${documentId}/chunks**`, (route) =>
+    route.fulfill({
+      json: {
+        documentId,
+        sourceName: '移动端分块测试.md',
+        documentVersion: 1,
+        items: [0, 1].map((ordinal) => ({
+          id: String(ordinal + 1).repeat(64),
+          documentVersion: 1,
+          ordinal,
+          originalText: `移动端分块原始内容 ${ordinal + 1}。`.repeat(80),
+          redactedText: `移动端分块脱敏内容 ${ordinal + 1}。`.repeat(80),
+          tokenCount: 320,
+          page: ordinal + 1,
+          sheet: null,
+          sectionPath: ['移动端布局'],
+          elementTypes: ['paragraph'],
+          previousChunkId: ordinal === 0 ? null : '1'.repeat(64),
+          nextChunkId: ordinal === 1 ? null : '2'.repeat(64),
+          redactionPolicyVersion: 'v1',
+          redactionSummary: {},
+          createdAt: '2026-07-22T09:00:00.000Z',
+        })),
+        page: 1,
+        pageSize: 20,
+        total: 21,
+      },
+    }),
+  );
+
+  await page.goto(`/documents/${documentId}/chunks?version=1`);
+  await expect(page.locator('.chunk-card')).toHaveCount(2);
+  const mobileChunksScroll = await page.evaluate(() => {
+    const chunksPage = document.querySelector<HTMLElement>('.document-chunks-page');
+    const toolbar = chunksPage?.querySelector<HTMLElement>('.chunks-toolbar');
+    const summary = toolbar?.querySelector<HTMLElement>('.chunks-summary');
+    const versionSelect = toolbar?.querySelector<HTMLElement>('.chunks-version-select');
+    const content = chunksPage?.querySelector<HTMLElement>(':scope > .kb-block-content');
+    const list = content?.querySelector<HTMLElement>(':scope > .kb-block-scroll');
+    const toolbarTopBefore = toolbar?.getBoundingClientRect().top ?? 0;
+    if (chunksPage) chunksPage.scrollTop = 120;
+    const toolbarTopAfter = toolbar?.getBoundingClientRect().top ?? 0;
+    return {
+      pageOverflowY: chunksPage ? getComputedStyle(chunksPage).overflowY : '',
+      contentOverflowY: content ? getComputedStyle(content).overflowY : '',
+      listOverflowY: list ? getComputedStyle(list).overflowY : '',
+      pageScrollable: (chunksPage?.scrollHeight ?? 0) > (chunksPage?.clientHeight ?? 0),
+      toolbarMoved: toolbarTopAfter < toolbarTopBefore,
+      summaryTextAlign: summary ? getComputedStyle(summary).textAlign : '',
+      versionWidth: versionSelect?.getBoundingClientRect().width ?? 0,
+      summaryWidth: summary?.getBoundingClientRect().width ?? Number.POSITIVE_INFINITY,
+    };
+  });
+  expect(mobileChunksScroll).toMatchObject({
+    pageOverflowY: 'auto',
+    contentOverflowY: 'visible',
+    listOverflowY: 'visible',
+    pageScrollable: true,
+    toolbarMoved: true,
+    summaryTextAlign: 'left',
+  });
+  expect(mobileChunksScroll.versionWidth).toBeCloseTo(mobileChunksScroll.summaryWidth, 0);
+});
+
+test('keeps document detail actions fixed above the PC and Pad content scroller', async ({
+  page,
+}) => {
+  const documentId = '6769af9a-a4d0-4dc2-a97d-942584a9c826';
+  await mockSession(page);
+  await page.route('**/v1/ingestion-jobs**', (route) =>
+    route.fulfill({ json: { items: [], page: 1, pageSize: 20, total: 0 } }),
+  );
+  await page.route(`**/v1/documents/${documentId}`, (route) =>
+    route.fulfill({
+      json: {
+        id: documentId,
+        sourceName: '详情固定操作栏测试.pdf',
+        mimeType: 'application/pdf',
+        department: 'finance',
+        sensitivity: 'internal',
+        ownerId: 'admin.fixture',
+        activeVersion: 12,
+        status: 'active',
+        versions: Array.from({ length: 12 }, (_, index) => {
+          const version = 12 - index;
+          return {
+            version,
+            status: version === 12 ? 'active' : 'superseded',
+            parser: 'pdf',
+            parserVersion: '1.0',
+            warnings: [],
+            chunkCount: 20 + version,
+            vectorCollection: `nexus_detail_v${version}`,
+            embeddingFingerprint: String(version % 10).repeat(64),
+            indexedAt: '2026-07-22T09:00:00.000Z',
+            activatedAt: '2026-07-22T09:00:00.000Z',
+            supersededAt: version === 12 ? null : '2026-07-23T09:00:00.000Z',
+            createdAt: '2026-07-22T09:00:00.000Z',
+          };
+        }),
+        createdAt: '2026-07-22T09:00:00.000Z',
+        updatedAt: '2026-07-22T09:00:00.000Z',
+      },
+    }),
+  );
+
+  for (const width of [1440, 900]) {
+    await page.setViewportSize({ width, height: 520 });
+    await page.goto(`/documents/${documentId}`);
+    await expect(page.locator('.detail-actions')).toBeVisible();
+    const fixedLayout = await page.evaluate(() => {
+      const detailPage = document.querySelector<HTMLElement>('.document-detail-page');
+      const actions = detailPage?.querySelector<HTMLElement>(':scope > .detail-actions');
+      const content = detailPage?.querySelector<HTMLElement>(':scope > .detail-content');
+      if (content) content.scrollTop = 0;
+      const actionsTopBefore = actions?.getBoundingClientRect().top ?? 0;
+      if (content) content.scrollTop = 240;
+      const actionsTopAfter = actions?.getBoundingClientRect().top ?? 0;
+      return {
+        actionsAreDirectChild: actions?.parentElement === detailPage,
+        contentIsDirectChild: content?.parentElement === detailPage,
+        contentOverflowY: content ? getComputedStyle(content).overflowY : '',
+        contentScrolled: (content?.scrollTop ?? 0) > 0,
+        actionsTopBefore,
+        actionsTopAfter,
+      };
+    });
+    expect(fixedLayout).toMatchObject({
+      actionsAreDirectChild: true,
+      contentIsDirectChild: true,
+      contentOverflowY: 'auto',
+      contentScrolled: true,
+    });
+    expect(fixedLayout.actionsTopAfter).toBeCloseTo(fixedLayout.actionsTopBefore, 0);
+  }
+});
+
+test('uses one shared data grid for audit, ingestion, and system details', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await mockSession(page, ['documents:read', 'audit:read', 'system:read']);
+  const job = {
+    id: '11111111-1111-4111-8111-111111111111',
+    documentId: '22222222-2222-4222-8222-222222222222',
+    sourceName: '共享数据网格测试.pdf',
+    mimeType: 'application/pdf',
+    version: 1,
+    kind: 'ingestion',
+    status: 'embedding',
+    step: 'embedding',
+    checkpoint: 'policy_check',
+    attempts: 2,
+    traceId: '33333333-3333-4333-8333-333333333333',
+    parserVersion: '1.0',
+    embeddingFingerprint: null,
+    embeddingCompletedChunks: 8,
+    embeddingTotalChunks: 20,
+    embeddingBatchSize: 16,
+    warnings: [],
+    errorCode: null,
+    errorCategory: null,
+    retryable: false,
+    startedAt: '2026-07-22T09:00:00.000Z',
+    completedAt: null,
+    createdAt: '2026-07-22T09:00:00.000Z',
+    updatedAt: '2026-07-22T09:01:00.000Z',
+  };
+  await page.route('**/v1/ingestion-jobs**', (route) =>
+    route.fulfill({ json: { items: [job], page: 1, pageSize: 20, total: 1 } }),
+  );
+  await page.route('**/v1/audit/events**', (route) =>
+    route.fulfill({
+      json: {
+        events: [
+          {
+            id: '44444444-4444-4444-8444-444444444444',
+            type: 'query',
+            event: 'knowledge_query',
+            outcome: 'answered',
+            traceId: '55555555-5555-4555-8555-555555555555',
+            actorUserId: 'admin.fixture',
+            documentId: null,
+            ingestionJobId: job.id,
+            attributes: {},
+            createdAt: '2026-07-22T09:00:00.000Z',
+          },
+        ],
+        nextBefore: null,
+        total: 1,
+      },
+    }),
+  );
+  await page.route('**/v1/system/status', (route) =>
+    route.fulfill({
+      json: {
+        status: 'ready',
+        checkedAt: '2026-07-22T09:00:00.000Z',
+        rawDocsDiskUsageRatio: 0.25,
+        components: [
+          { id: 'api', status: 'up', reason: null },
+          { id: 'parserWorker', status: 'down', reason: 'unavailable' },
+        ],
+        ingestionQueue: {
+          status: 'up',
+          waiting: 2,
+          active: 1,
+          delayed: 0,
+          failed: 0,
+          oldestWaitSeconds: 45,
+        },
+      },
+    }),
+  );
+  await page.route('**/v1/system/usage**', (route) =>
+    route.fulfill({
+      json: {
+        from: '2026-06-22T00:00:00.000Z',
+        to: '2026-07-22T00:00:00.000Z',
+        totalQueries: 18,
+        failureRate: 0.05,
+        queryP95Ms: 420,
+        providers: [],
+        departments: [],
+        usageCompleteness: 'request_only',
+      },
+    }),
+  );
+
+  const readGridStyle = async (selector: string) =>
+    page.locator(selector).evaluate((element) => {
+      const style = getComputedStyle(element);
+      const label = element.querySelector<HTMLElement>('.kb-data-grid__item .kb-text--secondary');
+      const value = element.querySelector<HTMLElement>('.kb-data-grid__value');
+      return {
+        background: style.backgroundColor,
+        borderTopWidth: style.borderTopWidth,
+        borderRadius: style.borderRadius,
+        gap: style.gap,
+        padding: style.padding,
+        columns: style.gridTemplateColumns.split(' ').length,
+        labelColor: label ? getComputedStyle(label).color : '',
+        labelFontSize: label ? getComputedStyle(label).fontSize : '',
+        valueFontSize: value ? getComputedStyle(value).fontSize : '',
+        valueFontWeight: value ? getComputedStyle(value).fontWeight : '',
+      };
+    });
+
+  await page.goto('/ingestion-jobs');
+  const taskGrid = page.locator('.task-details .kb-data-grid--four');
+  await expect(taskGrid).toHaveClass(/kb-data-grid--four/);
+  const taskStyle = await readGridStyle('.task-details .kb-data-grid--four');
+  expect(taskStyle).toMatchObject({
+    background: 'rgba(0, 0, 0, 0)',
+    borderTopWidth: '0px',
+    borderRadius: '0px',
+    columns: 4,
+    padding: '0px',
+  });
+
+  await page.goto('/audit');
+  await page.locator('.el-table__expand-icon').click();
+  const auditGrid = page.locator('.el-table__expanded-cell .kb-data-grid--three');
+  await expect(auditGrid).toHaveClass(/kb-data-grid--three/);
+  const auditStyle = await readGridStyle('.el-table__expanded-cell .kb-data-grid--three');
+  expect(auditStyle).toMatchObject({
+    background: 'rgba(0, 0, 0, 0)',
+    borderTopWidth: '0px',
+    borderRadius: '0px',
+    columns: 3,
+    padding: '12px',
+  });
+  expect(auditStyle).toMatchObject({
+    gap: taskStyle.gap,
+    labelColor: taskStyle.labelColor,
+    labelFontSize: taskStyle.labelFontSize,
+    valueFontSize: taskStyle.valueFontSize,
+    valueFontWeight: taskStyle.valueFontWeight,
+  });
+
+  await page.goto('/system/status');
+  const systemOverview = page.locator(
+    '.kb-page__content > .kb-data-grid--three.kb-data-grid--flush',
+  );
+  await expect(systemOverview).toHaveClass(/kb-data-grid--three/);
+  await expect(systemOverview).not.toHaveClass(/kb-block/);
+  const systemOverviewItems = systemOverview.locator(':scope > .kb-data-grid__item');
+  await expect(systemOverviewItems).toHaveCount(3);
+  await expect(systemOverviewItems.first()).toHaveClass(/kb-block/);
+  const systemOverviewStyle = await readGridStyle(
+    '.kb-page__content > .kb-data-grid--three.kb-data-grid--flush',
+  );
+  expect(systemOverviewStyle).toMatchObject({
+    background: 'rgba(0, 0, 0, 0)',
+    borderTopWidth: '0px',
+    borderRadius: '0px',
+    columns: 3,
+    gap: taskStyle.gap,
+    padding: '0px',
+    labelColor: taskStyle.labelColor,
+    labelFontSize: taskStyle.labelFontSize,
+    valueFontSize: taskStyle.valueFontSize,
+    valueFontWeight: taskStyle.valueFontWeight,
+  });
+  await expect(systemOverviewItems.first()).toHaveCSS('border-top-width', '1px');
+  await expect(systemOverviewItems.first()).toHaveCSS('border-radius', '12px');
+  await expect(systemOverviewItems.first()).toHaveCSS('background-color', 'rgb(255, 255, 255)');
+  const queueGrid = page.locator('.kb-page__content .kb-data-grid--five');
+  await expect(queueGrid).toHaveClass(/kb-data-grid--five/);
+  expect(await readGridStyle('.kb-page__content .kb-data-grid--five')).toMatchObject({
+    background: 'rgba(0, 0, 0, 0)',
+    borderTopWidth: '0px',
+    borderRadius: '0px',
+    columns: 5,
+    padding: '0px',
+  });
+  const componentCards = page.locator('.component-card');
+  await expect(componentCards).toHaveCount(2);
+  const componentLayout = await componentCards.first().evaluate((card) => {
+    return {
+      display: getComputedStyle(card).display,
+      columns: getComputedStyle(card).gridTemplateColumns.split(' ').length,
+      minHeight: Number.parseFloat(getComputedStyle(card).minHeight),
+      copyDisplay: getComputedStyle(card).display,
+      titleLineHeight: getComputedStyle(card).lineHeight,
+      descriptionLineHeight: getComputedStyle(card).lineHeight,
+    };
+  });
+  expect(componentLayout).toMatchObject({
+    display: 'grid',
+    columns: 2,
+    copyDisplay: 'grid',
+    titleLineHeight: componentLayout.descriptionLineHeight,
+  });
+  expect(componentLayout.minHeight).toBeGreaterThanOrEqual(72);
+
+  await page.goto('/system/usage');
+  const usageSummary = page.locator('.kb-page__content > .kb-data-grid--three.kb-data-grid--flush');
+  await expect(usageSummary).not.toHaveClass(/kb-block/);
+  await expect(usageSummary).toHaveClass(/kb-data-grid--three/);
+  const usageSummaryItems = usageSummary.locator(':scope > .kb-data-grid__item');
+  await expect(usageSummaryItems).toHaveCount(3);
+  await expect(usageSummaryItems.first()).toHaveClass(/kb-block/);
+  const usageSummaryStyle = await readGridStyle(
+    '.kb-page__content > .kb-data-grid--three.kb-data-grid--flush',
+  );
+  expect(usageSummaryStyle).toMatchObject({
+    background: 'rgba(0, 0, 0, 0)',
+    borderTopWidth: '0px',
+    borderRadius: '0px',
+    columns: 3,
+    padding: '0px',
+    labelColor: systemOverviewStyle.labelColor,
+    labelFontSize: systemOverviewStyle.labelFontSize,
+    valueFontWeight: systemOverviewStyle.valueFontWeight,
+  });
+  await expect(usageSummaryItems.first()).toHaveCSS('border-top-width', '1px');
+  await expect(usageSummaryItems.first()).toHaveCSS('border-radius', '12px');
+  await expect(usageSummaryItems.first()).toHaveCSS('background-color', 'rgb(255, 255, 255)');
+  await expect(usageSummary.locator('.usage-summary__value').first()).toHaveCSS(
+    'font-size',
+    '20px',
+  );
+
+  await page.setViewportSize({ width: 430, height: 900 });
+  await page.goto('/system/usage');
+  expect(
+    (await readGridStyle('.kb-page__content > .kb-data-grid--three.kb-data-grid--flush')).columns,
+  ).toBe(2);
+});
+
 test('fills and localizes the Mobile usage date picker popper', async ({ page }) => {
-  await page.setViewportSize({ width: 375, height: 900 });
+  await page.setViewportSize({ width: 425, height: 887 });
   await mockSession(page, ['system:read']);
   await page.route('**/v1/system/usage**', (route) =>
     route.fulfill({
@@ -1410,37 +2078,49 @@ test('fills and localizes the Mobile usage date picker popper', async ({ page })
   );
 
   await page.goto('/system/usage');
-  await page.locator('.usage-toolbar').getByRole('button', { name: '筛选' }).click();
-  await page.locator('.usage-filter-drawer').getByPlaceholder('开始时间').click();
+  await expect(page.locator('.usage-filter-drawer')).toHaveCount(0);
+  const startDate = page
+    .locator('form[aria-label="用量日期范围筛选"]')
+    .getByPlaceholder('开始日期');
+  await expect(startDate).toHaveAttribute('readonly', '');
+  await startDate.click();
 
   const popper = page.locator('.usage-date-picker-popper:visible');
   await expect(popper).toBeVisible();
+  await expect(popper.locator('.el-date-range-picker.single-panel')).toBeVisible();
   const layout = await popper.evaluate((root) => {
     const panel = root.querySelector<HTMLElement>('.el-picker-panel');
     const content = root.querySelector<HTMLElement>('.el-picker-panel__content');
     const rootBounds = root.getBoundingClientRect();
     const panelBounds = panel?.getBoundingClientRect();
     const contentBounds = content?.getBoundingClientRect();
+    const triggerBounds = document
+      .querySelector<HTMLElement>('.usage-date-range-field')
+      ?.getBoundingClientRect();
     return {
       rootLeft: rootBounds.left,
       rootRight: rootBounds.right,
       rootWidth: rootBounds.width,
       panelWidth: panelBounds?.width ?? 0,
+      triggerLeft: triggerBounds?.left ?? -1,
+      triggerWidth: triggerBounds?.width ?? 0,
       contentLeftGap: contentBounds && panelBounds ? contentBounds.left - panelBounds.left : -1,
       contentRightGap: contentBounds && panelBounds ? panelBounds.right - contentBounds.right : -1,
     };
   });
 
   expect(layout.rootLeft).toBeGreaterThanOrEqual(0);
-  expect(layout.rootRight).toBeLessThanOrEqual(375);
+  expect(layout.rootRight).toBeLessThanOrEqual(425);
+  expect(layout.rootLeft).toBeCloseTo(layout.triggerLeft, 0);
+  expect(layout.rootWidth).toBeCloseTo(layout.triggerWidth, 0);
   expect(layout.rootWidth - layout.panelWidth).toBeLessThanOrEqual(2);
   expect(layout.contentLeftGap).toBeCloseTo(layout.contentRightGap, 0);
   expect(layout.contentRightGap).toBeLessThanOrEqual(17);
-  await expect(popper.locator('.el-date-picker__header-label').first()).toContainText('年');
-  await expect(popper.locator('.el-date-picker__header-label').nth(1)).toContainText('月');
+  await expect(popper.locator('.el-date-range-picker__header-label').first()).toContainText('年');
+  await expect(popper.locator('.el-date-range-picker__header-label').nth(1)).toContainText('月');
   await expect(popper.getByText('日', { exact: true })).toBeVisible();
-  await expect(popper.getByRole('button', { name: '此刻' })).toBeVisible();
-  await expect(popper.getByRole('button', { name: '确定' })).toBeVisible();
+  await expect(popper.getByRole('button', { name: '此刻' })).toHaveCount(0);
+  await expect(popper.getByRole('button', { name: '确定' })).toHaveCount(0);
   await expect(popper).not.toContainText('July');
   await expect(popper).not.toContainText('Sun');
 });
@@ -1533,6 +2213,14 @@ test('keeps phone task steps compact and department cards grouped', async ({ pag
   const completedCard = page.locator('.task-card').filter({ hasText: '移动端超长文档名称' });
   const runningCard = page.locator('.task-card').filter({ hasText: '进行中任务.docx' });
   const failedCard = page.locator('.task-card').filter({ hasText: '失败任务.pdf' });
+  const completedSourceLink = completedCard.locator('.kb-link');
+  await expect(completedSourceLink).toHaveCSS('justify-content', 'flex-start');
+  await expect(completedSourceLink).toHaveCSS('text-align', 'left');
+  await expect(completedSourceLink.locator('.el-link__inner')).toHaveCSS(
+    'justify-content',
+    'flex-start',
+  );
+  await expect(completedSourceLink.locator('.kb-link__text')).toHaveCSS('text-align', 'left');
   await expect(completedCard.locator('.task-summary')).toHaveAttribute('aria-expanded', 'false');
   await expect(completedCard.locator('.task-progress-dot')).toHaveCount(7);
   await expect(completedCard.locator('.task-details')).toHaveCount(0);
@@ -1541,7 +2229,7 @@ test('keeps phone task steps compact and department cards grouped', async ({ pag
   await expect(failedCard.locator('.task-summary')).toHaveAttribute('aria-expanded', 'true');
   await expect(failedCard.locator('.task-error')).toBeVisible();
   const mobileWidths = await page.evaluate(() => {
-    return ['.page > .kb-block-content', '.task-list', '.task-summary'].map((selector) => {
+    return ['.kb-page > .kb-block-content', '.kb-block-scroll', '.task-summary'].map((selector) => {
       const element = document.querySelector<HTMLElement>(selector);
       return {
         selector,
@@ -1576,6 +2264,15 @@ test('keeps phone task steps compact and department cards grouped', async ({ pag
   expect(padStepScroll.scrollLeft).toBe(0);
   expect(padStepScroll.firstStepLeft).toBeGreaterThanOrEqual(padStepScroll.left);
   expect(padStepScroll.background).not.toBe('rgba(0, 0, 0, 0)');
+
+  await page.goto('/access/departments');
+  const departmentDirectory = page.locator('nav[aria-label="部门列表"] > .kb-block-scroll');
+  await expect(departmentDirectory).toHaveClass(/kb-block-scroll--list/);
+  const departmentItems = departmentDirectory.locator('.department-list-item');
+  await expect(departmentItems).toHaveCount(3);
+  await expect(departmentDirectory.locator('.el-button')).toHaveCount(0);
+  await departmentItems.filter({ hasText: 'general' }).press('Enter');
+  await expect(page.getByRole('heading', { name: 'general 权限' })).toBeVisible();
 
   await page.setViewportSize({ width: 430, height: 932 });
   await page.goto('/access/departments');
@@ -1699,7 +2396,7 @@ test('keeps landscape mobile controls aligned and management content scrollable'
 
   await page.goto('/access/users');
   await expect(page.getByText('user-1', { exact: true })).toBeVisible();
-  const userScroll = await page.locator('.page > .kb-block-content--gap').evaluate((element) => {
+  const userScroll = await page.locator('.kb-page > .kb-block-content--gap').evaluate((element) => {
     const candidates = [
       element.querySelector<HTMLElement>('.access-table-wrap'),
       ...element.querySelectorAll<HTMLElement>('.access-table-wrap .el-scrollbar__wrap'),
@@ -1732,17 +2429,19 @@ test('keeps landscape mobile controls aligned and management content scrollable'
   expect(departmentScroll.scrollTop).toBeGreaterThan(0);
 
   await page.goto('/history');
-  const historyResetPosition = await page.locator('.history-toolbar').evaluate((element) => {
-    const button = element.querySelector<HTMLElement>('.filter-actions .el-button:last-child');
-    const toolbarBounds = element.getBoundingClientRect();
-    const buttonBounds = button?.getBoundingClientRect();
-    return {
-      toolbarRight: toolbarBounds.right,
-      buttonRight: buttonBounds?.right ?? Number.NEGATIVE_INFINITY,
-      buttonTop: buttonBounds?.top ?? Number.NEGATIVE_INFINITY,
-      toolbarTop: toolbarBounds.top,
-    };
-  });
+  const historyResetPosition = await page
+    .locator('form[aria-label="搜索历史记录"]')
+    .evaluate((element) => {
+      const button = element.querySelector<HTMLElement>('.kb-filter-actions .el-button:last-child');
+      const toolbarBounds = element.getBoundingClientRect();
+      const buttonBounds = button?.getBoundingClientRect();
+      return {
+        toolbarRight: toolbarBounds.right,
+        buttonRight: buttonBounds?.right ?? Number.NEGATIVE_INFINITY,
+        buttonTop: buttonBounds?.top ?? Number.NEGATIVE_INFINITY,
+        toolbarTop: toolbarBounds.top,
+      };
+    });
   expect(historyResetPosition.buttonRight).toBeGreaterThan(historyResetPosition.toolbarRight - 20);
   expect(historyResetPosition.buttonTop).toBeGreaterThanOrEqual(historyResetPosition.toolbarTop);
 
@@ -1753,11 +2452,11 @@ test('keeps landscape mobile controls aligned and management content scrollable'
   await page.goto('/system/usage');
   await expect(page.getByText('ollama / bge-m3:latest')).toBeVisible();
   const usageLayout = await page.evaluate(() => {
-    const intro = document.querySelector<HTMLElement>('.usage-toolbar');
-    const filter = intro?.querySelector<HTMLElement>('.filter-trigger');
-    const content = document.querySelector<HTMLElement>('.page > .page-content');
+    const intro = document.querySelector<HTMLElement>('form[aria-label="用量日期范围筛选"]');
+    const reset = intro?.querySelector<HTMLElement>('.el-button');
+    const content = document.querySelector<HTMLElement>('.kb-page > .kb-page__content');
     const introBounds = intro?.getBoundingClientRect();
-    const filterBounds = filter?.getBoundingClientRect();
+    const resetBounds = reset?.getBoundingClientRect();
     if (content) {
       const spacer = document.createElement('div');
       spacer.style.height = '800px';
@@ -1768,20 +2467,20 @@ test('keeps landscape mobile controls aligned and management content scrollable'
     }
     return {
       introHeight: introBounds?.height ?? Number.POSITIVE_INFINITY,
-      filterRight: filterBounds?.right ?? Number.NEGATIVE_INFINITY,
+      resetRight: resetBounds?.right ?? Number.NEGATIVE_INFINITY,
       introRight: introBounds?.right ?? Number.POSITIVE_INFINITY,
       canScroll: (content?.scrollHeight ?? 0) > (content?.clientHeight ?? 0),
       scrollTop: content?.scrollTop ?? 0,
     };
   });
   expect(usageLayout.introHeight).toBeLessThanOrEqual(56);
-  expect(usageLayout.filterRight).toBeGreaterThan(usageLayout.introRight - 20);
+  expect(usageLayout.resetRight).toBeGreaterThan(usageLayout.introRight - 20);
   expect(usageLayout.canScroll).toBe(true);
   expect(usageLayout.scrollTop).toBeGreaterThan(0);
 
   for (const [path, intro, actionName] of [
-    ['/settings/providers', '.provider-toolbar', '刷新状态'],
-    ['/system/status', '.system-status-toolbar', '重新检查'],
+    ['/settings/providers', '.kb-status-toolbar', '刷新状态'],
+    ['/system/status', '.kb-status-toolbar', '重新检查'],
   ] as const) {
     await page.goto(path);
     const introLayout = await page.locator(intro).evaluate((element, name) => {
@@ -1801,10 +2500,10 @@ test('keeps landscape mobile controls aligned and management content scrollable'
   }
 
   await page.goto('/audit');
-  const auditToolbar = page.locator('.audit-toolbar');
+  const auditToolbar = page.locator('.kb-control-toolbar');
   await expect(auditToolbar.locator('.audit-type-filter')).toContainText('全部事件类型');
   await expect(auditToolbar.getByRole('button', { name: '重置' })).toBeVisible();
-  await expect(page.locator('.mobile-filter-drawer')).toHaveCount(0);
+  await expect(page.locator('.el-drawer:visible')).toHaveCount(0);
 });
 
 test('keeps Mobile access and department surface blocks independently scrollable', async ({
@@ -1932,15 +2631,13 @@ test('uses a department select and shared collapse list in user management', asy
   expect(mobileListMetrics.scrollTop).toBeGreaterThan(0);
   await page.getByPlaceholder('搜索用户 ID').fill('admin');
   await page.getByRole('button', { name: '筛选' }).click();
-  const userFilterDrawer = page
-    .locator('.mobile-filter-drawer')
-    .filter({ hasText: '筛选用户目录' });
+  const userFilterDrawer = page.locator('.el-drawer:visible').filter({ hasText: '筛选用户目录' });
   await expect(userFilterDrawer.locator('.el-select')).toBeVisible();
   await userFilterDrawer.locator('.el-select').click();
   await expect(page.getByText('finance', { exact: true }).last()).toBeVisible();
   await page.getByText('finance', { exact: true }).last().click();
-  const userFilterTrigger = page.locator('.access-toolbar--mobile .filter-trigger');
-  await expect(userFilterTrigger).toHaveClass(/is-active/);
+  const userFilterTrigger = page.locator('form[aria-label="搜索用户目录"] .kb-filter-trigger');
+  await expect(userFilterTrigger).toHaveClass(/kb-filter-trigger--active/);
   expect(
     await userFilterTrigger.evaluate((button) => getComputedStyle(button, '::after').content),
   ).toBe('""');
@@ -2171,24 +2868,24 @@ test('uses explicit page and inner-panel scroll models across management pages',
   }
 
   await page.goto('/documents');
-  const documentsPanel = page.locator('.kb-block-content--mobile-inset');
+  const documentsPanel = page.locator('.kb-page > .kb-block-content');
   await expect(documentsPanel).toHaveClass(/kb-block-content/);
-  await expect(documentsPanel).toHaveClass(/kb-block-content--mobile-inset/);
   await expect(documentsPanel).not.toHaveClass(/(^|\s)kb-block(\s|$)/);
-  await expect(documentsPanel.locator(':scope > .kb-block-scroll')).toHaveClass(/kb-block--flush/);
+  await expect(documentsPanel.locator(':scope > .kb-block-scroll')).not.toHaveClass(
+    /kb-block--flush/,
+  );
   const documentsMetrics = await contentPanelMetrics(
-    '.kb-block-content--mobile-inset',
+    '.kb-page > .kb-block-content',
     '.kb-block-scroll',
   );
 
   await page.goto('/audit');
-  const auditPanel = page.locator('.kb-block-content--mobile-inset');
+  const auditPanel = page.locator('.kb-page > .kb-block-content');
   await expect(auditPanel).toHaveClass(/kb-block-content/);
-  await expect(auditPanel).toHaveClass(/kb-block-content--mobile-inset/);
   await expect(auditPanel).not.toHaveClass(/(^|\s)kb-block(\s|$)/);
-  await expect(auditPanel.locator(':scope > .kb-block-scroll')).toHaveClass(/kb-block--flush/);
+  await expect(auditPanel.locator(':scope > .kb-block-scroll')).not.toHaveClass(/kb-block--flush/);
   const auditMetrics = await contentPanelMetrics(
-    '.kb-block-content--mobile-inset',
+    '.kb-page > .kb-block-content',
     '.kb-block-scroll',
   );
 
@@ -2202,25 +2899,25 @@ test('uses explicit page and inner-panel scroll models across management pages',
     emptyFlexGrow: '1',
   });
 
-  for (const [path, contentSelector, scrollSelector] of [
-    ['/ingestion-jobs', '.page > .kb-block-content', '.task-list'],
+  for (const [path, contentSelector, scrollSelector, expectedOverflow] of [
+    ['/ingestion-jobs', '.kb-page > .kb-block-content', '.kb-block-scroll', 'auto'],
     [
       `/documents/${documentId}/chunks`,
       '.document-chunks-page > .kb-block-content',
       '.document-chunks-page > .kb-block-content > .kb-block-scroll',
+      'visible',
     ],
-    ['/access/users', '.page > .kb-block-content--gap', '.access-table-wrap'],
+    ['/access/users', '.kb-page > .kb-block-content--gap', '.access-table-wrap', 'auto'],
   ] as const) {
     await page.goto(path);
     await expect(page.locator(contentSelector)).toHaveClass(/kb-block-content/);
     await expect(page.locator(scrollSelector)).toHaveClass(/kb-block-scroll/);
-    await expect(page.locator(contentSelector)).not.toHaveClass(/kb-block-content--mobile-inset/);
-    await expect(page.locator(scrollSelector)).toHaveCSS('overflow-y', 'auto');
+    await expect(page.locator(scrollSelector)).toHaveCSS('overflow-y', expectedOverflow);
     await expect(page.locator(scrollSelector)).toHaveCSS('padding', '0px');
   }
 
   await page.goto('/system/status');
-  const systemContent = page.locator('.system-status-toolbar + .page-content');
+  const systemContent = page.locator('.kb-status-toolbar + .kb-page__content');
   await expect(systemContent).not.toHaveClass(/kb-block-content/);
   await expect(systemContent).toHaveCSS('overflow-y', 'auto');
 });
@@ -2381,7 +3078,7 @@ test('uses the history-style three-tier document toolbar', async ({ page }) => {
   const desktop = await page.locator('.documents-toolbar').evaluate((toolbar) => {
     const controls = Array.from(
       toolbar.querySelectorAll<HTMLElement>(
-        '.el-input, .el-select, .filter-actions, .documents-upload-action',
+        '.el-input, .el-select, .kb-filter-actions, .documents-upload-action',
       ),
     ).map((control) => control.getBoundingClientRect());
     const inputWrapper = toolbar.querySelector<HTMLElement>('.el-input__wrapper');
@@ -2394,15 +3091,15 @@ test('uses the history-style three-tier document toolbar', async ({ page }) => {
   expect(new Set(desktop.tops).size).toBe(1);
   expect(desktop.controlHeight).toBe(40);
   expect(desktop.toolbarHeight).toBe(40);
-  await expectAdjacentButtonsUseParentGap(page, '.documents-toolbar .filter-actions');
+  await expectAdjacentButtonsUseParentGap(page, '.documents-toolbar .kb-filter-actions');
 
   await page.setViewportSize({ width: 768, height: 887 });
   await page.goto('/documents');
   await expect(page.locator('.kb-empty-state .el-empty__image')).toBeVisible();
   const pad = await page.locator('.documents-toolbar').evaluate((toolbar) => {
     const search = toolbar.querySelector<HTMLElement>('.document-filter-search');
-    const status = toolbar.querySelector<HTMLElement>('.document-filter-status');
-    const actions = toolbar.querySelector<HTMLElement>('.filter-actions');
+    const status = toolbar.querySelector<HTMLElement>('.el-select');
+    const actions = toolbar.querySelector<HTMLElement>('.kb-filter-actions');
     const upload = toolbar.querySelector<HTMLElement>('.documents-upload-action');
     const searchBounds = search?.getBoundingClientRect();
     const statusBounds = status?.getBoundingClientRect();
@@ -2424,7 +3121,7 @@ test('uses the history-style three-tier document toolbar', async ({ page }) => {
   expect(pad.leftDelta).toBeLessThanOrEqual(1);
   expect(pad.rightDelta).toBeLessThanOrEqual(1);
   expect(pad.toolbarHeight).toBe(88);
-  await expectAdjacentButtonsUseParentGap(page, '.documents-toolbar .filter-actions');
+  await expectAdjacentButtonsUseParentGap(page, '.documents-toolbar .kb-filter-actions');
 
   await page.setViewportSize({ width: 375, height: 900 });
   await page.goto('/documents');
@@ -2454,11 +3151,11 @@ test('uses the history-style three-tier document toolbar', async ({ page }) => {
     name: '筛选',
     exact: true,
   });
-  await expect(documentFilterTrigger).toHaveClass(/is-active/);
+  await expect(documentFilterTrigger).toHaveClass(/kb-filter-trigger--active/);
   expect(
     await documentFilterTrigger.evaluate((button) => getComputedStyle(button, '::after').content),
   ).toBe('""');
-  await expectAdjacentButtonsUseParentGap(page, '.mobile-filter-drawer .mobile-filter-actions');
+  await expectAdjacentButtonsUseParentGap(page, '.el-drawer:visible .kb-filter-form__actions');
   await drawer.getByRole('button', { name: '重置', exact: true }).click();
   await expect(drawer).toBeHidden();
   await expect(mobileToolbar.getByPlaceholder('搜索文件名')).toHaveValue('');
@@ -2485,8 +3182,8 @@ test('uses parent gaps for adjacent Element buttons across desktop, pad, and mob
   );
 
   for (const viewport of [
-    { width: 1440, height: 900, toolbar: '.documents-toolbar .filter-actions' },
-    { width: 768, height: 887, toolbar: '.documents-toolbar .filter-actions' },
+    { width: 1440, height: 900, toolbar: '.documents-toolbar .kb-filter-actions' },
+    { width: 768, height: 887, toolbar: '.documents-toolbar .kb-filter-actions' },
     { width: 375, height: 900, toolbar: '.documents-toolbar--mobile' },
   ]) {
     await page.setViewportSize(viewport);
@@ -2520,7 +3217,9 @@ test('uses parent gaps for adjacent Element buttons across desktop, pad, and mob
   }
 });
 
-test('keeps upload and account dialog bodies scrollable in a short viewport', async ({ page }) => {
+test('keeps desktop dialogs scrollable and uses bottom account drawers on mobile', async ({
+  page,
+}) => {
   await page.setViewportSize({ width: 900, height: 360 });
   await mockSession(page, ['documents:read', 'documents:write', 'access:read', 'access:write']);
   await page.route('**/v1/documents?**', (route) =>
@@ -2551,8 +3250,17 @@ test('keeps upload and account dialog bodies scrollable in a short viewport', as
             status: 'active',
             lastAuthenticatedAt: '2026-08-19T08:00:00.000Z',
           },
+          {
+            userId: 'external.user',
+            username: null,
+            department: 'platform',
+            roles: ['user'],
+            roleSource: 'managed',
+            status: 'observed',
+            lastAuthenticatedAt: '2026-08-19T08:00:00.000Z',
+          },
         ],
-        total: 1,
+        total: 2,
         offset: 0,
         limit: 25,
         scope: 'tenant',
@@ -2614,6 +3322,59 @@ test('keeps upload and account dialog bodies scrollable in a short viewport', as
     .evaluate((button) => (button as HTMLButtonElement).click());
   await expectScrollableDialog('管理后台账号');
   await page.getByRole('dialog').getByRole('button', { name: '取消' }).click();
+
+  await page.setViewportSize({ width: 375, height: 812 });
+  await page.goto('/access/users');
+
+  async function expectBottomAccountDrawer(title: string): Promise<Locator> {
+    const drawer = page.locator('.access-editor-drawer.el-drawer').filter({ hasText: title });
+    await expect(drawer).toBeVisible();
+    await expect(drawer).toHaveClass(/btt/);
+    await expect
+      .poll(() => drawer.evaluate((surface) => Math.round(surface.getBoundingClientRect().bottom)))
+      .toBe(812);
+    const bounds = await drawer.evaluate((surface) => {
+      const rect = surface.getBoundingClientRect();
+      return {
+        bottom: Math.round(rect.bottom),
+        height: rect.height,
+        viewportHeight: window.innerHeight,
+      };
+    });
+    expect(bounds.bottom).toBe(bounds.viewportHeight);
+    expect(bounds.height).toBeLessThanOrEqual(bounds.viewportHeight);
+    return drawer;
+  }
+
+  await page.getByRole('button', { name: '新增账号' }).click();
+  let accountDrawer = await expectBottomAccountDrawer('新增账号');
+  await accountDrawer.getByRole('button', { name: '取消' }).click();
+  await expect(accountDrawer).toBeHidden();
+
+  const managedUser = page.locator('.el-collapse-item').filter({ hasText: 'managed.user' });
+  await managedUser.locator('.el-collapse-item__header').click();
+  await managedUser.getByRole('button', { name: '编辑用户' }).click();
+  accountDrawer = await expectBottomAccountDrawer('管理后台账号');
+  await accountDrawer.getByRole('button', { name: '取消' }).click();
+  await expect(accountDrawer).toBeHidden();
+
+  const externalUser = page.locator('.el-collapse-item').filter({ hasText: 'external.user' });
+  await externalUser.locator('.el-collapse-item__header').click();
+  await externalUser.getByRole('button', { name: '编辑角色' }).click();
+  accountDrawer = await expectBottomAccountDrawer('编辑托管角色');
+  await accountDrawer.getByRole('button', { name: '取消' }).click();
+  await expect(accountDrawer).toBeHidden();
+
+  await managedUser.locator('.el-collapse-item__header').click();
+  await managedUser.getByRole('button', { name: '删除账号' }).click();
+  const messageBox = page.locator('.el-message-box');
+  await expect(messageBox).toBeVisible();
+  const messageBoxRadii = await messageBox.evaluate((surface) => ({
+    actual: getComputedStyle(surface).borderRadius,
+    dialog: getComputedStyle(document.documentElement).getPropertyValue('--kb-radius-md').trim(),
+  }));
+  expect(messageBoxRadii.actual).toBe(messageBoxRadii.dialog);
+  await messageBox.getByRole('button', { name: '取消' }).click();
 });
 
 test('uses the document-style three-tier usage and access toolbars', async ({ page }) => {
@@ -2643,70 +3404,112 @@ test('uses the document-style three-tier usage and access toolbars', async ({ pa
       },
     }),
   );
+  const expectUsagePanelContentFills = async () => {
+    await page.getByPlaceholder('开始日期').click();
+    const popper = page.locator('.usage-date-picker-popper:visible');
+    await expect(popper).toBeVisible();
+    const layout = await popper.evaluate((root) => {
+      const panel = root.querySelector<HTMLElement>('.el-date-range-picker.single-panel');
+      const body = root.querySelector<HTMLElement>('.el-picker-panel__body');
+      const content = root.querySelector<HTMLElement>('.el-picker-panel__content');
+      const trigger = document.querySelector<HTMLElement>('.usage-date-range-field');
+      const popperBounds = root.getBoundingClientRect();
+      const panelBounds = panel?.getBoundingClientRect();
+      const bodyBounds = body?.getBoundingClientRect();
+      const contentBounds = content?.getBoundingClientRect();
+      const triggerBounds = trigger?.getBoundingClientRect();
+      return {
+        popperLeft: popperBounds.left,
+        popperWidth: popperBounds.width,
+        panelLeft: panelBounds?.left ?? -1,
+        panelWidth: panelBounds?.width ?? 0,
+        bodyLeft: bodyBounds?.left ?? -1,
+        bodyWidth: bodyBounds?.width ?? 0,
+        contentLeft: contentBounds?.left ?? -1,
+        contentWidth: contentBounds?.width ?? 0,
+        triggerLeft: triggerBounds?.left ?? -1,
+        triggerWidth: triggerBounds?.width ?? 0,
+      };
+    });
+    expect(Math.abs(layout.popperLeft - layout.triggerLeft)).toBeLessThanOrEqual(1);
+    expect(Math.abs(layout.popperWidth - layout.triggerWidth)).toBeLessThanOrEqual(1);
+    for (const left of [layout.bodyLeft, layout.contentLeft]) {
+      expect(Math.abs(left - layout.panelLeft)).toBeLessThanOrEqual(1);
+    }
+    for (const width of [layout.bodyWidth, layout.contentWidth]) {
+      expect(Math.abs(width - layout.panelWidth)).toBeLessThanOrEqual(1);
+    }
+    await page.keyboard.press('Escape');
+  };
 
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto('/system/usage');
-  const usageDesktop = await page.locator('.usage-toolbar').evaluate((toolbar) => ({
-    tops: Array.from(
-      toolbar.querySelectorAll<HTMLElement>(
-        '.usage-start-filter, .usage-end-filter, .filter-actions',
-      ),
-    ).map((control) => Math.round(control.getBoundingClientRect().top)),
-    height: toolbar.getBoundingClientRect().height,
-  }));
+  const usageDesktop = await page
+    .locator('form[aria-label="用量日期范围筛选"]')
+    .evaluate((toolbar) => ({
+      tops: Array.from(
+        toolbar.querySelectorAll<HTMLElement>('.usage-date-range-field, .kb-filter-actions'),
+      ).map((control) => Math.round(control.getBoundingClientRect().top)),
+      dateWidth:
+        toolbar.querySelector<HTMLElement>('.usage-date-range-field')?.getBoundingClientRect()
+          .width ?? 0,
+      toolbarWidth: toolbar.getBoundingClientRect().width,
+      height: toolbar.getBoundingClientRect().height,
+    }));
   expect(new Set(usageDesktop.tops).size).toBe(1);
   expect(usageDesktop.height).toBe(40);
-  await expectAdjacentButtonsUseParentGap(page, '.filter-actions');
+  expect(usageDesktop.dateWidth).toBeLessThan(usageDesktop.toolbarWidth);
+  expect(usageDesktop.dateWidth).toBe(350);
+  await expect(page.getByPlaceholder('开始日期')).toHaveAttribute('readonly', '');
+  await expect(page.getByPlaceholder('结束日期')).toHaveAttribute('readonly', '');
+  await expectUsagePanelContentFills();
+  await expectAdjacentButtonsUseParentGap(page, '.kb-filter-actions');
   await expect(page.locator('.usage-toolbar__title')).toHaveCount(0);
-  await expect(page.locator('.usage-toolbar > .kb-text')).toHaveCount(0);
+  await expect(page.locator('form[aria-label="用量日期范围筛选"] > .kb-text')).toHaveCount(0);
 
   await page.goto('/access/users');
   const accessDesktop = await page.locator('.access-toolbar').evaluate((toolbar) => ({
-    tops: Array.from(
-      toolbar.querySelectorAll<HTMLElement>(
-        '.access-filter-search, .access-filter-department, .filter-actions, .access-create-action',
-      ),
-    ).map((control) => Math.round(control.getBoundingClientRect().top)),
+    tops: Array.from(toolbar.children).map((control) =>
+      Math.round(control.getBoundingClientRect().top),
+    ),
     height: toolbar.getBoundingClientRect().height,
   }));
   expect(new Set(accessDesktop.tops).size).toBe(1);
   expect(accessDesktop.height).toBe(40);
-  await expectAdjacentButtonsUseParentGap(page, '.filter-actions');
+  await expectAdjacentButtonsUseParentGap(page, '.kb-filter-actions');
   await expect(page.locator('.access-toolbar__title')).toHaveCount(0);
   await expect(page.locator('.access-toolbar > .kb-text')).toHaveCount(0);
 
   await page.setViewportSize({ width: 768, height: 887 });
   await page.goto('/system/usage');
-  const usagePad = await page.locator('.usage-toolbar').evaluate((toolbar) => {
-    const start = toolbar
-      .querySelector<HTMLElement>('.usage-start-filter')
+  const usagePad = await page.locator('form[aria-label="用量日期范围筛选"]').evaluate((toolbar) => {
+    const dateRange = toolbar
+      .querySelector<HTMLElement>('.usage-date-range-field')
       ?.getBoundingClientRect();
-    const end = toolbar.querySelector<HTMLElement>('.usage-end-filter')?.getBoundingClientRect();
-    const actions = toolbar.querySelector<HTMLElement>('.filter-actions')?.getBoundingClientRect();
+    const actions = toolbar
+      .querySelector<HTMLElement>('.kb-filter-actions')
+      ?.getBoundingClientRect();
     return {
-      datesTop: start?.top ?? Infinity,
-      datesTopDelta: start && end ? Math.abs(start.top - end.top) : Infinity,
-      datesWidthDelta: start && end ? Math.abs(start.width - end.width) : Infinity,
+      dateTop: dateRange?.top ?? Infinity,
+      dateWidth: dateRange?.width ?? Infinity,
+      dateRight: dateRange?.right ?? Infinity,
       actionsTop: actions?.top ?? -Infinity,
-      actionsRight: actions?.right ?? -Infinity,
-      toolbarRight: toolbar.getBoundingClientRect().right,
+      actionsLeft: actions?.left ?? -Infinity,
       height: toolbar.getBoundingClientRect().height,
     };
   });
-  expect(usagePad.datesTopDelta).toBeLessThanOrEqual(1);
-  expect(usagePad.datesWidthDelta).toBeLessThanOrEqual(1);
-  expect(Math.abs(usagePad.datesTop - usagePad.actionsTop)).toBeLessThanOrEqual(1);
-  expect(Math.abs(usagePad.toolbarRight - usagePad.actionsRight)).toBeLessThanOrEqual(1);
+  expect(Math.abs(usagePad.dateTop - usagePad.actionsTop)).toBeLessThanOrEqual(1);
+  expect(usagePad.dateWidth).toBe(350);
+  expect(usagePad.actionsLeft - usagePad.dateRight).toBe(8);
   expect(usagePad.height).toBe(40);
-  await expectAdjacentButtonsUseParentGap(page, '.filter-actions');
+  await expectUsagePanelContentFills();
+  await expectAdjacentButtonsUseParentGap(page, '.kb-filter-actions');
 
   await page.goto('/access/users');
   const accessPad = await page.locator('.access-toolbar').evaluate((toolbar) => ({
-    tops: Array.from(
-      toolbar.querySelectorAll<HTMLElement>(
-        '.access-filter-search, .access-filter-department, .filter-actions, .access-create-action',
-      ),
-    ).map((control) => Math.round(control.getBoundingClientRect().top)),
+    tops: Array.from(toolbar.children).map((control) =>
+      Math.round(control.getBoundingClientRect().top),
+    ),
     height: toolbar.getBoundingClientRect().height,
     scrollWidth: toolbar.scrollWidth,
     clientWidth: toolbar.clientWidth,
@@ -2714,17 +3517,20 @@ test('uses the document-style three-tier usage and access toolbars', async ({ pa
   expect(new Set(accessPad.tops).size).toBe(1);
   expect(accessPad.scrollWidth).toBeLessThanOrEqual(accessPad.clientWidth);
   expect(accessPad.height).toBe(40);
-  await expectAdjacentButtonsUseParentGap(page, '.filter-actions');
+  await expectAdjacentButtonsUseParentGap(page, '.kb-filter-actions');
 
   await page.setViewportSize({ width: 375, height: 900 });
   await page.goto('/system/usage');
-  const usageMobile = page.locator('.usage-toolbar--mobile');
-  await expect(usageMobile.getByRole('button', { name: '筛选' })).toBeVisible();
+  const usageMobile = page.locator('form[aria-label="用量日期范围筛选"]');
+  await expect(usageMobile.getByPlaceholder('开始日期')).toBeVisible();
+  await expect(usageMobile.getByPlaceholder('结束日期')).toBeVisible();
+  await expect(usageMobile.getByRole('button', { name: '重置' })).toBeVisible();
+  await expect(page.locator('.usage-filter-drawer')).toHaveCount(0);
   await expect(page.locator('.usage-filter-form')).toHaveCount(0);
   expect(await usageMobile.evaluate((toolbar) => toolbar.getBoundingClientRect().height)).toBe(40);
 
   await page.goto('/access/users');
-  const accessMobile = page.locator('.access-toolbar--mobile');
+  const accessMobile = page.locator('form[aria-label="搜索用户目录"]');
   await expect(accessMobile.getByPlaceholder('搜索用户 ID')).toBeVisible();
   await expect(accessMobile.getByRole('button', { name: '新增账号' })).toBeVisible();
   await expect(accessMobile.getByRole('button', { name: '筛选' })).toBeVisible();
@@ -2740,14 +3546,14 @@ test('uses the document-style three-tier usage and access toolbars', async ({ pa
   expect(new Set(accessMobileLayout.tops).size).toBe(1);
   expect(accessMobileLayout.height).toBe(40);
   expect(accessMobileLayout.scrollWidth).toBeLessThanOrEqual(accessMobileLayout.clientWidth);
-  await expectAdjacentButtonsUseParentGap(page, '.access-toolbar--mobile');
+  await expectAdjacentButtonsUseParentGap(page, 'form[aria-label="搜索用户目录"]');
 
   await accessMobile.getByRole('button', { name: '筛选' }).click();
   const drawer = page.locator('.el-drawer').filter({ hasText: '筛选用户目录' });
   await expect(drawer).toBeVisible();
   await expect(drawer.getByPlaceholder('搜索用户 ID')).toHaveCount(0);
   await expect(drawer.locator('.el-select')).toBeVisible();
-  await expectAdjacentButtonsUseParentGap(page, '.mobile-filter-drawer .mobile-filter-actions');
+  await expectAdjacentButtonsUseParentGap(page, '.el-drawer:visible .kb-filter-form__actions');
 });
 
 test('keeps ingestion task controls on one row for desktop and Pad', async ({ page }) => {
@@ -2763,7 +3569,7 @@ test('keeps ingestion task controls on one row for desktop and Pad', async ({ pa
   const desktop = await page.locator('.task-toolbar').evaluate((toolbar) => {
     const controls = Array.from(
       toolbar.querySelectorAll<HTMLElement>(
-        '.task-document-filter, .task-status-filter, .filter-actions',
+        '.task-document-filter, .el-select, .kb-filter-actions',
       ),
     ).map((control) => control.getBoundingClientRect());
     const inputWrapper = toolbar.querySelector<HTMLElement>('.el-input__wrapper');
@@ -2776,11 +3582,11 @@ test('keeps ingestion task controls on one row for desktop and Pad', async ({ pa
   expect(new Set(desktop.tops).size).toBe(1);
   expect(desktop.controlHeight).toBe(40);
   expect(desktop.toolbarHeight).toBe(40);
-  await expect(page.locator('.task-toolbar + .kb-block-content > .task-list')).toHaveCSS(
+  await expect(page.locator('.task-toolbar + .kb-block-content > .kb-block-scroll')).toHaveCSS(
     'border-radius',
     '12px',
   );
-  await expect(page.locator('.task-toolbar + .kb-block-content > .task-list')).toHaveCSS(
+  await expect(page.locator('.task-toolbar + .kb-block-content > .kb-block-scroll')).toHaveCSS(
     'overflow-y',
     'auto',
   );
@@ -2789,8 +3595,8 @@ test('keeps ingestion task controls on one row for desktop and Pad', async ({ pa
   await page.goto('/ingestion-jobs');
   const pad = await page.locator('.task-toolbar').evaluate((toolbar) => {
     const documentId = toolbar.querySelector<HTMLElement>('.task-document-filter');
-    const status = toolbar.querySelector<HTMLElement>('.task-status-filter');
-    const actions = toolbar.querySelector<HTMLElement>('.filter-actions');
+    const status = toolbar.querySelector<HTMLElement>('.el-select');
+    const actions = toolbar.querySelector<HTMLElement>('.kb-filter-actions');
     const documentBounds = documentId?.getBoundingClientRect();
     const statusBounds = status?.getBoundingClientRect();
     const actionsBounds = actions?.getBoundingClientRect();
@@ -2811,7 +3617,7 @@ test('keeps ingestion task controls on one row for desktop and Pad', async ({ pa
   await expect(mobileToolbar.getByPlaceholder('文档 ID')).toBeVisible();
   await mobileToolbar.getByPlaceholder('文档 ID').fill('6769af9a-a4d0-4dc2-a97d-942584a9c826');
   await expect(mobileToolbar.getByRole('button', { name: '筛选', exact: true })).toBeVisible();
-  await expect(page.locator('.task-status-filter')).toHaveCount(0);
+  await expect(page.locator('.task-toolbar .el-select')).toHaveCount(0);
   const mobile = await mobileToolbar.evaluate((toolbar) => ({
     tops: Array.from(toolbar.children).map((control) =>
       Math.round(control.getBoundingClientRect().top),
@@ -2832,7 +3638,7 @@ test('keeps ingestion task controls on one row for desktop and Pad', async ({ pa
     name: '筛选',
     exact: true,
   });
-  await expect(ingestionFilterTrigger).toHaveClass(/is-active/);
+  await expect(ingestionFilterTrigger).toHaveClass(/kb-filter-trigger--active/);
   expect(
     await ingestionFilterTrigger.evaluate((button) => getComputedStyle(button, '::after').content),
   ).toBe('""');
@@ -3025,7 +3831,28 @@ test('keeps shell chrome fixed and confines management-page scrolling below cont
     }),
   );
   await page.route('**/v1/documents?**', (route) =>
-    route.fulfill({ json: { items: [], page: 1, pageSize: 20, total: 0 } }),
+    route.fulfill({
+      json: {
+        items: [
+          {
+            id: '6769af9a-a4d0-4dc2-a97d-942584a9c826',
+            sourceName: '制度.md',
+            mimeType: 'text/markdown',
+            department: 'platform',
+            sensitivity: 'internal',
+            ownerId: 'admin.fixture',
+            status: 'active',
+            activeVersion: 1,
+            latestJob: null,
+            createdAt: '2026-07-22T09:00:00.000Z',
+            updatedAt: '2026-07-22T09:00:00.000Z',
+          },
+        ],
+        page: 1,
+        pageSize: 20,
+        total: 1,
+      },
+    }),
   );
   await page.route('**/v1/access/users**', (route) =>
     route.fulfill({
@@ -3055,7 +3882,7 @@ test('keeps shell chrome fixed and confines management-page scrolling below cont
   const ingestionLayout = await page.evaluate(() => {
     const header = document.querySelector<HTMLElement>('.app-header');
     const sidebar = document.querySelector<HTMLElement>('.app-sidebar');
-    const heading = document.querySelector<HTMLElement>('.page-header');
+    const heading = document.querySelector<HTMLElement>('.kb-page-header');
     const section = document.querySelector<HTMLElement>('.app-main > section');
     const toolbar = document.querySelector<HTMLElement>('.task-toolbar');
     return {
@@ -3088,14 +3915,15 @@ test('keeps shell chrome fixed and confines management-page scrolling below cont
   await expect(page.getByRole('heading', { name: '审计中心' })).toBeVisible();
   await expect(page.getByRole('button', { name: '折叠侧栏' })).toHaveCount(0);
   await expect(
-    page.locator('.audit-toolbar + .kb-block-content > .kb-block-scroll .el-empty'),
+    page.locator('.kb-control-toolbar + .kb-block-content > .kb-block-scroll .el-empty'),
   ).toHaveCount(0);
   await expect(
-    page.locator('.audit-toolbar + .kb-block-content .el-pagination__total'),
+    page.locator('.kb-control-toolbar + .kb-block-content .el-pagination__total'),
   ).toContainText('51');
+  await expectFlushTableUsesContainerBottomBorder(page);
   await page.evaluate(() => {
     const table = document.querySelector<HTMLElement>(
-      '.audit-toolbar + .kb-block-content > .kb-block-scroll',
+      '.kb-control-toolbar + .kb-block-content > .kb-block-scroll',
     );
     if (!table) return;
     const spacer = document.createElement('div');
@@ -3105,10 +3933,10 @@ test('keeps shell chrome fixed and confines management-page scrolling below cont
     table.scrollTo({ top: 700 });
   });
   const auditLayout = await page.evaluate(() => {
-    const heading = document.querySelector<HTMLElement>('.page-header');
-    const toolbar = document.querySelector<HTMLElement>('.audit-toolbar');
+    const heading = document.querySelector<HTMLElement>('.kb-page-header');
+    const toolbar = document.querySelector<HTMLElement>('.kb-control-toolbar');
     const table = document.querySelector<HTMLElement>(
-      '.audit-toolbar + .kb-block-content > .kb-block-scroll',
+      '.kb-control-toolbar + .kb-block-content > .kb-block-scroll',
     );
     const pageSection = document.querySelector<HTMLElement>('.app-main > section');
     return {
@@ -3140,7 +3968,7 @@ test('keeps shell chrome fixed and confines management-page scrolling below cont
   const usageLayout = await page.evaluate(() => {
     const actions = document.querySelector<HTMLElement>('.usage-filter-form');
     const dateEditors = actions?.querySelectorAll<HTMLElement>('.el-date-editor');
-    const toolbar = document.querySelector<HTMLElement>('.usage-toolbar');
+    const toolbar = document.querySelector<HTMLElement>('form[aria-label="用量日期范围筛选"]');
     const section = document.querySelector<HTMLElement>('.app-main > section');
     const actionBounds = actions?.getBoundingClientRect();
     return {
@@ -3151,7 +3979,7 @@ test('keeps shell chrome fixed and confines management-page scrolling below cont
       toolbarDirection: toolbar ? getComputedStyle(toolbar).flexDirection : '',
       toolbarPosition: toolbar ? getComputedStyle(toolbar).position : '',
       dateWidths: [...(dateEditors ?? [])].map((date) => date.getBoundingClientRect().width),
-      dateRight: dateEditors?.[1]?.getBoundingClientRect().right ?? Number.POSITIVE_INFINITY,
+      dateRight: dateEditors?.[0]?.getBoundingClientRect().right ?? Number.POSITIVE_INFINITY,
       actionsRight: actionBounds?.right ?? Number.NEGATIVE_INFINITY,
       sectionLeft: section?.getBoundingClientRect().left ?? 0,
       sectionRight: section?.getBoundingClientRect().right ?? 0,
@@ -3160,8 +3988,7 @@ test('keeps shell chrome fixed and confines management-page scrolling below cont
   expect(usageLayout.actionsGap).toBe(usageLayout.expectedActionsGap);
   expect(usageLayout.toolbarDirection).toBe('row');
   expect(usageLayout.toolbarPosition).toBe('static');
-  expect(usageLayout.dateWidths).toHaveLength(2);
-  expect(Math.abs(usageLayout.dateWidths[0]! - usageLayout.dateWidths[1]!)).toBeLessThanOrEqual(1);
+  expect(usageLayout.dateWidths).toHaveLength(1);
   expect(usageLayout.dateWidths[0]).toBeGreaterThan(0);
   expect(usageLayout.dateRight).toBeLessThanOrEqual(usageLayout.actionsRight);
   expect(usageLayout.sectionLeft).toBe(ingestionLayout.headingLeft);
@@ -3170,13 +3997,14 @@ test('keeps shell chrome fixed and confines management-page scrolling below cont
   await page.goto('/documents');
   await expect(page.getByRole('heading', { name: '文档管理' })).toBeVisible();
   await expect(page.locator('.documents-toolbar')).toBeVisible();
-  await expect(page.locator('.page > .kb-block-content--mobile-inset')).toBeVisible();
+  await expect(page.locator('.kb-page > .kb-block-content')).toBeVisible();
+  await expectFlushTableUsesContainerBottomBorder(page);
   await expect(page.locator('.documents-toolbar')).toHaveCSS('position', 'static');
   const documentsLayout = await page.evaluate(() => {
-    const heading = document.querySelector<HTMLElement>('.page-header');
+    const heading = document.querySelector<HTMLElement>('.kb-page-header');
     const section = document.querySelector<HTMLElement>('.app-main > section');
     const toolbar = document.querySelector<HTMLElement>('.documents-toolbar');
-    const content = document.querySelector<HTMLElement>('.page > .kb-block-content--mobile-inset');
+    const content = document.querySelector<HTMLElement>('.kb-page > .kb-block-content');
     return {
       headingLeft: heading?.getBoundingClientRect().left ?? 0,
       headingRight: heading?.getBoundingClientRect().right ?? 0,
@@ -3199,10 +4027,12 @@ test('keeps shell chrome fixed and confines management-page scrolling below cont
   await expect(page.locator('.access-intro')).toHaveCount(0);
   await expect(page.locator('.access-filters')).toHaveCount(0);
   await expect(page.locator('.access-table-wrap .el-empty')).toHaveCount(0);
+  await expectFlushTableUsesContainerBottomBorder(page);
   const accessToolbarLayout = await page.evaluate(() => {
     const toolbar = document.querySelector<HTMLElement>('.access-toolbar');
-    const search = document.querySelector<HTMLElement>('.access-filter-search');
-    const department = document.querySelector<HTMLElement>('.access-filter-department');
+    const controls = Array.from(toolbar?.children ?? []) as HTMLElement[];
+    const search = controls[0];
+    const department = controls[1];
     const createAccount = Array.from(document.querySelectorAll<HTMLButtonElement>('button')).find(
       (button) => button.textContent?.trim() === '新增账号',
     );

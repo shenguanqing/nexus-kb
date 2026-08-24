@@ -40,6 +40,7 @@
   --kb-shadow-float: 0 12px 30px rgb(29 33 41 / 14%);
   --kb-shadow-drawer: 0 18px 48px rgb(19 37 79 / 14%);
   --kb-shadow-subtle: 0 4px 14px rgb(38 58 106 / 3%);
+  --kb-shadow-input: 0 0px 24px rgb(38 58 106 / 12%);
   --kb-shadow-card: none;
   --kb-transition-fast: 0.16s ease;
 
@@ -56,6 +57,7 @@
   --kb-font-size-xs: 11px;
   --kb-font-size-sm: 12px;
   --kb-font-size-body: 14px;
+  --kb-font-size-lg: 16px;
   --kb-font-size-mobile-input: 16px;
   --kb-font-size-title: 18px;
   --kb-font-family-base:
@@ -87,10 +89,10 @@
   --kb-space-component: var(--kb-space-4);
   --kb-space-section: var(--kb-space-4);
   /*
-   * 页面级仅允许使用流式 token：375px 为 12px，1440px 约 31px，
-   * 1920px 约 40px；限制上下界避免超宽屏产生松散布局。
+   * 页面级仅允许使用流式 token：375px 为 12px，1440px 约 27px，
+   * 1920px 约 36px；限制上下界避免超宽屏产生松散布局。
    */
-  --kb-space-page: clamp(12px, calc(1.8vw + 5px), 40px);
+  --kb-space-page: clamp(12px, calc(1.8vw + 1px), 40px);
   --kb-space-page-block: clamp(16px, calc(1.1vw + 12px), 32px);
   /* Markdown 内容随字号缩放，仍集中管理以避免页面内的相对间距漂移。 */
   --kb-space-text-2xs: 0.12em;

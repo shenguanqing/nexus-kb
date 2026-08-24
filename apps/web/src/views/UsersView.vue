@@ -1,5 +1,5 @@
 <template>
-  <section class="page">
+  <section class="kb-page">
     <form
       v-if="!isMobile"
       class="access-toolbar"
@@ -7,57 +7,22 @@
       aria-label="用户目录筛选"
       @submit.prevent="applyFilters"
     >
-      <el-input
-        v-model="search"
-        class="access-filter-search"
-        clearable
-        maxlength="128"
-        placeholder="搜索用户 ID"
-      />
-      <el-select
-        v-if="isAdmin"
-        v-model="department"
-        class="access-filter-department"
-        clearable
-        filterable
-        placeholder="筛选部门"
-      >
+      <el-input v-model="search" clearable maxlength="128" placeholder="搜索用户 ID" />
+      <el-select v-if="isAdmin" v-model="department" clearable filterable placeholder="筛选部门">
         <el-option v-for="item in departments" :key="item" :label="item" :value="item" />
       </el-select>
-      <div class="filter-actions">
+      <div class="kb-filter-actions">
         <el-button native-type="submit">筛选</el-button>
-        <el-button native-type="button" @click="resetFilters">重置</el-button>
+        <el-button @click="resetFilters">重置</el-button>
       </div>
-      <el-button
-        v-if="canWrite"
-        class="access-create-action"
-        type="primary"
-        native-type="button"
-        @click="openCreateUser"
-      >
-        新增账号
-      </el-button>
+      <el-button v-if="canWrite" type="primary" @click="openCreateUser">新增账号</el-button>
     </form>
-    <form
-      v-else
-      class="access-toolbar access-toolbar--mobile"
-      aria-label="搜索用户目录"
-      @submit.prevent="applyFilters"
-    >
+    <form v-else class="access-toolbar" aria-label="搜索用户目录" @submit.prevent="applyFilters">
       <el-input v-model="search" clearable maxlength="128" placeholder="搜索用户 ID" />
+      <el-button v-if="canWrite" type="primary" @click="openCreateUser">新增账号</el-button>
       <el-button
-        v-if="canWrite"
-        class="access-create-action"
-        type="primary"
-        native-type="button"
-        @click="openCreateUser"
-      >
-        新增账号
-      </el-button>
-      <el-button
-        class="filter-trigger"
-        :class="{ 'is-active': hasDepartmentFilter }"
-        native-type="button"
+        class="kb-filter-trigger"
+        :class="{ 'kb-filter-trigger--active': hasDepartmentFilter }"
         aria-label="筛选"
         @click="filtersVisible = true"
       >
@@ -67,26 +32,25 @@
     <el-drawer
       v-if="isMobile"
       v-model="filtersVisible"
-      class="mobile-filter-drawer"
       direction="btt"
       size="auto"
       title="筛选用户目录"
       append-to-body
     >
-      <form class="mobile-filter-form" aria-label="用户目录筛选" @submit.prevent="applyFilters">
+      <form class="kb-filter-form" aria-label="用户目录筛选" @submit.prevent="applyFilters">
         <el-select v-if="isAdmin" v-model="department" clearable filterable placeholder="筛选部门">
           <el-option v-for="item in departments" :key="item" :label="item" :value="item" />
         </el-select>
-        <div class="mobile-filter-actions">
-          <el-button native-type="button" @click="resetFilters"> 重置 </el-button>
-          <el-button type="primary" native-type="submit"> 筛选 </el-button>
+        <div class="kb-filter-form__actions">
+          <el-button @click="resetFilters">重置</el-button>
+          <el-button type="primary" native-type="submit">筛选</el-button>
         </div>
       </form>
     </el-drawer>
 
     <div class="kb-block-content kb-block-content--gap">
       <div v-if="errorMessage && users.length === 0" class="kb-error-state" role="alert">
-        <strong class="kb-text--danger">无法加载用户目录</strong>
+        <strong class="kb-text kb-text--danger">无法加载用户目录</strong>
         <span>{{ errorMessage }}</span>
         <el-button @click="load">重试</el-button>
       </div>
@@ -106,13 +70,16 @@
           >
             <el-table-column label="账号 / 用户 ID" min-width="220">
               <template #default="scopeRow">
-                <strong>
-                  {{ userRow(scopeRow.row).username ?? userRow(scopeRow.row).userId }}
-                </strong>
-                <div v-if="userRow(scopeRow.row).username">
-                  <el-text>
+                <div class="kb-data-grid__item">
+                  <span class="kb-text kb-text--md kb-text--strong">
+                    {{ userRow(scopeRow.row).username ?? userRow(scopeRow.row).userId }}
+                  </span>
+                  <span
+                    v-if="userRow(scopeRow.row).username"
+                    class="kb-text kb-text--md kb-text--secondary"
+                  >
                     {{ userRow(scopeRow.row).userId }}
-                  </el-text>
+                  </span>
                 </div>
               </template>
             </el-table-column>
@@ -186,7 +153,9 @@
             <el-collapse-item v-for="user in users" :key="user.userId" :name="user.userId">
               <template #title>
                 <div class="kb-collapse-list__summary">
-                  <span class="kb-data-field__label">{{ user.username ?? user.userId }}</span>
+                  <span class="kb-collapse-list__label kb-text kb-text--md kb-text--secondary">
+                    {{ user.username ?? user.userId }}
+                  </span>
                   <el-tag :type="user.status === 'disabled' ? 'info' : 'success'">
                     {{
                       user.status === 'active'
@@ -201,7 +170,9 @@
               <div class="kb-data-fields">
                 <div class="kb-data-field">
                   <span class="kb-data-field__label">部门</span>
-                  <span class="kb-data-field__value">{{ user.department }}</span>
+                  <span class="kb-data-field__value">
+                    {{ user.department }}
+                  </span>
                 </div>
                 <div class="kb-data-field">
                   <span class="kb-data-field__label">最近认证</span>
@@ -211,9 +182,9 @@
                 </div>
                 <div class="kb-data-field">
                   <span class="kb-data-field__label">角色</span>
-                  <strong class="kb-data-field__value">
+                  <span class="kb-data-field__value kb-text--strong">
                     {{ accessRoleSummary(user.roles).join('、') || '普通用户' }}
-                  </strong>
+                  </span>
                 </div>
               </div>
               <div class="mobile-user-actions">
@@ -262,25 +233,33 @@
       </div>
 
       <aside class="kb-block">
-        <strong class="access-boundary-note__title">权限边界</strong>
-        <div>
-          <el-text>
-            管理员可创建和管理本地后台账号；外部身份账号仍由其身份源管理。管理员自动拥有当前租户的全部功能权限和敏感度访问范围，所有账号变更写入审计，并禁止移除、禁用或降级最后一个管理员。
-          </el-text>
+        <div
+          class="access-boundary-note__title kb-heading kb-heading--h2"
+          role="heading"
+          aria-level="2"
+        >
+          权限边界
+        </div>
+        <div class="kb-text kb-text--secondary">
+          管理员可创建和管理本地后台账号；外部身份账号仍由其身份源管理。管理员自动拥有当前租户的全部功能权限和敏感度访问范围，所有账号变更写入审计，并禁止移除、禁用或降级最后一个管理员。
         </div>
       </aside>
     </div>
-    <el-dialog
+    <component
+      :is="isMobile ? ElDrawer : ElDialog"
       v-model="roleDialogVisible"
+      :class="isMobile ? 'access-editor-drawer' : 'access-editor-dialog'"
       title="编辑托管角色"
-      width="min(480px, calc(100vw - 28px))"
+      :width="isMobile ? undefined : 'min(480px, calc(100vw - 28px))'"
       align-center
+      :size="isMobile ? 'auto' : undefined"
+      :direction="isMobile ? 'btt' : undefined"
       append-to-body
       :z-index="4000"
       @closed="selectedUser = null"
     >
-      <div v-if="selectedUser">
-        <el-text>{{ selectedUser.userId }} · {{ selectedUser.department }}</el-text>
+      <div v-if="selectedUser" class="kb-text kb-text--secondary">
+        {{ selectedUser.userId }} · {{ selectedUser.department }}
       </div>
       <el-radio-group v-model="selectedRole" class="role-editor">
         <el-radio value="user">普通用户</el-radio>
@@ -288,14 +267,18 @@
       </el-radio-group>
       <template #footer>
         <el-button @click="roleDialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="roleSaving" @click="saveRoles"> 保存角色 </el-button>
+        <el-button type="primary" :loading="roleSaving" @click="saveRoles">保存角色</el-button>
       </template>
-    </el-dialog>
-    <el-dialog
+    </component>
+    <component
+      :is="isMobile ? ElDrawer : ElDialog"
       v-model="createDialogVisible"
+      :class="isMobile ? 'access-editor-drawer' : 'access-editor-dialog'"
       title="新增账号"
-      width="min(520px, calc(100vw - 28px))"
+      :width="isMobile ? undefined : 'min(520px, calc(100vw - 28px))'"
       align-center
+      :size="isMobile ? 'auto' : undefined"
+      :direction="isMobile ? 'btt' : undefined"
       append-to-body
       :z-index="4000"
       @closed="newPassword = ''"
@@ -324,18 +307,22 @@
         <el-button @click="createDialogVisible = false">取消</el-button>
         <el-button type="primary" :loading="createSaving" @click="saveNewUser">创建账号</el-button>
       </template>
-    </el-dialog>
-    <el-dialog
+    </component>
+    <component
+      :is="isMobile ? ElDrawer : ElDialog"
       v-model="accountDialogVisible"
+      :class="isMobile ? 'access-editor-drawer' : 'access-editor-dialog'"
       title="管理后台账号"
-      width="min(520px, calc(100vw - 28px))"
+      :width="isMobile ? undefined : 'min(520px, calc(100vw - 28px))'"
       align-center
+      :size="isMobile ? 'auto' : undefined"
+      :direction="isMobile ? 'btt' : undefined"
       append-to-body
       :z-index="4000"
       @closed="replacementPassword = ''"
     >
-      <div v-if="selectedUser">
-        <el-text>{{ selectedUser.username }} · {{ selectedUser.userId }}</el-text>
+      <div v-if="selectedUser" class="kb-text kb-text--secondary">
+        {{ selectedUser.username }} · {{ selectedUser.userId }}
       </div>
       <el-form label-position="top">
         <el-form-item label="部门">
@@ -347,8 +334,8 @@
             :disabled="selectedUser?.userId === auth.identity?.userId"
           >
             <el-radio value="user">普通用户</el-radio>
-            <el-radio value="admin">管理员</el-radio></el-radio-group
-          >
+            <el-radio value="admin">管理员</el-radio>
+          </el-radio-group>
         </el-form-item>
         <el-form-item label="账号状态">
           <el-switch
@@ -366,13 +353,13 @@
         <el-button @click="accountDialogVisible = false">取消</el-button>
         <el-button type="primary" :loading="accountSaving" @click="saveAccount">保存账号</el-button>
       </template>
-    </el-dialog>
+    </component>
   </section>
 </template>
 
 <script setup lang="ts">
 import type { AppRole, UserDirectoryEntry, UserDirectoryQueryRequest } from '@nexus-kb/contracts';
-import { ElMessage, ElMessageBox } from 'element-plus';
+import { ElDialog, ElDrawer, ElMessage, ElMessageBox } from 'element-plus';
 import { computed, onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
@@ -613,9 +600,6 @@ onMounted(() => {
 .role-editor {
   display: grid;
   gap: var(--kb-space-2);
-}
-.access-boundary-note__title {
-  font-size: 17px;
 }
 .access-table-wrap .desktop-data-table {
   min-height: 0;

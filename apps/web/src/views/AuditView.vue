@@ -1,10 +1,10 @@
 <template>
-  <section class="page">
-    <div class="audit-toolbar">
+  <section class="kb-page">
+    <div class="kb-control-toolbar">
       <div class="audit-toolbar__intro">
-        <strong class="audit-toolbar__title">租户审计事件</strong>
-        <div>
-          <el-text>仅展示当前租户内经过最小披露处理的结构化记录。</el-text>
+        <div class="kb-heading kb-heading--h2" role="heading" aria-level="1">租户审计事件</div>
+        <div class="audit-toolbar__description kb-text kb-text--secondary">
+          仅展示当前租户内经过最小披露处理的结构化记录。
         </div>
       </div>
       <form
@@ -14,7 +14,7 @@
         @submit.prevent="applyFilter"
       >
         <label>
-          <span class="sr-only">事件类型</span>
+          <span class="kb-visually-hidden">事件类型</span>
           <el-select
             v-model="selectedType"
             class="audit-type-filter"
@@ -30,7 +30,7 @@
           </el-select>
         </label>
         <el-button native-type="submit">筛选</el-button>
-        <el-button native-type="button" @click="resetFilter">重置</el-button>
+        <el-button @click="resetFilter">重置</el-button>
       </form>
       <form
         v-else
@@ -52,13 +52,13 @@
             :value="value"
           />
         </el-select>
-        <el-button native-type="button" @click="resetFilter">重置</el-button>
+        <el-button @click="resetFilter">重置</el-button>
       </form>
     </div>
 
-    <div class="kb-block-content kb-block-content--mobile-inset">
+    <div class="kb-block-content">
       <div v-if="errorMessage && !hasEvents" class="kb-error-state" role="alert">
-        <strong class="kb-text--danger">无法加载审计事件</strong>
+        <strong class="kb-text kb-text--danger">无法加载审计事件</strong>
         <span>{{ errorMessage }}</span>
         <el-button @click="load()">重试</el-button>
       </div>
@@ -66,8 +66,8 @@
       <div
         v-else
         v-loading="loading"
-        class="kb-block--flush kb-block-scroll"
-        :class="!isMobile ? 'kb-block' : ''"
+        class="kb-block-scroll"
+        :class="!isMobile ? 'kb-block kb-block--flush' : ''"
       >
         <template v-if="hasEvents">
           <el-table
@@ -79,26 +79,24 @@
           >
             <el-table-column type="expand">
               <template #default="scope">
-                <div class="audit-details">
+                <div class="kb-data-grid kb-data-grid--three">
                   <div
                     v-for="attribute in visibleAuditAttributes(auditRow(scope.row))"
                     :key="attribute.label"
-                    class="audit-detail-item"
+                    class="kb-data-grid__item"
                   >
-                    <span class="audit-detail-label">{{ attribute.label }}</span>
-                    <span class="audit-detail-value">{{ attribute.value }}</span>
-                  </div>
-                  <div class="audit-detail-item">
-                    <span class="audit-detail-label">Trace ID</span>
-                    <span class="audit-detail-value">
-                      <code>{{ scope.row.traceId ?? '—' }}</code>
+                    <span class="kb-text kb-text--sm kb-text--secondary">
+                      {{ attribute.label }}
                     </span>
+                    <span class="kb-data-grid__value">{{ attribute.value }}</span>
                   </div>
-                  <div v-if="scope.row.ingestionJobId" class="audit-detail-item">
-                    <span class="audit-detail-label">入库任务</span>
-                    <span class="audit-detail-value">
-                      <code>{{ scope.row.ingestionJobId }}</code>
-                    </span>
+                  <div class="kb-data-grid__item">
+                    <span class="kb-text kb-text--sm kb-text--secondary">Trace ID</span>
+                    <span class="kb-data-grid__value">{{ scope.row.traceId ?? '—' }}</span>
+                  </div>
+                  <div v-if="scope.row.ingestionJobId" class="kb-data-grid__item">
+                    <span class="kb-text kb-text--sm kb-text--secondary">入库任务</span>
+                    <span class="kb-data-grid__value">{{ scope.row.ingestionJobId }}</span>
                   </div>
                 </div>
               </template>
@@ -139,8 +137,10 @@
           </el-table>
           <div v-else class="kb-block-list" aria-label="审计事件列表">
             <article v-for="event in events" :key="event.id" class="kb-block">
-              <div class="kb-block-header">
-                <strong class="kb-block-title">{{ auditEventLabel(event) }}</strong>
+              <div class="kb-block__header">
+                <div class="kb-block__title kb-heading kb-heading--h4">
+                  {{ auditEventLabel(event) }}
+                </div>
                 <el-tag :type="outcomeTagType(event.outcome)">
                   {{ auditOutcomeLabel(event.outcome) }}
                 </el-tag>
@@ -290,15 +290,6 @@ onMounted(() => load());
 </script>
 
 <style scoped>
-.audit-toolbar {
-  display: grid;
-  align-items: center;
-  gap: var(--kb-space-2);
-  grid-template-columns: minmax(0, 1fr) auto;
-}
-.audit-toolbar__title {
-  font-size: 17px;
-}
 .audit-filter-form {
   display: flex;
   align-items: center;
@@ -314,26 +305,9 @@ onMounted(() => load());
   min-height: 24px;
   white-space: normal;
 }
-.audit-details {
-  display: grid;
-  gap: var(--kb-layout-gap);
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  padding: var(--kb-space-2) var(--kb-space-12);
-  font-size: 14px;
-}
-.audit-detail-item {
-  display: grid;
-  gap: var(--kb-space-1);
-}
-.audit-detail-label {
-  font-weight: bold;
-}
-.audit-detail-value {
-  overflow-wrap: anywhere;
-}
 /* 响应式：紧凑布局（<1280px） */
 @media (max-width: 1279px) {
-  .audit-toolbar .el-text {
+  .audit-toolbar__description {
     display: none;
   }
 }

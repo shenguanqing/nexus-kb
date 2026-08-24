@@ -1,7 +1,7 @@
 <template>
-  <section class="page" v-loading="loading">
+  <section class="kb-page" v-loading="loading">
     <div v-if="errorMessage" class="kb-error-state" role="alert">
-      <strong class="kb-text--danger">无法加载部门</strong><span>{{ errorMessage }}</span>
+      <strong class="kb-text kb-text--danger">无法加载部门</strong><span>{{ errorMessage }}</span>
       <el-button @click="load">重试</el-button>
     </div>
     <div
@@ -15,30 +15,42 @@
         aria-label="部门列表"
       >
         <div class="department-panel__header">
-          <span>部门列表</span>
-          <span class="department-panel__count">{{ departments.length }}</span>
+          <span class="kb-heading kb-heading--h5" role="heading" aria-level="2">部门列表 </span>
+          <span
+            class="department-panel__count kb-text kb-text--sm kb-text--secondary kb-text--medium"
+          >
+            {{ departments.length }}
+          </span>
         </div>
-        <div class="department-directory__list">
-          <button
+        <div class="kb-block-scroll kb-block-scroll--list">
+          <div
             v-for="item in departments"
             :key="item.department"
-            type="button"
             class="department-list-item"
+            tabindex="0"
             :class="{ 'is-active': selected?.department === item.department }"
             @click="select(item)"
+            @keydown.enter.prevent="select(item)"
+            @keydown.space.prevent="select(item)"
           >
-            <strong>{{ item.department }}</strong>
-            <span class="department-list-item__meta">
+            <span class="kb-text kb-text--md kb-text--primary kb-text--strong">
+              {{ item.department }}
+            </span>
+            <span class="kb-text kb-text--sm kb-text--secondary">
               {{ item.userCount }} 位用户 · {{ item.documentCount }} 份文档</span
             >
-          </button>
+          </div>
         </div>
       </nav>
       <article v-if="selected && !isMobile" class="department-policy kb-block kb-block--flush">
-        <div class="department-panel__header">{{ selected.department }} 权限</div>
+        <div class="department-panel__header">
+          <span class="kb-heading kb-heading--h5" role="heading" aria-level="2">
+            {{ selected.department }} 权限
+          </span>
+        </div>
         <div class="department-policy-body">
-          <div>
-            <el-text>该策略只能收紧身份源声明的敏感度，不能扩大用户权限。</el-text>
+          <div class="kb-text kb-text--secondary">
+            该策略只能收紧身份源声明的敏感度，不能扩大用户权限。
           </div>
           <el-checkbox-group
             v-model="sensitivities"
@@ -79,8 +91,8 @@
               <div>{{ item.userCount }} 位用户 · {{ item.documentCount }} 份文档</div>
             </div>
           </template>
-          <div>
-            <el-text>该策略只能收紧身份源声明的敏感度，不能扩大用户权限。</el-text>
+          <div class="kb-text kb-text--secondary">
+            该策略只能收紧身份源声明的敏感度，不能扩大用户权限。
           </div>
           <div class="mobile-inline-editor">
             <el-checkbox-group
@@ -181,12 +193,6 @@ onMounted(load);
   height: 100%;
   min-height: 0;
 }
-.department-directory__list {
-  flex: 1 1 auto;
-  overflow: auto;
-  min-height: 0;
-  padding: var(--kb-list-row-padding);
-}
 .department-list-item {
   display: grid;
   align-items: center;
@@ -218,10 +224,6 @@ onMounted(load);
   border-color: color-mix(in srgb, var(--kb-color-primary) 30%, var(--kb-color-border));
   background: var(--kb-color-primary-soft);
 }
-.department-list-item__meta {
-  color: var(--kb-color-text-secondary);
-  font-size: 12px;
-}
 .department-policy-body {
   display: flex;
   flex: 1 1 auto;
@@ -241,17 +243,11 @@ onMounted(load);
   min-width: 0;
   padding: var(--kb-block-padding) var(--kb-space-4);
   border-bottom: 1px solid var(--kb-color-border);
-  color: var(--kb-color-text-primary);
-  font-size: 14px;
-  font-weight: 600;
 }
 .department-panel__count {
   padding: 0 var(--kb-space-2);
   border-radius: var(--kb-radius-pill);
-  color: var(--kb-color-text-secondary);
   background: var(--kb-color-canvas);
-  font-size: 12px;
-  font-weight: 600;
 }
 
 /* 敏感度选择：普通 checkbox，横向排列 */

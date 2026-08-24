@@ -1,12 +1,14 @@
 <template>
-  <section class="page">
+  <section class="kb-page">
     <article v-if="isMobile && selected" class="history-detail history-detail--mobile kb-block">
       <header class="mobile-detail-header">
         <div class="mobile-detail-title" :title="selected.title">{{ selected.title }}</div>
       </header>
       <div class="history-detail-body">
         <div v-for="turn in selected.turns" :key="turn.id" class="history-turn">
-          <div class="history-question"><strong>用户</strong>{{ turn.question }}</div>
+          <div class="history-question">
+            <span class="kb-text kb-text--strong">用户</span>{{ turn.question }}
+          </div>
           <HistoryAnswer :turn="turn" @select-source="openSource" />
         </div>
       </div>
@@ -14,82 +16,82 @@
     <template v-else>
       <form
         v-if="!isMobile"
-        class="history-toolbar"
+        class="kb-control-toolbar"
         aria-label="历史记录筛选"
         @submit.prevent="search"
       >
         <el-input v-model="query" clearable maxlength="200" placeholder="搜索会话标题" />
-        <div class="filter-actions">
+        <div class="kb-filter-actions">
           <el-button native-type="submit">筛选</el-button>
-          <el-button native-type="button" @click="resetFilters"> 重置 </el-button>
+          <el-button @click="resetFilters">重置 </el-button>
         </div>
       </form>
       <form
         v-else
-        class="history-toolbar history-toolbar--mobile"
+        class="history-mobile-controls kb-control-toolbar"
         aria-label="搜索历史记录"
         @submit.prevent="search"
       >
         <el-input v-model="query" clearable maxlength="200" placeholder="搜索会话标题" />
-        <div class="filter-actions">
-          <el-button native-type="button" @click="resetFilters"> 重置 </el-button>
+        <div class="kb-filter-actions">
+          <el-button @click="resetFilters">重置 </el-button>
         </div>
       </form>
       <div v-if="errorMessage" class="kb-error-state" role="alert">
-        <strong class="kb-text--danger">无法加载历史</strong><span>{{ errorMessage }}</span>
+        <span class="kb-text kb-text--danger">无法加载历史</span><span>{{ errorMessage }}</span>
         <el-button @click="reload">重试</el-button>
       </div>
       <div v-else class="history-layout kb-split-layout" v-loading="loading">
-        <section class="history-list-panel kb-block kb-block--flush">
-          <div class="history-list-card">
-            <div class="history-list" role="list" aria-label="问答会话列表">
-              <div class="history-list-scroll" @scroll.passive="handleListScroll">
-                <div
-                  v-for="row in conversations"
-                  :key="row.id"
-                  class="history-list-row"
-                  :class="{ 'is-active': selected?.id === row.id }"
-                  role="listitem"
+        <section class="kb-block kb-block--flush kb-block-content" aria-label="问答会话列表">
+          <div class="kb-block-scroll kb-block-scroll--list" @scroll.passive="handleListScroll">
+            <div
+              v-for="row in conversations"
+              :key="row.id"
+              class="history-list-row"
+              :class="{ 'is-active': selected?.id === row.id }"
+            >
+              <div
+                class="history-list-item"
+                tabindex="0"
+                @click="openFromList(row.id)"
+                @keydown.enter.prevent="openFromList(row.id)"
+                @keydown.space.prevent="openFromList(row.id)"
+              >
+                <span
+                  class="history-item-title kb-text kb-text--md kb-text--primary kb-text--strong"
                 >
-                  <button
-                    type="button"
-                    class="history-list-item"
-                    :aria-pressed="selected?.id === row.id"
-                    @click="openFromList(row.id)"
-                  >
-                    <strong class="history-item-title">{{ row.title }}</strong>
-                    <span class="history-item-subtitle">
-                      {{ row.messageCount }} 条消息 · {{ formatUpdatedAt(row.updatedAt) }}
-                    </span>
-                  </button>
-                  <el-button
-                    class="history-delete"
-                    :icon="Delete"
-                    text
-                    circle
-                    :aria-label="`删除会话：${row.title}`"
-                    @click.stop="remove(row)"
-                  >
-                  </el-button>
-                </div>
-                <el-empty
-                  v-if="!loading && conversations.length === 0"
-                  class="history-list-empty kb-empty-state"
-                  description="暂无个人问答历史"
-                />
-                <div
-                  v-else-if="loadingMore || loadMoreError || !hasMore"
-                  class="history-load-state"
-                  aria-live="polite"
-                >
-                  <span v-if="loadingMore">正在加载更多…</span>
-                  <template v-else-if="loadMoreError">
-                    <span>{{ loadMoreError }}</span>
-                    <el-button text @click="loadMore">重试</el-button>
-                  </template>
-                  <span v-else-if="conversations.length > 0">已加载全部</span>
-                </div>
+                  {{ row.title }}
+                </span>
+                <span class="history-item-subtitle kb-text kb-text--sm kb-text--secondary">
+                  {{ row.messageCount }} 条消息 · {{ formatUpdatedAt(row.updatedAt) }}
+                </span>
               </div>
+              <el-button
+                class="history-delete"
+                :icon="Delete"
+                text
+                circle
+                :aria-label="`删除会话：${row.title}`"
+                @click.stop="remove(row)"
+              >
+              </el-button>
+            </div>
+            <el-empty
+              v-if="!loading && conversations.length === 0"
+              class="kb-empty-state"
+              description="暂无个人问答历史"
+            />
+            <div
+              v-else-if="loadingMore || loadMoreError || !hasMore"
+              class="history-load-state kb-text kb-text--sm kb-text--tertiary"
+              aria-live="polite"
+            >
+              <span v-if="loadingMore">正在加载更多…</span>
+              <template v-else-if="loadMoreError">
+                <span>{{ loadMoreError }}</span>
+                <el-button text @click="loadMore">重试</el-button>
+              </template>
+              <span v-else-if="conversations.length > 0">已加载全部</span>
             </div>
           </div>
         </section>
@@ -97,7 +99,9 @@
           <template v-if="selected">
             <div class="history-detail-body">
               <div v-for="turn in selected.turns" :key="turn.id" class="history-turn">
-                <div class="history-question"><strong>用户</strong>{{ turn.question }}</div>
+                <div class="history-question">
+                  <span class="kb-text kb-text--strong">用户</span>{{ turn.question }}
+                </div>
                 <HistoryAnswer :turn="turn" @select-source="openSource" />
               </div>
             </div>
@@ -312,51 +316,12 @@ function handleListScroll(event: Event): void {
  * 布局：筛选栏（Toolbar / Filter Bar） + 会话列表 + 会话详情。
  * 移动端选中会话后整页切换为详情视图（history-detail--mobile）。
  */
-.history-toolbar {
-  display: grid;
-  align-items: center;
-  gap: var(--kb-space-2);
-  grid-template-columns: minmax(0, 1fr) auto;
-}
-/* 列表 + 详情两栏布局 */
-.history-list-panel {
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  min-width: 0;
-  min-height: 0;
-}
-.history-list-card {
-  display: flex;
-  flex: 1 1 auto;
-  flex-direction: column;
-  overflow: hidden;
-  min-height: 0;
-}
-.history-list {
-  display: flex;
-  flex: 1 1 auto;
-  flex-direction: column;
-  overflow: hidden;
-  min-height: 0;
-}
-.history-list-scroll {
-  flex: 1 1 auto;
-  align-content: start;
-  overflow: auto;
-  overscroll-behavior: contain;
-  min-height: 0;
-  padding: var(--kb-list-row-padding);
-  scrollbar-gutter: stable;
-}
 .history-load-state {
   display: flex;
   justify-content: center;
   align-items: center;
   gap: var(--kb-space-2);
   min-height: 44px;
-  color: var(--kb-color-text-tertiary);
-  font-size: 12px;
 }
 
 /* 会话行：标题/摘要 + 常驻删除按钮，不再依赖滑动手势 */
@@ -403,10 +368,6 @@ function handleListScroll(event: Event): void {
   min-width: 0;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-.history-item-subtitle {
-  color: var(--kb-color-text-secondary);
-  font-size: 12px;
 }
 
 /*
@@ -476,7 +437,7 @@ function handleListScroll(event: Event): void {
 
 /* 响应式：Mobile（<768px） */
 @media (max-width: 767px) {
-  .history-toolbar--mobile {
+  .history-mobile-controls {
     display: grid;
     align-items: center;
     gap: var(--kb-space-2);

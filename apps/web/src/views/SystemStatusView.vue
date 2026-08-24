@@ -1,45 +1,48 @@
 <template>
-  <section class="page">
-    <div class="system-status-toolbar kb-status-toolbar">
+  <section class="kb-page">
+    <div class="kb-status-toolbar">
       <div>
-        <strong class="system-status-toolbar__title">系统运行状态</strong>
-        <div>
-          <el-text>展示安全摘要，不包含内部地址、凭据或异常堆栈。</el-text>
+        <div class="kb-heading kb-heading--h1" role="heading" aria-level="1">系统运行状态</div>
+        <div class="system-status-toolbar__description kb-text kb-text--secondary">
+          展示安全摘要，不包含内部地址、凭据或异常堆栈。
         </div>
       </div>
       <el-button :loading="loading" @click="load">重新检查</el-button>
     </div>
 
-    <div class="page-content">
+    <div class="kb-page__content">
       <div v-if="errorMessage && !result" class="kb-error-state" role="alert">
-        <strong class="kb-text--danger">无法加载系统状态</strong>
+        <strong class="kb-text kb-text--danger">无法加载系统状态</strong>
         <span>{{ errorMessage }}</span>
         <el-button @click="load">重试</el-button>
       </div>
 
       <template v-else-if="result">
-        <div class="system-overview kb-block" aria-live="polite">
-          <div class="system-overview__item">
-            <span class="system-overview__label">总体状态</span>
-            <strong class="system-overview__value" :class="`is-${result.status}`">
+        <div class="kb-data-grid kb-data-grid--three kb-data-grid--flush" aria-live="polite">
+          <div class="kb-block kb-data-grid__item">
+            <span class="kb-text kb-text--sm kb-text--secondary">总体状态</span>
+            <span
+              class="kb-data-grid__value"
+              :class="result.status === 'ready' ? 'kb-text--success' : 'kb-text--warning'"
+            >
               {{ result.status === 'ready' ? '运行正常' : '需要关注' }}
-            </strong>
+            </span>
           </div>
-          <div class="system-overview__item">
-            <span class="system-overview__label">原始文档磁盘使用率</span>
-            <strong class="system-overview__value">
+          <div class="kb-block kb-data-grid__item">
+            <span class="kb-text kb-text--sm kb-text--secondary">原始文档磁盘使用率</span>
+            <span class="kb-data-grid__value">
               {{ formatDiskUsage(result.rawDocsDiskUsageRatio) }}
-            </strong>
+            </span>
           </div>
-          <div class="system-overview__item">
-            <span class="system-overview__label">检查时间</span>
-            <strong class="system-overview__value">
+          <div class="kb-block kb-data-grid__item">
+            <span class="kb-text kb-text--sm kb-text--secondary">检查时间</span>
+            <span class="kb-data-grid__value">
               {{ new Date(result.checkedAt).toLocaleString() }}
-            </strong>
+            </span>
           </div>
         </div>
 
-        <div class="component-grid">
+        <div class="kb-data-grid kb-data-grid--three kb-data-grid--flush">
           <article
             v-for="component in result.components"
             :key="component.id"
@@ -47,50 +50,50 @@
           >
             <span class="component-status" :class="`is-${component.status}`" aria-hidden="true">
             </span>
-            <div>
-              <strong>{{ systemComponentLabels[component.id] }}</strong>
-              <div>
-                <el-text>
-                  {{
-                    component.status === 'up'
-                      ? '正常'
-                      : healthReasonLabels[component.reason ?? 'unavailable']
-                  }}
-                </el-text>
+            <div class="kb-data-grid__item">
+              <div class="kb-heading kb-heading--h5" role="heading" aria-level="2">
+                {{ systemComponentLabels[component.id] }}
               </div>
+              <span class="kb-text kb-text--secondary">
+                {{
+                  component.status === 'up'
+                    ? '正常'
+                    : healthReasonLabels[component.reason ?? 'unavailable']
+                }}
+              </span>
             </div>
           </article>
         </div>
 
-        <section class="queue-summary kb-block">
-          <div class="kb-block-header">
-            <div class="kb-block-title">入库队列</div>
+        <section class="kb-block">
+          <div class="kb-block__header">
+            <div class="kb-block__title kb-heading kb-heading--h4">入库队列</div>
             <el-tag :type="result.ingestionQueue.status === 'up' ? 'success' : 'danger'">
               {{ result.ingestionQueue.status === 'up' ? '可用' : '不可用' }}
             </el-tag>
           </div>
-          <div class="queue-data-list">
-            <div class="queue-data-item">
-              <span class="queue-data-label">等待</span>
-              <strong class="queue-data-value">{{ result.ingestionQueue.waiting ?? '—' }}</strong>
+          <div class="kb-data-grid kb-data-grid--five kb-data-grid--flush">
+            <div class="kb-data-grid__item">
+              <span class="kb-text kb-text--sm kb-text--secondary">等待</span>
+              <span class="kb-data-grid__value">{{ result.ingestionQueue.waiting ?? '—' }}</span>
             </div>
-            <div class="queue-data-item">
-              <span class="queue-data-label">处理中</span>
-              <strong class="queue-data-value">{{ result.ingestionQueue.active ?? '—' }}</strong>
+            <div class="kb-data-grid__item">
+              <span class="kb-text kb-text--sm kb-text--secondary">处理中</span>
+              <span class="kb-data-grid__value">{{ result.ingestionQueue.active ?? '—' }}</span>
             </div>
-            <div class="queue-data-item">
-              <span class="queue-data-label">延迟</span>
-              <strong class="queue-data-value">{{ result.ingestionQueue.delayed ?? '—' }}</strong>
+            <div class="kb-data-grid__item">
+              <span class="kb-text kb-text--sm kb-text--secondary">延迟</span>
+              <span class="kb-data-grid__value">{{ result.ingestionQueue.delayed ?? '—' }}</span>
             </div>
-            <div class="queue-data-item">
-              <span class="queue-data-label">失败</span>
-              <strong class="queue-data-value">{{ result.ingestionQueue.failed ?? '—' }}</strong>
+            <div class="kb-data-grid__item">
+              <span class="kb-text kb-text--sm kb-text--secondary">失败</span>
+              <span class="kb-data-grid__value">{{ result.ingestionQueue.failed ?? '—' }}</span>
             </div>
-            <div class="queue-data-item">
-              <span class="queue-data-label">最老等待任务</span>
-              <strong class="queue-data-value">
+            <div class="kb-data-grid__item">
+              <span class="kb-text kb-text--sm kb-text--secondary">最老等待任务</span>
+              <span class="kb-data-grid__value">
                 {{ formatDuration(result.ingestionQueue.oldestWaitSeconds) }}
-              </strong>
+              </span>
             </div>
           </div>
         </section>
@@ -134,37 +137,11 @@ onMounted(load);
 </script>
 
 <style scoped>
-.system-status-toolbar__title {
-  font-size: 17px;
-}
-.system-overview {
-  display: grid;
-  gap: var(--kb-space-5);
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-}
-.system-overview__item {
-  display: grid;
-  gap: var(--kb-space-2);
-}
-.system-overview__label {
-  color: var(--kb-color-text-secondary);
-  font-size: 13px;
-}
-.system-overview__value.is-ready {
-  color: var(--kb-color-success);
-}
-.system-overview__value.is-degraded {
-  color: var(--kb-color-warning);
-}
-.component-grid {
-  display: grid;
-  gap: var(--kb-space-4);
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-}
 .component-card {
-  display: flex;
+  display: grid;
   align-items: center;
   gap: var(--kb-layout-gap);
+  grid-template-columns: auto minmax(0, 1fr);
 }
 .component-status {
   flex: 0 0 auto;
@@ -178,39 +155,13 @@ onMounted(load);
   background: var(--kb-color-success);
   box-shadow: 0 0 0 var(--kb-space-1) color-mix(in srgb, var(--kb-color-success) 10%, transparent);
 }
-.queue-data-list {
-  display: grid;
-  gap: var(--kb-space-4);
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  margin: 0;
-}
-.queue-data-item {
-  display: flex;
-  justify-content: space-between;
-  gap: var(--kb-space-1);
-}
-.queue-data-label {
-  color: var(--kb-color-text-secondary);
-}
-.queue-data-value {
-  overflow-wrap: anywhere;
-  min-width: 0;
-  text-align: center;
-}
 .system-loading {
   min-height: 260px;
 }
 /* 响应式：紧凑布局（<1280px） */
 @media (max-width: 1279px) {
-  .system-status-toolbar .el-text {
+  .system-status-toolbar__description {
     display: none;
-  }
-  .component-grid {
-    gap: var(--kb-layout-gap);
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-  .queue-data-list {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
 </style>

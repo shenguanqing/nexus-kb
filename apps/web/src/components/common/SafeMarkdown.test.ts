@@ -17,8 +17,8 @@ describe('SafeMarkdown', () => {
       'Proxy [来源1]',
     ]);
     expect(wrapper.get('code').text()).toBe('setup()');
-    expect(wrapper.get('.answer-citation').text()).toBe('[来源1]');
-    expect(wrapper.get('.answer-citation').element.tagName).toBe('SMALL');
+    expect(wrapper.get('.kb-answer-citation').text()).toBe('[来源1]');
+    expect(wrapper.get('.kb-answer-citation').element.tagName).toBe('SMALL');
   });
 
   it('emits only generated interactive citation indexes', async () => {
@@ -26,7 +26,7 @@ describe('SafeMarkdown', () => {
       props: { content: '付款周期为 30 天。[来源2]', interactiveCitations: true },
     });
 
-    const citation = wrapper.get('.answer-citation--interactive');
+    const citation = wrapper.get('.kb-answer-citation--interactive');
     expect(citation.attributes()).toMatchObject({
       'aria-label': '查看来源 2',
       'data-source-index': '2',

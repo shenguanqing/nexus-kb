@@ -12,8 +12,10 @@
   >
     <div v-if="source" class="source-detail">
       <header class="source-detail__header">
-        <span class="source-index">来源 {{ source.index }}</span>
-        <div class="source-detail__title kb-heading" role="heading" aria-level="2">
+        <span class="source-index kb-text kb-text--sm kb-text--strong">
+          来源 {{ source.index }}
+        </span>
+        <div class="source-detail__title kb-heading kb-heading--h1" role="heading" aria-level="2">
           {{ source.sourceName }}
         </div>
       </header>
@@ -23,16 +25,28 @@
         class="source-reference kb-block kb-block--flush"
       >
         <div v-if="sourceLocation" class="source-reference__item">
-          <span class="source-reference__label">位置</span>
-          <strong class="source-reference__value">{{ sourceLocation }}</strong>
+          <span
+            class="source-reference__label kb-text kb-text--xs kb-text--secondary kb-text--strong"
+          >
+            位置
+          </span>
+          <strong class="source-reference__value kb-text kb-text--primary">
+            {{ sourceLocation }}
+          </strong>
         </div>
         <div v-if="source.sectionPath.length" class="source-reference__item">
-          <span class="source-reference__label">章节</span>
-          <strong class="source-reference__value">{{ source.sectionPath.join(' / ') }}</strong>
+          <span
+            class="source-reference__label kb-text kb-text--xs kb-text--secondary kb-text--strong"
+          >
+            章节
+          </span>
+          <strong class="source-reference__value kb-text kb-text--primary">
+            {{ source.sectionPath.join(' / ') }}
+          </strong>
         </div>
       </div>
 
-      <div class="source-detail__notice">
+      <div class="source-detail__notice kb-text kb-text--sm kb-text--secondary">
         这里只显示本次回答中后端已授权返回的来源信息。查看内容时会重新验证权限。
       </div>
     </div>
@@ -76,8 +90,6 @@ const previewTarget = computed(() => {
 <style scoped>
 .source-index {
   color: var(--kb-color-primary);
-  font-size: 12px;
-  font-weight: 700;
 }
 .source-detail {
   display: grid;
@@ -90,8 +102,6 @@ const previewTarget = computed(() => {
 }
 .source-detail__title {
   overflow-wrap: anywhere;
-  font-size: var(--kb-font-size-title);
-  font-weight: 600;
 }
 .source-reference {
   display: grid;
@@ -103,23 +113,15 @@ const previewTarget = computed(() => {
   gap: var(--kb-space-1);
   padding: var(--kb-block-padding);
 }
-.source-reference__label {
-  color: var(--kb-color-text-secondary);
-  font-size: 11px;
-  font-weight: 700;
-}
 .source-reference__value {
   overflow-wrap: anywhere;
-  color: var(--kb-color-text-primary);
   font-size: 13px;
   line-height: 1.55;
 }
 .source-detail__notice {
   padding: var(--kb-block-padding);
   border-radius: var(--kb-radius-md);
-  color: var(--kb-color-text-secondary);
   background: var(--kb-color-info-soft);
-  font-size: 12px;
   line-height: 1.6;
 }
 .source-drawer__document-link {

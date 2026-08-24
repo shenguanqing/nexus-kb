@@ -1,27 +1,35 @@
 <template>
-  <section ref="previewPage" v-loading="loading" class="document-preview-page">
+  <section ref="previewPage" v-loading="loading" class="document-preview-page kb-page">
     <div v-if="errorMessage" class="kb-error-state" role="alert">
-      <strong class="kb-text--danger">无法加载文档预览</strong><span>{{ errorMessage }}</span>
+      <strong class="kb-text kb-text--danger">无法加载文档预览</strong>
+      <span>{{ errorMessage }}</span>
       <el-button @click="load">重试</el-button>
     </div>
 
     <template v-else-if="preview">
-      <header class="preview-toolbar">
-        <div class="preview-toolbar__identity">
-          <div>{{ preview.sourceName }}</div>
+      <header class="preview-toolbar kb-block kb-status-toolbar">
+        <div class="preview-toolbar__identity kb-title-group">
+          <div class="kb-block__title kb-heading kb-heading--h4">{{ preview.sourceName }}</div>
           <span
-            class="preview-security-badge"
+            class="preview-security-badge kb-text kb-text--xs kb-text--success"
             title="每次读取都会重新校验租户、部门与敏感度权限。"
             aria-label="实时权限校验：每次读取都会重新校验租户、部门与敏感度权限。"
           >
             实时权限校验
           </span>
         </div>
-        <div class="preview-toolbar__actions">
-          <div v-if="sourcePage || sourceSheet" class="preview-location" aria-label="引用位置">
-            <span class="preview-location__label">引用位置</span>
-            <strong v-if="sourcePage"> 第 {{ sourcePage }} 页 </strong>
-            <strong v-if="sourceSheet"> 工作表 {{ sourceSheet }} </strong>
+        <div
+          class="preview-toolbar__actions kb-action-group"
+          :class="{ 'is-cad': isCadPreview, 'has-location': sourcePage || sourceSheet }"
+        >
+          <div
+            v-if="sourcePage || sourceSheet"
+            class="preview-location kb-text"
+            aria-label="引用位置"
+          >
+            <span class="kb-text kb-text--xs kb-text--secondary">引用位置 </span>
+            <strong v-if="sourcePage">第 {{ sourcePage }} 页 </strong>
+            <strong v-if="sourceSheet">工作表 {{ sourceSheet }} </strong>
           </div>
           <div v-if="isCadPreview" class="preview-zoom-controls" aria-label="CAD 预览缩放">
             <el-button
@@ -45,6 +53,7 @@
             </el-button>
           </div>
           <el-button
+            class="preview-fullscreen-action"
             size="small"
             :disabled="!canFullscreen"
             :aria-label="isFullscreen ? '退出全屏预览' : '全屏预览'"
@@ -53,12 +62,16 @@
             {{ isFullscreen ? '退出全屏' : '全屏' }}
           </el-button>
         </div>
-        <span v-if="interactionMessage" class="preview-control-error" role="status">
+        <span
+          v-if="interactionMessage"
+          class="preview-control-error kb-text kb-text--sm kb-text--danger"
+          role="status"
+        >
           {{ interactionMessage }}
         </span>
       </header>
 
-      <div v-if="preview.status === 'ready'" class="preview-surface kb-block kb-block--flush">
+      <div v-if="preview.status === 'ready'" class="kb-page__content kb-block kb-block--flush">
         <iframe
           v-if="preview.kind === 'pdf'"
           class="preview-pdf"
@@ -108,26 +121,23 @@
         <pre v-else-if="preview.kind === 'text'" class="preview-text">{{ textContent }}</pre>
       </div>
 
-      <div v-else-if="preview.status === 'fallback'" class="preview-fallback kb-block-content">
-        <div class="preview-fallback__content kb-block kb-block-scroll">
-          <div class="preview-fallback__notice">
+      <div v-else-if="preview.status === 'fallback'" class="kb-block-content kb-block-content--gap">
+        <div class="kb-block kb-block-content kb-block-content--gap kb-block-scroll">
+          <div class="preview-fallback__notice kb-block kb-text kb-text--warning">
             <strong>原格式预览暂不可用</strong>
-            <span class="preview-fallback__description">
+            <div class="kb-text kb-text--secondary">
               已降级显示经解析的原始文本，版式可能与源文件不同。
-            </span>
+            </div>
           </div>
-          <div v-if="chunks?.items.length" class="preview-chunk-list">
-            <article
-              v-for="chunk in chunks.items"
-              :key="chunk.id"
-              class="preview-chunk kb-block"
-              :class="{ 'is-referenced': isReferencedChunk(chunk) }"
-            >
-              <header class="preview-chunk__header">
+          <div v-if="chunks?.items.length" class="kb-block-list">
+            <article v-for="chunk in chunks.items" :key="chunk.id" class="kb-block">
+              <header class="kb-block__header">
                 <strong>
                   {{ chunk.sectionPath.join(' / ') || `分块 ${chunk.ordinal + 1}` }}
                 </strong>
-                <span class="preview-chunk__location">{{ chunkLocation(chunk) }}</span>
+                <span class="preview-chunk__location kb-text kb-text--sm kb-text--secondary">
+                  {{ chunkLocation(chunk) }}
+                </span>
               </header>
               <pre class="preview-chunk__content">{{ chunk.originalText }}</pre>
             </article>
@@ -234,13 +244,6 @@ function readPositiveInteger(value: unknown): number | null {
 function chunkLocation(chunk: DocumentChunkListResponse['items'][number]): string {
   const parts = [chunk.page ? `第 ${chunk.page} 页` : null, chunk.sheet];
   return parts.filter((value): value is string => Boolean(value)).join(' · ') || '未标注位置';
-}
-
-function isReferencedChunk(chunk: DocumentChunkListResponse['items'][number]): boolean {
-  return (
-    (sourcePage.value !== null && chunk.page === sourcePage.value) ||
-    (sourceSheet.value !== null && chunk.sheet === sourceSheet.value)
-  );
 }
 
 async function load(): Promise<void> {
@@ -392,60 +395,40 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
-.document-preview-page {
-  display: grid;
-  gap: var(--kb-layout-gap);
-  grid-template-rows: auto minmax(0, 1fr);
-  width: 100%;
-  height: 100%;
-  min-width: 0;
-  min-height: 0;
-}
 .document-preview-page:fullscreen {
   max-width: none;
   padding: var(--kb-block-padding);
-  background: var(--kb-color-canvas);
+  background: var(--kb-color-surface);
 }
 .preview-toolbar {
   position: relative;
-  display: grid;
-  align-items: center;
-  gap: var(--kb-layout-gap);
-  grid-template-columns: minmax(0, 1fr) auto;
 }
 .preview-toolbar__identity {
   display: flex;
-  align-items: center;
+  flex-direction: column;
+  align-items: flex-start;
   gap: var(--kb-space-2);
-  min-width: 0;
 }
 .preview-security-badge {
   flex: 0 0 auto;
   padding: var(--kb-space-1) var(--kb-space-2);
   border-radius: var(--kb-radius-pill);
-  color: var(--kb-color-success);
   background: var(--kb-color-success-soft);
-  font-size: 11px;
   white-space: nowrap;
 }
 .preview-toolbar__actions {
-  display: flex;
-  flex: 0 0 auto;
-  align-items: center;
   gap: var(--kb-space-2);
 }
 .preview-zoom-controls {
   display: flex;
   align-items: center;
-  gap: var(--kb-space-1);
+  gap: var(--kb-space-2);
 }
 .preview-control-error {
   position: absolute;
   right: var(--kb-block-padding);
   bottom: -18px;
   z-index: 1;
-  color: var(--kb-color-danger);
-  font-size: 12px;
 }
 .preview-location {
   display: flex;
@@ -457,20 +440,6 @@ onBeforeUnmount(() => {
   color: var(--kb-color-primary-dark);
   background: var(--kb-color-primary-soft);
   font-size: 13px;
-}
-.preview-location__label {
-  color: var(--kb-color-text-secondary);
-  font-size: 11px;
-}
-.preview-surface,
-.preview-fallback {
-  overflow: auto;
-  min-width: 0;
-  min-height: 0;
-}
-.preview-surface {
-  display: grid;
-  place-items: stretch;
 }
 .preview-pdf {
   width: 100%;
@@ -530,46 +499,13 @@ onBeforeUnmount(() => {
   font-family: inherit;
   white-space: normal;
 }
-.preview-fallback {
-  display: flex;
-  flex-direction: column;
-  gap: var(--kb-space-4);
-}
-.preview-fallback__content {
-  display: flex;
-  flex-direction: column;
-  gap: var(--kb-space-4);
-}
 .preview-fallback__notice {
   display: grid;
   gap: var(--kb-space-1);
-  padding: var(--kb-block-padding) var(--kb-space-4);
-  border-radius: var(--kb-radius-sm);
-  color: var(--kb-color-warning);
   background: var(--kb-color-warning-soft);
-}
-.preview-fallback__description {
-  color: var(--kb-color-text-secondary);
-  font-size: 13px;
-}
-.preview-chunk-list {
-  display: grid;
-  gap: var(--kb-layout-gap);
-}
-.preview-chunk.is-referenced {
-  border-color: var(--kb-color-primary);
-  box-shadow: 0 0 0 2px var(--kb-color-primary-soft);
-}
-.preview-chunk__header {
-  display: flex;
-  justify-content: space-between;
-  gap: var(--kb-layout-gap);
-  margin-bottom: var(--kb-space-2);
 }
 .preview-chunk__location {
   flex: 0 0 auto;
-  color: var(--kb-color-text-secondary);
-  font-size: 12px;
 }
 .preview-chunk__content {
   overflow-wrap: anywhere;
@@ -584,27 +520,56 @@ onBeforeUnmount(() => {
 }
 /* 响应式：Mobile（<768px） */
 @media (max-width: 767px) {
-  .document-preview-page {
-    gap: var(--kb-space-2);
-  }
   .preview-toolbar {
-    gap: var(--kb-space-2);
-    grid-template-columns: minmax(0, 1fr);
+    display: block;
+  }
+  .preview-toolbar__identity {
+    width: 100%;
+    padding-right: calc(var(--kb-control-height) + var(--kb-space-8));
+  }
+  .preview-toolbar__identity .kb-block__title {
+    width: 100%;
+    line-height: var(--kb-line-height-body);
   }
   .preview-toolbar__actions {
-    flex-wrap: wrap;
-    justify-content: flex-end;
-    justify-self: end;
+    display: grid;
+    gap: var(--kb-space-2);
+    grid-template-columns: minmax(0, 1fr);
+    width: 100%;
+  }
+  .preview-toolbar__actions.is-cad,
+  .preview-toolbar__actions.has-location {
+    margin-top: var(--kb-block-padding);
+  }
+  .preview-toolbar__actions .preview-location {
+    width: 100%;
+  }
+  .preview-toolbar__actions.is-cad .preview-zoom-controls {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    width: 100%;
+  }
+  .preview-toolbar__actions.is-cad .preview-zoom-controls .el-button {
+    overflow: hidden;
+    width: 100%;
+    min-width: 0;
+    padding-inline: var(--kb-space-2);
+  }
+  .preview-fullscreen-action {
+    position: absolute;
+    top: var(--kb-block-padding);
+    right: var(--kb-block-padding);
+    width: auto;
+  }
+  .preview-control-error {
+    position: static;
+    grid-column: 1 / -1;
   }
   .preview-location {
     flex-wrap: wrap;
   }
   .preview-pdf {
     min-height: 65vh;
-  }
-  .preview-chunk__header {
-    flex-direction: column;
-    gap: var(--kb-space-1);
   }
 }
 </style>

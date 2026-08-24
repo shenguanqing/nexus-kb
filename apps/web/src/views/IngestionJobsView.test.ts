@@ -92,7 +92,7 @@ describe('IngestionJobsView Mobile filters', () => {
     await wrapper.get('.task-toolbar--mobile').trigger('submit');
     await flushPromises();
 
-    expect(wrapper.get('.task-filter-error').text()).toContain('完整的文档 ID');
+    expect(wrapper.get('.task-document-filter [role="alert"]').text()).toContain('完整的文档 ID');
     expect(wrapper.find('.kb-error-state').exists()).toBe(false);
     expect(wrapper.find('.kb-pagination').exists()).toBe(false);
     expect(api.listIngestionJobs).toHaveBeenCalledOnce();
@@ -105,7 +105,7 @@ describe('IngestionJobsView Mobile filters', () => {
 
     expect((documentId.element as HTMLInputElement).value).toBe('');
     expect((wrapper.get('select').element as HTMLSelectElement).value).toBe('');
-    expect(wrapper.find('.task-filter-error').exists()).toBe(false);
+    expect(wrapper.find('.task-document-filter [role="alert"]').exists()).toBe(false);
     expect(api.listIngestionJobs).toHaveBeenCalledTimes(2);
   });
 });

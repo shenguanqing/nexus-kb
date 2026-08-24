@@ -1,18 +1,26 @@
 <template>
   <div class="app-shell">
     <header class="app-header">
-      <button
-        type="button"
+      <el-button
         class="mobile-menu-trigger"
+        :icon="Expand"
+        text
+        circle
         aria-label="打开导航菜单"
         @click="mobileSidebarOpen = true"
       >
-        <span class="mobile-menu-trigger__bar" aria-hidden="true"></span>
-        <span class="mobile-menu-trigger__bar" aria-hidden="true"></span>
-        <span class="mobile-menu-trigger__bar" aria-hidden="true"></span>
-      </button>
+      </el-button>
+      <RouterLink
+        v-if="isMobile && returnNavigation"
+        class="mobile-return-trigger"
+        :to="returnNavigation.to"
+        :aria-label="returnNavigation.label"
+        :title="returnNavigation.label"
+      >
+        <el-icon><ArrowLeft /></el-icon>
+      </RouterLink>
       <RouterLink to="/ask" class="brand" aria-label="知枢 NexusKB 首页">
-        <span class="brand-mark">N</span>
+        <span class="kb-brand-mark">N</span>
         <span class="brand-copy">
           <strong class="brand-name">知枢</strong>
           <small class="brand-product">NexusKB</small>
@@ -22,7 +30,7 @@
       <div class="header-context"><span class="status-dot" aria-hidden="true"></span>知识服务</div>
       <el-breadcrumb class="top-breadcrumb" separator="/" aria-label="当前位置">
         <el-breadcrumb-item>{{ pageSection }}</el-breadcrumb-item>
-        <el-breadcrumb-item class="top-breadcrumb__current">{{ pageTitle }}</el-breadcrumb-item>
+        <el-breadcrumb-item>{{ pageTitle }}</el-breadcrumb-item>
       </el-breadcrumb>
       <div class="user-summary">
         <span class="avatar" aria-hidden="true">
@@ -34,15 +42,15 @@
             {{ auth.identity?.department }} · {{ auth.identity?.tenantId }}</small
           >
         </span>
-        <button
+        <el-button
           v-if="auth.mode === 'password'"
           class="logout-button"
-          type="button"
+          text
           aria-label="退出登录"
           @click="signOut"
         >
           退出
-        </button>
+        </el-button>
       </div>
     </header>
 
@@ -104,22 +112,19 @@
     </aside>
 
     <main class="app-main">
-      <el-page-header
-        v-if="route.path !== '/ask' && (!isMobile || returnNavigation)"
-        class="page-header"
-      >
+      <el-page-header v-if="route.path !== '/ask' && !isMobile" class="kb-page-header">
         <template #content>
-          <div v-if="!isMobile" class="page-header-copy">
+          <div v-if="!isMobile" class="kb-title-group">
             <div class="kb-heading kb-heading--h1" role="heading" aria-level="1">
               {{ pageTitle }}
             </div>
-            <div v-if="pageDescription">
-              <el-text>{{ pageDescription }}</el-text>
+            <div v-if="pageDescription" class="kb-text kb-text--secondary">
+              {{ pageDescription }}
             </div>
           </div>
         </template>
         <template #extra>
-          <div class="page-header-actions">
+          <div class="kb-action-group">
             <RouterLink v-if="returnNavigation" :to="returnNavigation.to" class="page-return-link">
               <el-button>{{ returnNavigation.label }}</el-button>
             </RouterLink>
@@ -148,20 +153,20 @@
               aria-label="知枢 NexusKB 首页"
               @click="closeMobileSidebar"
             >
-              <span class="brand-mark">N</span>
+              <span class="kb-brand-mark">N</span>
               <span class="brand-copy">
                 <strong class="brand-name">知枢</strong>
                 <small class="brand-product">NexusKB</small></span
               >
             </RouterLink>
-            <button
+            <el-button
               class="mobile-sidebar-close"
-              type="button"
+              :icon="Close"
+              circle
               aria-label="关闭导航菜单"
               @click="close"
             >
-              <el-icon class="mobile-sidebar-close__icon"><Close /></el-icon>
-            </button>
+            </el-button>
           </div>
           <div class="mobile-sidebar-identity">
             <span class="avatar mobile-sidebar-identity__avatar" aria-hidden="true">
@@ -201,16 +206,14 @@
         </section>
       </nav>
       <div v-if="auth.mode === 'password'" class="mobile-sidebar-footer">
-        <el-button class="mobile-sidebar-logout" native-type="button" @click="signOut">
-          退出登录
-        </el-button>
+        <el-button class="mobile-sidebar-logout" @click="signOut">退出登录 </el-button>
       </div>
     </el-drawer>
   </div>
 </template>
 
 <script setup lang="ts">
-import { Close } from '@element-plus/icons-vue';
+import { ArrowLeft, Close, Expand } from '@element-plus/icons-vue';
 import { computed, ref } from 'vue';
 import AppNavIcon, { type NavIconName } from '@/components/common/AppNavIcon.vue';
 import { useRoute, useRouter } from 'vue-router';
@@ -569,24 +572,26 @@ async function signOut(): Promise<void> {
   background: var(--kb-color-surface);
   transition: left 0.18s ease;
 }
-.app-main > :not(.page-header) {
+.app-main > :not(.kb-page-header) {
   flex: 1 1 auto;
   width: 100%;
   min-width: 0;
-  max-width: var(--kb-content-max-width);
   min-height: 0;
-  margin-inline: auto;
 }
 .page-return-link {
   display: inline-flex;
   align-items: center;
-  font-size: 13px;
+  border-radius: var(--kb-radius-md);
 }
 .page-return-link:hover {
   border-color: color-mix(in srgb, var(--kb-color-primary) 40%, var(--kb-color-border));
   background: var(--kb-color-primary-soft);
 }
+.mobile-menu-trigger :deep(.el-icon) {
+  font-size: var(--kb-font-size-title);
+}
 .mobile-menu-trigger,
+.mobile-return-trigger,
 .tablet-group-navigation {
   display: none;
 }
@@ -608,7 +613,7 @@ async function signOut(): Promise<void> {
   .app-sidebar .tablet-group-navigation {
     display: grid;
     flex: 0 0 auto;
-    gap: 0;
+    gap: var(--kb-space-0);
     overflow: visible;
     width: 100%;
   }
@@ -645,16 +650,8 @@ async function signOut(): Promise<void> {
     color: var(--kb-color-primary);
     background: var(--kb-color-nav-accent);
   }
-  .app-main {
-    padding: var(--kb-space-6);
-  }
 }
 /* 响应式：Pad 横屏（768px–1279px） */
-@media (min-width: 768px) and (max-width: 1279px) and (orientation: landscape) {
-  .app-main {
-    padding: var(--kb-block-padding);
-  }
-}
 /* 响应式：Mobile（<768px） */
 @media (max-width: 767px) {
   .brand {
@@ -668,8 +665,12 @@ async function signOut(): Promise<void> {
   }
   .mobile-page-title {
     display: block;
+    flex: 1 1 auto;
+    overflow: hidden;
     min-width: 0;
     margin-left: var(--kb-space-element);
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
   .mobile-menu-trigger {
     display: grid;
@@ -681,12 +682,21 @@ async function signOut(): Promise<void> {
     background: transparent;
     cursor: pointer;
   }
-  .mobile-menu-trigger__bar {
-    display: block;
-    width: 20px;
-    height: 2px;
-    border-radius: 2px;
-    background: currentColor;
+  .mobile-return-trigger {
+    display: grid;
+    flex: 0 0 auto;
+    place-items: center;
+    width: 32px;
+    height: 44px;
+    border-radius: var(--kb-radius-md);
+    color: var(--kb-color-text-secondary);
+    font-size: 20px;
+  }
+  .mobile-return-trigger:hover,
+  .mobile-return-trigger:focus-visible {
+    outline: none;
+    color: var(--kb-color-primary);
+    background: var(--kb-color-primary-soft);
   }
   .user-summary {
     margin-left: auto;
@@ -696,9 +706,6 @@ async function signOut(): Promise<void> {
   }
   .app-main {
     left: 0;
-  }
-  .page-return-link {
-    font-size: 12px;
   }
   .mobile-sidebar-header {
     display: grid;
@@ -767,9 +774,6 @@ async function signOut(): Promise<void> {
       color var(--kb-transition-fast),
       background var(--kb-transition-fast);
     cursor: pointer;
-  }
-  .mobile-sidebar-close__icon {
-    font-size: 20px;
   }
   .mobile-sidebar-close:hover,
   .mobile-sidebar-close:focus,

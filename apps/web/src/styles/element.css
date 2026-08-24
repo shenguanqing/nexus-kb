@@ -1,7 +1,7 @@
 /*
  * Element Plus 2.14.3 light theme.
  * 全局主题优先通过官方 --el-* 变量映射现有 --kb-* token。
- * 选择器只用于官方未暴露变量的结构性缺口，不包含任何业务 class。
+ * 选择器只用于官方未暴露变量的结构性缺口；只允许组合跨页面稳定复用的语义变体，不包含页面业务前缀。
  */
 
 /* 基础主题变量 */
@@ -142,6 +142,27 @@
 .el-button + .el-button {
   margin-left: var(--kb-space-0);
 }
+
+/* Link：文字链接需要允许 Flex 收缩，并覆盖组件默认的居中对齐。 */
+.el-link.kb-link {
+  justify-content: flex-start;
+  min-width: 0;
+  max-width: 100%;
+  text-align: left;
+}
+.el-link.kb-link > .el-link__inner {
+  justify-content: flex-start;
+  min-width: 0;
+  max-width: 100%;
+}
+.el-link.kb-link--fill {
+  width: 100%;
+}
+.el-link.kb-link--end,
+.el-link.kb-link--end > .el-link__inner {
+  justify-content: flex-end;
+  text-align: right;
+}
 /*
  * Input / Select / DatePicker / InputNumber：各 size 的 wrapper 默认高度和圆角不同，
  * 统一映射为 default，并配套统一 padding / font / gap。
@@ -203,6 +224,13 @@
 }
 .el-table .el-table__cell {
   padding-block: var(--kb-space-2);
+}
+.kb-block--flush > .desktop-data-table .el-table__inner-wrapper::before,
+.kb-block--flush > .desktop-data-table .el-table__border-bottom-patch {
+  display: none;
+}
+.kb-block--flush > .desktop-data-table .el-table__body tr:last-child > td.el-table__cell {
+  border-bottom: 0;
 }
 
 /* Form：FormItem 间距没有公开变量。 */
@@ -316,6 +344,18 @@
   border-color: var(--kb-color-border-light);
   background: var(--kb-color-surface-subtle);
 }
+.usage-date-picker-popper .el-picker-panel.el-date-range-picker.single-panel,
+.usage-date-picker-popper .el-date-range-picker.single-panel .el-picker-panel__body-wrapper,
+.usage-date-picker-popper .el-date-range-picker.single-panel .el-picker-panel__body {
+  width: 100%;
+  min-width: 0;
+}
+.usage-date-picker-popper .el-date-range-picker.single-panel .el-picker-panel__content {
+  box-sizing: border-box;
+  width: 100% !important;
+  margin: 0 !important;
+  padding: var(--kb-space-4);
+}
 
 /* Dropdown：菜单项 padding 没有公开变量。 */
 .el-dropdown-menu {
@@ -392,8 +432,8 @@
     background var(--kb-transition-fast);
 }
 .el-dialog__headerbtn {
-  top: var(--kb-space-6);
-  right: var(--kb-space-6);
+  top: var(--kb-block-padding);
+  right: var(--kb-block-padding);
 }
 .el-dialog__headerbtn:hover,
 .el-dialog__headerbtn:focus,
@@ -462,6 +502,7 @@
 }
 .el-drawer.btt {
   overflow: hidden;
+  max-height: calc(100dvh - var(--kb-space-6));
   border-radius: var(--kb-radius-sheet) var(--kb-radius-sheet) var(--kb-space-0) var(--kb-space-0);
 }
 .el-drawer.btt::before {
@@ -506,12 +547,15 @@
   line-height: var(--kb-line-height-body);
 }
 
-/* Steps / Anchor / MessageBox：官方未暴露对应结构间距变量。 */
+/* Steps / Anchor / MessageBox：结构间距与弹层圆角在全局基线收口。 */
 .el-steps--vertical {
   height: auto;
 }
 .el-anchor--horizontal .el-anchor__item:not(:first-child) {
   padding-left: var(--kb-space-2);
+}
+.el-message-box {
+  --el-messagebox-border-radius: var(--kb-radius-md);
 }
 .el-message-box__btns {
   gap: var(--kb-space-2);
@@ -655,13 +699,18 @@
   .el-picker__popper {
     overflow-y: auto;
     overscroll-behavior: contain;
-    width: calc(100vw - var(--kb-space-6)) !important;
+    width: calc(100vw - var(--kb-space-6));
     max-width: calc(100vw - var(--kb-space-6)) !important;
     max-height: calc(100dvh - var(--kb-space-6));
   }
   .el-picker__popper .el-picker-panel.el-date-picker,
+  .el-picker__popper .el-picker-panel.el-date-range-picker.single-panel,
   .el-picker__popper .el-picker-panel__body,
   .el-picker__popper .el-picker-panel__body-wrapper {
+    width: 100%;
+    min-width: 0;
+  }
+  .el-picker__popper .el-date-range-picker.single-panel .el-picker-panel__body {
     width: 100%;
     min-width: 0;
   }

@@ -1,72 +1,68 @@
 <template>
-  <section v-loading="loading" class="document-detail-page">
-    <div class="page-content">
-      <div v-if="errorMessage" class="kb-error-state" role="alert">
-        <strong class="kb-text--danger">无法加载文档详情</strong>
-        <span>{{ errorMessage }}</span>
-        <el-button @click="load">重试</el-button>
-      </div>
-      <template v-else-if="document">
-        <header class="detail-actions kb-block">
-          <div class="detail-title">
-            <div class="detail-title-name kb-heading" role="heading" aria-level="2">
-              {{ document.sourceName }}
-            </div>
-            <div class="detail-title-value">{{ document.mimeType }}</div>
+  <section v-loading="loading" class="document-detail-page kb-page">
+    <div v-if="errorMessage" class="kb-error-state" role="alert">
+      <strong class="kb-text kb-text--danger">无法加载文档详情</strong>
+      <span>{{ errorMessage }}</span>
+      <el-button @click="load">重试</el-button>
+    </div>
+    <template v-else-if="document">
+      <header class="detail-actions kb-block kb-status-toolbar">
+        <div class="detail-title kb-title-group">
+          <div class="kb-heading kb-heading--h4 kb-block__title" role="heading" aria-level="2">
+            {{ document.sourceName }}
           </div>
-          <el-button
-            v-if="isMobile"
-            class="mobile-actions-trigger"
-            text
-            circle
-            aria-label="打开文档操作面板"
-            @click="mobileActionsVisible = true"
+          <span class="kb-text kb-text--secondary">{{ document.mimeType }}</span>
+        </div>
+        <el-button
+          v-if="isMobile"
+          class="mobile-actions-trigger"
+          text
+          circle
+          aria-label="打开文档操作面板"
+          @click="mobileActionsVisible = true"
+        >
+          <el-icon><MoreFilled /></el-icon>
+        </el-button>
+        <div v-else class="detail-action-buttons kb-action-group">
+          <RouterLink
+            :to="{ path: `/documents/${document.id}/preview`, query: { from: route.fullPath } }"
           >
-            <el-icon><MoreFilled /></el-icon>
+            <el-button>预览文档</el-button>
+          </RouterLink>
+          <el-button v-if="canWrite" :disabled="document.status !== 'active'" @click="openMetadata">
+            修改权限
           </el-button>
-          <div v-else class="detail-action-buttons">
-            <RouterLink
-              :to="{ path: `/documents/${document.id}/preview`, query: { from: route.fullPath } }"
-            >
-              <el-button>预览文档</el-button>
-            </RouterLink>
-            <el-button
-              v-if="canWrite"
-              :disabled="document.status !== 'active'"
-              @click="openMetadata"
-            >
-              修改权限
-            </el-button>
-            <el-button
-              v-if="canWrite"
-              :loading="mutating"
-              :disabled="document.status !== 'active' && document.status !== 'prepared'"
-              @click="requestReindex"
-            >
-              {{ document.status === 'prepared' ? '继续建立索引' : '重新索引' }}
-            </el-button>
-            <el-button
-              v-if="canDelete"
-              class="delete-document-button"
-              type="danger"
-              :loading="mutating"
-              @click="requestRemoval"
-            >
-              删除文档
-            </el-button>
-          </div>
-        </header>
+          <el-button
+            v-if="canWrite"
+            :loading="mutating"
+            :disabled="document.status !== 'active' && document.status !== 'prepared'"
+            @click="requestReindex"
+          >
+            {{ document.status === 'prepared' ? '继续建立索引' : '重新索引' }}
+          </el-button>
+          <el-button
+            v-if="canDelete"
+            class="delete-document-button"
+            type="danger"
+            :loading="mutating"
+            @click="requestRemoval"
+          >
+            删除文档
+          </el-button>
+        </div>
+      </header>
 
+      <div class="detail-content kb-page__content">
         <div class="kb-block-list detail-grid">
           <article class="kb-block">
-            <div class="kb-block-header">
-              <div class="kb-block-title">基本信息</div>
+            <div class="kb-block__header">
+              <div class="kb-block__title kb-heading kb-heading--h4">基本信息</div>
             </div>
             <div class="kb-data-fields">
               <div class="kb-data-field">
                 <span class="kb-data-field__label">文档 ID</span>
                 <span
-                  class="kb-data-field__value document-id-copy"
+                  class="kb-data-field__value"
                   :aria-label="`复制文档 ID ${document.id}`"
                   title="点击复制文档 ID"
                   @click="copyDocumentId"
@@ -75,29 +71,37 @@
                 </span>
               </div>
               <div class="kb-data-field">
-                <span class="kb-data-field__label">状态</span>
-                <span class="kb-data-field__value">{{ documentStatusLabel(document.status) }}</span>
+                <span class="kb-data-field__label">状态 </span>
+                <span class="kb-data-field__value">
+                  {{ documentStatusLabel(document.status) }}
+                </span>
               </div>
               <div class="kb-data-field">
-                <span class="kb-data-field__label">部门</span>
-                <span class="kb-data-field__value">{{ document.department }}</span>
+                <span class="kb-data-field__label">部门 </span>
+                <span class="kb-data-field__value">
+                  {{ document.department }}
+                </span>
               </div>
               <div class="kb-data-field">
-                <span class="kb-data-field__label">敏感度</span>
-                <span class="kb-data-field__value">{{ document.sensitivity }}</span>
+                <span class="kb-data-field__label">敏感度 </span>
+                <span class="kb-data-field__value">
+                  {{ document.sensitivity }}
+                </span>
               </div>
               <div class="kb-data-field">
-                <span class="kb-data-field__label">所有者</span>
-                <span class="kb-data-field__value">{{ document.ownerId }}</span>
+                <span class="kb-data-field__label">所有者 </span>
+                <span class="kb-data-field__value">
+                  {{ document.ownerId }}
+                </span>
               </div>
               <div class="kb-data-field">
-                <span class="kb-data-field__label">当前版本</span>
+                <span class="kb-data-field__label">当前版本 </span>
                 <span class="kb-data-field__value">
                   {{ document.activeVersion ? `v${document.activeVersion}` : '尚未激活' }}
                 </span>
               </div>
               <div class="kb-data-field">
-                <span class="kb-data-field__label">更新时间</span>
+                <span class="kb-data-field__label">更新时间 </span>
                 <span class="kb-data-field__value">
                   {{ new Date(document.updatedAt).toLocaleString() }}
                 </span>
@@ -105,42 +109,53 @@
             </div>
           </article>
           <article class="kb-block">
-            <div class="kb-block-header">
-              <div class="kb-block-title">当前向量索引</div>
+            <div class="kb-block__header">
+              <div class="kb-block__title kb-heading kb-heading--h4">当前向量索引</div>
               <RouterLink
                 v-if="activeVersion?.chunkCount"
-                class="card-title__link"
+                v-slot="{ href, navigate }"
                 :to="chunksTarget"
+                custom
               >
-                查看全部分块
+                <el-link
+                  class="kb-link"
+                  type="primary"
+                  underline="never"
+                  :href="href"
+                  @click="navigate"
+                >
+                  <span class="kb-link__text">查看全部分块</span>
+                </el-link>
               </RouterLink>
             </div>
             <div class="kb-data-fields">
               <div class="kb-data-field">
-                <span class="kb-data-field__label">向量库</span>
+                <span class="kb-data-field__label">向量库 </span>
                 <span class="kb-data-field__value">
                   {{ activeVersion?.vectorCollection ?? '尚未写入' }}
                 </span>
               </div>
               <div class="kb-data-field">
-                <span class="kb-data-field__label">向量数（分块）</span>
-                <span class="kb-data-field__value">{{ activeVersion?.chunkCount ?? 0 }}</span>
+                <span class="kb-data-field__label">向量数（分块） </span>
+                <span class="kb-data-field__value">
+                  {{ activeVersion?.chunkCount ?? 0 }}
+                </span>
               </div>
               <div class="kb-data-field">
-                <span class="kb-data-field__label">解析器</span>
+                <span class="kb-data-field__label">解析器 </span>
                 <span class="kb-data-field__value">
                   {{ activeVersion?.parser ?? '—' }}
                   {{ activeVersion?.parserVersion ?? '' }}
                 </span>
               </div>
               <div class="kb-data-field">
-                <span class="kb-data-field__label">Embedding 指纹</span>
+                <span class="kb-data-field__label">Embedding 指纹 </span>
                 <span class="kb-data-field__value">
                   {{ activeVersion?.embeddingFingerprint ?? '尚未生成' }}
                 </span>
               </div>
               <div class="kb-data-field">
-                <span class="kb-data-field__label">写入时间</span>
+                <span class="kb-data-field__label">写入时间 </span>
                 <span class="kb-data-field__value">
                   {{
                     activeVersion?.indexedAt
@@ -158,7 +173,11 @@
               </div>
             </div>
             <div v-if="visibleIndexWarnings.length" class="index-warning-list">
-              <div v-for="warning in visibleIndexWarnings" :key="warning" class="recent-jobs-item">
+              <div
+                v-for="warning in visibleIndexWarnings"
+                :key="warning"
+                class="recent-jobs-item kb-text kb-text--warning"
+              >
                 {{ warning }}
               </div>
             </div>
@@ -166,9 +185,19 @@
         </div>
 
         <article class="kb-block">
-          <div class="kb-block-header">
-            <div class="kb-block-title">版本历史</div>
-            <RouterLink class="card-title__link" :to="allTasksTarget">查看全部任务</RouterLink>
+          <div class="kb-block__header">
+            <div class="kb-block__title kb-heading kb-heading--h4">版本历史</div>
+            <RouterLink v-slot="{ href, navigate }" :to="allTasksTarget" custom>
+              <el-link
+                class="kb-link"
+                type="primary"
+                underline="never"
+                :href="href"
+                @click="navigate"
+              >
+                <span class="kb-link__text">查看全部任务</span>
+              </el-link>
+            </RouterLink>
           </div>
           <el-table
             v-if="!isMobile"
@@ -201,29 +230,33 @@
           </el-table>
           <div v-else-if="document.versions.length" class="kb-block-list" aria-label="版本历史">
             <article v-for="version in document.versions" :key="version.version" class="kb-block">
-              <div class="kb-block-header">
-                <div class="kb-block-title">版本 v{{ version.version }}</div>
+              <div class="kb-block__header">
+                <div class="kb-block__title kb-heading kb-heading--h4">
+                  版本 v{{ version.version }}
+                </div>
                 <el-tag :type="documentStatusType(version.status)" effect="plain">
                   {{ documentStatusLabel(version.status) }}
                 </el-tag>
               </div>
               <div class="kb-data-fields">
                 <div class="kb-data-field">
-                  <span class="kb-data-field__label">分块</span>
-                  <span class="kb-data-field__value">{{ version.chunkCount }}</span>
+                  <span class="kb-data-field__label">分块 </span>
+                  <span class="kb-data-field__value">{{ version.chunkCount }} </span>
                 </div>
                 <div class="kb-data-field">
-                  <span class="kb-data-field__label">解析器</span>
-                  <span class="kb-data-field__value">{{ version.parserVersion }}</span>
+                  <span class="kb-data-field__label">解析器 </span>
+                  <span class="kb-data-field__value">
+                    {{ version.parserVersion }}
+                  </span>
                 </div>
                 <div class="kb-data-field">
-                  <span class="kb-data-field__label">向量库</span>
+                  <span class="kb-data-field__label">向量库 </span>
                   <span class="kb-data-field__value">
                     {{ version.vectorCollection ?? '—' }}
                   </span>
                 </div>
                 <div class="kb-data-field">
-                  <span class="kb-data-field__label">创建时间</span>
+                  <span class="kb-data-field__label">创建时间 </span>
                   <span class="kb-data-field__value">
                     {{ new Date(version.createdAt).toLocaleString() }}
                   </span>
@@ -267,8 +300,9 @@
         <el-drawer
           v-else
           v-model="metadataVisible"
-          direction="rtl"
-          size="100%"
+          class="metadata-drawer"
+          direction="btt"
+          size="auto"
           title="修改权限"
           append-to-body
         >
@@ -301,7 +335,7 @@
           title="确认高风险操作"
           :width="isMobile ? undefined : 'min(520px, calc(100vw - 28px))'"
           align-center
-          :size="isMobile ? '90%' : undefined"
+          :size="isMobile ? 'auto' : undefined"
           :direction="isMobile ? 'btt' : undefined"
           append-to-body
           @update:model-value="
@@ -311,18 +345,18 @@
           "
         >
           <template v-if="document && dangerAction">
-            <div v-if="dangerAction === 'delete'" class="danger-confirmation-copy kb-text">
-              删除将永久移除原文件、全部版本向量和可识别缓存，且无法撤销。
-            </div>
-            <div v-else class="danger-confirmation-copy kb-text">
-              将创建新的索引版本；旧版本会持续服务，直至新版本通过验证并原子激活。
-            </div>
-            <div>
-              <el-text tag="sub">
+            <div class="document-dialog-body">
+              <div v-if="dangerAction === 'delete'" class="kb-text kb-text--danger">
+                删除将永久移除原文件、全部版本向量和可识别缓存，且无法撤销。
+              </div>
+              <div v-else class="kb-text">
+                将创建新的索引版本；旧版本会持续服务，直至新版本通过验证并原子激活。
+              </div>
+              <div class="kb-text kb-text--md kb-text--secondary">
                 请输入文档名 <strong>{{ document.sourceName }}</strong> 以确认。
-              </el-text>
+              </div>
+              <el-input v-model="confirmationName" aria-label="输入文档名确认" />
             </div>
-            <el-input v-model="confirmationName" aria-label="输入文档名确认" />
           </template>
           <template #footer>
             <el-button @click="dangerAction = null">取消</el-button>
@@ -338,17 +372,31 @@
         </component>
 
         <article v-if="jobs.length" class="kb-block">
-          <div class="kb-block-header">
-            <div class="kb-block-title">最近任务</div>
+          <div class="kb-block__header">
+            <div class="kb-block__title kb-heading kb-heading--h4">最近任务</div>
           </div>
-          <div class="recent-jobs">
-            <div v-for="job in jobs.slice(0, 5)" :key="job.id" class="recent-jobs-item">
-              <RouterLink :to="allTasksTarget">
-                <span class="recent-job-name__link">
-                  v{{ job.version }} · {{ job.status }} · {{ job.step }}
-                </span>
+          <div class="recent-jobs kb-data-fields">
+            <div
+              v-for="job in jobs.slice(0, 5)"
+              :key="job.id"
+              class="recent-jobs-item kb-data-field"
+            >
+              <RouterLink v-slot="{ href, navigate }" :to="allTasksTarget" custom>
+                <el-link
+                  class="kb-link"
+                  type="primary"
+                  underline="never"
+                  :href="href"
+                  @click="navigate"
+                >
+                  <span class="kb-link__text">
+                    v{{ job.version }} · {{ job.status }} · {{ job.step }}
+                  </span>
+                </el-link>
               </RouterLink>
-              <time class="recent-job-time">{{ new Date(job.updatedAt).toLocaleString() }}</time>
+              <time class="recent-job-time kb-text kb-text--secondary">
+                {{ new Date(job.updatedAt).toLocaleString() }}
+              </time>
             </div>
           </div>
         </article>
@@ -362,10 +410,9 @@
           title="文档操作"
           append-to-body
         >
-          <div class="mobile-action-list" role="menu" aria-label="文档操作">
+          <div class="mobile-action-list">
             <RouterLink
               class="mobile-action-item"
-              role="menuitem"
               :to="{ path: `/documents/${document.id}/preview`, query: { from: route.fullPath } }"
               @click="closeMobileActions"
             >
@@ -373,45 +420,39 @@
               <span>预览文档</span>
               <span class="mobile-action-chevron" aria-hidden="true">›</span>
             </RouterLink>
-            <button
+            <el-button
               v-if="canWrite"
               class="mobile-action-item"
-              type="button"
-              role="menuitem"
               :disabled="document.status !== 'active'"
               @click="openMetadataFromMobile"
             >
               <el-icon class="mobile-action-icon"><Lock /></el-icon>
               <span>修改权限</span>
               <span class="mobile-action-chevron" aria-hidden="true">›</span>
-            </button>
-            <button
+            </el-button>
+            <el-button
               v-if="canWrite"
               class="mobile-action-item"
-              type="button"
-              role="menuitem"
               :disabled="document.status !== 'active' && document.status !== 'prepared'"
               @click="requestReindexFromMobile"
             >
               <el-icon class="mobile-action-icon"><Refresh /></el-icon>
               <span>{{ document.status === 'prepared' ? '继续建立索引' : '重新索引' }}</span>
               <span class="mobile-action-chevron" aria-hidden="true">›</span>
-            </button>
-            <button
+            </el-button>
+            <el-button
               v-if="canDelete"
               class="mobile-action-item mobile-action-item--danger"
-              type="button"
-              role="menuitem"
               @click="requestRemovalFromMobile"
             >
               <el-icon class="mobile-action-icon"><Delete /></el-icon>
               <span>删除文档</span>
               <span class="mobile-action-chevron" aria-hidden="true">›</span>
-            </button>
+            </el-button>
           </div>
         </el-drawer>
-      </template>
-    </div>
+      </div>
+    </template>
   </section>
 </template>
 
@@ -629,44 +670,21 @@ onMounted(load);
 </script>
 
 <style scoped>
-/* 根容器 */
-.document-detail-page {
-  display: flex;
-  flex-direction: column;
-}
-
 /* 顶部操作栏（标题 + 桌面按钮 / 移动端触发器） */
 .detail-actions {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: var(--kb-block-padding);
+  flex: 0 0 auto;
 }
 .detail-title {
-  flex: 1 1 auto;
   overflow: hidden;
-  min-width: 0;
-}
-.detail-title-name {
-  overflow-wrap: anywhere;
-  margin: 0 0 var(--kb-space-1);
-}
-.detail-title-value {
-  margin: 0;
-  color: var(--kb-color-text-secondary);
 }
 .mobile-actions-trigger {
-  flex: 0 0 var(--kb-space-12);
   width: var(--kb-space-12);
   height: var(--kb-space-12);
   min-width: var(--kb-space-12);
   color: var(--kb-color-text-primary);
 }
 .detail-action-buttons {
-  display: flex;
-  flex: 0 0 auto;
   justify-content: flex-end;
-  align-items: center;
   gap: var(--kb-space-2);
   width: fit-content;
 }
@@ -677,17 +695,6 @@ onMounted(load);
 /* 基本信息 / 索引信息 */
 .detail-grid {
   grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-.document-id-copy {
-  cursor: pointer;
-}
-.document-id-copy:hover {
-  color: var(--kb-color-primary);
-}
-.card-title__link {
-  flex: 0 0 auto;
-  color: var(--kb-color-primary);
-  white-space: nowrap;
 }
 .conversion-note {
   display: flex;
@@ -712,44 +719,23 @@ onMounted(load);
 .index-warning-list .recent-jobs-item {
   padding: var(--kb-list-row-padding);
   border-radius: var(--kb-radius-md);
-  color: var(--kb-color-warning);
   background: color-mix(in srgb, var(--kb-color-warning) 10%, var(--kb-color-surface));
 }
 
-/* 危险操作确认弹窗文案 */
-.danger-confirmation-copy {
-  color: var(--kb-color-danger);
-  line-height: 1.5;
-}
-
 /* 最近任务 */
-.recent-jobs {
-  display: flex;
-  flex-direction: column;
-}
 .recent-jobs .recent-jobs-item {
-  display: flex;
-  justify-content: space-between;
   align-items: center;
-  gap: var(--kb-space-4);
-  padding: var(--kb-space-2) 0;
-  border-bottom: 1px solid var(--kb-color-border);
-}
-.recent-jobs .recent-jobs-item:last-child {
-  border-bottom: 0;
-}
-.recent-job-name__link {
-  color: var(--kb-color-primary);
 }
 .recent-job-time {
-  color: var(--kb-color-text-secondary);
   font-size: 13px;
+  text-align: right;
 }
 
 /* 移动端底部操作面板 */
+.document-dialog-body,
 .mobile-action-list {
   display: grid;
-  gap: var(--kb-space-2);
+  gap: var(--kb-layout-gap);
 }
 .mobile-action-item {
   display: grid;
@@ -770,6 +756,9 @@ onMounted(load);
   transition:
     background-color 0.12s ease,
     transform 0.06s ease;
+}
+.el-button.mobile-action-item :deep(> span) {
+  display: contents;
 }
 .mobile-action-item:active {
   background: var(--kb-color-primary-soft);
@@ -797,18 +786,18 @@ onMounted(load);
   font-style: normal;
 }
 
-/* 响应式：Pad（768px–1279px） */
-@media (min-width: 768px) and (max-width: 1279px) {
-  .detail-actions {
-    flex-wrap: wrap;
-  }
-}
 /* 响应式：Mobile（<768px） */
 @media (max-width: 767px) {
+  .document-detail-page {
+    overflow-y: auto;
+  }
+  .detail-content {
+    flex: none;
+    overflow: visible;
+    min-height: auto;
+  }
   .detail-actions {
     align-items: flex-start;
-    gap: var(--kb-space-2);
-    padding: var(--kb-block-padding);
   }
   .detail-grid {
     grid-template-columns: minmax(0, 1fr);

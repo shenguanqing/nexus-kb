@@ -147,9 +147,14 @@ describe('DocumentPreviewView', () => {
       page: 1,
       pageSize: 20,
     });
-    expect(wrapper.get('.preview-chunk').classes()).toContain('is-referenced');
     expect(wrapper.text()).toContain('付款周期为 30 天');
-    expect(wrapper.get('.preview-fallback').classes()).toContain('kb-block-content');
+    expect(wrapper.get('.preview-toolbar').classes()).toContain('kb-status-toolbar');
+    expect(wrapper.get('.document-preview-page > .kb-block-content').classes()).toEqual(
+      expect.arrayContaining(['kb-block-content', 'kb-block-content--gap']),
+    );
+    expect(wrapper.get('.document-preview-page > .kb-block-content > .kb-block').classes()).toEqual(
+      expect.arrayContaining(['kb-block-content', 'kb-block-content--gap', 'kb-block-scroll']),
+    );
     const paginationParent = wrapper.get('.kb-pagination').element.parentElement?.classList;
     expect(paginationParent).toContain('kb-block-content');
     expect(paginationParent).not.toContain('kb-block');

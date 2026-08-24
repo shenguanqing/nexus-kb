@@ -32,26 +32,26 @@ describe('AssistantAnswer', () => {
   it('renders compact inline citations and matching source details', async () => {
     const wrapper = mount(AssistantAnswer, { props: { response } });
 
-    expect(wrapper.findAll('.answer-citation').map((citation) => citation.text())).toEqual([
+    expect(wrapper.findAll('.kb-answer-citation').map((citation) => citation.text())).toEqual([
       '[来源1]',
       '[来源2]',
       '[来源2]',
     ]);
-    expect(wrapper.get('.answer-text .markdown-heading--h2').text()).toBe('Vue 3');
-    expect(wrapper.get('.answer-text strong').text()).toBe('Proxy');
-    expect(wrapper.get('.answer-text .markdown-list-item').text()).toBe(
+    expect(wrapper.get('.markdown-content .markdown-heading--h2').text()).toBe('Vue 3');
+    expect(wrapper.get('.markdown-content strong').text()).toBe('Proxy');
+    expect(wrapper.get('.markdown-content .markdown-list-item').text()).toBe(
       '支持 Composition API。[来源2]',
     );
-    expect(wrapper.get('.answer-sources-label').text()).toBe('回答来源');
-    expect(wrapper.findAll('.answer-source-card').map((source) => source.text())).toEqual([
+    expect(wrapper.get('.kb-answer-sources__label').text()).toBe('回答来源');
+    expect(wrapper.findAll('.kb-answer-sources__card').map((source) => source.text())).toEqual([
       expect.stringContaining('来源 1'),
       expect.stringContaining('来源 2'),
     ]);
-    expect(wrapper.get('.answer-source-card').text()).toContain('v1');
-    expect(wrapper.get('.answer-source-card').text()).not.toContain('位置未标注');
-    await wrapper.findAll('.answer-citation--interactive')[1]!.trigger('click');
+    expect(wrapper.get('.kb-answer-sources__card').text()).toContain('v1');
+    expect(wrapper.get('.kb-answer-sources__card').text()).not.toContain('位置未标注');
+    await wrapper.findAll('.kb-answer-citation--interactive')[1]!.trigger('click');
     expect(wrapper.emitted('selectSource')?.[0]?.[0]).toMatchObject({ index: 2 });
-    await wrapper.findAll('.answer-source-card')[1]!.trigger('click');
+    await wrapper.findAll('.kb-answer-sources__card')[1]!.trigger('click');
     expect(wrapper.emitted('selectSource')?.[1]?.[0]).toMatchObject({ index: 2 });
   });
 
@@ -67,8 +67,8 @@ describe('AssistantAnswer', () => {
       },
     });
 
-    expect(wrapper.get('.answer-notice').text()).toContain('不是知识库资料');
-    expect(wrapper.get('.answer-text').text()).toContain('Vue 3 使用 Proxy');
-    expect(wrapper.find('.answer-sources').exists()).toBe(false);
+    expect(wrapper.get('.kb-answer-notice').text()).toContain('不是知识库资料');
+    expect(wrapper.get('.markdown-content').text()).toContain('Vue 3 使用 Proxy');
+    expect(wrapper.find('.kb-answer-sources').exists()).toBe(false);
   });
 });

@@ -6,10 +6,18 @@
   />
   <div v-else class="kb-block-list" aria-label="文档列表">
     <article v-for="document in data" :key="document.id" class="kb-block">
-      <div class="kb-block-header">
-        <div class="kb-block-title">
-          <RouterLink :to="`/documents/${document.id}`">
-            <el-link type="primary" underline="never">{{ document.sourceName }}</el-link>
+      <div class="kb-block__header">
+        <div class="kb-block__title kb-heading kb-heading--h4">
+          <RouterLink v-slot="{ href, navigate }" :to="`/documents/${document.id}`" custom>
+            <el-link
+              class="kb-link"
+              type="primary"
+              underline="never"
+              :href="href"
+              @click="navigate"
+            >
+              <span class="kb-link__text">{{ document.sourceName }}</span>
+            </el-link>
           </RouterLink>
         </div>
         <el-tag :type="statusType(document.status)" size="small">
