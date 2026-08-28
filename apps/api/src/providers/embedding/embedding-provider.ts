@@ -21,6 +21,8 @@ export interface EmbeddingTelemetryEvent {
   promptTokens?: number;
   totalTokens?: number;
   requestId?: string;
+  providerDurationMs?: number;
+  loadDurationMs?: number;
   durationMs: number;
   attempts: number;
   status: 'success' | 'error';

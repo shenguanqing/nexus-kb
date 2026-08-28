@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
   documentPreviewOverviewUrl,
+  documentPreviewFocusOverviewUrl,
   documentPreviewTileUrl,
   fetchDocumentPreview,
   listDocumentChunks,
@@ -114,6 +115,9 @@ describe('documents API', () => {
   it('builds encoded CAD overview and integer tile URLs', () => {
     expect(documentPreviewOverviewUrl('document/id')).toBe(
       '/v1/documents/document%2Fid/preview/overview',
+    );
+    expect(documentPreviewFocusOverviewUrl('document/id')).toBe(
+      '/v1/documents/document%2Fid/preview/focus-overview',
     );
     expect(documentPreviewTileUrl('document/id', 8, 255, 127)).toBe(
       '/v1/documents/document%2Fid/preview/tiles/8/255/127',

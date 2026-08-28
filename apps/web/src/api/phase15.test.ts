@@ -37,6 +37,7 @@ describe('remaining phase 15 APIs', () => {
       to: '2026-07-20T00:00:00.000Z',
       totalQueries: 0,
       failureRate: null,
+      queryP50Ms: null,
       queryP95Ms: null,
       providers: [],
       departments: [],

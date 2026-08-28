@@ -319,9 +319,20 @@
               <small class="upload-file-error kb-text kb-text--sm kb-text--secondary" role="alert">
                 {{ row.error }}
               </small>
-              <el-button class="upload-file-retry" link type="primary" @click="retryUpload(row)">
-                重试
-              </el-button>
+              <div class="upload-file-actions">
+                <el-button class="upload-file-retry" link type="primary" @click="retryUpload(row)">
+                  重试
+                </el-button>
+                <el-button
+                  class="upload-file-remove"
+                  link
+                  type="danger"
+                  :aria-label="`删除失败文件：${row.file.name}`"
+                  @click="removeUpload(row)"
+                >
+                  删除
+                </el-button>
+              </div>
             </div>
           </div>
         </div>
@@ -501,6 +512,13 @@ async function retryUpload(row: UploadRow): Promise<void> {
   await load();
 }
 
+function removeUpload(row: UploadRow): void {
+  uploadRows.value = uploadRows.value.filter((candidate) => candidate !== row);
+  selectedUploadFiles.value = selectedUploadFiles.value.filter(
+    (candidate) => candidate.raw !== row.file,
+  );
+}
+
 function closeUploadWhenComplete(): void {
   if (!uploadRows.value.length || !uploadRows.value.every((row) => row.status === 'queued')) return;
   ElMessage.success('全部文件已进入入库队列');
@@ -627,7 +645,6 @@ onMounted(load);
   overflow: hidden;
   min-width: 0;
   text-overflow: ellipsis;
-  white-space: nowrap;
 }
 .upload-file-size {
   flex: 0 0 auto;
@@ -639,9 +656,19 @@ onMounted(load);
 .upload-file-error {
   overflow-wrap: anywhere;
 }
+.upload-file-error {
+  flex: 1 1 auto;
+  min-width: 0;
+}
 .upload-file-failure {
   display: flex;
   justify-content: space-between;
+  align-items: center;
+  gap: var(--kb-space-2);
+}
+.upload-file-actions {
+  display: flex;
+  flex: 0 0 auto;
   align-items: center;
   gap: var(--kb-space-2);
 }

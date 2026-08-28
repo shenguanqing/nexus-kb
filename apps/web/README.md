@@ -57,7 +57,7 @@ apps/web/
 
 - `KnowledgeAskView`：知识问答、严格/通用回答模式和来源。
 - `HistoryView`：当前登录用户的问答历史。
-- `DocumentsView`、`DocumentDetailView`、`DocumentChunksView`、`DocumentPreviewView`：文档、版本、授权分块和全格式预览；小型 CAD SVG 支持 50%–25,600% 缩放，超大 CAD 使用按视口加载的 Canvas 瓦片查看器（默认相对总览最大 256×），全部预览支持全屏。
+- `DocumentsView`、`DocumentDetailView`、`DocumentChunksView`、`DocumentPreviewView`：文档、版本、授权分块和全格式预览；CAD SVG 与按视口加载的 Canvas 瓦片查看器提供有界缩放和鸟瞰图。所有 CAD 鸟瞰都只显示统一的“拖动定位”提示；manifest 有 `focusBounds` 时额外显示“主体 / 全图”范围切换。瓦片配置基准为 z12，远距实体稀释主体时 manifest 可动态补足到 z15；查看器按设备像素比和实际层级限制继续放大，避免把最高瓦片再次模糊拉伸。渐进瓦片在完整索引前使用单请求初始化并在失败后停止自动预取，首批细节成功后恢复双并发且只刷新一次鸟瞰，使快速总览切换到完整彩色几何；有 `focusBounds` 时首次打开与重置聚焦主体，鸟瞰默认显示 ACL 保护的“主体”缩略图并可切换“全图”，全图、平移和瓦片仍覆盖完整 `bounds`。旧 manifest 保持原行为。全部预览支持全屏。
 - `IngestionJobsView`：入库状态、步骤、失败详情和安全重试。
 - `UsersView`、`DepartmentsView`：角色与部门权限。
 - `AuditView`：无正文结构化审计。

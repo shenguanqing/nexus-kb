@@ -37,6 +37,12 @@ import { ParserError } from '../parser/parser-error';
 import { ChromaVectorStore } from '../vector-store/chroma-vector-store';
 import { validateUploadedFile } from './file-validation';
 
+const MANUALLY_RETRYABLE_CAPACITY_ERROR_CODES = [
+  'CAD_ENTITY_LIMIT_EXCEEDED',
+  'DWG_CONVERTED_SIZE_LIMIT_EXCEEDED',
+  'PARSER_ELEMENT_LIMIT_EXCEEDED',
+] as const;
+
 @Injectable()
 export class DocumentsService {
   constructor(
@@ -515,6 +521,23 @@ export class DocumentsService {
     return { ...file, mimeType: 'image/png', sourceName: document.sourceName };
   }
 
+  async getDocumentPreviewFocusOverview(
+    id: string,
+    identity: Identity,
+  ): Promise<{ path: string; size: number; mimeType: 'image/png'; sourceName: string }> {
+    const document = await this.getVisibleCadPreviewDocument(id, identity);
+    const manifest = await this.readCadPreviewManifest(id, document.previewStorageKey);
+    if (!manifest.focusBounds) {
+      throw new ApiException('CAD_PREVIEW_FOCUS_NOT_AVAILABLE', 'CAD 预览没有独立主体范围', 409);
+    }
+    const current = await this.resolveCadPreviewBundle(id, document.previewStorageKey);
+    const file = await this.resolveNestedPreviewFile(
+      `${document.previewStorageKey}/bundles/${current.bundleId}/focus-overview.png`,
+      `${document.previewStorageKey}/bundles/${current.bundleId}/`,
+    );
+    return { ...file, mimeType: 'image/png', sourceName: document.sourceName };
+  }
+
   async getDocumentPreviewTile(
     id: string,
     zoom: number,
@@ -726,7 +749,7 @@ export class DocumentsService {
       },
     });
     if (!job) throw new ApiException('INGESTION_JOB_NOT_FOUND', '入库任务不存在', 404);
-    if (job.status !== 'failed' || !job.retryable) {
+    if (job.status !== 'failed' || !this.canManuallyRetry(job)) {
       throw new ApiException('INGESTION_JOB_NOT_RETRYABLE', '当前入库任务不可重试', 409);
     }
     const auditId = randomUUID();
@@ -736,7 +759,10 @@ export class DocumentsService {
           id: job.id,
           tenantId: identity.tenantId,
           status: 'failed',
-          retryable: true,
+          OR: [
+            { retryable: true },
+            { errorCode: { in: [...MANUALLY_RETRYABLE_CAPACITY_ERROR_CODES] } },
+          ],
         },
         data: {
           status: 'queued',
@@ -788,7 +814,7 @@ export class DocumentsService {
             step: job.step,
             errorCode: job.errorCode,
             errorCategory: job.errorCategory,
-            retryable: true,
+            retryable: job.retryable,
             completedAt: job.completedAt,
           },
         }),
@@ -849,7 +875,12 @@ export class DocumentsService {
         updatedAt: true,
       },
     });
-    return { jobs };
+    return {
+      jobs: jobs.map((job) => ({
+        ...job,
+        retryable: this.canManuallyRetry(job),
+      })),
+    };
   }
 
   async reindexDocument(id: string, identity: Identity, traceId: string): Promise<object> {
@@ -1622,6 +1653,7 @@ export class DocumentsService {
     const { document, ...job } = row;
     return {
       ...job,
+      retryable: this.canManuallyRetry(job),
       sourceName: document.sourceName,
       mimeType: document.mimeType,
       kind: job.kind as IngestionJob['kind'],
@@ -1631,6 +1663,14 @@ export class DocumentsService {
       createdAt: job.createdAt.toISOString(),
       updatedAt: job.updatedAt.toISOString(),
     };
+  }
+
+  private canManuallyRetry(job: { retryable: boolean; errorCode: string | null }): boolean {
+    return (
+      job.retryable ||
+      (job.errorCode !== null &&
+        MANUALLY_RETRYABLE_CAPACITY_ERROR_CODES.some((code) => code === job.errorCode))
+    );
   }
 
   private stringArray(value: unknown): string[] {

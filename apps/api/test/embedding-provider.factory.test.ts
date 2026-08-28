@@ -68,6 +68,7 @@ describe('EmbeddingProviderFactory', () => {
         EMBEDDING_MAX_ATTEMPTS: 3,
         EMBEDDING_RETRY_BASE_DELAY_MS: 500,
         OLLAMA_BASE_URL: 'http://host.docker.internal:11434',
+        OLLAMA_KEEP_ALIVE: '30m',
         CHUNK_MAX_TOKENS: 600,
         CHUNK_OVERLAP_TOKENS: 80,
         REDACTION_POLICY_VERSION: 'v1',

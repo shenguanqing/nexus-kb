@@ -25,6 +25,8 @@ from app.cad_tiles import (
 from app.schemas import PreviewArtifact
 
 _MAX_COMPRESSIBLE_SVG_BYTES = 1_073_741_824
+_COMPLEX_CAD_ENTITY_BUDGET_RATIO = 0.7
+_COMPLEX_CAD_REUSED_BLOCKS = 1_000
 _ZERO_STROKE_WIDTH = re.compile(r"stroke-width:\s*0(?:\.0+)?;")
 
 
@@ -34,6 +36,17 @@ def cad_preview_failure_warning(error: Exception) -> str:
     if isinstance(error, CadPreviewResourceError | MemoryError):
         return "CAD_PREVIEW_RESOURCE_LIMIT_EXCEEDED"
     return "PREVIEW_GENERATION_FAILED"
+
+
+def cad_preview_is_complex(
+    visited_entity_count: int,
+    max_entity_count: int,
+    reused_block_definition_count: int,
+) -> bool:
+    return (
+        visited_entity_count >= max_entity_count * _COMPLEX_CAD_ENTITY_BUDGET_RATIO
+        or reused_block_definition_count >= _COMPLEX_CAD_REUSED_BLOCKS
+    )
 
 
 def generate_office_pdf(
@@ -144,6 +157,7 @@ def generate_cad_preview(
     render_timeout_seconds: int,
     render_memory_bytes: int,
     max_insert_depth: int = 8,
+    complex_source: bool = False,
 ) -> PreviewArtifact:
     _entity_count, render_cost = estimate_cad_render_cost(source, max_insert_depth)
     if tiled_enabled and (
@@ -159,6 +173,7 @@ def generate_cad_preview(
             max_source_bytes=max_bytes,
             render_timeout_seconds=render_timeout_seconds,
             render_memory_bytes=render_memory_bytes,
+            complex_source=complex_source,
         )
     return generate_cad_svg(
         source,

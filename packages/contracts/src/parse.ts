@@ -65,7 +65,7 @@ export type ParseResponse = z.infer<typeof parseResponseSchema>;
 export const cadPreviewTileRequestSchema = z
   .object({
     documentId: z.uuid(),
-    zoom: z.number().int().min(0).max(12),
+    zoom: z.number().int().min(0).max(15),
     tileX: z.number().int().min(0).max(65_535),
     tileY: z.number().int().min(0).max(65_535),
   })
@@ -76,7 +76,7 @@ export const cadPreviewTileResponseSchema = z
     storageKey: z
       .string()
       .regex(
-        /^[0-9a-f-]{36}\.cad\/bundles\/[0-9a-f-]{36}\/tiles\/(?:[0-9]|1[0-2])\/[0-9]{1,5}\/[0-9]{1,5}\.png$/,
+        /^[0-9a-f-]{36}\.cad\/bundles\/[0-9a-f-]{36}\/tiles\/(?:[0-9]|1[0-5])\/[0-9]{1,5}\/[0-9]{1,5}\.png$/,
       ),
     mimeType: z.literal('image/png'),
     sizeBytes: z.number().int().positive().max(16_777_216),

@@ -293,40 +293,60 @@ export class ChromaVectorStore implements VectorStore {
       throw new VectorStoreError('invalid_input');
     }
     const branches: Where[] = [];
+    let accessWhere: Where;
     if (filter.tenantWideAccess) {
-      return {
+      accessWhere = {
         $and: [
           { tenantId: filter.tenantId },
           { sensitivity: { $in: filter.allowedSensitivities } },
         ],
       };
-    }
-    if (filter.allowedSensitivities.includes('public')) {
-      branches.push({ sensitivity: 'public' });
-    }
-    const restrictedSensitivities = filter.allowedSensitivities.filter(
-      (sensitivity) => sensitivity !== 'public',
-    );
-    if (restrictedSensitivities.length > 0 && filter.departments.length > 0) {
-      branches.push({
+    } else {
+      if (filter.allowedSensitivities.includes('public')) {
+        branches.push({ sensitivity: 'public' });
+      }
+      const restrictedSensitivities = filter.allowedSensitivities.filter(
+        (sensitivity) => sensitivity !== 'public',
+      );
+      if (restrictedSensitivities.length > 0 && filter.departments.length > 0) {
+        branches.push({
+          $and: [
+            { department: { $in: filter.departments } },
+            { sensitivity: { $in: restrictedSensitivities } },
+          ],
+        });
+      }
+      if (restrictedSensitivities.length > 0) {
+        branches.push({
+          $and: [{ ownerId: filter.userId }, { sensitivity: { $in: restrictedSensitivities } }],
+        });
+      }
+      if (branches.length === 0) throw new VectorStoreError('invalid_input');
+      const firstBranch = branches[0];
+      if (!firstBranch) throw new VectorStoreError('invalid_input');
+      accessWhere = {
         $and: [
-          { department: { $in: filter.departments } },
-          { sensitivity: { $in: restrictedSensitivities } },
+          { tenantId: filter.tenantId },
+          branches.length === 1 ? firstBranch : { $or: branches },
         ],
-      });
+      };
     }
-    if (restrictedSensitivities.length > 0) {
-      branches.push({
-        $and: [{ ownerId: filter.userId }, { sensitivity: { $in: restrictedSensitivities } }],
-      });
+    return this.documentScopeWhere(accessWhere, filter.documentIds);
+  }
+
+  private documentScopeWhere(accessWhere: Where, documentIds: string[] | undefined): Where {
+    if (documentIds === undefined) return accessWhere;
+    if (
+      documentIds.length === 0 ||
+      documentIds.length > 20 ||
+      documentIds.some(
+        (id) =>
+          !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id),
+      )
+    ) {
+      throw new VectorStoreError('invalid_input');
     }
-    if (branches.length === 0) throw new VectorStoreError('invalid_input');
-    const firstBranch = branches[0];
-    if (!firstBranch) throw new VectorStoreError('invalid_input');
-    const accessWhere = branches.length === 1 ? firstBranch : { $or: branches };
-    return {
-      $and: [{ tenantId: filter.tenantId }, accessWhere],
-    };
+    return { $and: [accessWhere, { documentId: { $in: documentIds } }] };
   }
 
   private scalarMetadata(metadata: Metadata): Record<string, boolean | number | string> {

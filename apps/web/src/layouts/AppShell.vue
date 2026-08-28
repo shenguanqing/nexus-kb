@@ -403,7 +403,7 @@ async function signOut(): Promise<void> {
   display: flex;
   align-items: center;
   height: 56px;
-  padding: 0 var(--kb-list-row-padding);
+  padding: 0 var(--kb-space-5);
   border-bottom: 1px solid var(--kb-color-border);
   color: var(--kb-color-text-primary);
   background: var(--kb-color-surface);

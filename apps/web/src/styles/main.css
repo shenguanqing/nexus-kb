@@ -500,12 +500,14 @@ a {
 .kb-answer-sources__list {
   display: grid;
   gap: var(--kb-space-2);
-  grid-template-columns: repeat(auto-fit, minmax(160px, 220px));
+  grid-template-columns: repeat(auto-fit, 160px);
 }
 .el-button.kb-answer-sources__card {
+  justify-content: flex-start;
   align-items: stretch;
   height: auto;
   min-height: 0;
+  padding: var(--kb-space-3);
   text-align: left;
   white-space: normal;
   cursor: pointer;
@@ -514,7 +516,7 @@ a {
   display: flex;
   flex-direction: column;
   align-items: stretch;
-  gap: var(--kb-space-1);
+  gap: var(--kb-space-2);
   min-width: 0;
   text-align: left;
 }
@@ -629,6 +631,10 @@ a {
   }
   .kb-state-page__title {
     font-size: 22px;
+  }
+  .kb-answer-sources__list{
+  grid-template-columns: repeat(auto-fit, 126px);
+
   }
   .kb-answer-meta {
     gap: 0;

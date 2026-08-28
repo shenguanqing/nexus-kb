@@ -550,7 +550,7 @@ onUnmounted(() => {
 .task-details {
   display: grid;
   gap: var(--kb-layout-gap);
-  padding: var(--kb-layout-gap) var(--kb-block-padding);
+  padding: var(--kb-block-padding);
 }
 .task-steps-scroll {
   overflow-x: auto;

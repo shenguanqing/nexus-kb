@@ -29,6 +29,7 @@ import {
   selectConversationQuestions,
 } from './conversation-context';
 import { QueryProviderUsageContext } from '../usage/query-provider-usage.context';
+import { MetricsService, type KnowledgeQueryPhase } from '../observability/metrics.service';
 
 const NO_ANSWER_TEXT = '当前知识库中没有找到足够可靠且有权限访问的依据。';
 type QueryResult = Omit<KnowledgeQueryResponse, 'conversationId'>;
@@ -53,6 +54,7 @@ export class KnowledgeQueryService {
     private readonly sourceValidator: AnswerSourceValidator,
     @Optional() private readonly history?: KnowledgeHistoryService,
     @Optional() private readonly providerUsage?: QueryProviderUsageContext,
+    @Optional() private readonly metrics?: MetricsService,
   ) {}
 
   async query(
@@ -90,21 +92,24 @@ export class KnowledgeQueryService {
         this.config.values.RERANK_PROVIDER === 'none' ? undefined : this.config.values.RERANK_MODEL,
     };
     try {
-      await this.rateLimiter.assertAllowed(identity);
-      const recentQuestions = request.conversationId
-        ? selectConversationQuestions(
-            (await this.history?.recentQuestions(request.conversationId, identity)) ?? [],
-          ).map((question) => normalizeKnowledgeQuestion(question))
-        : [];
-      const conversationQuestions = needsConversationContext(normalizedQuestion)
-        ? recentQuestions
-        : [];
+      await this.measurePhase('rate_limit', () => this.rateLimiter.assertAllowed(identity));
+      const conversationQuestions = await this.conversationQuestions(
+        request.conversationId,
+        normalizedQuestion,
+        identity,
+      );
       const retrievalQuestion = buildRetrievalQuestion(normalizedQuestion, conversationQuestions);
-      const queryVector = await this.embedding.embedQuery(retrievalQuestion, {
-        sensitivity: identity.defaultSensitivity,
-        tenantId: identity.tenantId,
-      });
-      const candidates = await this.retrieval.retrieve(identity, queryVector);
+      const queryVector = await this.measurePhase('query_embedding', () =>
+        this.embedding.embedQuery(retrievalQuestion, {
+          sensitivity: identity.defaultSensitivity,
+          tenantId: identity.tenantId,
+        }),
+      );
+      const retrievalResult = await this.measurePhase('vector_retrieval', () =>
+        this.retrieval.retrieveDetailed(identity, queryVector, retrievalQuestion),
+      );
+      const candidates = retrievalResult.contexts;
+      const allowGeneralKnowledge = retrievalResult.matchedDocumentIds.length === 0;
       observer?.recordVectorSources(candidates.map((candidate) => this.qualitySource(candidate)));
       if (candidates.length === 0) {
         observer?.recordFinalSources([]);
@@ -117,21 +122,26 @@ export class KnowledgeQueryService {
             normalizedQuestion,
             conversationQuestions,
             traceId,
+            allowGeneralKnowledge,
             false,
             startedAt,
           ),
         );
       }
-      const reranked = await this.rerank.rerank({
-        identity,
-        query: retrievalQuestion,
-        chunks: candidates,
-        topK: Math.min(this.config.values.RERANK_TOP_K, candidates.length),
-        traceId,
-      });
-      const contexts = await this.sourceAuthorization.retainActiveAuthorizedSources(
-        identity,
-        this.limitLlmContexts(reranked.chunks),
+      const reranked = await this.measurePhase('rerank', () =>
+        this.rerank.rerank({
+          identity,
+          query: retrievalQuestion,
+          chunks: candidates,
+          topK: Math.min(this.config.values.RERANK_TOP_K, candidates.length),
+          traceId,
+        }),
+      );
+      const contexts = await this.measurePhase('source_auth_before_llm', () =>
+        this.sourceAuthorization.retainActiveAuthorizedSources(
+          identity,
+          this.limitLlmContexts(reranked.chunks),
+        ),
       );
       if (contexts.length === 0) {
         observer?.recordFinalSources([]);
@@ -150,13 +160,15 @@ export class KnowledgeQueryService {
       let answer: Awaited<ReturnType<LlmService['answer']>>;
       let citedSourceIndexes: number[] = [];
       try {
-        answer = await this.llm.answer({
-          identity,
-          question: normalizedQuestion,
-          conversationQuestions,
-          contexts,
-          traceId,
-        });
+        answer = await this.measurePhase('llm', () =>
+          this.llm.answer({
+            identity,
+            question: normalizedQuestion,
+            conversationQuestions,
+            contexts,
+            traceId,
+          }),
+        );
         citedSourceIndexes = this.sourceValidator.validate(answer.text, contexts.length);
       } catch (error) {
         if (error instanceof AnswerCitationError) {
@@ -168,12 +180,16 @@ export class KnowledgeQueryService {
               {
                 ...auditBase,
                 ...this.configuredLlmAuditFields(),
-                errorCode: 'LLM_ANSWER_UNVERIFIABLE',
+                errorCode:
+                  error.reason === 'insufficient'
+                    ? 'LLM_CONTEXT_INSUFFICIENT'
+                    : 'LLM_ANSWER_UNVERIFIABLE',
               },
               identity,
               normalizedQuestion,
               conversationQuestions,
               traceId,
+              allowGeneralKnowledge,
               reranked.degraded,
               startedAt,
             ),
@@ -181,9 +197,8 @@ export class KnowledgeQueryService {
         }
         throw error;
       }
-      const finalContexts = await this.sourceAuthorization.retainActiveAuthorizedSources(
-        identity,
-        contexts,
+      const finalContexts = await this.measurePhase('source_auth_before_return', () =>
+        this.sourceAuthorization.retainActiveAuthorizedSources(identity, contexts),
       );
       observer?.recordFinalSources(finalContexts.map((context) => this.qualitySource(context)));
       if (!this.sameContexts(contexts, finalContexts)) {
@@ -216,7 +231,7 @@ export class KnowledgeQueryService {
       const sources = citedSourceIndexes.map((sourceIndex, index) =>
         this.source(finalContexts[sourceIndex - 1]!, index + 1),
       );
-      await this.audit.record({
+      await this.recordAudit({
         ...auditBase,
         outcome: 'answered',
         answerMode: 'grounded',
@@ -243,7 +258,7 @@ export class KnowledgeQueryService {
         rerankDegraded: reranked.degraded,
       });
     } catch (error) {
-      await this.audit.record({
+      await this.recordAudit({
         ...auditBase,
         outcome: 'failed',
         resultCount: 0,
@@ -265,7 +280,7 @@ export class KnowledgeQueryService {
     rerankDegraded: boolean,
     startedAt: number,
   ): Promise<QueryResult> {
-    await this.audit.record({
+    await this.recordAudit({
       ...auditBase,
       outcome: 'no_answer',
       resultCount: 0,
@@ -294,10 +309,12 @@ export class KnowledgeQueryService {
     question: string,
     conversationQuestions: string[],
     traceId: string,
+    allowGeneralKnowledge: boolean,
     rerankDegraded: boolean,
     startedAt: number,
   ): Promise<QueryResult> {
     if (
+      !allowGeneralKnowledge ||
       this.config.values.QUERY_ANSWER_MODE !== 'hybrid' ||
       this.config.values.LLM_PROVIDER === 'none'
     ) {
@@ -305,12 +322,14 @@ export class KnowledgeQueryService {
     }
     let answer: Awaited<ReturnType<LlmService['answerGeneral']>>;
     try {
-      answer = await this.llm.answerGeneral({
-        identity,
-        question,
-        conversationQuestions,
-        traceId,
-      });
+      answer = await this.measurePhase('llm', () =>
+        this.llm.answerGeneral({
+          identity,
+          question,
+          conversationQuestions,
+          traceId,
+        }),
+      );
     } catch (error) {
       if (error instanceof LlmProviderError && error.kind === 'policy_denied') {
         return this.noAnswer(
@@ -323,7 +342,7 @@ export class KnowledgeQueryService {
       }
       throw error;
     }
-    await this.audit.record({
+    await this.recordAudit({
       ...auditBase,
       outcome: 'answered',
       answerMode: 'general',
@@ -375,10 +394,50 @@ export class KnowledgeQueryService {
     identity: Identity,
     response: QueryResult,
   ): Promise<KnowledgeQueryResponse> {
-    const conversationId = this.history
-      ? await this.history.recordTurn(request.conversationId, request.question, response, identity)
+    const history = this.history;
+    const conversationId = history
+      ? await this.measurePhase('history_write', () =>
+          history.recordTurn(request.conversationId, request.question, response, identity),
+        )
       : (request.conversationId ?? randomUUID());
     return { conversationId, ...response };
+  }
+
+  private async conversationQuestions(
+    conversationId: string | undefined,
+    normalizedQuestion: string,
+    identity: Identity,
+  ): Promise<string[]> {
+    const history = this.history;
+    if (!conversationId || !history) return [];
+    return this.measurePhase('history_read', async () => {
+      if (!needsConversationContext(normalizedQuestion)) {
+        await history.assertOwned(conversationId, identity);
+        return [];
+      }
+      return selectConversationQuestions(
+        await history.recentQuestions(conversationId, identity),
+      ).map((question) => normalizeKnowledgeQuestion(question));
+    });
+  }
+
+  private recordAudit(input: Parameters<QueryAuditService['record']>[0]): Promise<void> {
+    return this.measurePhase('audit_write', () => this.audit.record(input));
+  }
+
+  private async measurePhase<T>(
+    phase: KnowledgeQueryPhase,
+    operation: () => Promise<T>,
+  ): Promise<T> {
+    const startedAt = Date.now();
+    try {
+      const result = await operation();
+      this.metrics?.observeKnowledgeQueryPhase(phase, 'success', Date.now() - startedAt);
+      return result;
+    } catch (error) {
+      this.metrics?.observeKnowledgeQueryPhase(phase, 'error', Date.now() - startedAt);
+      throw error;
+    }
   }
 
   private source(context: RetrievedChunk, index: number): KnowledgeSource {

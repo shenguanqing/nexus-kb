@@ -17,6 +17,17 @@ import { AppConfig } from '../config/app-config';
 import { MetricsService } from '../observability/metrics.service';
 import { ParserError } from './parser-error';
 
+const CAD_PREVIEW_INITIALIZATION_TIMEOUT_SECONDS = 180;
+const CAD_PREVIEW_CLIENT_TIMEOUT_MARGIN_SECONDS = 10;
+
+export function cadPreviewTileTimeoutMs(renderTimeoutSeconds: number): number {
+  return (
+    (Math.min(renderTimeoutSeconds * 3, CAD_PREVIEW_INITIALIZATION_TIMEOUT_SECONDS) +
+      CAD_PREVIEW_CLIENT_TIMEOUT_MARGIN_SECONDS) *
+    1000
+  );
+}
+
 const SAFE_WORKER_ERROR_CODES = new Set([
   'CAD_ENTITY_LIMIT_EXCEEDED',
   'PARSER_ELEMENT_LIMIT_EXCEEDED',
@@ -103,7 +114,7 @@ export class ParserClient {
     const controller = new AbortController();
     const timeout = setTimeout(
       () => controller.abort(),
-      Math.min((this.config.values.CAD_PREVIEW_RENDER_TIMEOUT_SECONDS + 10) * 1000, 610_000),
+      cadPreviewTileTimeoutMs(this.config.values.CAD_PREVIEW_RENDER_TIMEOUT_SECONDS),
     );
     try {
       let response: Response;

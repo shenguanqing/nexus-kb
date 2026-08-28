@@ -163,13 +163,14 @@ export const cadPreviewManifestSchema = z
   .object({
     strategy: z.literal('tiles'),
     tileSize: z.number().int().min(256).max(1024),
-    minZoom: z.number().int().min(0).max(12),
-    maxZoom: z.number().int().min(0).max(12),
+    minZoom: z.number().int().min(0).max(15),
+    maxZoom: z.number().int().min(0).max(15),
     baseWidth: z.number().int().positive(),
     baseHeight: z.number().int().positive(),
     overviewWidth: z.number().int().positive().max(4096),
     overviewHeight: z.number().int().positive().max(4096),
     bounds: cadPreviewBoundsSchema,
+    focusBounds: cadPreviewBoundsSchema.optional(),
     worldToPixel: z.array(z.number().finite()).length(6),
     entityCount: z.number().int().positive().max(2_000_000),
     renderCostScore: z.number().int().positive().max(100_000_000),
@@ -178,7 +179,19 @@ export const cadPreviewManifestSchema = z
   .refine((value) => value.maxZoom >= value.minZoom, {
     message: 'CAD preview zoom range is invalid',
     path: ['maxZoom'],
-  });
+  })
+  .refine(
+    (value) =>
+      value.focusBounds === undefined ||
+      (value.bounds.minX <= value.focusBounds.minX &&
+        value.focusBounds.maxX <= value.bounds.maxX &&
+        value.bounds.minY <= value.focusBounds.minY &&
+        value.focusBounds.maxY <= value.bounds.maxY),
+    {
+      message: 'CAD preview focus bounds must be contained by full bounds',
+      path: ['focusBounds'],
+    },
+  );
 
 export const documentPreviewSchema = z
   .object({

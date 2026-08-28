@@ -72,6 +72,10 @@ describe('MetricsService', () => {
     metrics.setQueueSnapshot({ waiting: 2, active: 1, delayed: 0, failed: 3 }, 45);
     metrics.observeRetrieval(0);
     metrics.observeRerankDegradation('policy_denied');
+    metrics.observeKnowledgeQueryPhase('query_embedding', 'success', 125);
+    metrics.observeLlmCitationEvent('repair_started');
+    metrics.observeEmbeddingCache('query', 'hit');
+    metrics.observeCadPreviewTile(99, 'miss', 'success', 250);
     metrics.setDependencyHealth({ chroma: { status: 'up' } });
     metrics.setDiskUsage(0.75);
     const output = await metrics.render();
@@ -82,7 +86,17 @@ describe('MetricsService', () => {
     expect(output).toContain('nexuskb_parser_ocr_warnings_total 1');
     expect(output).toContain('nexuskb_ingestion_queue_jobs{state="failed"} 3');
     expect(output).toContain('nexuskb_retrieval_results_total{outcome="empty"} 1');
+    expect(output).toContain(
+      'nexuskb_knowledge_query_phase_duration_seconds_sum{phase="query_embedding",status="success"} 0.125',
+    );
+    expect(output).toContain('nexuskb_llm_citation_events_total{event="repair_started"} 1');
+    expect(output).toContain(
+      'nexuskb_embedding_cache_requests_total{operation="query",outcome="hit"} 1',
+    );
     expect(output).toContain('nexuskb_dependency_up{component="chroma"} 1');
     expect(output).toContain('nexuskb_disk_usage_ratio{path="raw_docs"} 0.75');
+    expect(output).toContain(
+      'nexuskb_cad_preview_tiles_total{zoom="15",cache="miss",status="success"} 1',
+    );
   });
 });

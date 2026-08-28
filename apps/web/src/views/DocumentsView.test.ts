@@ -189,6 +189,16 @@ describe('DocumentsView upload dialog', () => {
     await flushPromises();
     expect(wrapper.get('.is-failed').text()).toContain('上传失败');
     expect(wrapper.get('.is-failed').text()).toContain('重试');
+    const remove = wrapper
+      .get('.is-failed')
+      .findAll('button')
+      .find((button) => button.text() === '删除');
+    expect(remove?.attributes('aria-label')).toBe('删除失败文件：selected-2.md');
+
+    await remove?.trigger('click');
+
+    expect(wrapper.find('.is-failed').exists()).toBe(false);
+    expect(wrapper.text()).not.toContain('selected-2.md');
   });
 
   it('does not render the document table or empty state when loading fails', async () => {

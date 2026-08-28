@@ -24,6 +24,7 @@ describe('model provider configuration', () => {
       QUERY_ANSWER_MODE: 'hybrid',
       QUERY_MAX_LLM_CONTEXT_CHARS: 32_000,
       MODEL_PRICING_USD_PER_MILLION_TOKENS_JSON: {},
+      OLLAMA_KEEP_ALIVE: '30m',
     });
   });
 
@@ -129,6 +130,27 @@ describe('model provider configuration', () => {
       LLM_PROVIDER: 'deepseek',
       LLM_FALLBACK_PROVIDER: 'openai',
     });
+  });
+
+  it('bounds the Ollama native embedding keep-alive duration', () => {
+    const ollamaEnvironment = {
+      ...baseEnvironment,
+      EMBEDDING_PROVIDER: 'ollama',
+      EMBEDDING_MODEL: 'bge-m3:latest',
+      EMBEDDING_REGION: 'local',
+      OLLAMA_BASE_URL: 'http://host.docker.internal:11434',
+    };
+
+    expect(parseEnvironment(ollamaEnvironment)).toMatchObject({ OLLAMA_KEEP_ALIVE: '30m' });
+    expect(() => parseEnvironment({ ...ollamaEnvironment, OLLAMA_KEEP_ALIVE: '30s' })).toThrow(
+      'Invalid application configuration: OLLAMA_KEEP_ALIVE',
+    );
+    expect(() => parseEnvironment({ ...ollamaEnvironment, OLLAMA_KEEP_ALIVE: '25h' })).toThrow(
+      'Invalid application configuration: OLLAMA_KEEP_ALIVE',
+    );
+    expect(() => parseEnvironment({ ...ollamaEnvironment, OLLAMA_KEEP_ALIVE: 'forever' })).toThrow(
+      'Invalid application configuration: OLLAMA_KEEP_ALIVE',
+    );
   });
 
   it('requires qwen3-rerank and its dedicated compatible endpoint', () => {

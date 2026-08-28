@@ -152,7 +152,31 @@ describe('LlmService', () => {
     expect(answer).toHaveBeenNthCalledWith(2, expect.objectContaining({ citationRepair: true }));
     expect(repairWarn).toHaveBeenCalledWith(
       'llm_citation_repair_retry',
-      expect.objectContaining({ traceId: 'trace-a', status: 'invalid_citation' }),
+      expect.objectContaining({ traceId: 'trace-a', status: 'missing' }),
+    );
+  });
+
+  it('does not spend a repair call when the grounded model explicitly reports insufficient data', async () => {
+    const answer = vi.fn<LlmProvider['answer']>().mockResolvedValue({ text: '资料不足' });
+    const factory = {
+      getPrimary: () => llmProvider('deepseek', answer),
+      getFallback: () => null,
+    } as LlmProviderFactory;
+    const info = vi.fn();
+    const service = new LlmService(
+      factory,
+      { allAllowed: vi.fn().mockReturnValue(true) } as unknown as KnowledgeContextPolicy,
+      new AnswerSourceValidator(),
+      { info, warn: vi.fn() } as unknown as OperationalLogger,
+    );
+
+    await expect(
+      service.answer({ identity, question: '问题', contexts, traceId: 'trace-a' }),
+    ).rejects.toMatchObject({ reason: 'insufficient' });
+    expect(answer).toHaveBeenCalledOnce();
+    expect(info).toHaveBeenCalledWith(
+      'llm_grounded_context_insufficient',
+      expect.objectContaining({ traceId: 'trace-a', status: 'insufficient' }),
     );
   });
 

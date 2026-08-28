@@ -182,12 +182,13 @@ describe('document contracts', () => {
         strategy: 'tiles',
         tileSize: 512,
         minZoom: 0,
-        maxZoom: 8,
+        maxZoom: 15,
         baseWidth: 512,
         baseHeight: 256,
         overviewWidth: 1600,
         overviewHeight: 800,
         bounds: { minX: 100, minY: 200, maxX: 1100, maxY: 700 },
+        focusBounds: { minX: 200, minY: 250, maxX: 600, maxY: 500 },
         worldToPixel: [0.512, 0, 0, -0.512, -51.2, 358.4],
         entityCount: 120000,
         renderCostScore: 480000,
@@ -195,6 +196,21 @@ describe('document contracts', () => {
     });
 
     expect(preview.cad?.worldToPixel).toHaveLength(6);
+    expect(preview.cad?.focusBounds).toEqual({
+      minX: 200,
+      minY: 250,
+      maxX: 600,
+      maxY: 500,
+    });
+    expect(
+      documentPreviewSchema.safeParse({
+        ...preview,
+        cad: {
+          ...preview.cad,
+          focusBounds: { minX: 0, minY: 250, maxX: 600, maxY: 500 },
+        },
+      }).success,
+    ).toBe(false);
     expect(
       documentPreviewSchema.safeParse({ ...preview, kind: 'svg', cad: preview.cad }).success,
     ).toBe(false);

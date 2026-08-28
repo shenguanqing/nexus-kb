@@ -26,6 +26,39 @@ const metadataSchema = z.object({
   sectionPath: z.string().optional(),
 });
 
+const DOCUMENT_HINT_PATTERN =
+  /(?:#|楼|图|室|园|文档|文件|\.(?:pdf|dwg|dxf|docx?|xlsx|md|txt)\b|[a-z][a-z0-9_-]{3,})/iu;
+const GENERIC_DOCUMENT_HINT_TERMS = [
+  '建设单位',
+  '工程名称',
+  '智能化',
+  '信息化',
+  '平面图',
+  '系统图',
+  '设计说明',
+  '图纸',
+  '文档',
+  '文件',
+  '是哪家',
+  '是什么',
+  '有哪些',
+  '有什么',
+  '有几个',
+  '几个',
+  '多少',
+  '尺寸',
+  '讲了什么',
+];
+const MIN_DOCUMENT_HINT_CHARACTERS = 4;
+const MIN_CJK_DOCUMENT_HINT_CHARACTERS = 3;
+const MAX_DOCUMENT_HINT_DOCUMENTS = 200;
+const MAX_MATCHED_DOCUMENTS = 5;
+
+export interface QueryRetrievalResult {
+  contexts: RetrievedChunk[];
+  matchedDocumentIds: string[];
+}
+
 @Injectable()
 export class QueryRetrievalService {
   constructor(
@@ -36,11 +69,46 @@ export class QueryRetrievalService {
     @Optional() private readonly metrics?: MetricsService,
   ) {}
 
-  async retrieve(identity: Identity, vector: number[]): Promise<RetrievedChunk[]> {
-    const raw = await this.vectorStore.query({
+  async retrieve(
+    identity: Identity,
+    vector: number[],
+    question?: string,
+  ): Promise<RetrievedChunk[]> {
+    return (await this.retrieveDetailed(identity, vector, question)).contexts;
+  }
+
+  async retrieveDetailed(
+    identity: Identity,
+    vector: number[],
+    question?: string,
+  ): Promise<QueryRetrievalResult> {
+    const recallTopK = this.config.values.QUERY_RECALL_TOP_K;
+    const outputTopK =
+      this.config.values.RERANK_PROVIDER === 'none' ? this.config.values.RERANK_TOP_K : recallTopK;
+    const filter = this.acl.vectorFilter(identity);
+    const globalQuery = this.vectorStore.query({
       vector,
-      filter: this.acl.vectorFilter(identity),
-      topK: this.config.values.QUERY_RECALL_TOP_K,
+      filter,
+      topK: recallTopK,
+    });
+    const [globalResults, documentIds] = await Promise.all([
+      globalQuery,
+      question ? this.matchedDocumentIds(identity, question) : Promise.resolve([]),
+    ]);
+    const scopedResults =
+      documentIds.length > 0
+        ? await this.vectorStore.query({
+            vector,
+            filter: { ...filter, documentIds },
+            topK: recallTopK,
+          })
+        : [];
+    const seenIds = new Set<string>();
+    const selectedResults = documentIds.length > 0 ? scopedResults : globalResults;
+    const raw = selectedResults.filter((chunk) => {
+      if (seenIds.has(chunk.id)) return false;
+      seenIds.add(chunk.id);
+      return true;
     });
     const mapped = raw.map((chunk) => this.mapVectorChunk(chunk));
     const relevant = mapped.filter(
@@ -48,11 +116,64 @@ export class QueryRetrievalService {
     );
     if (relevant.length === 0) {
       this.metrics?.observeRetrieval(0);
-      return [];
+      return { contexts: [], matchedDocumentIds: documentIds };
     }
-    const expanded = await this.expandNeighbors(identity, relevant);
-    this.metrics?.observeRetrieval(expanded.length);
-    return expanded;
+    const matchedDocumentIdSet = new Set(documentIds);
+    const expanded = await this.expandNeighbors(identity, relevant, matchedDocumentIdSet);
+    const contexts = this.selectContexts(expanded, matchedDocumentIdSet, outputTopK);
+    this.metrics?.observeRetrieval(contexts.length);
+    return { contexts, matchedDocumentIds: documentIds };
+  }
+
+  private async matchedDocumentIds(identity: Identity, question: string): Promise<string[]> {
+    if (!DOCUMENT_HINT_PATTERN.test(question)) return [];
+    const normalizedQuestion = normalizeDocumentHint(question);
+    const minimumCharacters = /[\p{Script=Han}]{3}/u.test(normalizedQuestion)
+      ? MIN_CJK_DOCUMENT_HINT_CHARACTERS
+      : MIN_DOCUMENT_HINT_CHARACTERS;
+    if ([...normalizedQuestion].length < minimumCharacters) return [];
+    const documents = await this.prisma.document.findMany({
+      where: { ...this.acl.documentWhere(identity), status: 'active' },
+      select: { id: true, sourceName: true },
+      orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
+      take: MAX_DOCUMENT_HINT_DOCUMENTS,
+    });
+    const scored = documents
+      .map((document) => ({
+        id: document.id,
+        score: longestCommonSubstringLength(
+          normalizedQuestion,
+          normalizeDocumentHint(document.sourceName),
+        ),
+      }))
+      .filter((document) => document.score >= minimumCharacters);
+    const bestScore = Math.max(0, ...scored.map((document) => document.score));
+    return scored
+      .filter((document) => document.score === bestScore)
+      .slice(0, MAX_MATCHED_DOCUMENTS)
+      .map((document) => document.id);
+  }
+
+  private selectContexts(
+    contexts: RetrievedChunk[],
+    matchedDocumentIds: Set<string>,
+    topK: number,
+  ): RetrievedChunk[] {
+    const ordered = [...contexts].sort((left, right) => {
+      const leftScoped = matchedDocumentIds.has(left.metadata.documentId);
+      const rightScoped = matchedDocumentIds.has(right.metadata.documentId);
+      if (leftScoped !== rightScoped) return leftScoped ? -1 : 1;
+      return left.distance - right.distance;
+    });
+    const seenTexts = new Set<string>();
+    return ordered
+      .filter((context) => {
+        const textKey = normalizeContextText(context.text);
+        if (seenTexts.has(textKey)) return false;
+        seenTexts.add(textKey);
+        return true;
+      })
+      .slice(0, topK);
   }
 
   private mapVectorChunk(chunk: RetrievedVectorChunk): RetrievedChunk {
@@ -85,6 +206,7 @@ export class QueryRetrievalService {
   private async expandNeighbors(
     identity: Identity,
     hits: RetrievedChunk[],
+    matchedDocumentIds = new Set<string>(),
   ): Promise<RetrievedChunk[]> {
     const window = this.config.values.QUERY_NEIGHBOR_WINDOW;
     const windows = hits.flatMap((hit) => {
@@ -199,7 +321,12 @@ export class QueryRetrievalService {
     });
     let totalCharacters = 0;
     return merged
-      .sort((left, right) => left.distance - right.distance)
+      .sort((left, right) => {
+        const leftScoped = matchedDocumentIds.has(left.metadata.documentId);
+        const rightScoped = matchedDocumentIds.has(right.metadata.documentId);
+        if (leftScoped !== rightScoped) return leftScoped ? -1 : 1;
+        return left.distance - right.distance;
+      })
       .filter((context) => {
         if (
           totalCharacters + context.text.length >
@@ -215,4 +342,39 @@ export class QueryRetrievalService {
   private stringArray(value: unknown): string[] {
     return Array.isArray(value) && value.every((item) => typeof item === 'string') ? value : [];
   }
+}
+
+function normalizeDocumentHint(value: string): string {
+  let normalized = value
+    .toLowerCase()
+    .replaceAll('消防控制室', '消控室')
+    .replaceAll('消防室', '消控室');
+  for (const term of GENERIC_DOCUMENT_HINT_TERMS) {
+    normalized = normalized.replaceAll(term, '');
+  }
+  return normalized
+    .replace(/\.(?:pdf|dwg|dxf|docx?|xlsx|md|txt)$/iu, '')
+    .replace(/[^\p{L}\p{N}#_-]+/gu, '')
+    .slice(0, 128);
+}
+
+function normalizeContextText(value: string): string {
+  return value.normalize('NFKC').replace(/\s+/gu, ' ').trim().toLowerCase();
+}
+
+function longestCommonSubstringLength(left: string, right: string): number {
+  const leftCharacters = [...left];
+  const rightCharacters = [...right];
+  let previous = new Array<number>(rightCharacters.length + 1).fill(0);
+  let longest = 0;
+  for (const leftCharacter of leftCharacters) {
+    const current = new Array<number>(rightCharacters.length + 1).fill(0);
+    for (const [index, rightCharacter] of rightCharacters.entries()) {
+      if (leftCharacter !== rightCharacter) continue;
+      current[index + 1] = (previous[index] ?? 0) + 1;
+      longest = Math.max(longest, current[index + 1] ?? 0);
+    }
+    previous = current;
+  }
+  return longest;
 }

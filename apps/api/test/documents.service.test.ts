@@ -59,66 +59,115 @@ describe('DocumentsService tenant isolation', () => {
     expect(query.skip).toBe(20);
   });
 
-  it('requeues only an ACL-visible retryable failed ingestion job', async () => {
-    const retry = vi.fn().mockResolvedValue(undefined);
-    const claimJob = vi.fn().mockResolvedValue({ count: 1 });
-    const updateDocument = vi.fn().mockResolvedValue({});
-    const updateVersion = vi.fn().mockResolvedValue({});
-    const createAudit = vi.fn().mockResolvedValue({});
-    const transactionClient = {
-      ingestionJob: { updateMany: claimJob },
-      document: { update: updateDocument },
-      documentVersion: { update: updateVersion },
-      documentLifecycleAudit: { create: createAudit },
-    };
+  it.each([
+    { errorCode: 'EMBEDDING_UNAVAILABLE', retryable: true },
+    { errorCode: 'CAD_ENTITY_LIMIT_EXCEEDED', retryable: false },
+  ])(
+    'requeues an ACL-visible manually retryable failed ingestion job ($errorCode)',
+    async ({ errorCode, retryable: storedRetryable }) => {
+      const retry = vi.fn().mockResolvedValue(undefined);
+      const claimJob = vi.fn().mockResolvedValue({ count: 1 });
+      const updateDocument = vi.fn().mockResolvedValue({});
+      const updateVersion = vi.fn().mockResolvedValue({});
+      const createAudit = vi.fn().mockResolvedValue({});
+      const transactionClient = {
+        ingestionJob: { updateMany: claimJob },
+        document: { update: updateDocument },
+        documentVersion: { update: updateVersion },
+        documentLifecycleAudit: { create: createAudit },
+      };
+      const service = new DocumentsService(
+        {} as AppConfig,
+        {
+          ingestionJob: {
+            findFirst: vi.fn().mockResolvedValue({
+              id: 'a5427e4a-b9db-4750-8dfd-02d601a41473',
+              documentId: '6769af9a-a4d0-4dc2-a97d-942584a9c826',
+              version: 1,
+              status: 'failed',
+              step: 'failed',
+              errorCode,
+              errorCategory: 'embedding',
+              retryable: storedRetryable,
+              completedAt: new Date(),
+              document: {
+                activeVersion: null,
+                status: 'failed',
+                storageKey: '6769af9a-a4d0-4dc2-a97d-942584a9c826.pdf',
+              },
+            }),
+          },
+          $transaction: (operation: (tx: typeof transactionClient) => Promise<unknown>) =>
+            operation(transactionClient),
+        } as unknown as PrismaService,
+        { retry } as unknown as IngestionQueue,
+        {} as ChromaVectorStore,
+        logger,
+        acl,
+      );
+
+      await expect(
+        service.retryJob(
+          'a5427e4a-b9db-4750-8dfd-02d601a41473',
+          identity,
+          'd26720b3-1f78-40df-868d-8ca8510dca26',
+        ),
+      ).resolves.toMatchObject({ status: 'queued' });
+      expect(retry).toHaveBeenCalledWith('a5427e4a-b9db-4750-8dfd-02d601a41473', {
+        ingestionJobId: 'a5427e4a-b9db-4750-8dfd-02d601a41473',
+        documentId: '6769af9a-a4d0-4dc2-a97d-942584a9c826',
+        storageKey: '6769af9a-a4d0-4dc2-a97d-942584a9c826.pdf',
+      });
+      const [updateInput] = claimJob.mock.calls[0] as unknown as [
+        { data: { status: string; startedAt: Date | null } },
+      ];
+      expect(updateInput.data.status).toBe('queued');
+      expect(updateInput.data.startedAt).toBeNull();
+      expect(createAudit).toHaveBeenCalledOnce();
+    },
+  );
+
+  it('exposes capacity failures as manually retryable without enabling queue auto-retry', async () => {
+    const now = new Date('2026-08-24T09:00:00.000Z');
     const service = new DocumentsService(
       {} as AppConfig,
       {
         ingestionJob: {
-          findFirst: vi.fn().mockResolvedValue({
-            id: 'a5427e4a-b9db-4750-8dfd-02d601a41473',
-            documentId: '6769af9a-a4d0-4dc2-a97d-942584a9c826',
-            version: 1,
-            status: 'failed',
-            step: 'failed',
-            errorCode: 'EMBEDDING_UNAVAILABLE',
-            errorCategory: 'embedding',
-            retryable: true,
-            completedAt: new Date(),
-            document: {
-              activeVersion: null,
+          findMany: vi.fn().mockResolvedValue([
+            {
+              id: 'a5427e4a-b9db-4750-8dfd-02d601a41473',
+              documentId: '6769af9a-a4d0-4dc2-a97d-942584a9c826',
+              version: 1,
+              kind: 'ingestion',
               status: 'failed',
-              storageKey: '6769af9a-a4d0-4dc2-a97d-942584a9c826.pdf',
+              step: 'failed',
+              checkpoint: 'queued',
+              attempts: 1,
+              traceId: 'd26720b3-1f78-40df-868d-8ca8510dca26',
+              embeddingCompletedChunks: 0,
+              embeddingTotalChunks: null,
+              embeddingBatchSize: null,
+              errorCode: 'CAD_ENTITY_LIMIT_EXCEEDED',
+              errorCategory: 'parser',
+              retryable: false,
+              startedAt: now,
+              completedAt: now,
+              updatedAt: now,
             },
-          }),
+          ]),
         },
-        $transaction: (operation: (tx: typeof transactionClient) => Promise<unknown>) =>
-          operation(transactionClient),
       } as unknown as PrismaService,
-      { retry } as unknown as IngestionQueue,
+      {} as IngestionQueue,
       {} as ChromaVectorStore,
       logger,
       acl,
     );
 
-    await expect(
-      service.retryJob(
-        'a5427e4a-b9db-4750-8dfd-02d601a41473',
-        identity,
-        'd26720b3-1f78-40df-868d-8ca8510dca26',
-      ),
-    ).resolves.toMatchObject({ status: 'queued' });
-    expect(retry).toHaveBeenCalledWith('a5427e4a-b9db-4750-8dfd-02d601a41473', {
-      ingestionJobId: 'a5427e4a-b9db-4750-8dfd-02d601a41473',
-      documentId: '6769af9a-a4d0-4dc2-a97d-942584a9c826',
-      storageKey: '6769af9a-a4d0-4dc2-a97d-942584a9c826.pdf',
-    });
-    const [updateInput] = claimJob.mock.calls[0] as unknown as [
-      { data: { status: string; startedAt: Date | null } },
-    ];
-    expect(updateInput.data.status).toBe('queued');
-    expect(updateInput.data.startedAt).toBeNull();
-    expect(createAudit).toHaveBeenCalledOnce();
+    const result = (await service.getFailedJobs(identity)) as {
+      jobs: Array<{ retryable: boolean }>;
+    };
+
+    expect(result.jobs[0]?.retryable).toBe(true);
   });
 
   it('lists only ACL-visible documents with server-side pagination and filters', async () => {
@@ -837,6 +886,63 @@ describe('DocumentsService tenant isolation', () => {
         previewStorageKey: storageKey,
         previewKind: 'cad_tiles',
       });
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
+  it('serves the focused CAD overview only for an ACL-visible focused manifest', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'nexuskb-cad-focus-overview-'));
+    const documentId = '6769af9a-a4d0-4dc2-a97d-942584a9c826';
+    const bundleId = 'd26720b3-1f78-40df-868d-8ca8510dca26';
+    const storageKey = `${documentId}.cad`;
+    const bundle = join(directory, storageKey, 'bundles', bundleId);
+    await mkdir(bundle, { recursive: true });
+    await writeFile(join(directory, storageKey, 'current.json'), JSON.stringify({ bundleId }));
+    await writeFile(
+      join(bundle, 'manifest.json'),
+      JSON.stringify({
+        strategy: 'tiles',
+        tileSize: 512,
+        minZoom: 0,
+        maxZoom: 15,
+        baseWidth: 512,
+        baseHeight: 256,
+        overviewWidth: 1600,
+        overviewHeight: 800,
+        bounds: { minX: 0, minY: 0, maxX: 1_000_000, maxY: 500_000 },
+        focusBounds: { minX: 100, minY: 100, maxX: 1100, maxY: 600 },
+        worldToPixel: [0.000512, 0, 0, -0.000512, 0, 256],
+        entityCount: 120000,
+        renderCostScore: 480000,
+      }),
+    );
+    await writeFile(join(bundle, 'focus-overview.png'), 'focus');
+    const findFirst = vi.fn().mockResolvedValue({
+      sourceName: '厂区平面图.dxf',
+      previewStorageKey: storageKey,
+      previewKind: 'cad_tiles',
+      previewMimeType: 'application/vnd.nexuskb.cad-tiles+json',
+    });
+    const service = new DocumentsService(
+      { values: { PREVIEW_ARTIFACTS_PATH: directory } } as unknown as AppConfig,
+      { document: { findFirst } } as unknown as PrismaService,
+      {} as IngestionQueue,
+      {} as ChromaVectorStore,
+      logger,
+      acl,
+    );
+
+    try {
+      await expect(
+        service.getDocumentPreviewFocusOverview(documentId, identity),
+      ).resolves.toMatchObject({
+        path: await realpath(join(bundle, 'focus-overview.png')),
+        mimeType: 'image/png',
+        sourceName: '厂区平面图.dxf',
+      });
+      const [query] = findFirst.mock.calls[0] as unknown as [{ where: { tenantId: string } }];
+      expect(query.where.tenantId).toBe(identity.tenantId);
     } finally {
       await rm(directory, { recursive: true, force: true });
     }

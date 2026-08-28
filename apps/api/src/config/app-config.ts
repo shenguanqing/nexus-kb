@@ -142,6 +142,14 @@ function isApprovedOllamaEndpoint(value: string): boolean {
   }
 }
 
+function ollamaKeepAliveSeconds(value: string): number | null {
+  const match = /^([1-9]\d{0,4})(s|m|h)$/.exec(value);
+  if (!match) return null;
+  const amount = Number(match[1]);
+  const multiplier = match[2] === 'h' ? 3600 : match[2] === 'm' ? 60 : 1;
+  return amount * multiplier;
+}
+
 function isApprovedLocalRerankEndpoint(value: string): boolean {
   try {
     const url = new URL(value);
@@ -211,7 +219,7 @@ const environmentSchema = z
       .max(1_073_741_824)
       .default(20_971_520),
     CAD_PREVIEW_TILE_SIZE: z.coerce.number().int().min(256).max(1024).default(512),
-    CAD_PREVIEW_MAX_ZOOM: z.coerce.number().int().min(1).max(12).default(8),
+    CAD_PREVIEW_MAX_ZOOM: z.coerce.number().int().min(1).max(12).default(12),
     CAD_PREVIEW_METATILE_RADIUS: z.coerce.number().int().min(0).max(2).default(1),
     CAD_PREVIEW_TILE_CACHE_BYTES: z.coerce
       .number()
@@ -303,6 +311,7 @@ const environmentSchema = z
     ALIBABA_BASE_URL: z.string().trim().default(''),
     ALIBABA_REGION: z.string().trim().max(64).default('cn-beijing'),
     OLLAMA_BASE_URL: z.string().trim().default(''),
+    OLLAMA_KEEP_ALIVE: z.string().trim().max(16).default('30m'),
     LLM_PROVIDER: llmProviderSchema.default('none'),
     LLM_MODEL: z.string().trim().max(128).default(''),
     LLM_FALLBACK_PROVIDER: llmProviderSchema.default('none'),
@@ -520,6 +529,14 @@ const environmentSchema = z
           code: 'custom',
           path: ['OLLAMA_BASE_URL'],
           message: 'must be an approved local HTTP endpoint on port 11434',
+        });
+      }
+      const keepAliveSeconds = ollamaKeepAliveSeconds(environment.OLLAMA_KEEP_ALIVE);
+      if (keepAliveSeconds === null || keepAliveSeconds < 60 || keepAliveSeconds > 86_400) {
+        context.addIssue({
+          code: 'custom',
+          path: ['OLLAMA_KEEP_ALIVE'],
+          message: 'must be a duration from 60s to 24h using s, m or h',
         });
       }
       if (![64, 128, 256, 512, 768, 1024, 1536, 2048].includes(environment.EMBEDDING_DIMENSIONS)) {

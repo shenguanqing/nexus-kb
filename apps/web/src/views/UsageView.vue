@@ -34,11 +34,17 @@
         <strong class="kb-text kb-text--danger">无法加载用量</strong><span>{{ errorMessage }}</span>
       </div>
       <template v-else-if="usage">
-        <div class="kb-data-grid kb-data-grid--three kb-data-grid--flush">
+        <div class="kb-data-grid kb-data-grid--four kb-data-grid--flush">
           <div class="kb-block kb-data-grid__item">
             <span class="kb-text kb-text--sm kb-text--secondary">查询次数</span>
             <span class="kb-data-grid__value">
               {{ usage.totalQueries }}
+            </span>
+          </div>
+          <div class="kb-block kb-data-grid__item">
+            <span class="kb-text kb-text--sm kb-text--secondary">查询 P50</span>
+            <span class="kb-data-grid__value">
+              {{ usage.queryP50Ms === null ? emptyValueLabel : `${usage.queryP50Ms} ms` }}
             </span>
           </div>
           <div class="kb-block kb-data-grid__item">

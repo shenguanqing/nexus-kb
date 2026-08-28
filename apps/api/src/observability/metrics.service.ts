@@ -5,6 +5,28 @@ import { AppConfig } from '../config/app-config';
 
 type ProviderKind = 'embedding' | 'llm' | 'rerank';
 
+export type KnowledgeQueryPhase =
+  | 'rate_limit'
+  | 'history_read'
+  | 'query_embedding'
+  | 'vector_retrieval'
+  | 'rerank'
+  | 'source_auth_before_llm'
+  | 'llm'
+  | 'source_auth_before_return'
+  | 'audit_write'
+  | 'history_write';
+
+export type LlmCitationEvent =
+  | 'valid'
+  | 'empty'
+  | 'insufficient'
+  | 'missing'
+  | 'out_of_range'
+  | 'repair_started'
+  | 'repair_succeeded'
+  | 'repair_failed';
+
 interface ProviderMetricEvent {
   provider: string;
   model: string;
@@ -47,6 +69,9 @@ export class MetricsService {
   private readonly queueJobs: Gauge<'state'>;
   private readonly queueOldestWait: Gauge;
   private readonly retrievalResults: Counter<'outcome'>;
+  private readonly knowledgeQueryPhaseDuration: Histogram<'phase' | 'status'>;
+  private readonly llmCitationEvents: Counter<'event'>;
+  private readonly embeddingCacheRequests: Counter<'operation' | 'outcome'>;
   private readonly rerankDegradations: Counter<'reason'>;
   private readonly rateLimits: Counter<'scope'>;
   private readonly dependencyHealth: Gauge<'component'>;
@@ -144,6 +169,22 @@ export class MetricsService {
       'Knowledge retrieval attempts by empty or non-empty outcome.',
       ['outcome'],
     );
+    this.knowledgeQueryPhaseDuration = this.histogram(
+      'nexuskb_knowledge_query_phase_duration_seconds',
+      'Knowledge query duration by bounded pipeline phase and outcome.',
+      ['phase', 'status'],
+      [0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30, 60, 120],
+    );
+    this.llmCitationEvents = this.counter(
+      'nexuskb_llm_citation_events_total',
+      'Grounded LLM citation validation and repair events.',
+      ['event'],
+    );
+    this.embeddingCacheRequests = this.counter(
+      'nexuskb_embedding_cache_requests_total',
+      'Embedding cache requests by operation and hit outcome.',
+      ['operation', 'outcome'],
+    );
     this.rerankDegradations = this.counter(
       'nexuskb_rerank_degradations_total',
       'Rerank fallback to vector order by bounded reason.',
@@ -236,7 +277,7 @@ export class MetricsService {
     durationMs: number,
   ): void {
     const labels = {
-      zoom: String(Math.min(12, Math.max(0, Math.trunc(zoom)))),
+      zoom: String(Math.min(15, Math.max(0, Math.trunc(zoom)))),
       cache,
       status,
     };
@@ -258,6 +299,25 @@ export class MetricsService {
 
   observeRetrieval(resultCount: number): void {
     this.retrievalResults.inc({ outcome: resultCount === 0 ? 'empty' : 'non_empty' });
+  }
+
+  observeKnowledgeQueryPhase(
+    phase: KnowledgeQueryPhase,
+    status: 'success' | 'error',
+    durationMs: number,
+  ): void {
+    this.knowledgeQueryPhaseDuration.observe({ phase, status }, durationMs / 1000);
+  }
+
+  observeLlmCitationEvent(event: LlmCitationEvent): void {
+    this.llmCitationEvents.inc({ event });
+  }
+
+  observeEmbeddingCache(
+    operation: 'documents' | 'query',
+    outcome: 'hit' | 'partial' | 'miss',
+  ): void {
+    this.embeddingCacheRequests.inc({ operation, outcome });
   }
 
   observeRerankDegradation(reason: string): void {

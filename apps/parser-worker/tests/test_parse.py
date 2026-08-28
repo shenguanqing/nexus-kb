@@ -498,11 +498,27 @@ def test_dxf_extracts_summary_text_block_attributes_and_dimensions(tmp_path: Pat
     drawing = ezdxf.new("R2010")
     drawing.layers.add("ANNOTATION")
     drawing.layers.add("DIMENSIONS")
+    drawing.layers.add("TITLE_VALUES")
     block = drawing.blocks.new("TITLE_BLOCK")
     block.add_attdef("PROJECT", (0, 0), text="未填写", dxfattribs={"layer": "ANNOTATION"})
     insert = drawing.modelspace().add_blockref("TITLE_BLOCK", (0, 0))
     insert.add_auto_attribs({"PROJECT": "NexusKB CAD"})
     drawing.modelspace().add_mtext("Payment term: 30 days", dxfattribs={"layer": "ANNOTATION"})
+    drawing.modelspace().add_text(
+        "建设单位", dxfattribs={"layer": "ANNOTATION", "insert": (100, 100)}
+    )
+    drawing.modelspace().add_text(
+        "不应配对的左侧文字",
+        dxfattribs={"layer": "TITLE_VALUES", "insert": (80, 100)},
+    )
+    drawing.modelspace().add_text(
+        "无锡市华夏房地产开发有限公司",
+        dxfattribs={"layer": "TITLE_VALUES", "insert": (130, 100.5)},
+    )
+    drawing.modelspace().add_text(
+        "不应配对的其他行",
+        dxfattribs={"layer": "TITLE_VALUES", "insert": (105, 120)},
+    )
     dimension = drawing.modelspace().add_linear_dim(
         base=(0, 3),
         p1=(0, 0),
@@ -520,14 +536,71 @@ def test_dxf_extracts_summary_text_block_attributes_and_dimensions(tmp_path: Pat
     assert response.status_code == 200
     parsed = response.json()
     assert parsed["parser"] == "ezdxf"
-    assert parsed["parserVersion"] == ezdxf.__version__
+    assert parsed["parserVersion"] == f"{ezdxf.__version__}+nexus-4"
     assert parsed["elements"][0]["elementType"] == "cad_summary"
     assert "ANNOTATION" in parsed["elements"][0]["metadata"]["layers"]
     assert any(element["text"] == "NexusKB CAD" for element in parsed["elements"])
     assert any(element["text"] == "Payment term: 30 days" for element in parsed["elements"])
+    title_field = next(
+        element
+        for element in parsed["elements"]
+        if element["elementType"] == "cad_title_field"
+        and element["text"].startswith("建设单位：")
+    )
+    assert title_field["text"] == "建设单位：无锡市华夏房地产开发有限公司"
+    assert title_field["sectionPath"] == ["Model", "CAD 标题栏"]
+    assert title_field["metadata"]["relation"] == "same_row_right"
+    assert title_field["metadata"]["labelInsert"] == [100.0, 100.0, 0.0]
+    assert title_field["metadata"]["valueInsert"] == [130.0, 100.5, 0.0]
+    title_summary = next(
+        element
+        for element in parsed["elements"]
+        if element["elementType"] == "cad_title_summary"
+    )
+    assert "[Model] 建设单位：无锡市华夏房地产开发有限公司" in title_summary["text"]
+    assert title_summary["sectionPath"] == ["CAD 标题栏汇总"]
+    assert title_summary["metadata"] == {"fieldCount": 1, "truncated": False}
     assert any(element["elementType"] == "cad_dimension" for element in parsed["elements"])
     assert parsed["preview"]["kind"] == "svg"
     assert (tmp_path / "previews" / parsed["preview"]["storageKey"]).is_file()
+
+
+def test_dxf_reuses_repeated_block_definitions_and_keeps_instance_attributes(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "repeated-blocks.dxf"
+    drawing = ezdxf.new("R2010")
+    block = drawing.blocks.new("DEVICE")
+    block.add_attdef("DEVICE_ID", (0, 0), text="未编号")
+    for offset in range(10):
+        block.add_line((offset, 0), (offset, 1))
+    for index in range(25):
+        insert = drawing.modelspace().add_blockref("DEVICE", (index * 2, 0))
+        insert.add_auto_attribs({"DEVICE_ID": f"AGV-{index:02d}"})
+    drawing.saveas(path)
+    client = TestClient(
+        create_app(
+            Settings(
+                PARSER_INTERNAL_TOKEN=TOKEN,
+                RAW_DOCS_PATH=tmp_path,
+                MAX_CAD_ENTITIES=70,
+            )
+        )
+    )
+    body = payload(path)
+    body["mimeType"] = "application/dxf"
+
+    response = client.post("/internal/v1/parse", headers={"x-internal-token": TOKEN}, json=body)
+
+    assert response.status_code == 200
+    parsed = response.json()
+    summary = parsed["elements"][0]
+    assert summary["metadata"]["visitedEntityCount"] == 61
+    assert summary["metadata"]["expandedBlockContextCount"] == 1
+    assert summary["metadata"]["reusedBlockDefinitionCount"] == 24
+    assert "DXF_REPEATED_BLOCK_DEFINITIONS_REUSED" in parsed["warnings"]
+    extracted_text = {element["text"] for element in parsed["elements"]}
+    assert {f"AGV-{index:02d}" for index in range(25)} <= extracted_text
 
 
 def test_dxf_rejects_entity_limit(tmp_path: Path) -> None:

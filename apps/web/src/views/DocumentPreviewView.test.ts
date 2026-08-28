@@ -56,9 +56,15 @@ function dispatchPointerEvent(
   element.dispatchEvent(event);
 }
 
-function dispatchCadWheelEvent(element: Element, deltaY: number): void {
+function dispatchCadWheelEvent(
+  element: Element,
+  deltaY: number,
+  position: { clientX: number; clientY: number } = { clientX: 0, clientY: 0 },
+): void {
   const event = new Event('wheel', { bubbles: true, cancelable: true });
   Object.defineProperties(event, {
+    clientX: { value: position.clientX },
+    clientY: { value: position.clientY },
     ctrlKey: { value: true },
     deltaY: { value: deltaY },
   });
@@ -186,11 +192,15 @@ describe('DocumentPreviewView', () => {
     const zoomInButton = wrapper.get('[aria-label="放大 CAD 预览"]');
     await zoomInButton.trigger('click');
     expect(wrapper.get('.preview-image').attributes('style')).toContain('width: 150%');
-    for (let step = 0; step < 13; step += 1) {
+    for (let step = 0; step < 21; step += 1) {
       await zoomInButton.trigger('click');
     }
-    expect(wrapper.get('.preview-image').attributes('style')).toContain('width: 25600%');
+    expect(wrapper.get('.preview-image').attributes('style')).toContain('width: 409600%');
     expect(zoomInButton.attributes()).toHaveProperty('disabled');
+    expect(wrapper.get('[aria-label="园区平面图.dxf CAD 鸟瞰图"]').text()).toContain('拖动定位');
+    expect(wrapper.get('[aria-label="园区平面图.dxf CAD 鸟瞰图"]').text()).not.toContain(
+      '鸟瞰图',
+    );
     expect(wrapper.get('.preview-security-badge').attributes('title')).toBe(
       '每次读取都会重新校验租户、部门与敏感度权限。',
     );
@@ -257,6 +267,99 @@ describe('DocumentPreviewView', () => {
     expect(viewport.classes()).not.toContain('is-dragging');
   });
 
+  it('keeps the same SVG CAD viewport center across repeated button zooms', async () => {
+    api.fetchDocumentPreview.mockResolvedValue({
+      documentId: 'document-id',
+      sourceName: '教室大样图.dwg',
+      sourceMimeType: 'image/vnd.dxf',
+      status: 'ready',
+      kind: 'svg',
+      contentType: 'image/svg+xml',
+      renderer: 'ezdxf-svg',
+      rendererVersion: '1.4.4',
+      generatedAt: '2026-08-09T08:00:00.000Z',
+      fallbackVersion: null,
+      cad: null,
+    });
+
+    const wrapper = mountView();
+    await flushPromises();
+    const viewport = wrapper.get('.preview-image-viewport');
+    const image = wrapper.get<HTMLImageElement>('.preview-image');
+    Object.defineProperties(viewport.element, {
+      clientWidth: { configurable: true, get: () => 800 },
+      clientHeight: { configurable: true, get: () => 600 },
+      scrollWidth: {
+        configurable: true,
+        get: () => (Number.parseFloat(image.element.style.width) / 100) * 800,
+      },
+      scrollHeight: {
+        configurable: true,
+        get: () => (Number.parseFloat(image.element.style.width) / 100) * 600,
+      },
+      scrollLeft: { configurable: true, value: 0, writable: true },
+      scrollTop: { configurable: true, value: 0, writable: true },
+    });
+
+    const zoomInButton = wrapper.get('[aria-label="放大 CAD 预览"]');
+    await zoomInButton.trigger('click');
+    await wrapper.vm.$nextTick();
+    expect(viewport.element.scrollLeft).toBe(200);
+    expect(viewport.element.scrollTop).toBe(150);
+
+    await zoomInButton.trigger('click');
+    await wrapper.vm.$nextTick();
+    expect(image.attributes('style')).toContain('width: 225%');
+    expect(viewport.element.scrollLeft).toBe(500);
+    expect(viewport.element.scrollTop).toBe(375);
+  });
+
+  it('keeps the SVG CAD point under the pointer fixed during wheel zoom', async () => {
+    api.fetchDocumentPreview.mockResolvedValue({
+      documentId: 'document-id',
+      sourceName: '教室大样图.dwg',
+      sourceMimeType: 'image/vnd.dxf',
+      status: 'ready',
+      kind: 'svg',
+      contentType: 'image/svg+xml',
+      renderer: 'ezdxf-svg',
+      rendererVersion: '1.4.4',
+      generatedAt: '2026-08-09T08:00:00.000Z',
+      fallbackVersion: null,
+      cad: null,
+    });
+
+    const wrapper = mountView();
+    await flushPromises();
+    const viewport = wrapper.get('.preview-image-viewport');
+    const image = wrapper.get<HTMLImageElement>('.preview-image');
+    Object.defineProperties(viewport.element, {
+      clientWidth: { configurable: true, get: () => 800 },
+      clientHeight: { configurable: true, get: () => 600 },
+      scrollWidth: {
+        configurable: true,
+        get: () => (Number.parseFloat(image.element.style.width) / 100) * 800,
+      },
+      scrollHeight: {
+        configurable: true,
+        get: () => (Number.parseFloat(image.element.style.width) / 100) * 600,
+      },
+      scrollLeft: { configurable: true, value: 0, writable: true },
+      scrollTop: { configurable: true, value: 0, writable: true },
+      getBoundingClientRect: {
+        configurable: true,
+        value: () => ({ height: 600, left: 100, top: 50, width: 800 }),
+      },
+    });
+
+    dispatchCadWheelEvent(viewport.element, -1, { clientX: 200, clientY: 150 });
+    await wrapper.vm.$nextTick();
+
+    expect(image.attributes('style')).toContain('width: 125%');
+    expect(viewport.element.scrollLeft).toBe(25);
+    expect(viewport.element.scrollTop).toBe(25);
+  });
+
   it('uses the tiled CAD viewer and accepts its zoom capability state', async () => {
     api.fetchDocumentPreview.mockResolvedValue({
       documentId: 'document-id',
@@ -265,8 +368,8 @@ describe('DocumentPreviewView', () => {
       status: 'ready',
       kind: 'cad_tiles',
       contentType: 'application/vnd.nexuskb.cad-tiles+json',
-      renderer: 'ezdxf-cad-tiles',
-      rendererVersion: '1',
+      renderer: 'ezdxf-cad-tiles-progressive',
+      rendererVersion: '2',
       generatedAt: '2026-08-09T08:00:00.000Z',
       fallbackVersion: null,
       cad: {
@@ -289,6 +392,7 @@ describe('DocumentPreviewView', () => {
     await flushPromises();
     const viewer = wrapper.getComponent({ name: 'CadTileViewer' });
     expect(viewer.props('documentId')).toBe('document-id');
+    expect(viewer.props('refreshOverviewOnDetail')).toBe(true);
     const zoomInButton = wrapper.get('[aria-label="放大 CAD 预览"]');
     expect(zoomInButton.attributes('disabled')).toBe('false');
     (

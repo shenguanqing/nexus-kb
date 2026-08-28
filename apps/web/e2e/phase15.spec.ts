@@ -1408,6 +1408,7 @@ test('keeps every authorized page within a 375px mobile viewport', async ({ page
           to: '2026-07-22T00:00:00.000Z',
           totalQueries: 0,
           failureRate: null,
+          queryP50Ms: null,
           queryP95Ms: null,
           providers: [],
           departments: [],
@@ -1909,6 +1910,7 @@ test('uses one shared data grid for audit, ingestion, and system details', async
         to: '2026-07-22T00:00:00.000Z',
         totalQueries: 18,
         failureRate: 0.05,
+        queryP50Ms: 210,
         queryP95Ms: 420,
         providers: [],
         departments: [],
@@ -2069,6 +2071,7 @@ test('fills and localizes the Mobile usage date picker popper', async ({ page })
         to: '2026-07-22T00:00:00.000Z',
         totalQueries: 0,
         failureRate: null,
+        queryP50Ms: null,
         queryP95Ms: null,
         providers: [],
         departments: [],
@@ -2333,6 +2336,7 @@ test('keeps landscape mobile controls aligned and management content scrollable'
         to: '2026-07-22T00:00:00.000Z',
         totalQueries: 138,
         failureRate: 0.13,
+        queryP50Ms: 2480,
         queryP95Ms: 5388,
         providers: [
           {
@@ -3386,6 +3390,7 @@ test('uses the document-style three-tier usage and access toolbars', async ({ pa
         to: '2026-08-14T00:00:00.000Z',
         totalQueries: 0,
         failureRate: null,
+        queryP50Ms: null,
         queryP95Ms: null,
         providers: [],
         departments: [],
@@ -3698,6 +3703,9 @@ test('keeps failed upload rows aligned in the pad dialog', async ({ page }) => {
   await dialog.getByRole('button', { name: '开始上传' }).click();
   await expect(dialog.locator('.upload-file-error')).toContainText('相同权限范围');
   await expect(dialog.getByRole('button', { name: '重试' })).toBeVisible();
+  await expect(
+    dialog.getByRole('button', { name: '删除失败文件：动态表单 API.docx' }),
+  ).toBeVisible();
 
   const rowLayout = await dialog.locator('.upload-file-item').evaluate((row) => {
     const bounds = (selector: string) =>
@@ -3706,6 +3714,7 @@ test('keeps failed upload rows aligned in the pad dialog', async ({ page }) => {
     const status = bounds('.upload-file-heading .el-tag');
     const error = bounds('.upload-file-error');
     const retry = bounds('.upload-file-retry');
+    const remove = bounds('.upload-file-remove');
     const center = (rect: DOMRect | undefined) =>
       rect ? rect.top + rect.height / 2 : Number.POSITIVE_INFINITY;
     return {
@@ -3713,6 +3722,7 @@ test('keeps failed upload rows aligned in the pad dialog', async ({ page }) => {
       firstRowCenterDelta: Math.abs(center(name) - center(status)),
       secondRowCenterDelta: Math.abs(center(error) - center(retry)),
       errorBeforeRetry: error && retry ? error.right <= retry.left : false,
+      retryBeforeRemove: retry && remove ? retry.right <= remove.left : false,
       height: row.getBoundingClientRect().height,
       scrollWidth: row.scrollWidth,
       clientWidth: row.clientWidth,
@@ -3722,6 +3732,7 @@ test('keeps failed upload rows aligned in the pad dialog', async ({ page }) => {
   expect(rowLayout.firstRowCenterDelta).toBeLessThanOrEqual(1);
   expect(rowLayout.secondRowCenterDelta).toBeLessThanOrEqual(1);
   expect(rowLayout.errorBeforeRetry).toBe(true);
+  expect(rowLayout.retryBeforeRemove).toBe(true);
   expect(rowLayout.height).toBeLessThanOrEqual(110);
   expect(rowLayout.scrollWidth).toBeLessThanOrEqual(rowLayout.clientWidth);
 });
@@ -3823,6 +3834,7 @@ test('keeps shell chrome fixed and confines management-page scrolling below cont
         to: '2026-07-22T00:00:00.000Z',
         totalQueries: 0,
         failureRate: null,
+        queryP50Ms: null,
         queryP95Ms: null,
         providers: [],
         departments: [],

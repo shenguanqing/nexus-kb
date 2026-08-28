@@ -6,7 +6,11 @@ from pathlib import Path
 from uuid import UUID
 
 from app.parsers.dxf import DxfParseResult, parse_dxf
-from app.preview import cad_preview_failure_warning, generate_cad_preview
+from app.preview import (
+    cad_preview_failure_warning,
+    cad_preview_is_complex,
+    generate_cad_preview,
+)
 
 SUPPORTED_DWG_VERSIONS = {
     "AC1009",
@@ -142,9 +146,16 @@ def parse_dwg(
                 render_timeout_seconds=cad_preview_render_timeout_seconds,
                 render_memory_bytes=cad_preview_render_memory_bytes,
                 max_insert_depth=max_insert_depth,
+                complex_source=cad_preview_is_complex(
+                    result.visited_entity_count,
+                    max_entities,
+                    result.reused_block_definition_count,
+                ),
             )
             if preview.renderer == "ezdxf-svg-gzip":
                 preview_warnings.append("CAD_PREVIEW_GZIP_COMPRESSED")
+            if preview.renderer == "ezdxf-cad-tiles-progressive":
+                preview_warnings.append("CAD_PREVIEW_PROGRESSIVE_GEOMETRY")
         except Exception as error:
             preview_warnings.append(cad_preview_failure_warning(error))
         return DxfParseResult(
@@ -156,6 +167,9 @@ def parse_dwg(
                 *preview_warnings,
             ],
             parser_version=f"oda-{converter_release}+ezdxf-{result.parser_version}",
+            visited_entity_count=result.visited_entity_count,
+            expanded_block_context_count=result.expanded_block_context_count,
+            reused_block_definition_count=result.reused_block_definition_count,
             preview=preview,
         )
 

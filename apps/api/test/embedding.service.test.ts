@@ -7,6 +7,7 @@ import type { EmbeddingProvider } from '../src/providers/embedding/embedding-pro
 import type { EmbeddingProviderFactory } from '../src/providers/embedding/embedding-provider.factory';
 import { EmbeddingService } from '../src/providers/embedding/embedding.service';
 import { ProviderError } from '../src/providers/embedding/provider-error';
+import type { MetricsService } from '../src/observability/metrics.service';
 
 function policyConfig(): AppConfig {
   return {
@@ -93,6 +94,7 @@ function cachePrisma() {
   };
   return {
     entries,
+    embeddingCacheEntry,
     prisma: {
       embeddingCacheEntry,
       $transaction: (operations: Array<Promise<unknown>>) => Promise.all(operations),
@@ -185,12 +187,14 @@ describe('EmbeddingService', () => {
 
   it('reuses duplicate text within the same fingerprint and tenant cache scope', async () => {
     const { embeddingProvider, embedDocuments } = provider();
-    const { prisma, entries } = cachePrisma();
+    const { prisma, entries, embeddingCacheEntry } = cachePrisma();
+    const observeEmbeddingCache = vi.fn();
     const service = new EmbeddingService(
       cacheFactory(embeddingProvider),
       new CloudPolicyService(cacheConfig()),
       prisma,
       cacheConfig(),
+      { observeEmbeddingCache } as unknown as MetricsService,
     );
 
     await expect(
@@ -210,6 +214,12 @@ describe('EmbeddingService', () => {
     expect(embedDocuments).toHaveBeenCalledTimes(1);
     expect(embedDocuments).toHaveBeenCalledWith(['same text']);
     expect(entries.size).toBe(1);
+    expect(embeddingCacheEntry.deleteMany).toHaveBeenCalledOnce();
+    expect(embeddingCacheEntry.updateMany).not.toHaveBeenCalled();
+    expect(observeEmbeddingCache.mock.calls).toEqual([
+      ['documents', 'miss'],
+      ['documents', 'hit'],
+    ]);
   });
 
   it('resumes provider work at the first uncached batch after a batch failure', async () => {

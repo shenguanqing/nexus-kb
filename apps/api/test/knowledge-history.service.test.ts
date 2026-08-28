@@ -29,6 +29,35 @@ function createService(
 }
 
 describe('KnowledgeHistoryService', () => {
+  it('validates conversation ownership without loading turns', async () => {
+    const findFirst = vi.fn().mockResolvedValue({ id: '11111111-1111-4111-8111-111111111111' });
+    const service = createService({
+      knowledgeConversation: { findFirst },
+    } as unknown as PrismaService);
+
+    await expect(
+      service.assertOwned('11111111-1111-4111-8111-111111111111', identity),
+    ).resolves.toBeUndefined();
+    expect(findFirst).toHaveBeenCalledWith({
+      where: {
+        id: '11111111-1111-4111-8111-111111111111',
+        tenantId: 'tenant-a',
+        userId: 'user-a',
+      },
+      select: { id: true },
+    });
+  });
+
+  it('fails ownership validation for another tenant or user', async () => {
+    const service = createService({
+      knowledgeConversation: { findFirst: vi.fn().mockResolvedValue(null) },
+    } as unknown as PrismaService);
+
+    await expect(
+      service.assertOwned('11111111-1111-4111-8111-111111111111', identity),
+    ).rejects.toMatchObject({ code: 'CONVERSATION_NOT_FOUND', status: 404 });
+  });
+
   it('loads only the owned conversation recent questions in chronological order', async () => {
     const findFirst = vi.fn().mockResolvedValue({
       turns: [{ question: '它的限制是什么？' }, { question: '比较前两个方案。' }],

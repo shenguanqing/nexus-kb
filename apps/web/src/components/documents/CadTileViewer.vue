@@ -15,20 +15,37 @@
       @keydown="handleKeydown"
     >
     </canvas>
+    <CadOverviewMap
+      :source="overviewUrl"
+      :focus-source="focusOverviewUrl"
+      :source-name="sourceName"
+      :viewport="overviewViewport"
+      :focus-region="focusOverviewRegion"
+      :aspect-ratio="manifest.overviewWidth / manifest.overviewHeight"
+      :focus-aspect-ratio="defaultCameraWidth / defaultCameraHeight"
+      @navigate="navigateFromOverview"
+    />
     <span v-if="statusMessage" class="cad-tile-status" role="status">{{ statusMessage }}</span>
   </div>
 </template>
 
 <script setup lang="ts">
 import type { CadPreviewManifest } from '@nexus-kb/contracts';
-import { nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
 
-import { documentPreviewOverviewUrl, documentPreviewTileUrl } from '@/api/documents';
+import {
+  documentPreviewFocusOverviewUrl,
+  documentPreviewOverviewUrl,
+  documentPreviewTileUrl,
+} from '@/api/documents';
+import type { CadOverviewViewport } from './cad-overview';
+import CadOverviewMap from './CadOverviewMap.vue';
 
 const props = defineProps<{
   documentId: string;
   manifest: CadPreviewManifest;
   sourceName: string;
+  refreshOverviewOnDetail?: boolean;
 }>();
 const emit = defineEmits<{
   zoomChange: [state: { percent: number; canZoomIn: boolean; canZoomOut: boolean }];
@@ -41,11 +58,20 @@ type CachedBitmap = { bitmap: ImageBitmap; lastUsed: number };
 const canvas = ref<HTMLCanvasElement | null>(null);
 const loading = ref(true);
 const statusMessage = ref('正在加载 CAD 总览');
+const overviewRevision = ref(0);
+const overviewUrl = computed(() =>
+  revisionedUrl(documentPreviewOverviewUrl(props.documentId), overviewRevision.value),
+);
+const focusOverviewUrl = computed(() =>
+  props.manifest.focusBounds
+    ? revisionedUrl(documentPreviewFocusOverviewUrl(props.documentId), overviewRevision.value)
+    : undefined,
+);
+const overviewViewport = ref<CadOverviewViewport>({ x: 0, y: 0, width: 1, height: 1 });
 const maxConcurrentRequests = 2;
 const maxCachedBitmaps = 96;
 const tileRequestDebounceMs = 140;
 const minimumZoomFactor = 0.5;
-const maximumZoomFactor = 2 ** props.manifest.maxZoom;
 const tileCache = new Map<string, CachedBitmap>();
 const pendingTiles = new Map<string, TileCoordinate>();
 const inFlight = new Map<string, AbortController>();
@@ -56,30 +82,55 @@ let animationFrame: number | null = null;
 let tileRequestTimer: ReturnType<typeof setTimeout> | null = null;
 let viewportWidth = 1;
 let viewportHeight = 1;
-let centerX = (props.manifest.bounds.minX + props.manifest.bounds.maxX) / 2;
-let centerY = (props.manifest.bounds.minY + props.manifest.bounds.maxY) / 2;
+const defaultCameraBounds = props.manifest.focusBounds ?? props.manifest.bounds;
+let centerX = (defaultCameraBounds.minX + defaultCameraBounds.maxX) / 2;
+let centerY = (defaultCameraBounds.minY + defaultCameraBounds.maxY) / 2;
 let zoomFactor = 1;
 let pointerId: number | null = null;
 let pointerX = 0;
 let pointerY = 0;
 let errorReported = false;
+let overviewRefreshStarted = false;
+let detailedRenderingReady = !props.refreshOverviewOnDetail;
 
 const worldWidth = props.manifest.bounds.maxX - props.manifest.bounds.minX;
 const worldHeight = props.manifest.bounds.maxY - props.manifest.bounds.minY;
+const defaultCameraWidth = defaultCameraBounds.maxX - defaultCameraBounds.minX;
+const defaultCameraHeight = defaultCameraBounds.maxY - defaultCameraBounds.minY;
+const focusOverviewRegion: CadOverviewViewport | undefined = props.manifest.focusBounds
+  ? {
+      x: (props.manifest.focusBounds.minX - props.manifest.bounds.minX) / worldWidth,
+      y: (props.manifest.bounds.maxY - props.manifest.focusBounds.maxY) / worldHeight,
+      width: defaultCameraWidth / worldWidth,
+      height: defaultCameraHeight / worldHeight,
+    }
+  : undefined;
 const baseScale = Math.max(props.manifest.worldToPixel[0] ?? 1, 1e-9);
 
 function fitScale(): number {
-  return Math.max(1e-9, Math.min(viewportWidth / worldWidth, viewportHeight / worldHeight) * 0.96);
+  return Math.max(
+    1e-9,
+    Math.min(viewportWidth / defaultCameraWidth, viewportHeight / defaultCameraHeight) * 0.96,
+  );
 }
 
 function viewScale(): number {
   return fitScale() * zoomFactor;
 }
 
+function deviceScale(): number {
+  return Math.min(window.devicePixelRatio || 1, 2);
+}
+
+function maximumZoomFactor(): number {
+  const maximumCssScale = (baseScale * 2 ** props.manifest.maxZoom) / deviceScale();
+  return Math.max(1, maximumCssScale / fitScale());
+}
+
 function zoomState(): { percent: number; canZoomIn: boolean; canZoomOut: boolean } {
   return {
     percent: Math.round(zoomFactor * 100),
-    canZoomIn: zoomFactor < maximumZoomFactor,
+    canZoomIn: zoomFactor < maximumZoomFactor(),
     canZoomOut: zoomFactor > minimumZoomFactor,
   };
 }
@@ -96,7 +147,7 @@ function setZoom(
   const previousScale = viewScale();
   const worldAnchorX = centerX + (anchorX - viewportWidth / 2) / previousScale;
   const worldAnchorY = centerY - (anchorY - viewportHeight / 2) / previousScale;
-  zoomFactor = Math.min(maximumZoomFactor, Math.max(minimumZoomFactor, nextZoom));
+  zoomFactor = Math.min(maximumZoomFactor(), Math.max(minimumZoomFactor, nextZoom));
   const nextScale = viewScale();
   centerX = worldAnchorX - (anchorX - viewportWidth / 2) / nextScale;
   centerY = worldAnchorY + (anchorY - viewportHeight / 2) / nextScale;
@@ -114,8 +165,8 @@ function zoomOut(): void {
 }
 
 function reset(): void {
-  centerX = (props.manifest.bounds.minX + props.manifest.bounds.maxX) / 2;
-  centerY = (props.manifest.bounds.minY + props.manifest.bounds.maxY) / 2;
+  centerX = (defaultCameraBounds.minX + defaultCameraBounds.maxX) / 2;
+  centerY = (defaultCameraBounds.minY + defaultCameraBounds.maxY) / 2;
   zoomFactor = 1;
   emitZoomState();
   refreshViewport();
@@ -182,8 +233,32 @@ function clampCenter(): void {
 }
 
 function refreshViewport(): void {
+  syncOverviewViewport();
   scheduleDraw();
   scheduleTileRequestSync();
+}
+
+function syncOverviewViewport(): void {
+  const scale = viewScale();
+  const halfWorldWidth = viewportWidth / (2 * scale);
+  const halfWorldHeight = viewportHeight / (2 * scale);
+  const visibleLeft = Math.max(props.manifest.bounds.minX, centerX - halfWorldWidth);
+  const visibleRight = Math.min(props.manifest.bounds.maxX, centerX + halfWorldWidth);
+  const visibleBottom = Math.max(props.manifest.bounds.minY, centerY - halfWorldHeight);
+  const visibleTop = Math.min(props.manifest.bounds.maxY, centerY + halfWorldHeight);
+  overviewViewport.value = {
+    x: Math.max(0, (visibleLeft - props.manifest.bounds.minX) / worldWidth),
+    y: Math.max(0, (props.manifest.bounds.maxY - visibleTop) / worldHeight),
+    width: Math.min(1, Math.max(0, (visibleRight - visibleLeft) / worldWidth)),
+    height: Math.min(1, Math.max(0, (visibleTop - visibleBottom) / worldHeight)),
+  };
+}
+
+function navigateFromOverview(position: { x: number; y: number }): void {
+  centerX = props.manifest.bounds.minX + position.x * worldWidth;
+  centerY = props.manifest.bounds.maxY - position.y * worldHeight;
+  clampCenter();
+  refreshViewport();
 }
 
 function scheduleTileRequestSync(delay = tileRequestDebounceMs): void {
@@ -206,14 +281,14 @@ function drawViewport(): void {
   const target = canvas.value;
   const context = target?.getContext('2d');
   if (!target || !context) return;
-  const deviceScale = Math.min(window.devicePixelRatio || 1, 2);
-  const pixelWidth = Math.max(1, Math.round(viewportWidth * deviceScale));
-  const pixelHeight = Math.max(1, Math.round(viewportHeight * deviceScale));
+  const canvasScale = deviceScale();
+  const pixelWidth = Math.max(1, Math.round(viewportWidth * canvasScale));
+  const pixelHeight = Math.max(1, Math.round(viewportHeight * canvasScale));
   if (target.width !== pixelWidth || target.height !== pixelHeight) {
     target.width = pixelWidth;
     target.height = pixelHeight;
   }
-  context.setTransform(deviceScale, 0, 0, deviceScale, 0, 0);
+  context.setTransform(canvasScale, 0, 0, canvasScale, 0, 0);
   context.fillStyle = '#212830';
   context.fillRect(0, 0, viewportWidth, viewportHeight);
   if (overviewBitmap) {
@@ -255,7 +330,7 @@ function currentTileZoom(): number | null {
     props.manifest.overviewHeight / worldHeight,
   );
   if (viewScale() <= overviewScale) return null;
-  const ratio = (viewScale() * Math.min(window.devicePixelRatio || 1, 2)) / baseScale;
+  const ratio = (viewScale() * deviceScale()) / baseScale;
   return Math.min(
     props.manifest.maxZoom,
     Math.max(props.manifest.minZoom, Math.ceil(Math.log2(Math.max(1, ratio)))),
@@ -342,7 +417,8 @@ function updateDetailStatus(visible = visibleTileCoordinates(false)): void {
 }
 
 function startPendingRequests(): void {
-  while (inFlight.size < maxConcurrentRequests && pendingTiles.size > 0) {
+  const concurrencyLimit = detailedRenderingReady ? maxConcurrentRequests : 1;
+  while (inFlight.size < concurrencyLimit && pendingTiles.size > 0) {
     const next = pendingTiles.entries().next().value;
     if (!next) break;
     const [key, coordinate] = next;
@@ -366,11 +442,14 @@ async function loadTile(key: string, coordinate: TileCoordinate): Promise<void> 
       return;
     }
     tileCache.set(key, { bitmap, lastUsed: performance.now() });
+    detailedRenderingReady = true;
     evictOldBitmaps();
     updateDetailStatus();
     scheduleDraw();
+    void refreshOverviewAfterDetail();
   } catch (error) {
     if (error instanceof Error && error.name === 'AbortError') return;
+    if (!detailedRenderingReady) pendingTiles.clear();
     statusMessage.value = '部分细节瓦片暂时不可用，仍可继续平移或缩放重试';
     if (!errorReported) {
       errorReported = true;
@@ -400,26 +479,46 @@ function tileKey(coordinate: TileCoordinate): string {
   return `${coordinate.zoom}/${coordinate.x}/${coordinate.y}`;
 }
 
-async function loadOverview(): Promise<void> {
-  overviewController = new AbortController();
+async function loadOverview(reportFailure = true): Promise<void> {
+  const controller = new AbortController();
+  overviewController?.abort();
+  overviewController = controller;
   try {
-    const response = await fetch(documentPreviewOverviewUrl(props.documentId), {
+    const response = await fetch(overviewUrl.value, {
       credentials: 'include',
       cache: 'no-store',
-      signal: overviewController.signal,
+      signal: controller.signal,
     });
     if (!response.ok) throw new Error(`overview request failed: ${response.status}`);
-    overviewBitmap = await createImageBitmap(await response.blob());
+    const bitmap = await createImageBitmap(await response.blob());
+    if (controller.signal.aborted) {
+      bitmap.close();
+      return;
+    }
+    overviewBitmap?.close();
+    overviewBitmap = bitmap;
     loading.value = false;
-    statusMessage.value = '';
+    updateDetailStatus();
     refreshViewport();
   } catch (error) {
     if (error instanceof Error && error.name === 'AbortError') return;
+    if (!reportFailure) return;
     loading.value = false;
     statusMessage.value =
       'CAD 总览加载失败；该图纸可能过于复杂，请重试或使用本地 CAD 软件查看源文件';
     emit('error', statusMessage.value);
   }
+}
+
+async function refreshOverviewAfterDetail(): Promise<void> {
+  if (!props.refreshOverviewOnDetail || overviewRefreshStarted) return;
+  overviewRefreshStarted = true;
+  overviewRevision.value += 1;
+  await loadOverview(false);
+}
+
+function revisionedUrl(url: string, revision: number): string {
+  return revision > 0 ? `${url}?detail=${revision}` : url;
 }
 
 function updateSize(): void {

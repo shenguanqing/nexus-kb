@@ -34,6 +34,7 @@ export class EmbeddingProviderFactory {
             requestTimeoutMs: this.config.values.EMBEDDING_REQUEST_TIMEOUT_MS,
             maxAttempts: this.config.values.EMBEDDING_MAX_ATTEMPTS,
             retryBaseDelayMs: this.config.values.EMBEDDING_RETRY_BASE_DELAY_MS,
+            keepAlive: this.config.values.OLLAMA_KEEP_ALIVE,
             telemetryRecorder: (event) => this.telemetry.record(event),
           })
         : this.config.values.EMBEDDING_PROVIDER === 'google'

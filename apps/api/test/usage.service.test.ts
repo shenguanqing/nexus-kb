@@ -67,6 +67,7 @@ describe('UsageService', () => {
     expect(result).toMatchObject({
       totalQueries: 2,
       failureRate: 0.5,
+      queryP50Ms: 100,
       queryP95Ms: 900,
       usageCompleteness: 'request_only',
     });

@@ -110,6 +110,7 @@ export class UsageService {
       to: request.to,
       totalQueries: rows.length,
       failureRate: rows.length > 0 ? failures / rows.length : null,
+      queryP50Ms: durations.length > 0 ? durations[Math.ceil(durations.length * 0.5) - 1]! : null,
       queryP95Ms: durations.length > 0 ? durations[Math.ceil(durations.length * 0.95) - 1]! : null,
       providers,
       departments: [...departmentCounts.entries()]

@@ -88,7 +88,7 @@ class Settings(BaseSettings):
         default=512, ge=256, le=1024, validation_alias="CAD_PREVIEW_TILE_SIZE"
     )
     cad_preview_max_zoom: int = Field(
-        default=8, ge=1, le=12, validation_alias="CAD_PREVIEW_MAX_ZOOM"
+        default=12, ge=1, le=12, validation_alias="CAD_PREVIEW_MAX_ZOOM"
     )
     cad_preview_metatile_radius: int = Field(
         default=1, ge=0, le=2, validation_alias="CAD_PREVIEW_METATILE_RADIUS"

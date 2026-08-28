@@ -3,6 +3,8 @@ import { describe, expect, it } from 'vitest';
 import {
   authLoginOptionsSchema,
   authSessionSchema,
+  cadPreviewTileRequestSchema,
+  cadPreviewTileResponseSchema,
   conversationDetailSchema,
   ingestionPayloadSchema,
   knowledgeQueryRequestSchema,
@@ -107,6 +109,27 @@ describe('user directory contract', () => {
 });
 
 describe('parser contract', () => {
+  it('accepts bounded z15 CAD tile requests and storage references', () => {
+    expect(
+      cadPreviewTileRequestSchema.parse({
+        documentId: '6769af9a-a4d0-4dc2-a97d-942584a9c826',
+        zoom: 15,
+        tileX: 32767,
+        tileY: 32767,
+      }),
+    ).toMatchObject({ zoom: 15 });
+    expect(
+      cadPreviewTileResponseSchema.parse({
+        storageKey:
+          '6769af9a-a4d0-4dc2-a97d-942584a9c826.cad/bundles/' +
+          'd26720b3-1f78-40df-868d-8ca8510dca26/tiles/15/32767/32767.png',
+        mimeType: 'image/png',
+        sizeBytes: 4096,
+        cacheHit: false,
+      }),
+    ).toMatchObject({ cacheHit: false });
+  });
+
   it('accepts the version one response shape', () => {
     const response = parseResponseSchema.parse({
       parser: 'text',

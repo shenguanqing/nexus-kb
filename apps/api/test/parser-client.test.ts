@@ -1,13 +1,19 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { AppConfig } from '../src/config/app-config';
-import { ParserClient } from '../src/parser/parser-client';
+import { cadPreviewTileTimeoutMs, ParserClient } from '../src/parser/parser-client';
 import type { ParserError } from '../src/parser/parser-error';
 
 const id = 'd26720b3-1f78-40df-868d-8ca8510dca26';
 
 describe('ParserClient contract validation', () => {
   afterEach(() => vi.unstubAllGlobals());
+
+  it('keeps the client open for bounded first-detail geometry initialization', () => {
+    expect(cadPreviewTileTimeoutMs(5)).toBe(25_000);
+    expect(cadPreviewTileTimeoutMs(60)).toBe(190_000);
+    expect(cadPreviewTileTimeoutMs(600)).toBe(190_000);
+  });
 
   it('accepts a valid Worker response and sends internal authentication', async () => {
     const fetchMock = vi.fn().mockResolvedValue(

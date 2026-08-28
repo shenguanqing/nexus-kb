@@ -613,10 +613,24 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { description: CAD tile preview is not ready }
+  /v1/documents/{documentId}/preview/focus-overview:
+    parameters:
+      - $ref: '#/components/parameters/DocumentId'
+    get:
+      summary: Stream the ACL-authorized CAD main-geometry overview image
+      responses:
+        '200':
+          description: Focused CAD main-geometry overview PNG
+          content:
+            image/png: { schema: { type: string, format: binary } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { description: CAD focus overview is not available }
   /v1/documents/{documentId}/preview/tiles/{zoom}/{tileX}/{tileY}:
     parameters:
       - $ref: '#/components/parameters/DocumentId'
-      - { name: zoom, in: path, required: true, schema: { type: integer, minimum: 0, maximum: 12 } }
+      - { name: zoom, in: path, required: true, schema: { type: integer, minimum: 0, maximum: 15 } }
       - {
           name: tileX,
           in: path,
@@ -1100,12 +1114,23 @@ components:
       type: object
       additionalProperties: false
       required:
-        [from, to, totalQueries, failureRate, queryP95Ms, providers, departments, usageCompleteness]
+        [
+          from,
+          to,
+          totalQueries,
+          failureRate,
+          queryP50Ms,
+          queryP95Ms,
+          providers,
+          departments,
+          usageCompleteness,
+        ]
       properties:
         from: { type: string, format: date-time }
         to: { type: string, format: date-time }
         totalQueries: { type: integer, minimum: 0 }
         failureRate: { type: [number, 'null'], minimum: 0, maximum: 1 }
+        queryP50Ms: { type: [integer, 'null'], minimum: 0 }
         queryP95Ms: { type: [integer, 'null'], minimum: 0 }
         providers:
           type: array
@@ -1698,13 +1723,16 @@ components:
       properties:
         strategy: { const: tiles }
         tileSize: { type: integer, minimum: 256, maximum: 1024 }
-        minZoom: { type: integer, minimum: 0, maximum: 12 }
-        maxZoom: { type: integer, minimum: 0, maximum: 12 }
+        minZoom: { type: integer, minimum: 0, maximum: 15 }
+        maxZoom: { type: integer, minimum: 0, maximum: 15 }
         baseWidth: { type: integer, minimum: 1 }
         baseHeight: { type: integer, minimum: 1 }
         overviewWidth: { type: integer, minimum: 1, maximum: 4096 }
         overviewHeight: { type: integer, minimum: 1, maximum: 4096 }
         bounds: { $ref: '#/components/schemas/CadPreviewBounds' }
+        focusBounds:
+          description: Optional robust main-geometry bounds used only for the initial and reset camera.
+          $ref: '#/components/schemas/CadPreviewBounds'
         worldToPixel:
           type: array
           minItems: 6

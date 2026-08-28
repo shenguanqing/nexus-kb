@@ -52,6 +52,7 @@ describe('UsageView provider facts', () => {
       to: '2026-08-11T00:00:00.000Z',
       totalQueries: 1,
       failureRate: 0,
+      queryP50Ms: 100,
       queryP95Ms: 120,
       providers: [
         {

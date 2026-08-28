@@ -24,7 +24,12 @@ from app.parsers.pdf import parse_pdf
 from app.parsers.text import parse_text
 from app.parsers.tika import TikaUnavailableError, parse_with_tika, tika_is_ready
 from app.parsers.xlsx import parse_xlsx
-from app.preview import cad_preview_failure_warning, generate_cad_preview, generate_office_pdf
+from app.preview import (
+    cad_preview_failure_warning,
+    cad_preview_is_complex,
+    generate_cad_preview,
+    generate_office_pdf,
+)
 from app.schemas import (
     CadPreviewTileRequest,
     CadPreviewTileResponse,
@@ -157,12 +162,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             "status": "ready" if is_ready else "not_ready",
             "checks": {
                 "rawDocs": {"status": "up" if raw_docs_ready else "down"},
-                "previewArtifacts": {
-                    "status": "up" if preview_artifacts_ready else "down"
-                },
-                "officePreview": {
-                    "status": "up" if office_preview_ready else "down"
-                },
+                "previewArtifacts": {"status": "up" if preview_artifacts_ready else "down"},
+                "officePreview": {"status": "up" if office_preview_ready else "down"},
                 "dwgConverter": {"status": converter_status},
                 "tika": {"status": tika_status},
             },
@@ -339,9 +340,16 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                         ),
                         render_memory_bytes=resolved_settings.cad_preview_render_memory_bytes,
                         max_insert_depth=resolved_settings.max_cad_insert_depth,
+                        complex_source=cad_preview_is_complex(
+                            result.visited_entity_count,
+                            resolved_settings.max_cad_entities,
+                            result.reused_block_definition_count,
+                        ),
                     )
                     if preview.renderer == "ezdxf-svg-gzip":
                         warnings.append("CAD_PREVIEW_GZIP_COMPRESSED")
+                    if preview.renderer == "ezdxf-cad-tiles-progressive":
+                        warnings.append("CAD_PREVIEW_PROGRESSIVE_GEOMETRY")
                 except Exception as error:
                     warnings.append(cad_preview_failure_warning(error))
             else:

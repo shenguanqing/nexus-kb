@@ -83,6 +83,10 @@ export function documentPreviewOverviewUrl(documentId: string): string {
   return `/v1/documents/${encodeURIComponent(documentId)}/preview/overview`;
 }
 
+export function documentPreviewFocusOverviewUrl(documentId: string): string {
+  return `/v1/documents/${encodeURIComponent(documentId)}/preview/focus-overview`;
+}
+
 export function documentPreviewTileUrl(
   documentId: string,
   zoom: number,

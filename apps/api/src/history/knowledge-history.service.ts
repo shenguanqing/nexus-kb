@@ -27,6 +27,14 @@ export class KnowledgeHistoryService {
     private readonly sourceAuthorization: SourceAuthorizationService,
   ) {}
 
+  async assertOwned(id: string, identity: Identity): Promise<void> {
+    const row = await this.prisma.knowledgeConversation.findFirst({
+      where: { id, tenantId: identity.tenantId, userId: identity.userId },
+      select: { id: true },
+    });
+    if (!row) throw new ApiException('CONVERSATION_NOT_FOUND', '会话不存在', 404);
+  }
+
   async recentQuestions(id: string, identity: Identity): Promise<string[]> {
     const row = await this.prisma.knowledgeConversation.findFirst({
       where: { id, tenantId: identity.tenantId, userId: identity.userId },

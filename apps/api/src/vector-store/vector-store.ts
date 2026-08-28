@@ -24,6 +24,7 @@ export interface VectorAclFilter {
   allowedSensitivities: VectorSensitivity[];
   userId: string;
   tenantWideAccess: boolean;
+  documentIds?: string[];
 }
 
 export interface VectorQueryInput {

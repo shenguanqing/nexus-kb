@@ -165,9 +165,9 @@
                 </span>
               </div>
             </div>
-            <div v-if="hasDwgConversion" class="conversion-note">
-              <div class="conversion-label">格式转换说明</div>
-              <div class="conversion-value">
+            <div v-if="hasDwgConversion" class="conversion-note kb-data-field">
+              <div class="conversion-text kb-data-field__label kb-text--medium">格式转换说明</div>
+              <div class="conversion-text kb-data-field__value">
                 原始 DWG<span v-if="dwgSourceVersion">（版本 {{ dwgSourceVersion }}）</span>
                 已自动转换为 DXF 后解析入库
               </div>
@@ -697,13 +697,13 @@ onMounted(load);
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 .conversion-note {
-  display: flex;
-  justify-content: space-between;
   gap: var(--kb-block-padding);
   padding: var(--kb-list-row-padding);
   border-radius: var(--kb-radius-md);
-  color: var(--kb-color-primary-dark);
   background: var(--kb-color-nav-accent);
+}
+.conversion-text {
+  color: var(--kb-color-primary);
 }
 .conversion-label {
   font-weight: bold;

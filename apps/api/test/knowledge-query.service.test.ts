@@ -69,12 +69,16 @@ function dependencies(
     queryAnswerMode?: 'strict' | 'hybrid';
     recentQuestions?: string[];
     maxLlmContextChars?: number;
+    documentScoped?: boolean;
   } = {},
 ) {
   const candidates = options.candidates ?? [context];
   const assertAllowed = vi.fn().mockResolvedValue(undefined);
   const embedQuery = vi.fn().mockResolvedValue([1, 0, 0]);
-  const retrieve = vi.fn().mockResolvedValue(candidates);
+  const retrieveDetailed = vi.fn().mockResolvedValue({
+    contexts: candidates,
+    matchedDocumentIds: options.documentScoped ? [documentId] : [],
+  });
   const rerank = vi.fn().mockResolvedValue({ chunks: candidates, degraded: false });
   let authorizationCall = 0;
   const retainActiveAuthorizedSources = vi.fn((_: Identity, chunks: RetrievedChunk[]) => {
@@ -110,17 +114,18 @@ function dependencies(
     },
   } as AppConfig;
   const recentQuestions = vi.fn().mockResolvedValue(options.recentQuestions ?? []);
+  const assertOwned = vi.fn().mockResolvedValue(undefined);
   const recordTurn = vi.fn().mockResolvedValue('11111111-1111-4111-8111-111111111111');
   const history =
     options.recentQuestions === undefined
       ? undefined
-      : ({ recentQuestions, recordTurn } as unknown as KnowledgeHistoryService);
+      : ({ assertOwned, recentQuestions, recordTurn } as unknown as KnowledgeHistoryService);
   const service = new KnowledgeQueryService(
     config,
     new AclPolicy(),
     { assertAllowed } as unknown as QueryRateLimiter,
     { embedQuery } as unknown as EmbeddingService,
-    { retrieve } as unknown as QueryRetrievalService,
+    { retrieveDetailed } as unknown as QueryRetrievalService,
     { rerank } as unknown as RerankService,
     { answer, answerGeneral } as unknown as LlmService,
     { retainActiveAuthorizedSources } as unknown as SourceAuthorizationService,
@@ -132,11 +137,12 @@ function dependencies(
     service,
     assertAllowed,
     embedQuery,
-    retrieve,
+    retrieveDetailed,
     rerank,
     answer,
     answerGeneral,
     record,
+    assertOwned,
     recentQuestions,
   };
 }
@@ -212,6 +218,51 @@ describe('KnowledgeQueryService', () => {
     );
   });
 
+  it('uses the previous question for an action-only follow-up with an omitted subject', async () => {
+    const deps = dependencies({ recentQuestions: ['西班牙的 NIE 申请条件'] });
+    const conversationId = '11111111-1111-4111-8111-111111111111';
+
+    await deps.service.query({ conversationId, question: '列个需要的材料表格' }, identity, traceId);
+
+    const contextualQuestion =
+      '对话中的前序问题：\n1. 西班牙的 NIE 申请条件\n\n当前问题：列个需要的材料表格';
+    expect(deps.recentQuestions).toHaveBeenCalledWith(conversationId, identity);
+    expect(deps.assertOwned).not.toHaveBeenCalled();
+    expect(deps.embedQuery).toHaveBeenCalledWith(contextualQuestion, {
+      sensitivity: 'internal',
+      tenantId: 'tenant-a',
+    });
+    expect(deps.rerank).toHaveBeenCalledWith(
+      expect.objectContaining({ query: contextualQuestion }),
+    );
+    expect(deps.answer).toHaveBeenCalledWith(
+      expect.objectContaining({
+        question: '列个需要的材料表格',
+        conversationQuestions: ['西班牙的 NIE 申请条件'],
+      }),
+    );
+  });
+
+  it('uses the previous question when the generic object appears before the follow-up action', async () => {
+    const deps = dependencies({ recentQuestions: ['西班牙NIE申请条件'] });
+    const conversationId = '11111111-1111-4111-8111-111111111111';
+
+    await deps.service.query({ conversationId, question: '材料列个表格' }, identity, traceId);
+
+    const contextualQuestion = '对话中的前序问题：\n1. 西班牙NIE申请条件\n\n当前问题：材料列个表格';
+    expect(deps.recentQuestions).toHaveBeenCalledWith(conversationId, identity);
+    expect(deps.embedQuery).toHaveBeenCalledWith(contextualQuestion, {
+      sensitivity: 'internal',
+      tenantId: 'tenant-a',
+    });
+    expect(deps.answer).toHaveBeenCalledWith(
+      expect.objectContaining({
+        question: '材料列个表格',
+        conversationQuestions: ['西班牙NIE申请条件'],
+      }),
+    );
+  });
+
   it('does not send conversation history for a standalone question', async () => {
     const deps = dependencies({ recentQuestions: ['比较 Vue 2 和 Vue 3。'] });
     const conversationId = '11111111-1111-4111-8111-111111111111';
@@ -226,6 +277,8 @@ describe('KnowledgeQueryService', () => {
       sensitivity: 'internal',
       tenantId: 'tenant-a',
     });
+    expect(deps.assertOwned).toHaveBeenCalledWith(conversationId, identity);
+    expect(deps.recentQuestions).not.toHaveBeenCalled();
     expect(deps.answer).toHaveBeenCalledWith(
       expect.objectContaining({
         question: '解释 PostgreSQL 的 MVCC。',
@@ -354,6 +407,24 @@ describe('KnowledgeQueryService', () => {
     );
   });
 
+  it('does not replace an explicit document-scoped miss with general knowledge', async () => {
+    const deps = dependencies({ candidates: [], documentScoped: true });
+
+    await expect(
+      deps.service.query({ question: '消控室里有几个机柜' }, identity, traceId),
+    ).resolves.toMatchObject({
+      noAnswer: true,
+      reason: 'insufficient_relevance',
+      answerMode: null,
+      sources: [],
+      model: null,
+    });
+    expect(deps.answerGeneral).not.toHaveBeenCalled();
+    expect(deps.record).toHaveBeenCalledWith(
+      expect.objectContaining({ outcome: 'no_answer', resultCount: 0 }),
+    );
+  });
+
   it('keeps the original no-answer behavior when strict mode is configured', async () => {
     const deps = dependencies({ candidates: [], queryAnswerMode: 'strict' });
 
@@ -405,6 +476,48 @@ describe('KnowledgeQueryService', () => {
       }),
     );
     expect(deps.record).not.toHaveBeenCalledWith(expect.objectContaining({ outcome: 'failed' }));
+  });
+
+  it('records an explicit grounded refusal separately and returns a general answer without repair', async () => {
+    const deps = dependencies();
+    deps.answer.mockRejectedValue(new AnswerCitationError('insufficient'));
+
+    await expect(
+      deps.service.query({ question: 'NIE 需要哪些材料？' }, identity, traceId),
+    ).resolves.toMatchObject({
+      noAnswer: false,
+      answerMode: 'general',
+      sources: [],
+    });
+    expect(deps.record).toHaveBeenCalledWith(
+      expect.objectContaining({
+        outcome: 'answered',
+        answerMode: 'general',
+        errorCode: 'LLM_CONTEXT_INSUFFICIENT',
+      }),
+    );
+  });
+
+  it('keeps a document-scoped grounded refusal as no-answer instead of general knowledge', async () => {
+    const deps = dependencies({ documentScoped: true });
+    deps.answer.mockRejectedValue(new AnswerCitationError('insufficient'));
+
+    await expect(
+      deps.service.query({ question: '幼儿园弱电平面尺寸' }, identity, traceId),
+    ).resolves.toMatchObject({
+      noAnswer: true,
+      reason: 'insufficient_relevance',
+      answerMode: null,
+      sources: [],
+      model: null,
+    });
+    expect(deps.answerGeneral).not.toHaveBeenCalled();
+    expect(deps.record).toHaveBeenCalledWith(
+      expect.objectContaining({
+        outcome: 'no_answer',
+        errorCode: 'LLM_CONTEXT_INSUFFICIENT',
+      }),
+    );
   });
 
   it('keeps a safe no-answer when general question egress is policy-blocked', async () => {

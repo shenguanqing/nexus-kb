@@ -69,9 +69,9 @@ POST /internal/v1/parse
 预览与文本解析独立：
 
 - DOC/DOCX/XLSX 使用镜像内固定 LibreOffice 与 Noto CJK 字体转 PDF；DOC 正文解析要求内网 Tika 就绪，预览失败仍按统一 warning 降级。
-- DXF/DWG 按源字节数和实体类型加权渲染成本分流：小图生成受限 SVG；超大或高成本图生成总览图、z0、实体 R-Tree、非可执行 SQLite/R-Tree 图元索引和 manifest，细节 PNG 由内部端点按需渲染并以磁盘 LRU 清理。
+- DXF/DWG 按源字节数和实体类型加权渲染成本分流：小图生成受限 SVG；超大或高成本图生成总览图、z0、实体 R-Tree、非可执行 SQLite/R-Tree 图元索引和 manifest，细节 PNG 由内部端点按需渲染并以磁盘 LRU 清理。复杂图初始化使用最多 100,000 个确定性抽样实体和 500,000 个图元的快速几何索引；它会将 ASCII OCS 转为 WCS、忽略不代表可见几何的裸 `INSERT` 边界，并继续从世界坐标重绘高层级瓦片，而不是裁切放大总览 PNG。
 - 一个 3×3 metatile 只查询、绘制一次，再裁成相邻瓦片。旧 bundle 首次冷请求原子补建图元索引，之后不再重复解析完整 DXF。
-- manifest 包含 CAD bounds 和 `worldToPixel`；瓦片渲染子进程受超时和内存上限保护。SVG 保留 CJK 字形替换、非缩放线宽和受控 gzip 兼容逻辑。
+- manifest 包含完整 CAD bounds 和 `worldToPixel`；配置基准 `maxZoom=12`，索引阶段使用最多 4096 个实际渲染可见实体 bbox 的确定性蓄水池样本和两端 1% 稳健范围估计主要几何跨度。关闭/冻结图层和实体自身 `invisible` 标记的几何仍保留在完整 bounds、R-Tree 与瓦片坐标中，但不参与主体样本，避免不可见辅助线把可见主体误判为全图。少量远距辅助实体将完整跨度放大至少 2 倍时，只按倍率为该 bundle 补足最高层级并硬封顶 15，不裁 bounds、不删除图元。瓦片渲染子进程受超时和内存上限保护，新增层级仍按实际视口生成。SVG 保留 CJK 字形替换、非缩放线宽和受控 gzip 兼容逻辑。
 - 产物只写入 `PREVIEW_ARTIFACTS_PATH`；预览失败不使解析任务失败。
 
 ## 解析器算法
@@ -126,10 +126,12 @@ PNG、JPG 和 JPEG 先由 Pillow 校验文件完整性与总像素上限，再�
 2. 遍历所有 layout 和实体。
 3. 提取 `TEXT`、`MTEXT`、`ATTRIB`、`ATTDEF`。
 4. 计算并提取 `DIMENSION` 显示值。
-5. 遇到 `INSERT` 时递归遍历属性和块定义。
-6. 使用活动块集合检测循环，并限制最大块嵌套深度。
+5. 遇到 `INSERT` 时逐实例遍历属性；同一 layout、同一块路径中的块定义只展开一次，重复实例复用已经完成的块定义遍历，避免大型阵列或设备图因重复几何产生指数级文本解析开销。
+6. 使用活动块集合检测循环，并限制最大块嵌套深度；顶层实体、每个 `INSERT` 与每个实例属性仍逐项计入安全预算。
 7. 按“文本、布局、图层、块路径”去重。
-8. 在首元素生成图纸版本、单位、布局、图层和实体统计摘要。
+8. 对“建设单位、工程名称、设计编号”等高置信标题栏标签，使用同一 layout、同一块坐标系内的 `insert` 坐标寻找右侧同行最近值，生成 `cad_title_field` 结构化元素；不跨 layout、块坐标系或反向配对。
+9. 将最多 200 个已验证字段按 layout 标记汇总为有 20,000 字符硬上限的 `cad_title_summary`，使分散在不同 layout 的楼栋/子项目身份与建设单位等字段进入同一可分块文本；不汇总未配对原始文字。
+10. 在首元素生成图纸版本、单位、布局和实体统计摘要；metadata 额外记录实际检查实体数、展开的块上下文数与复用次数，供容量评估使用。
 
 `sectionPath` 的形式通常为：
 
@@ -137,7 +139,17 @@ PNG、JPG 和 JPEG 先由 Pillow 校验文件完整性与总像素上限，再�
 Model → 块:TITLE_BLOCK → 图层:ANNOTATION
 ```
 
-该算法面向 CAD 知识文本抽取，不是完整几何还原：重复块文本可能被合并，块引用的几何变换也不会转换成最终世界坐标。
+`cad_title_field` 使用 `字段：值` 文本和独立“CAD 标题栏”sectionPath，metadata 保留字段/值、配对关系、label/value insert 与 handle；`cad_title_summary` 只复制这些已验证字段并保留 layout 前缀。DXF parserVersion 在 ezdxf 版本后追加 Nexus 语义修订号，使标题栏抽取规则变化可被版本事实识别。
+
+该算法面向 CAD 知识文本抽取，不是完整几何还原：重复块文本可能被合并，块引用的几何变换也不会转换成最终世界坐标。逐实例的 `ATTRIB` 仍会保留，因此不同设备编号或标题属性不会因块定义复用而丢失。标题栏配对仅处理同一坐标系内的高置信标签，不把全图任意同行文字拼接成键值。
+
+预览是解析结果的可选附件。转换后 DXF 达到 128 MiB、文本遍历已使用至少 75% 实体预算，或同一解析复用至少 1,000 次块定义时，初始预览子进程的单次渲染预算会受控收敛到最多 20 秒（初始化总预算最多 60 秒）；超时返回 `CAD_PREVIEW_INITIALIZATION_TIMEOUT` 并继续交付文本解析结果，避免可选预览超过 API 总请求预算。后续对已经成功生成 bundle 的按需瓦片仍使用正常配置预算。
+
+复杂图渐进 bundle 使用 `simplified.json` 的 `formatVersion=3/detailMode=progressive_geometry` 标记并返回 `CAD_PREVIEW_PROGRESSIVE_GEOMETRY` warning。初始化只生成有界快速总览并保存受控转换 DXF；第一次请求细节瓦片时，ezdxf Frontend 完整展开块引用、解析颜色并原子建立 `geometry.sqlite`，随后所有瓦片从该完整索引绘制。完整几何格式 v2 将连续曲线和文字轮廓保存为单个数值型 polyline 记录，而不是让每个扁平线段分别占用 R-Tree 行；格式 v1 继续只读兼容。单记录 BLOB 仍限制为 64 MiB，完整索引仍限制 4,000,000 条记录、1 GiB bundle、2 GiB 默认子进程内存和 180 秒构建时间，不使用可执行反序列化。完整索引成功后还会从同一彩色几何原子替换 `overview.png`、z0 与可选主体鸟瞰，最后写 `overview-state.json`；已有缓存瓦片但缺少该完成标记时仍会补刷新。异常终止留下的 `.geometry.sqlite.<pid>.tmp` 只在下一次同文档持锁构建前按固定命名清理，不匹配的文件不删除。任一上限触发时保留快速总览并失败关闭，不会用抽样结果冒充完整细节。旧的 `formatVersion=1/detailMode=overview` 只放大总览，`formatVersion=2/detailMode=geometry` 仍缺少完整块与颜色；升级后应通过正常 reindex 或受控原子预览重建替换，不能手改 `current.json`、manifest、SQLite 或完成标记。
+
+完整 `bounds` 至少为确定性稳健主体跨度 2 倍时，manifest 额外返回位于完整范围内、带 5% 留白的 `focusBounds`。它不改变索引和瓦片网格，只为前端首次打开与重置提供主体相机建议；远距对象继续可通过鸟瞰和平移访问。旧 bundle 不会自动补字段，需要正常 reindex。
+
+存在 `focusBounds` 时，Worker 还会从几何索引生成独立 `focus-overview.png`；它只通过主服务的 ACL 端点返回，不暴露 bundle 路径。普通 bundle 使用完整几何生成，渐进 bundle 初始化时先用受限总览几何生成，并在首次完整索引完成后与普通全图和 z0 一并替换为完整彩色缩略图。
 
 ### `parsers/dwg.py`
 
@@ -151,7 +163,7 @@ DWG 使用“受控转换后复用 DXF”：
 6. 调用 `parse_dxf()`。
 7. 返回 ODA 与 ezdxf 的组合版本和转换 warning。
 
-转换产物只存在于临时目录，不替换原始 DWG，并在任务结束时自动清理。ODA 第三方安装包和许可说明见 [`vendor/oda/README.md`](./vendor/oda/README.md)。
+转换工作区不替换原始 DWG，并在任务结束时自动清理。复杂图渐进预览是唯一例外：Worker 会在清理工作区前把 DXF 数据副本收入与 `documentId` 绑定、不可直接下载且随文档删除的预览 bundle，用于首次细节请求构建完整几何索引。ODA 第三方安装包和许可说明见 [`vendor/oda/README.md`](./vendor/oda/README.md)。
 
 ## 资源与安全限制
 

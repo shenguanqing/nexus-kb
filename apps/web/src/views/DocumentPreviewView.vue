@@ -85,32 +85,48 @@
           :document-id="documentId"
           :manifest="preview.cad"
           :source-name="preview.sourceName"
+          :refresh-overview-on-detail="preview.renderer === 'ezdxf-cad-tiles-progressive'"
           @zoom-change="handleCadTileZoomChange"
           @error="handleCadTileError"
         />
         <div
           v-else-if="preview.kind === 'image' || preview.kind === 'svg'"
-          ref="cadViewport"
-          class="preview-image-viewport"
-          :class="{
-            'is-zoomable': preview.kind === 'svg',
-            'is-pannable': canPanCad,
-            'is-dragging': isCadDragging,
-          }"
-          :title="canPanCad ? '按住鼠标左键拖拽查看 CAD 细节' : undefined"
-          @wheel="handleCadWheel"
-          @pointerdown="startCadPan"
-          @pointermove="moveCadPan"
-          @pointerup="stopCadPan"
-          @pointercancel="stopCadPan"
-          @lostpointercapture="stopCadPan"
+          class="preview-image-stage"
         >
-          <img
-            class="preview-image"
-            draggable="false"
-            :style="preview.kind === 'svg' ? cadImageStyle : undefined"
-            :src="contentUrl"
-            :alt="`${preview.sourceName} 预览`"
+          <div
+            ref="cadViewport"
+            class="preview-image-viewport"
+            :class="{
+              'is-zoomable': preview.kind === 'svg',
+              'is-pannable': canPanCad,
+              'is-dragging': isCadDragging,
+            }"
+            :title="canPanCad ? '按住鼠标左键拖拽查看 CAD 细节' : undefined"
+            @scroll="syncSvgOverviewViewport"
+            @wheel="handleCadWheel"
+            @pointerdown="startCadPan"
+            @pointermove="moveCadPan"
+            @pointerup="stopCadPan"
+            @pointercancel="stopCadPan"
+            @lostpointercapture="stopCadPan"
+          >
+            <img
+              ref="cadImage"
+              class="preview-image"
+              draggable="false"
+              :style="preview.kind === 'svg' ? cadImageStyle : undefined"
+              :src="contentUrl"
+              :alt="`${preview.sourceName} 预览`"
+              @load="syncSvgOverviewViewport"
+            />
+          </div>
+          <CadOverviewMap
+            v-if="preview.kind === 'svg'"
+            :source="contentUrl"
+            :source-name="preview.sourceName"
+            :viewport="svgOverviewViewport"
+            :aspect-ratio="svgOverviewAspectRatio"
+            @navigate="navigateSvgFromOverview"
           />
         </div>
         <SafeMarkdown
@@ -155,14 +171,14 @@
         </div>
       </div>
 
-      <el-empty v-else description="文档尚未完成解析，暂时无法预览" />
+      <el-empty v-else class="kb-empty-state" description="文档尚未完成解析，暂时无法预览" />
     </template>
   </section>
 </template>
 
 <script setup lang="ts">
 import type { DocumentChunkListResponse, DocumentPreview } from '@nexus-kb/contracts';
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
 import { ApiError } from '@/api/client';
@@ -173,6 +189,8 @@ import {
   listDocumentChunks,
 } from '@/api/documents';
 import SafeMarkdown from '@/components/common/SafeMarkdown.vue';
+import type { CadOverviewViewport } from '@/components/documents/cad-overview';
+import CadOverviewMap from '@/components/documents/CadOverviewMap.vue';
 import CadTileViewer from '@/components/documents/CadTileViewer.vue';
 import { useBreakpoint } from '@/composables/useBreakpoint';
 
@@ -183,6 +201,7 @@ const documentId = String(route.params.id);
 const preview = ref<DocumentPreview | null>(null);
 const previewPage = ref<HTMLElement | null>(null);
 const cadViewport = ref<HTMLElement | null>(null);
+const cadImage = ref<HTMLImageElement | null>(null);
 const cadTileViewer = ref<InstanceType<typeof CadTileViewer> | null>(null);
 const textContent = ref('');
 const chunks = ref<DocumentChunkListResponse | null>(null);
@@ -192,6 +211,7 @@ const interactionMessage = ref('');
 const isFullscreen = ref(false);
 const canFullscreen = ref(true);
 const cadZoom = ref(1);
+const svgOverviewViewport = ref<CadOverviewViewport>({ x: 0, y: 0, width: 1, height: 1 });
 const isCadDragging = ref(false);
 const fallbackPage = ref(readPositiveInteger(route.query.chunkPage) ?? 1);
 const sourcePage = computed(() => readPositiveInteger(route.query.page));
@@ -215,10 +235,16 @@ const canPanCad = computed(
 );
 const cadZoomPercent = computed(() => Math.round(cadZoom.value * 100));
 const cadImageStyle = computed(() => ({ width: `${cadZoomPercent.value}%` }));
+const svgOverviewAspectRatio = computed(() => {
+  const image = cadImage.value;
+  return image?.naturalWidth && image.naturalHeight
+    ? image.naturalWidth / image.naturalHeight
+    : 1.6;
+});
 const { isMobile } = useBreakpoint();
 
 const cadZoomMinimum = 0.5;
-const cadZoomMaximum = 256;
+const cadZoomMaximum = 4096;
 const cadButtonZoomFactor = 1.5;
 const cadWheelZoomFactor = 1.25;
 const tiledCadCanZoomIn = ref(true);
@@ -273,9 +299,25 @@ async function load(): Promise<void> {
   }
 }
 
-function setSvgCadZoom(nextZoom: number): void {
+function setSvgCadZoom(nextZoom: number, anchor?: { viewportX: number; viewportY: number }): void {
+  const viewport = cadViewport.value;
+  const viewportX = anchor?.viewportX ?? (viewport?.clientWidth ?? 0) / 2;
+  const viewportY = anchor?.viewportY ?? (viewport?.clientHeight ?? 0) / 2;
+  const contentAnchorX = viewport
+    ? (viewport.scrollLeft + viewportX) / Math.max(1, viewport.scrollWidth)
+    : 0.5;
+  const contentAnchorY = viewport
+    ? (viewport.scrollTop + viewportY) / Math.max(1, viewport.scrollHeight)
+    : 0.5;
   cadZoom.value = Math.min(cadZoomMaximum, Math.max(cadZoomMinimum, Number(nextZoom.toFixed(4))));
   if (cadZoom.value <= 1) stopCadPan();
+  void nextTick(() => {
+    const updatedViewport = cadViewport.value;
+    if (!updatedViewport) return;
+    updatedViewport.scrollLeft = contentAnchorX * updatedViewport.scrollWidth - viewportX;
+    updatedViewport.scrollTop = contentAnchorY * updatedViewport.scrollHeight - viewportY;
+    syncSvgOverviewViewport();
+  });
 }
 
 function changeCadZoom(direction: -1 | 1): void {
@@ -298,6 +340,7 @@ function resetCadZoom(): void {
     cadViewport.value.scrollLeft = 0;
     cadViewport.value.scrollTop = 0;
   }
+  void nextTick(syncSvgOverviewViewport);
 }
 
 function handleCadTileZoomChange(state: {
@@ -317,7 +360,16 @@ function handleCadTileError(message: string): void {
 function handleCadWheel(event: WheelEvent): void {
   if (!event.ctrlKey && !event.metaKey) return;
   event.preventDefault();
-  setSvgCadZoom(cadZoom.value * (event.deltaY < 0 ? cadWheelZoomFactor : 1 / cadWheelZoomFactor));
+  const bounds = cadViewport.value?.getBoundingClientRect();
+  setSvgCadZoom(
+    cadZoom.value * (event.deltaY < 0 ? cadWheelZoomFactor : 1 / cadWheelZoomFactor),
+    bounds
+      ? {
+          viewportX: event.clientX - bounds.left,
+          viewportY: event.clientY - bounds.top,
+        }
+      : undefined,
+  );
 }
 
 function startCadPan(event: PointerEvent): void {
@@ -340,7 +392,29 @@ function moveCadPan(event: PointerEvent): void {
   if (!viewport || !isCadDragging.value || event.pointerId !== cadDragPointerId) return;
   viewport.scrollLeft = cadDragStartScrollLeft - (event.clientX - cadDragStartX);
   viewport.scrollTop = cadDragStartScrollTop - (event.clientY - cadDragStartY);
+  syncSvgOverviewViewport();
   event.preventDefault();
+}
+
+function syncSvgOverviewViewport(): void {
+  const viewport = cadViewport.value;
+  if (!viewport) return;
+  const contentWidth = Math.max(1, viewport.scrollWidth, viewport.clientWidth);
+  const contentHeight = Math.max(1, viewport.scrollHeight, viewport.clientHeight);
+  svgOverviewViewport.value = {
+    x: Math.min(1, Math.max(0, viewport.scrollLeft / contentWidth)),
+    y: Math.min(1, Math.max(0, viewport.scrollTop / contentHeight)),
+    width: Math.min(1, viewport.clientWidth / contentWidth || 1),
+    height: Math.min(1, viewport.clientHeight / contentHeight || 1),
+  };
+}
+
+function navigateSvgFromOverview(position: { x: number; y: number }): void {
+  const viewport = cadViewport.value;
+  if (!viewport) return;
+  viewport.scrollLeft = position.x * viewport.scrollWidth - viewport.clientWidth / 2;
+  viewport.scrollTop = position.y * viewport.scrollHeight - viewport.clientHeight / 2;
+  syncSvgOverviewViewport();
 }
 
 function stopCadPan(event?: PointerEvent): void {
@@ -385,12 +459,14 @@ async function changeFallbackPage(page: number): Promise<void> {
 onMounted(() => {
   canFullscreen.value = document.fullscreenEnabled ?? 'requestFullscreen' in HTMLElement.prototype;
   document.addEventListener('fullscreenchange', syncFullscreenState);
+  window.addEventListener('resize', syncSvgOverviewViewport);
   void load();
 });
 
 onBeforeUnmount(() => {
   stopCadPan();
   document.removeEventListener('fullscreenchange', syncFullscreenState);
+  window.removeEventListener('resize', syncSvgOverviewViewport);
 });
 </script>
 
@@ -447,6 +523,13 @@ onBeforeUnmount(() => {
   min-height: 640px;
   border: 0;
   background: var(--kb-color-canvas);
+}
+.preview-image-stage {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
 }
 .preview-image-viewport {
   display: grid;

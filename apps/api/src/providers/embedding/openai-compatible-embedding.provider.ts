@@ -34,6 +34,32 @@ type FetchFunction = typeof fetch;
 type SleepFunction = (durationMs: number) => Promise<void>;
 type TelemetryRecorder = (event: EmbeddingTelemetryEvent) => void;
 
+export interface ParsedEmbeddingResponse {
+  vectors: number[][];
+  model?: string;
+  promptTokens?: number;
+  totalTokens?: number;
+  requestId?: string;
+  providerDurationMs?: number;
+  loadDurationMs?: number;
+}
+
+function parseOpenAiResponse(body: unknown, response: Response): ParsedEmbeddingResponse {
+  const parsed = embeddingResponseSchema.safeParse(body);
+  if (!parsed.success) throw new ProviderError('invalid_response', false);
+  const orderedData = [...parsed.data.data].sort((left, right) => left.index - right.index);
+  if (orderedData.some((item, index) => item.index !== index)) {
+    throw new ProviderError('invalid_response', false);
+  }
+  return {
+    vectors: orderedData.map((item) => item.embedding),
+    model: parsed.data.model,
+    promptTokens: parsed.data.usage?.prompt_tokens,
+    totalTokens: parsed.data.usage?.total_tokens,
+    requestId: response.headers.get('x-request-id') ?? parsed.data.id,
+  };
+}
+
 export interface OpenAiCompatibleEmbeddingOptions {
   id: string;
   apiKey?: string;
@@ -51,6 +77,8 @@ export interface OpenAiCompatibleEmbeddingOptions {
   randomFunction?: () => number;
   nowFunction?: () => number;
   telemetryRecorder?: TelemetryRecorder;
+  requestBody?: (texts: string[]) => unknown;
+  responseParser?: (body: unknown, response: Response) => ParsedEmbeddingResponse;
 }
 
 export class OpenAiCompatibleEmbeddingProvider implements EmbeddingProvider {
@@ -73,6 +101,8 @@ export class OpenAiCompatibleEmbeddingProvider implements EmbeddingProvider {
   private readonly nowFunction: () => number;
   private readonly telemetryRecorder: TelemetryRecorder;
   private readonly apiKey?: string;
+  private readonly requestBody: (texts: string[]) => unknown;
+  private readonly responseParser: (body: unknown, response: Response) => ParsedEmbeddingResponse;
 
   constructor(options: OpenAiCompatibleEmbeddingOptions) {
     this.id = options.id;
@@ -92,6 +122,15 @@ export class OpenAiCompatibleEmbeddingProvider implements EmbeddingProvider {
     this.telemetryRecorder = options.telemetryRecorder ?? (() => undefined);
     this.apiKey = options.apiKey;
     this.endpoint = `${options.baseUrl.replace(/\/+$/, '')}${options.endpointPath}`;
+    this.requestBody =
+      options.requestBody ??
+      ((texts) => ({
+        model: this.model,
+        input: texts,
+        dimensions: this.dimensions,
+        encoding_format: 'float',
+      }));
+    this.responseParser = options.responseParser ?? parseOpenAiResponse;
   }
 
   async embedDocuments(texts: string[]): Promise<number[][]> {
@@ -127,12 +166,7 @@ export class OpenAiCompatibleEmbeddingProvider implements EmbeddingProvider {
         const response = await this.fetchFunction(this.endpoint, {
           method: 'POST',
           headers,
-          body: JSON.stringify({
-            model: this.model,
-            input: texts,
-            dimensions: this.dimensions,
-            encoding_format: 'float',
-          }),
+          body: JSON.stringify(this.requestBody(texts)),
           signal: abortController.signal,
         });
         if (!response.ok) throw this.mapStatusError(response.status);
@@ -142,16 +176,11 @@ export class OpenAiCompatibleEmbeddingProvider implements EmbeddingProvider {
         } catch (error) {
           throw new ProviderError('invalid_response', false, { cause: error });
         }
-        const parsed = embeddingResponseSchema.safeParse(responseBody);
-        if (!parsed.success) throw new ProviderError('invalid_response', false);
-        if (parsed.data.model && parsed.data.model !== this.model) {
+        const parsed = this.responseParser(responseBody, response);
+        if (parsed.model && parsed.model !== this.model) {
           throw new ProviderError('invalid_response', false);
         }
-        const orderedData = [...parsed.data.data].sort((left, right) => left.index - right.index);
-        if (orderedData.some((item, index) => item.index !== index)) {
-          throw new ProviderError('invalid_response', false);
-        }
-        const vectors = orderedData.map((item) => item.embedding);
+        const vectors = parsed.vectors;
         this.validateVectors(vectors, texts.length);
         this.telemetryRecorder({
           provider: this.id,
@@ -159,9 +188,11 @@ export class OpenAiCompatibleEmbeddingProvider implements EmbeddingProvider {
           region: this.region,
           operation,
           inputCount: texts.length,
-          promptTokens: parsed.data.usage?.prompt_tokens,
-          totalTokens: parsed.data.usage?.total_tokens,
-          requestId: response.headers.get('x-request-id') ?? parsed.data.id,
+          promptTokens: parsed.promptTokens,
+          totalTokens: parsed.totalTokens,
+          requestId: parsed.requestId,
+          providerDurationMs: parsed.providerDurationMs,
+          loadDurationMs: parsed.loadDurationMs,
           durationMs: this.nowFunction() - startedAt,
           attempts: attempt,
           status: 'success',

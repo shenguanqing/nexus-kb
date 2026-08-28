@@ -34,6 +34,7 @@ export const usageResponseSchema = z
     to: z.iso.datetime({ offset: true }),
     totalQueries: z.number().int().nonnegative(),
     failureRate: z.number().min(0).max(1).nullable(),
+    queryP50Ms: z.number().int().nonnegative().nullable(),
     queryP95Ms: z.number().int().nonnegative().nullable(),
     providers: z.array(usageProviderRowSchema),
     departments: z.array(usageDepartmentRowSchema),

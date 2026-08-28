@@ -23,9 +23,8 @@
         <span class="composer-hint kb-text kb-text--xs kb-text--tertiary">
           Enter 发送 · Shift + Enter 换行
         </span>
-        <span v-if="isNearLimit" class="character-count kb-text kb-text--tertiary">
+        <span v-if="isNearLimit" class="character-count kb-text kb-text--xs kb-text--tertiary">
           <span
-            class="kb-text"
             :class="modelValue.length >= 2000 ? ['kb-text--danger', 'kb-text--medium'] : undefined"
           >
             {{ modelValue.length }}
@@ -150,8 +149,8 @@ watch(
   white-space: nowrap;
 }
 .character-count {
-  min-width: 60px;
-  font-size: 10px;
+  min-width: 64px;
+  line-height: 1;
   text-align: right;
   white-space: nowrap;
 }

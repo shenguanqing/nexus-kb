@@ -1,7 +1,7 @@
 from typing import Any
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class ApiModel(BaseModel):
@@ -26,9 +26,7 @@ class ParsedElement(ApiModel):
 
 
 class PreviewArtifact(ApiModel):
-    storage_key: str = Field(
-        alias="storageKey", pattern=r"^[0-9a-f-]{36}\.(?:pdf|svg|cad)$"
-    )
+    storage_key: str = Field(alias="storageKey", pattern=r"^[0-9a-f-]{36}\.(?:pdf|svg|cad)$")
     kind: str = Field(pattern=r"^(?:pdf|svg|cad_tiles)$")
     mime_type: str = Field(
         alias="mimeType",
@@ -53,25 +51,42 @@ class CadPreviewBounds(ApiModel):
     max_x: float = Field(alias="maxX")
     max_y: float = Field(alias="maxY")
 
+    @model_validator(mode="after")
+    def validate_dimensions(self) -> "CadPreviewBounds":
+        if self.max_x <= self.min_x or self.max_y <= self.min_y:
+            raise ValueError("CAD preview bounds must have positive dimensions")
+        return self
+
 
 class CadPreviewManifest(ApiModel):
     strategy: str = Field(pattern=r"^tiles$")
     tile_size: int = Field(alias="tileSize", ge=256, le=1024)
-    min_zoom: int = Field(alias="minZoom", ge=0, le=12)
-    max_zoom: int = Field(alias="maxZoom", ge=0, le=12)
+    min_zoom: int = Field(alias="minZoom", ge=0, le=15)
+    max_zoom: int = Field(alias="maxZoom", ge=0, le=15)
     base_width: int = Field(alias="baseWidth", ge=1)
     base_height: int = Field(alias="baseHeight", ge=1)
     overview_width: int = Field(alias="overviewWidth", ge=1, le=4096)
     overview_height: int = Field(alias="overviewHeight", ge=1, le=4096)
     bounds: CadPreviewBounds
+    focus_bounds: CadPreviewBounds | None = Field(default=None, alias="focusBounds")
     world_to_pixel: list[float] = Field(alias="worldToPixel", min_length=6, max_length=6)
     entity_count: int = Field(alias="entityCount", ge=1, le=2_000_000)
     render_cost_score: int = Field(alias="renderCostScore", ge=1, le=100_000_000)
 
+    @model_validator(mode="after")
+    def validate_focus_bounds(self) -> "CadPreviewManifest":
+        focus = self.focus_bounds
+        if focus is not None and not (
+            self.bounds.min_x <= focus.min_x < focus.max_x <= self.bounds.max_x
+            and self.bounds.min_y <= focus.min_y < focus.max_y <= self.bounds.max_y
+        ):
+            raise ValueError("CAD focus bounds must be contained by full bounds")
+        return self
+
 
 class CadPreviewTileRequest(ApiModel):
     document_id: UUID = Field(alias="documentId")
-    zoom: int = Field(ge=0, le=12)
+    zoom: int = Field(ge=0, le=15)
     tile_x: int = Field(alias="tileX", ge=0, le=65_535)
     tile_y: int = Field(alias="tileY", ge=0, le=65_535)
 
@@ -81,7 +96,7 @@ class CadPreviewTileResponse(ApiModel):
         alias="storageKey",
         pattern=(
             r"^[0-9a-f-]{36}\.cad/bundles/[0-9a-f-]{36}/tiles/"
-            r"(?:[0-9]|1[0-2])/[0-9]{1,5}/[0-9]{1,5}\.png$"
+            r"(?:[0-9]|1[0-5])/[0-9]{1,5}/[0-9]{1,5}\.png$"
         ),
     )
     mime_type: str = Field(alias="mimeType", pattern=r"^image/png$")

@@ -16,6 +16,7 @@ from app.preview import (
     _bounded_svg_payload,
     _cad_render_context,
     cad_preview_failure_warning,
+    cad_preview_is_complex,
     generate_cad_preview,
     generate_cad_svg,
     generate_office_pdf,
@@ -118,7 +119,10 @@ def test_generate_cad_preview_uses_weighted_render_cost_for_tile_routing(
         rendererVersion="1",
     )
 
-    def generate_tiles(*_args: object, **_kwargs: object) -> PreviewArtifact:
+    tile_arguments: dict[str, object] = {}
+
+    def generate_tiles(*_args: object, **kwargs: object) -> PreviewArtifact:
+        tile_arguments.update(kwargs)
         return tiled
 
     monkeypatch.setattr(
@@ -140,9 +144,11 @@ def test_generate_cad_preview_uses_weighted_render_cost_for_tile_routing(
         max_zoom=8,
         render_timeout_seconds=60,
         render_memory_bytes=2_147_483_648,
+        complex_source=True,
     )
 
     assert artifact.kind == "cad_tiles"
+    assert tile_arguments["complex_source"] is True
 
 
 def test_cad_preview_failures_report_stable_specific_warning_codes() -> None:
@@ -159,6 +165,12 @@ def test_cad_preview_failures_report_stable_specific_warning_codes() -> None:
         == "CAD_PREVIEW_RESOURCE_LIMIT_EXCEEDED"
     )
     assert cad_preview_failure_warning(RuntimeError("unexpected")) == "PREVIEW_GENERATION_FAILED"
+
+
+def test_cad_preview_complexity_uses_bounded_real_sample_thresholds() -> None:
+    assert cad_preview_is_complex(700_000, 1_000_000, 0) is True
+    assert cad_preview_is_complex(699_999, 1_000_000, 1_000) is True
+    assert cad_preview_is_complex(699_999, 1_000_000, 999) is False
 
 
 def test_cad_render_context_replaces_missing_cjk_fallback_font(

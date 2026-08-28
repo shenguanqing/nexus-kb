@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
 
 import type { Identity } from '../../auth/identity';
 import {
@@ -11,6 +11,7 @@ import { OperationalLogger } from '../../common/operational-logger';
 import type { LlmAnswer } from './llm-provider';
 import { LlmProviderError } from './llm-provider-error';
 import { LlmProviderFactory } from './llm-provider.factory';
+import { MetricsService } from '../../observability/metrics.service';
 
 export interface SecuredLlmAnswer extends LlmAnswer {
   provider: string;
@@ -25,6 +26,7 @@ export class LlmService {
     private readonly contextPolicy: KnowledgeContextPolicy,
     private readonly sourceValidator: AnswerSourceValidator,
     private readonly logger: OperationalLogger,
+    @Optional() private readonly metrics?: MetricsService,
   ) {}
 
   async answer(input: {
@@ -120,18 +122,40 @@ export class LlmService {
     }
     try {
       this.sourceValidator.validate(answer.text, input.contexts.length);
+      this.metrics?.observeLlmCitationEvent('valid');
     } catch (error) {
       if (!(error instanceof AnswerCitationError)) throw error;
+      this.metrics?.observeLlmCitationEvent(error.reason);
+      if (error.reason === 'insufficient') {
+        this.logger.info('llm_grounded_context_insufficient', {
+          traceId: input.traceId,
+          tenantId: input.identity.tenantId,
+          userId: input.identity.userId,
+          provider: provider.id,
+          model: provider.model,
+          status: 'insufficient',
+        });
+        throw error;
+      }
       this.logger.warn('llm_citation_repair_retry', {
         traceId: input.traceId,
         tenantId: input.identity.tenantId,
         userId: input.identity.userId,
         provider: provider.id,
         model: provider.model,
-        status: 'invalid_citation',
+        status: error.reason,
       });
+      this.metrics?.observeLlmCitationEvent('repair_started');
       answer = await provider.answer({ ...input, citationRepair: true });
-      this.sourceValidator.validate(answer.text, input.contexts.length);
+      try {
+        this.sourceValidator.validate(answer.text, input.contexts.length);
+        this.metrics?.observeLlmCitationEvent('repair_succeeded');
+      } catch (repairError) {
+        if (repairError instanceof AnswerCitationError) {
+          this.metrics?.observeLlmCitationEvent('repair_failed');
+        }
+        throw repairError;
+      }
     }
     return {
       ...answer,

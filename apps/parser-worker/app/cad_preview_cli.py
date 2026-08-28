@@ -7,14 +7,15 @@ from uuid import UUID
 def main() -> None:
     parser = argparse.ArgumentParser(add_help=False)
     subparsers = parser.add_subparsers(dest="action", required=True)
-    initialize = subparsers.add_parser("initialize", add_help=False)
-    initialize.add_argument("--source", required=True)
-    initialize.add_argument("--document-id", required=True)
-    initialize.add_argument("--preview-root", required=True)
-    initialize.add_argument("--tile-size", type=int, required=True)
-    initialize.add_argument("--max-zoom", type=int, required=True)
-    initialize.add_argument("--max-source-bytes", type=int, required=True)
-    initialize.add_argument("--memory-bytes", type=int, required=True)
+    for action in ("initialize", "initialize-simplified"):
+        initialize = subparsers.add_parser(action, add_help=False)
+        initialize.add_argument("--source", required=True)
+        initialize.add_argument("--document-id", required=True)
+        initialize.add_argument("--preview-root", required=True)
+        initialize.add_argument("--tile-size", type=int, required=True)
+        initialize.add_argument("--max-zoom", type=int, required=True)
+        initialize.add_argument("--max-source-bytes", type=int, required=True)
+        initialize.add_argument("--memory-bytes", type=int, required=True)
     render = subparsers.add_parser("render", add_help=False)
     render.add_argument("--document-id", required=True)
     render.add_argument("--preview-root", required=True)
@@ -27,10 +28,19 @@ def main() -> None:
     arguments = parser.parse_args()
     resource.setrlimit(resource.RLIMIT_AS, (arguments.memory_bytes, arguments.memory_bytes))
 
-    from app.cad_tiles import _initialize_bundle, _render_metatile
+    from app.cad_tiles import (
+        _initialize_bundle,
+        _initialize_simplified_bundle,
+        _render_metatile,
+    )
 
-    if arguments.action == "initialize":
-        _initialize_bundle(
+    if arguments.action in {"initialize", "initialize-simplified"}:
+        initializer = (
+            _initialize_bundle
+            if arguments.action == "initialize"
+            else _initialize_simplified_bundle
+        )
+        initializer(
             Path(arguments.source),
             UUID(arguments.document_id),
             Path(arguments.preview_root),

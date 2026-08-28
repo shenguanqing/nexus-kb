@@ -108,12 +108,12 @@ pnpm --version
 
 仓库提供以下 pnpm 入口；所有命令都必须从仓库根目录运行：
 
-| 入口                     | 适用范围                               | 示例                                    |
-| ------------------------ | -------------------------------------- | --------------------------------------- |
-| `pnpm docker:base --`    | 基础服务，不含 DWG、部署代理或 DBeaver | `pnpm docker:base -- up -d --build`     |
-| `pnpm docker:dev --`     | 推荐本地开发，不含 DWG 和 DBeaver      | `pnpm docker:dev -- ps`                 |
-| `pnpm docker:full --`    | DWG + deployment-agent 的完整常驻服务  | `pnpm docker:full -- ps`                |
-| `pnpm docker:full:db --` | 完整服务，并临时开放本地 DBeaver 端口  | `pnpm docker:full:db -- up -d postgres` |
+| 入口                     | 适用范围                               | 示例                                   |
+| ------------------------ | -------------------------------------- | -------------------------------------- |
+| `pnpm docker:base --`    | 基础服务，不含 DWG、部署代理或 DBeaver | `pnpm docker:base -- up -d --build`    |
+| `pnpm docker:dev --`     | 推荐本地开发，不含 DWG 和 DBeaver      | `pnpm docker:dev -- ps`                |
+| `pnpm docker:full --`    | DWG + deployment-agent 的完整常驻服务  | `pnpm docker:full -- ps`               |
+| `pnpm docker:full:db --` | 完整服务，并临时开放本地 DBeaver 端口  | `pnpm docker:full:db -- up -d --build` |
 
 `docker:dev` 启用 `configuration` profile；`docker:full` 额外加载 `compose.dwg.yaml`；`docker:full:db` 再额外加载 `compose.db-gui.yaml`。这些入口会先加载 `.env`，再在存在时加载后台发布生成的 `config/runtime.env`，确保 Compose 插值和容器运行值都以激活版本为准；基础/开发模式仍固定关闭 DWG。不要绕过入口拼接另一套 Compose 命令。同一运行周期请始终使用同一个入口。一次性 Reranker 模型下载不属于常驻服务，仍使用 `--profile model-init run`。
 
@@ -254,9 +254,10 @@ EMBEDDING_MODEL=bge-m3:latest
 EMBEDDING_DIMENSIONS=1024
 EMBEDDING_REGION=local
 OLLAMA_BASE_URL=http://host.docker.internal:11434
+OLLAMA_KEEP_ALIVE=30m
 ```
 
-Ollama 不需要 API Key。`host.docker.internal` 是 API 容器访问 Mac 宿主机的地址，不要改成任意公网 HTTP 地址。
+Ollama 不需要 API Key。`host.docker.internal` 是 API 容器访问 Mac 宿主机的地址，不要改成任意公网 HTTP 地址。API 使用 Ollama 原生 `/api/embed` 并通过 `OLLAMA_KEEP_ALIVE` 将模型保留在内存中；该值只影响模型驻留时间，不改变向量空间。
 
 ### 3. 重建 API 容器
 
@@ -437,6 +438,14 @@ pnpm docker:up:all
 ```
 
 它等同于完整 Compose 文件组合并启用 `configuration` profile。缺少 ODA 时继续使用 `pnpm docker:up:dev`，不要用“全部启动”绕过 DWG 的安全检查。
+
+如果需要一次启动全部常驻 Docker 服务，并同时把 PostgreSQL 映射到 DBeaver 使用的 `127.0.0.1:15432`，改用：
+
+```bash
+pnpm docker:full:db -- up -d --build
+```
+
+`pnpm docker:up:all` 不加载 `compose.db-gui.yaml`，因此不会开放 `15432`。Compose 覆盖文件不会永久附着在容器上；本地需要持续使用 DBeaver 时，后续的 `up`、`ps`、`logs`、`exec`、`down` 和 `--force-recreate` 也应统一使用 `pnpm docker:full:db --`。Vue 前端不在 Compose 中，仍需单独运行 `pnpm --filter @nexus-kb/web dev`。
 
 本地 BGE Rerank 的模型下载是有意隔离的短任务，不会由该命令自动执行；首次启用时按上文的 `reranker-model-init` 命令预下载模型。
 

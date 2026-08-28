@@ -199,6 +199,43 @@ describe('ChromaVectorStore', () => {
       $and: [{ tenantId: 'tenant-a' }, { sensitivity: { $in: ['public', 'internal'] } }],
     });
 
+    await store.query({
+      vector: [1, 0, 0],
+      topK: 5,
+      filter: {
+        tenantId: 'tenant-a',
+        departments: ['finance'],
+        allowedSensitivities: ['public', 'internal'],
+        userId: 'user-a',
+        tenantWideAccess: false,
+        documentIds: ['6769af9a-a4d0-4dc2-a97d-942584a9c826'],
+      },
+    });
+    expect(ports.query.mock.calls[2]?.[0].where).toEqual({
+      $and: [
+        {
+          $and: [
+            { tenantId: 'tenant-a' },
+            {
+              $or: [
+                { sensitivity: 'public' },
+                {
+                  $and: [
+                    { department: { $in: ['finance'] } },
+                    { sensitivity: { $in: ['internal'] } },
+                  ],
+                },
+                {
+                  $and: [{ ownerId: 'user-a' }, { sensitivity: { $in: ['internal'] } }],
+                },
+              ],
+            },
+          ],
+        },
+        { documentId: { $in: ['6769af9a-a4d0-4dc2-a97d-942584a9c826'] } },
+      ],
+    });
+
     await store.deleteDocument('tenant-a', '6769af9a-a4d0-4dc2-a97d-942584a9c826');
     expect(ports.deleteRecords).toHaveBeenCalledWith({
       where: {

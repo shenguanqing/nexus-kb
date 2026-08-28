@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
 
 import { AppConfig } from '../../config/app-config';
@@ -8,6 +8,7 @@ import { createEmbeddingCacheKey } from './embedding-cache-key';
 import { EmbeddingProviderFactory } from './embedding-provider.factory';
 import type { EmbeddingProvider } from './embedding-provider';
 import { ProviderError } from './provider-error';
+import { MetricsService } from '../../observability/metrics.service';
 
 interface EmbeddingPolicyContext {
   sensitivity: 'public' | 'internal' | 'confidential';
@@ -31,6 +32,7 @@ export class EmbeddingService {
     private readonly cloudPolicy: CloudPolicyService,
     private readonly prisma: PrismaService,
     private readonly config: AppConfig,
+    @Optional() private readonly metrics?: MetricsService,
   ) {}
 
   async embedDocuments(texts: string[], context: EmbeddingPolicyContext): Promise<number[][]> {
@@ -78,11 +80,12 @@ export class EmbeddingService {
     const fingerprint = this.factory.getFingerprint();
     const batchSize = operation === 'query' ? 1 : config.values.EMBEDDING_BATCH_SIZE;
     const totalBatches = Math.ceil(texts.length / batchSize);
-    const expiresAt = () => new Date(Date.now() + config.values.EMBEDDING_CACHE_TTL_SECONDS * 1000);
+    const cacheTtlMs = config.values.EMBEDDING_CACHE_TTL_SECONDS * 1000;
+    const expiresAt = () => new Date(Date.now() + cacheTtlMs);
     const vectors: number[][] = [];
-    await prisma.embeddingCacheEntry.deleteMany({
-      where: { tenantId: context.tenantId, expiresAt: { lte: new Date() } },
-    });
+    let cleanupPromise: Promise<unknown> | undefined;
+    let requestedUniqueTexts = 0;
+    let generatedUniqueTexts = 0;
 
     for (let offset = 0; offset < texts.length; offset += batchSize) {
       const batch = texts.slice(offset, offset + batchSize);
@@ -98,6 +101,9 @@ export class EmbeddingService {
           expiresAt: { gt: new Date() },
         },
       });
+      const refreshKeys = cached
+        .filter((entry) => entry.expiresAt.getTime() - Date.now() <= cacheTtlMs / 2)
+        .map((entry) => entry.key);
       const cachedVectors = new Map(
         cached.flatMap((entry) => {
           const vector = this.validVector(entry.vector, provider.dimensions);
@@ -108,6 +114,7 @@ export class EmbeddingService {
         }),
       );
       const missingByKey = new Map<string, { text: string; index: number }>();
+      requestedUniqueTexts += new Set(identities.map((identity) => identity.key)).size;
       identities.forEach((identity, index) => {
         if (!cachedVectors.has(identity.key) && !missingByKey.has(identity.key)) {
           missingByKey.set(identity.key, { text: batch[index]!, index });
@@ -115,10 +122,16 @@ export class EmbeddingService {
       });
       if (missingByKey.size > 0) {
         const missing = [...missingByKey.values()];
-        const generated =
+        generatedUniqueTexts += missing.length;
+        cleanupPromise ??= prisma.embeddingCacheEntry.deleteMany({
+          where: { tenantId: context.tenantId, expiresAt: { lte: new Date() } },
+        });
+        const [generated] = await Promise.all([
           operation === 'documents'
-            ? await provider.embedDocuments(missing.map((item) => item.text))
-            : [await provider.embedQuery(missing[0]!.text)];
+            ? provider.embedDocuments(missing.map((item) => item.text))
+            : provider.embedQuery(missing[0]!.text).then((vector) => [vector]),
+          cleanupPromise,
+        ]);
         if (generated.length !== missing.length) throw new ProviderError('invalid_response', false);
         await prisma.$transaction(
           missing.map((item, index) => {
@@ -148,10 +161,12 @@ export class EmbeddingService {
       const batchVectors = identities.map((identity) => cachedVectors.get(identity.key));
       if (batchVectors.some((vector) => !vector))
         throw new ProviderError('invalid_response', false);
-      await prisma.embeddingCacheEntry.updateMany({
-        where: { key: { in: identities.map((identity) => identity.key) } },
-        data: { lastUsedAt: new Date(), expiresAt: expiresAt() },
-      });
+      if (refreshKeys.length > 0) {
+        await prisma.embeddingCacheEntry.updateMany({
+          where: { key: { in: refreshKeys } },
+          data: { lastUsedAt: new Date(), expiresAt: expiresAt() },
+        });
+      }
       vectors.push(...(batchVectors as number[][]));
       await context.onBatchCompleted?.({
         completedChunks: offset + batch.length,
@@ -162,6 +177,14 @@ export class EmbeddingService {
         cacheKeys: identities.map((identity) => identity.key),
       });
     }
+    this.metrics?.observeEmbeddingCache(
+      operation,
+      generatedUniqueTexts === 0
+        ? 'hit'
+        : generatedUniqueTexts === requestedUniqueTexts
+          ? 'miss'
+          : 'partial',
+    );
     return vectors;
   }
 

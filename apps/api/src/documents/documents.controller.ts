@@ -135,6 +135,24 @@ export class DocumentsController {
     return new StreamableFile(createReadStream(overview.path));
   }
 
+  @Get('documents/:documentId/preview/focus-overview')
+  async getDocumentPreviewFocusOverview(
+    @Param('documentId', new ParseUUIDPipe({ version: '4' })) documentId: string,
+    @Req() request: FastifyRequest,
+    @Res({ passthrough: true }) reply: FastifyReply,
+  ): Promise<StreamableFile> {
+    const overview = await this.documents.getDocumentPreviewFocusOverview(
+      documentId,
+      requestIdentity(request),
+    );
+    reply.header('cache-control', 'private, no-store');
+    reply.header('content-type', overview.mimeType);
+    reply.header('content-length', String(overview.size));
+    reply.header('content-disposition', inlineDisposition(overview.sourceName));
+    reply.header('x-content-type-options', 'nosniff');
+    return new StreamableFile(createReadStream(overview.path));
+  }
+
   @Get('documents/:documentId/preview/tiles/:zoom/:tileX/:tileY')
   async getDocumentPreviewTile(
     @Param('documentId', new ParseUUIDPipe({ version: '4' })) documentId: string,

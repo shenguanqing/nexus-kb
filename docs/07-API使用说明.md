@@ -231,6 +231,7 @@ unset NEXUSKB_ACCESS_TOKEN
 | `GET`    | `/v1/documents/{documentId}/preview`  | `documents:read`   | 无存储路径的预览 manifest 或降级状态   |
 | `GET`    | `/v1/documents/{documentId}/preview/content` | `documents:read` | 再次 ACL 校验后流式返回预览内容      |
 | `GET`    | `/v1/documents/{documentId}/preview/overview` | `documents:read` | 返回 CAD 瓦片模式总览 PNG                 |
+| `GET`    | `/v1/documents/{documentId}/preview/focus-overview` | `documents:read` | 返回 CAD 稳健主体范围缩略 PNG；无主体范围时 409 |
 | `GET`    | `/v1/documents/{documentId}/preview/tiles/{zoom}/{tileX}/{tileY}` | `documents:read` | 缓存未命中时按需生成并返回 CAD PNG 瓦片 |
 | `GET`    | `/v1/documents/{documentId}/chunks`   | `documents:read`   | 按版本分页查看原始/脱敏分块，不返回向量 |
 | `POST`   | `/v1/documents/{documentId}/reindex`  | `documents:write`  | 继续建立索引或创建安全的新版本          |
@@ -239,7 +240,7 @@ unset NEXUSKB_ACCESS_TOKEN
 | `GET`    | `/v1/ingestion-jobs`                  | `documents:read`   | ACL 入库任务列表                        |
 | `GET`    | `/v1/ingestion-jobs/failed`           | `documents:read`   | 最近最多 50 个失败任务                  |
 | `GET`    | `/v1/ingestion-jobs/{jobId}`          | `documents:read`   | 单个任务详情                            |
-| `POST`   | `/v1/ingestion-jobs/{jobId}/retry`    | `documents:write`  | 只重试失败且 `retryable=true` 的任务    |
+| `POST`   | `/v1/ingestion-jobs/{jobId}/retry`    | `documents:write`  | 重试失败且响应中 `retryable=true` 的任务 |
 
 `GET /v1/documents` 支持：
 
@@ -257,14 +258,15 @@ unset NEXUSKB_ACCESS_TOKEN
 
 - manifest `status` 为 `ready|fallback|unavailable`。
 - `kind=pdf|image|text|markdown|svg` 且 ready 时，通过 `/preview/content` 读取；仅支持单一 `Range: bytes=...`，不支持多段 range。
-- `kind=cad_tiles` 时，manifest 的 `cad` 包含 `tileSize`、`minZoom/maxZoom`、总览/基础像素尺寸、`bounds`、`worldToPixel`、`entityCount` 和 `renderCostScore`。客户端请求 `/preview/overview` 与视口所需的 `/preview/tiles/...`，不得猜测内部路径。
+- `kind=cad_tiles` 时，manifest 的 `cad` 包含 `tileSize`、`minZoom/maxZoom`、总览/基础像素尺寸、完整 `bounds`、可选 `focusBounds`、`worldToPixel`、`entityCount` 和 `renderCostScore`。配置基准 maxZoom 为 12，远距稀释图可动态升到 15。`focusBounds` 从实际渲染可见实体的稳健范围生成并保证位于完整 `bounds` 内；关闭/冻结图层和实体自身隐藏的图元仍可保留在完整 `bounds` 与瓦片坐标中。该字段只建议首次/重置相机和主体鸟瞰范围；瓦片坐标、平移边界与全图归一化必须继续使用 `bounds`。存在该字段时客户端可请求 `/preview/focus-overview`，并继续使用 `/preview/overview` 提供全图切换；两个资源都重新执行当前 ACL，不返回内部路径。
 - `X-Cad-Tile-Cache: hit|miss` 只用于调试和指标，不改变权限语义。`hit` 直接读取已有瓦片；一次 `miss` 可能同时生成相邻 3×3 metatile，并可能为旧 bundle 原子补建几何索引。客户端继续使用既有超时、总览打底和可取消请求，不依赖内部缓存文件。
+- 复杂图可能返回 `CAD_PREVIEW_PROGRESSIVE_GEOMETRY` warning；其 manifest 与瓦片端点不变。快速总览使用有界抽样，但第一次请求细节瓦片时服务端会原子建立完整块展开、颜色化的世界坐标几何索引，并在返回瓦片前从同一索引替换全图、z0 和可选主体鸟瞰；缓存瓦片命中但旧 bundle 缺少完成标记时也会补齐。客户端应保留总览、展示加载状态并使用既有可取消请求，在首批细节成功后用同一 ACL URL 加 cache-buster 刷新一次鸟瞰；刷新失败不应丢弃已加载细节。该 warning 不授予任何转换 DXF、SQLite、内部状态标记或 bundle 访问能力。
 - `fallback` 时，用 `fallbackVersion` 调用 chunks 接口展示解析原文。
 - manifest、总览和瓦片均以当前身份执行 tenant 与文档 ACL；缓存未命中渲染完成后再检查一次，确保撤权立即生效。响应不返回 storage key 或内部路径，也不使用短时预览 token。
 
 `GET /v1/ingestion-jobs` 支持 `documentId`、`status`、`page` 和 `pageSize`。
 
-任务列表和详情中的 `embeddingCompletedChunks`、`embeddingTotalChunks`、`embeddingBatchSize` 是服务端持久化的真实批次进度。`checkpoint=embedding_batch:x/y` 表示已完成批次的向量缓存与 chunk 关联已提交；失败重试会利用这些缓存跳过已完成批次的 Provider 调用。`embeddingTotalChunks=null` 表示尚未进入可计算 Embedding 总量的阶段，不应由客户端推测百分比。
+任务列表和详情中的 `embeddingCompletedChunks`、`embeddingTotalChunks`、`embeddingBatchSize` 是服务端持久化的真实批次进度。`checkpoint=embedding_batch:x/y` 表示已完成批次的向量缓存与 chunk 关联已提交；失败重试会利用这些缓存跳过已完成批次的 Provider 调用。`embeddingTotalChunks=null` 表示尚未进入可计算 Embedding 总量的阶段，不应由客户端推测百分比。`CAD_ENTITY_LIMIT_EXCEEDED`、`DWG_CONVERTED_SIZE_LIMIT_EXCEEDED` 和 `PARSER_ELEMENT_LIMIT_EXCEEDED` 不会在配置未变时自动重试，但任务响应会返回 `retryable=true`，使管理员完成代码或容量调整后可以人工复用原文件重排。
 
 ### 5.3 知识问答与个人历史
 
@@ -307,7 +309,7 @@ unset NEXUSKB_ACCESS_TOKEN
 
 审计接口支持 `type=query|document_lifecycle|cloud_policy|access_change`、`before` 和 `limit`，返回 `nextBefore` 时间游标及当前 tenant、事件类型筛选范围内的 `total`。下一页继续传递 `before=<nextBefore>`；`before` 不改变 `total`，游标不是权限凭据。
 
-用户目录使用 `offset`/`limit` 分页，支持 `query` 和 `department`。管理员可以管理本地密码账号；外部 OIDC 身份账号仅可查看，应在身份源中增删。普通用户即使有 `access:read`，也不能通过 `department` 查看其他部门。用量接口要求同时提供 `from` 和 `to`；`providers` 由查询审计聚合，并额外包含当前生效的 Embedding Provider/model。Provider 行的 `requests` 表示关联该阶段的问答数，不是供应商 HTTP 请求或账单调用数；一次问答可同时计入 Query Embedding 和 LLM。问答期间的实际 Provider telemetry 以 tenant + trace 持久化，输入/输出 token 为 Provider 回传值，估算成本使用调用时显式 `provider:model` USD 价格。Provider 未回传 usage、价格缺失或数据库迁移前没有事实时对应字段为 `null`；部分行仍可返回已知数值，但只有全部非零 Provider 行完整时 `usageCompleteness=tokens_and_cost`。若时间范围内尚无当前 Embedding 配置的查询，返回 `requests=0`、`failures=0`，token 与成本仍为 `null`，不得把入库批次解释为问答用量。查询审计事件可同时包含 Embedding 与 LLM Provider/model 事实，但审计页的知识问答行只展示 LLM；云端策略事件包含并展示策略检查当时固化的 Embedding Provider/model。
+用户目录使用 `offset`/`limit` 分页，支持 `query` 和 `department`。管理员可以管理本地密码账号；外部 OIDC 身份账号仅可查看，应在身份源中增删。普通用户即使有 `access:read`，也不能通过 `department` 查看其他部门。用量接口要求同时提供 `from` 和 `to`；响应同时返回 `queryP50Ms`、`queryP95Ms` 和 `totalQueries`，小样本时调用方应结合查询数解释分位数。`providers` 由查询审计聚合，并额外包含当前生效的 Embedding Provider/model。Provider 行的 `requests` 表示关联该阶段的问答数，不是供应商 HTTP 请求或账单调用数；一次问答可同时计入 Query Embedding 和 LLM。问答期间的实际 Provider telemetry 以 tenant + trace 持久化，输入/输出 token 为 Provider 回传值，估算成本使用调用时显式 `provider:model` USD 价格。Provider 未回传 usage、价格缺失或数据库迁移前没有事实时对应字段为 `null`；部分行仍可返回已知数值，但只有全部非零 Provider 行完整时 `usageCompleteness=tokens_and_cost`。若时间范围内尚无当前 Embedding 配置的查询，返回 `requests=0`、`failures=0`，token 与成本仍为 `null`，不得把入库批次解释为问答用量。查询审计事件可同时包含 Embedding 与 LLM Provider/model 事实，但审计页的知识问答行只展示 LLM；云端策略事件包含并展示策略检查当时固化的 Embedding Provider/model。
 
 配置发布规则：
 
@@ -481,7 +483,11 @@ curl --fail-with-body \
 }
 ```
 
-服务端会先确认该会话属于当前 tenant + user；不存在或不属于当前用户时返回统一 404，并且不会继续调用 Embedding、Rerank 或 LLM。合法续问最多使用最近 4 个、服务端记录敏感度与当前 `defaultSensitivity` 一致的用户问题，总计 4,000 字符，来理解“它”“前者”“后者”等指代；旧版本敏感度未知的轮次不参与联动。历史助手答案和来源正文不会因上下文联动被重新发送到云端；不含指代表达的独立问题仍按本轮问题检索。
+服务端会先确认该会话属于当前 tenant + user；不存在或不属于当前用户时返回统一 404，并且不会继续调用 Embedding、Rerank 或 LLM。合法续问最多使用最近 4 个、服务端记录敏感度与当前 `defaultSensitivity` 一致的用户问题，总计 4,000 字符，来理解“它”“前者”“后者”等显式指代，以及“列个需要的材料表格”“材料列个表格”“整理成清单”等动作在前/对象在前的省略主语短连续指令；旧版本敏感度未知的轮次不参与联动。历史助手答案和来源正文不会因上下文联动被重新发送到云端；带有明确独立主题的问题仍只按本轮问题检索。
+
+不含指代表达的续问仍在 Provider 调用前校验会话归属，但不加载历史轮次正文。服务端始终在 ACL 内以 `QUERY_RECALL_TOP_K` 过取有界候选；Rerank 关闭时不调用重排模型，而是在 active 块扩展和相同正文折叠后收敛为最终 `RERANK_TOP_K` Top 5；启用 Rerank 时才对过取候选重排到 Top 5。这些优化不改变响应契约、距离阈值、最终授权复核或引用校验。
+
+问题包含楼栋、文件扩展名、稳定文件标识，或至少 3 个连续中文的图纸实体线索时，服务端可以从当前身份可访问的 active 文档名称中选择高置信匹配；“消防室/消防控制室”会按“消控室”匹配。匹配到非空高置信范围后，最终候选只来自该 scoped 白名单，不用全局近似文档填充。客户端仍只能提交 `question`/`conversationId`，不能提交 documentId、tenant、ACL 或 Chroma filter；无法匹配名称时保持原全局检索。一旦服务端匹配到非空文档范围，资料不足时返回 `noAnswer=true` / `insufficient_relevance`，不改用 `answerMode=general` 猜测图纸或项目事实。
 
 知识库依据回答：
 

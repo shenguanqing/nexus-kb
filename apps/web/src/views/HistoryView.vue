@@ -47,6 +47,7 @@
             <div
               v-for="row in conversations"
               :key="row.id"
+              :title="row.title"
               class="history-list-row"
               :class="{ 'is-active': selected?.id === row.id }"
             >
@@ -365,7 +366,6 @@ function handleListScroll(event: Event): void {
 .history-item-title,
 .history-item-subtitle {
   overflow: hidden;
-  min-width: 0;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
