@@ -1989,7 +1989,7 @@ def _progressive_overview_needs_refresh(bundle: Path) -> bool:
     if not _is_safe_nonempty_file(marker, bundle):
         return True
     try:
-        value: Any = json.loads(marker.read_text(encoding="utf-8"))
+        value: object = json.loads(marker.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
         return True
     return value != {"formatVersion": "1", "detailMode": "full_geometry"}
