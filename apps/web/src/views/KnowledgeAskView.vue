@@ -166,8 +166,8 @@ async function startNewChat(): Promise<void> {
   width: 50px;
   height: 50px;
   margin: 0 auto var(--kb-space-4);
-  border-radius: var(--kb-radius-lg);
-  font-size: 22px;
+  border-radius: var(--kb-radius-sheet);
+  font-size: 24px;
 }
 .welcome-state__title {
   margin-bottom: var(--kb-space-2);

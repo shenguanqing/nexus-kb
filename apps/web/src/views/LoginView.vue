@@ -127,12 +127,12 @@ async function submit(): Promise<void> {
 .login-brand {
   padding: clamp(var(--kb-space-8), 12vh, var(--kb-space-16))
     clamp(var(--kb-space-8), 10vw, var(--kb-space-20));
-  color: var(--kb-color-surface);
-  background: #12224b;
+  color: var(--kb-color-on-brand);
+  background: var(--kb-color-brand-surface);
 }
 .brand-text {
   margin-top: var(--kb-space-1);
-  color: var(--kb-color-surface);
+  color: var(--kb-color-on-brand);
   font-weight: 700;
 }
 .login-text1 {
@@ -142,7 +142,7 @@ async function submit(): Promise<void> {
 }
 .login-text2 {
   margin-top: var(--kb-space-2);
-  color: #b7c3e4;
+  color: var(--kb-color-brand-secondary);
 }
 .login-panel {
   display: grid;

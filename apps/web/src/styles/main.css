@@ -38,6 +38,7 @@ span {
 }
 /* 全局基础 */
 html {
+  color-scheme: light;
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
 }
@@ -49,6 +50,9 @@ body {
   background: var(--kb-color-canvas);
   font-family: var(--kb-font-family-base);
   line-height: var(--kb-line-height-body);
+  transition:
+    color var(--kb-transition-fast),
+    background-color var(--kb-transition-fast);
 }
 button,
 textarea {

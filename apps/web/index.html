@@ -5,6 +5,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content="知枢 NexusKB 可溯源 RAG 知识库" />
     <link rel="icon" type="image/x-icon" href="/favicon.ico" />
+    <script>
+      try {
+        const theme = localStorage.getItem('nexuskb-theme');
+        if (theme === 'light' || theme === 'dark') document.documentElement.dataset.theme = theme;
+      } catch {
+        // 无法使用本地存储时回退为 CSS 的系统偏好。
+      }
+    </script>
     <title>知枢 NexusKB</title>
   </head>
 

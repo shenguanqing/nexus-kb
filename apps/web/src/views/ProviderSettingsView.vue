@@ -15,7 +15,7 @@
       v-loading="publishing"
       class="kb-page__content"
       :element-loading-text="publishingText"
-      element-loading-background="rgba(255, 255, 255, 0.78)"
+      element-loading-background="var(--kb-color-overlay)"
     >
       <div v-if="errorMessage && !result" class="kb-error-state" role="alert">
         <strong class="kb-text kb-text--danger">无法加载 Provider 配置</strong>

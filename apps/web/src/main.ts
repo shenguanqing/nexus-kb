@@ -4,12 +4,15 @@ import 'element-plus/es/components/dialog/style/css';
 import 'element-plus/es/components/drawer/style/css';
 import 'element-plus/es/components/message-box/style/css';
 import 'element-plus/es/components/message/style/css';
+import 'katex/dist/katex.min.css';
 
 import App from './App.vue';
+import { initializeTheme } from './composables/useTheme';
 import { router } from './router';
 import './styles/tokens.css';
 import './styles/breakpoints.scss';
 import './styles/main.css';
 import './styles/element.css';
 
+initializeTheme();
 createApp(App).use(createPinia()).use(router).mount('#app');

@@ -1,15 +1,126 @@
 import DOMPurify from 'dompurify';
+import katex from 'katex';
 import MarkdownIt from 'markdown-it';
+import type { RuleBlock } from 'markdown-it/lib/parser_block.mjs';
+import type { RuleInline } from 'markdown-it/lib/parser_inline.mjs';
 import type Token from 'markdown-it/lib/token.mjs';
 
 const SAFE_LINK_PATTERN = /^(?:(?:https?|mailto):|\/(?!\/)|\.{1,2}\/|#|\?)/i;
 const CITATION_PATTERN = /\[来源(\d+)\]/g;
+const FENCE_START_PATTERN = /(^|\n)```(?:tex|latex|math|markdown)?[^\n]*\n/gim;
 
 interface SafeMarkdownOptions {
   interactiveCitations?: boolean;
 }
 
 type TableAlignment = 'center' | 'left' | 'right';
+
+const KATEX_OPTIONS = {
+  maxExpand: 1_000,
+  maxSize: 50,
+  output: 'htmlAndMathml' as const,
+  strict: 'ignore' as const,
+  throwOnError: false,
+  trust: false,
+};
+
+function renderMath(source: string, displayMode: boolean): string {
+  return katex.renderToString(source.trim().replace(/\\_\{/g, '_{'), {
+    ...KATEX_OPTIONS,
+    displayMode,
+  });
+}
+
+function normalizeMalformedMathFence(source: string): string {
+  FENCE_START_PATTERN.lastIndex = 0;
+  const match = FENCE_START_PATTERN.exec(source);
+  if (!match) return source;
+
+  const openingStart = match.index + (match[1]?.length ?? 0);
+  const openingEnd = match.index + match[0].length;
+  const fencedContent = source.slice(openingEnd);
+  const startsWithDisplayMath = /^\s*(?:\$\$|\\\[|\[\\)/.test(fencedContent);
+  if (!startsWithDisplayMath || fencedContent.includes('\n```')) return source;
+
+  return `${source.slice(0, openingStart)}${fencedContent}`.replace(
+    /^(\$\$[^\n]+\$\$)\n\$\$\s*\n(?=\$\$)/gm,
+    '$1\n',
+  );
+}
+
+function findClosingDelimiter(source: string, start: number, delimiter: string): number {
+  let index = source.indexOf(delimiter, start);
+  while (index >= 0 && source[index - 1] === '\\') {
+    index = source.indexOf(delimiter, index + delimiter.length);
+  }
+  return index;
+}
+
+const mathBlockRule: RuleBlock = (state, startLine, endLine, silent) => {
+  if (state.sCount[startLine]! < state.blkIndent) return false;
+
+  const start = state.bMarks[startLine]! + state.tShift[startLine]!;
+  const openDelimiter = state.src.slice(start, start + 2);
+  const closeDelimiter =
+    openDelimiter === '\\[' || openDelimiter === '[\\' ? '\\]' : openDelimiter === '$$' ? '$$' : undefined;
+  if (!closeDelimiter) return false;
+
+  const contentStart = start + openDelimiter.length;
+  const close = findClosingDelimiter(state.src, contentStart, closeDelimiter);
+  if (close < 0) return false;
+
+  let closeLine = startLine;
+  while (closeLine < endLine && close >= state.eMarks[closeLine]!) closeLine += 1;
+  if (closeLine >= endLine) return false;
+
+  if (silent) return true;
+
+  const token = state.push('math_block', 'math', 0);
+  token.block = true;
+  token.content = state.src.slice(contentStart, close);
+  token.map = [startLine, closeLine + 1];
+  state.line = closeLine + 1;
+  return true;
+};
+
+const backslashMathInlineRule: RuleInline = (state, silent) => {
+  if (state.src.slice(state.pos, state.pos + 2) !== '\\(') return false;
+
+  const contentStart = state.pos + 2;
+  const close = findClosingDelimiter(state.src, contentStart, '\\)');
+  if (close < 0 || state.src.slice(contentStart, close).includes('\n')) return false;
+
+  if (!silent) {
+    const token = state.push('math_inline', 'math', 0);
+    token.content = state.src.slice(contentStart, close);
+  }
+  state.pos = close + 2;
+  return true;
+};
+
+const dollarMathInlineRule: RuleInline = (state, silent) => {
+  if (state.src[state.pos] !== '$' || state.src[state.pos + 1] === '$') return false;
+
+  const contentStart = state.pos + 1;
+  if (!state.src[contentStart] || /\s/.test(state.src[contentStart])) return false;
+
+  const close = findClosingDelimiter(state.src, contentStart, '$');
+  if (
+    close < 0 ||
+    close === contentStart ||
+    /\s/.test(state.src[close - 1]!) ||
+    state.src.slice(contentStart, close).includes('\n')
+  ) {
+    return false;
+  }
+
+  if (!silent) {
+    const token = state.push('math_inline', 'math', 0);
+    token.content = state.src.slice(contentStart, close);
+  }
+  state.pos = close + 1;
+  return true;
+};
 
 function tableAlignment(token: Token | undefined): TableAlignment | undefined {
   const alignment = token?.attrGet('style')?.match(/^text-align:(left|center|right)$/)?.[1];
@@ -55,6 +166,9 @@ const markdown = new MarkdownIt({
 });
 
 markdown.validateLink = (url: string): boolean => SAFE_LINK_PATTERN.test(url.trim());
+markdown.block.ruler.before('fence', 'math_block', mathBlockRule);
+markdown.inline.ruler.before('escape', 'math_inline_backslash', backslashMathInlineRule);
+markdown.inline.ruler.before('escape', 'math_inline_dollar', dollarMathInlineRule);
 
 const defaultTextRenderer =
   markdown.renderer.rules.text ??
@@ -140,9 +254,13 @@ markdown.renderer.rules.heading_open = (tokens, index): string => {
   return `<div class="markdown-heading markdown-heading--h${level} kb-heading kb-heading--h${level}" role="heading" aria-level="${level}">`;
 };
 markdown.renderer.rules.heading_close = () => '</div>';
+markdown.renderer.rules.math_block = (tokens, index): string =>
+  `${renderMath(tokens[index]?.content ?? '', true)}\n`;
+markdown.renderer.rules.math_inline = (tokens, index): string =>
+  renderMath(tokens[index]?.content ?? '', false);
 
 export function renderSafeMarkdown(source: string, options: SafeMarkdownOptions = {}): string {
-  const sanitized = DOMPurify.sanitize(markdown.render(source, options), {
+  const sanitized = DOMPurify.sanitize(markdown.render(normalizeMalformedMathFence(source), options), {
     ALLOWED_TAGS: [
       'a',
       'blockquote',
@@ -156,6 +274,7 @@ export function renderSafeMarkdown(source: string, options: SafeMarkdownOptions 
       'pre',
       's',
       'small',
+      'span',
       'strong',
       'table',
       'tbody',
@@ -163,6 +282,22 @@ export function renderSafeMarkdown(source: string, options: SafeMarkdownOptions 
       'th',
       'thead',
       'tr',
+      'annotation',
+      'math',
+      'mfrac',
+      'mi',
+      'mn',
+      'mo',
+      'mover',
+      'mrow',
+      'msqrt',
+      'msub',
+      'msubsup',
+      'msup',
+      'mtext',
+      'munder',
+      'munderover',
+      'semantics',
     ],
     ALLOWED_ATTR: [
       'aria-label',
@@ -170,6 +305,7 @@ export function renderSafeMarkdown(source: string, options: SafeMarkdownOptions 
       'class',
       'data-list-marker',
       'data-source-index',
+      'encoding',
       'href',
       'rel',
       'role',
@@ -177,11 +313,13 @@ export function renderSafeMarkdown(source: string, options: SafeMarkdownOptions 
       'tabindex',
       'title',
       'type',
+      'style',
+      'xmlns',
     ],
     ALLOWED_URI_REGEXP: SAFE_LINK_PATTERN,
     ALLOW_UNKNOWN_PROTOCOLS: false,
     FORBID_TAGS: ['embed', 'form', 'iframe', 'img', 'object', 'script', 'style', 'svg'],
-    FORBID_ATTR: ['id', 'style'],
+    FORBID_ATTR: ['id'],
   });
   const template = document.createElement('template');
   template.innerHTML = sanitized;

@@ -93,7 +93,7 @@ function selectCitation(event: MouseEvent): void {
 .markdown-content :deep(.markdown-code) {
   padding: var(--kb-space-text-2xs) var(--kb-space-text-lg);
   border-radius: 4px;
-  background: #f3f5f9;
+  background: var(--kb-color-code-surface);
   font-size: 0.88em;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 }
@@ -103,11 +103,20 @@ function selectCitation(event: MouseEvent): void {
   padding: var(--kb-space-2) var(--kb-block-padding);
   border: 1px solid var(--kb-color-border);
   border-radius: 8px;
-  background: #f7f8fa;
+  background: var(--kb-color-code-block-surface);
 }
 .markdown-content :deep(.markdown-code-block .markdown-code--block) {
   padding: 0;
   background: transparent;
+}
+.markdown-content :deep(.katex-display) {
+  overflow-x: auto;
+  overflow-y: hidden;
+  margin: 0 0 var(--kb-space-text-xl);
+  padding: var(--kb-space-text-xs) 0;
+}
+.markdown-content :deep(.katex-display > .katex) {
+  min-width: max-content;
 }
 .markdown-content :deep(.markdown-link) {
   color: var(--kb-color-primary);

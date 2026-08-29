@@ -83,18 +83,52 @@ describe('SafeMarkdown', () => {
     ]);
   });
 
+  it('renders TeX display and inline math without enabling KaTeX trust extensions', () => {
+    const wrapper = mount(SafeMarkdown, {
+      props: {
+        content:
+          '[\\\nN \\approx \\frac{Q \\times R}{V \\times M \\times T\\_{\\text{工作}}}\n\\]\n\n$$\nx = y\n$$\n\n行内公式 \\(E = mc^2\\) 和 $a^2 + b^2 = c^2$。\n\n$10 不是公式。\n\n\\(\\href{https://example.com}{链接}\\)\n\n```tex\n\\[x = y\\]\n```',
+      },
+    });
+
+    expect(wrapper.findAll('.katex-display')).toHaveLength(2);
+    expect(wrapper.findAll('.katex')).toHaveLength(5);
+    expect(wrapper.find('math').exists()).toBe(true);
+    expect(wrapper.find('msub').exists()).toBe(true);
+    expect(wrapper.text()).toContain('N≈');
+    expect(wrapper.text()).toContain('E=mc');
+    expect(wrapper.text()).toContain('$10 不是公式。');
+    expect(wrapper.get('.markdown-code-block').text()).toBe('\\[x = y\\]');
+    expect(wrapper.find('a[href="https://example.com"]').exists()).toBe(false);
+  });
+
+  it('repairs an unclosed model-generated fence that contains display math', () => {
+    const wrapper = mount(SafeMarkdown, {
+      props: {
+        content:
+          '块级公式：\n\n```\n$$\\int_0^\\infty e^{-x^2} dx = \\frac{\\sqrt{\\pi}}{2}$$\n$$\n\n$$\\int_0^\\infty e^{-x^2} dx = \\frac{\\sqrt{\\pi}}{2}\n$$\n\n说明文字。',
+      },
+    });
+
+    expect(wrapper.find('.markdown-code-block').exists()).toBe(false);
+    expect(wrapper.findAll('.katex-display')).toHaveLength(2);
+    expect(wrapper.text()).toContain('说明文字。');
+  });
+
   it('escapes raw HTML and rejects active content and dangerous links', () => {
     const wrapper = mount(SafeMarkdown, {
       props: {
         content:
-          '<img src=x onerror=alert(1)>\n\n<script>alert(1)</script>\n\n![跟踪图片](https://example.com/tracker.png)\n\n[危险链接](javascript:alert(1))\n\n[安全链接](https://example.com)',
+          '<img src=x onerror=alert(1)>\n\n<script>alert(1)</script>\n\n<span style="color:red">原始样式</span>\n\n![跟踪图片](https://example.com/tracker.png)\n\n[危险链接](javascript:alert(1))\n\n[安全链接](https://example.com)',
       },
     });
 
     expect(wrapper.find('img').exists()).toBe(false);
     expect(wrapper.find('script').exists()).toBe(false);
+    expect(wrapper.find('span').exists()).toBe(false);
     expect(wrapper.text()).toContain('<img src=x onerror=alert(1)>');
     expect(wrapper.text()).toContain('<script>alert(1)</script>');
+    expect(wrapper.text()).toContain('<span style="color:red">原始样式</span>');
     expect(wrapper.findAll('a')).toHaveLength(1);
     expect(wrapper.get('a').attributes()).toMatchObject({
       href: 'https://example.com',

@@ -32,6 +32,22 @@
   --kb-color-warning-soft: #fff8e8;
   --kb-color-danger-soft: #fff1f1;
   --kb-color-info-soft: #f4f7fd;
+  --kb-color-code-surface: #f3f5f9;
+  --kb-color-code-block-surface: #f7f8fa;
+  --kb-color-content-original: color-mix(
+    in srgb,
+    var(--kb-color-text-secondary) 7%,
+    var(--kb-color-canvas)
+  );
+  --kb-color-content-redacted: color-mix(
+    in srgb,
+    var(--kb-color-primary) 7%,
+    var(--kb-color-canvas)
+  );
+  --kb-color-brand-surface: #12224b;
+  --kb-color-on-brand: #ffffff;
+  --kb-color-brand-secondary: #b7c3e4;
+  --kb-color-overlay: rgb(255 255 255 / 78%);
   --kb-radius-sm: 6px;
   --kb-radius-md: 10px;
   --kb-radius-lg: 12px;
@@ -111,6 +127,88 @@
   --kb-block-padding: var(--kb-space-3);
   --kb-block-padding-compact: var(--kb-list-row-padding);
   --kb-block-padding-spacious: var(--kb-space-6);
+}
+
+/*
+ * 深色主题只重定义语义 token；页面、公共结构和 Element Plus 映射会随变量自动更新。
+ * 手动 data-theme 优先于系统偏好；未设置手动偏好时由下方 media query 跟随系统。
+ */
+[data-theme='dark'] {
+  color-scheme: dark;
+  --kb-color-primary: #a8c7ff;
+  --kb-color-primary-dark: #c4d7ff;
+  --kb-color-primary-soft: #263244;
+  --kb-color-brand-highlight: #c4d7ff;
+  --kb-color-on-primary: #121416;
+  --kb-color-nav-accent: #2d3a4f;
+  --kb-color-success: #72d2a6;
+  --kb-color-warning: #e9c46a;
+  --kb-color-danger: #f28b82;
+  --kb-color-danger-highlight: #552d2d;
+  --kb-color-text-primary: #f1efeb;
+  --kb-color-text-secondary: #c4c0ba;
+  --kb-color-text-tertiary: #98948e;
+  --kb-color-border: #3a3937;
+  --kb-color-border-light: #2d2c2a;
+  --kb-color-surface: #1d1d1b;
+  --kb-color-surface-subtle: #242421;
+  --kb-color-canvas: #151513;
+  --kb-color-success-soft: #20382d;
+  --kb-color-warning-soft: #423719;
+  --kb-color-danger-soft: #462627;
+  --kb-color-info-soft: #292b2f;
+  --kb-color-code-surface: #252523;
+  --kb-color-code-block-surface: #191918;
+  --kb-color-content-original: #262522;
+  --kb-color-content-redacted: #202833;
+  --kb-color-brand-surface: #1b1c20;
+  --kb-color-on-brand: #f8f7f4;
+  --kb-color-brand-secondary: #cac6c0;
+  --kb-color-overlay: rgb(10 10 9 / 78%);
+  --kb-shadow-float: 0 12px 30px rgb(0 0 0 / 22%);
+  --kb-shadow-drawer: 0 18px 48px rgb(0 0 0 / 28%);
+  --kb-shadow-subtle: 0 3px 10px rgb(0 0 0 / 16%);
+  --kb-shadow-input: 0 0 0 1px rgb(196 215 255 / 12%);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    color-scheme: dark;
+    --kb-color-primary: #a8c7ff;
+    --kb-color-primary-dark: #c4d7ff;
+    --kb-color-primary-soft: #263244;
+    --kb-color-brand-highlight: #c4d7ff;
+    --kb-color-on-primary: #121416;
+    --kb-color-nav-accent: #2d3a4f;
+    --kb-color-success: #72d2a6;
+    --kb-color-warning: #e9c46a;
+    --kb-color-danger: #f28b82;
+    --kb-color-danger-highlight: #552d2d;
+    --kb-color-text-primary: #f1efeb;
+    --kb-color-text-secondary: #c4c0ba;
+    --kb-color-text-tertiary: #98948e;
+    --kb-color-border: #3a3937;
+    --kb-color-border-light: #2d2c2a;
+    --kb-color-surface: #1d1d1b;
+    --kb-color-surface-subtle: #242421;
+    --kb-color-canvas: #151513;
+    --kb-color-success-soft: #20382d;
+    --kb-color-warning-soft: #423719;
+    --kb-color-danger-soft: #462627;
+    --kb-color-info-soft: #292b2f;
+    --kb-color-code-surface: #252523;
+    --kb-color-code-block-surface: #191918;
+    --kb-color-content-original: #262522;
+    --kb-color-content-redacted: #202833;
+    --kb-color-brand-surface: #1b1c20;
+    --kb-color-on-brand: #f8f7f4;
+    --kb-color-brand-secondary: #cac6c0;
+    --kb-color-overlay: rgb(10 10 9 / 78%);
+    --kb-shadow-float: 0 12px 30px rgb(0 0 0 / 22%);
+    --kb-shadow-drawer: 0 18px 48px rgb(0 0 0 / 28%);
+    --kb-shadow-subtle: 0 3px 10px rgb(0 0 0 / 16%);
+    --kb-shadow-input: 0 0 0 1px rgb(196 215 255 / 12%);
+  }
 }
 
 /*

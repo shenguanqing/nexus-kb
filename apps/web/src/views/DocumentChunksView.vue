@@ -407,10 +407,10 @@ onMounted(load);
   white-space: pre-wrap;
 }
 .chunk-text-content--original {
-  background: color-mix(in srgb, var(--kb-color-text-secondary) 7%, var(--kb-color-canvas));
+  background: var(--kb-color-content-original);
 }
 .chunk-text-content--redacted {
-  background: color-mix(in srgb, var(--kb-color-primary) 7%, var(--kb-color-canvas));
+  background: var(--kb-color-content-redacted);
 }
 .document-chunks-page {
   display: grid;

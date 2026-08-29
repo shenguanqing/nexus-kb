@@ -42,15 +42,40 @@
             {{ auth.identity?.department }} · {{ auth.identity?.tenantId }}</small
           >
         </span>
-        <el-button
-          v-if="auth.mode === 'password'"
-          class="logout-button"
-          text
-          aria-label="退出登录"
-          @click="signOut"
-        >
-          退出
-        </el-button>
+        <div v-if="!isMobile" class="user-summary__actions">
+          <el-dropdown placement="bottom-end" trigger="click" @command="setThemeMode">
+            <el-button
+              class="theme-toggle"
+              text
+              circle
+              :icon="isDark ? Sunny : Moon"
+              :aria-label="`主题：${themeMode === 'system' ? '跟随系统' : isDark ? '深色模式' : '浅色模式'}`"
+              title="主题设置"
+            />
+            <template #dropdown>
+              <el-dropdown-menu aria-label="主题设置">
+                <el-dropdown-item command="system" :disabled="themeMode === 'system'">
+                  跟随系统
+                </el-dropdown-item>
+                <el-dropdown-item command="light" :disabled="themeMode === 'light'">
+                  浅色模式
+                </el-dropdown-item>
+                <el-dropdown-item command="dark" :disabled="themeMode === 'dark'">
+                  深色模式
+                </el-dropdown-item>
+              </el-dropdown-menu>
+            </template>
+          </el-dropdown>
+          <el-button
+            v-if="auth.mode === 'password'"
+            class="logout-button"
+            text
+            aria-label="退出登录"
+            @click="signOut"
+          >
+            退出
+          </el-button>
+        </div>
       </div>
     </header>
 
@@ -156,17 +181,42 @@
               <span class="kb-brand-mark">N</span>
               <span class="brand-copy">
                 <strong class="brand-name">知枢</strong>
-                <small class="brand-product">NexusKB</small></span
-              >
+                <small class="brand-product">NexusKB</small>
+              </span>
             </RouterLink>
-            <el-button
-              class="mobile-sidebar-close"
-              :icon="Close"
-              circle
-              aria-label="关闭导航菜单"
-              @click="close"
-            >
-            </el-button>
+            <div class="mobile-sidebar-header__actions">
+              <el-dropdown placement="bottom-end" trigger="click" @command="setThemeMode">
+                <el-button
+                  class="theme-toggle"
+                  text
+                  circle
+                  :icon="isDark ? Sunny : Moon"
+                  :aria-label="`主题：${themeMode === 'system' ? '跟随系统' : isDark ? '深色模式' : '浅色模式'}`"
+                  title="主题设置"
+                />
+                <template #dropdown>
+                  <el-dropdown-menu aria-label="主题设置">
+                    <el-dropdown-item command="system" :disabled="themeMode === 'system'">
+                      跟随系统
+                    </el-dropdown-item>
+                    <el-dropdown-item command="light" :disabled="themeMode === 'light'">
+                      浅色模式
+                    </el-dropdown-item>
+                    <el-dropdown-item command="dark" :disabled="themeMode === 'dark'">
+                      深色模式
+                    </el-dropdown-item>
+                  </el-dropdown-menu>
+                </template>
+              </el-dropdown>
+              <el-button
+                class="mobile-sidebar-close"
+                :icon="Close"
+                circle
+                aria-label="关闭导航菜单"
+                @click="close"
+              >
+              </el-button>
+            </div>
           </div>
           <div class="mobile-sidebar-identity">
             <span class="avatar mobile-sidebar-identity__avatar" aria-hidden="true">
@@ -213,7 +263,7 @@
 </template>
 
 <script setup lang="ts">
-import { ArrowLeft, Close, Expand } from '@element-plus/icons-vue';
+import { ArrowLeft, Close, Expand, Moon, Sunny } from '@element-plus/icons-vue';
 import { computed, ref } from 'vue';
 import AppNavIcon, { type NavIconName } from '@/components/common/AppNavIcon.vue';
 import { useRoute, useRouter } from 'vue-router';
@@ -221,6 +271,7 @@ import { logout } from '@/api/auth';
 import { useAuthStore } from '@/stores/auth';
 import { useKnowledgeConversationStore } from '@/stores/knowledge-conversation';
 import { useBreakpoint } from '@/composables/useBreakpoint';
+import { useTheme } from '@/composables/useTheme';
 import type { NavigationTarget } from '@/router/navigation';
 import {
   documentDetailReturn,
@@ -249,6 +300,7 @@ const router = useRouter();
 const auth = useAuthStore();
 const conversation = useKnowledgeConversationStore();
 const { isDesktop, isMobile, isTablet } = useBreakpoint();
+const { isDark, setThemeMode, themeMode } = useTheme();
 const mobileSidebarOpen = ref(false);
 const activeNavigation = computed(() => route.meta.activeNavigation);
 const pageTitle = computed(() => String(route.meta.title ?? '知枢'));
@@ -464,6 +516,12 @@ async function signOut(): Promise<void> {
 .user-details {
   display: grid;
 }
+.user-summary__actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: var(--kb-space-0);
+}
 .user-context {
   color: var(--kb-color-text-secondary);
 }
@@ -483,6 +541,16 @@ async function signOut(): Promise<void> {
   color: var(--kb-color-text-secondary);
   background: transparent;
   cursor: pointer;
+}
+.theme-toggle {
+  flex: 0 0 auto;
+  color: var(--kb-color-text-secondary);
+}
+.theme-toggle:hover,
+.theme-toggle:focus-visible {
+  outline: none;
+  color: var(--kb-color-primary);
+  background: var(--kb-color-primary-soft);
 }
 .logout-button:hover,
 .logout-button:focus-visible {
@@ -654,6 +722,9 @@ async function signOut(): Promise<void> {
 /* 响应式：Pad 横屏（768px–1279px） */
 /* 响应式：Mobile（<768px） */
 @media (max-width: 767px) {
+  .app-header {
+    padding: 0 var(--kb-space-2);
+  }
   .brand {
     display: none;
   }
@@ -718,6 +789,12 @@ async function signOut(): Promise<void> {
     justify-content: space-between;
     align-items: center;
     gap: var(--kb-space-2);
+  }
+  .mobile-sidebar-header__actions {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+    gap: var(--kb-space-1);
   }
   .mobile-sidebar-brand {
     display: flex;

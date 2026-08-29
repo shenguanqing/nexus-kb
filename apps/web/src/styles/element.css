@@ -58,6 +58,7 @@
   --el-bg-color: var(--kb-color-surface);
   --el-bg-color-page: var(--kb-color-canvas);
   --el-bg-color-overlay: var(--kb-color-surface);
+  --el-mask-color: var(--kb-color-overlay);
   --el-fill-color: var(--kb-color-canvas);
   --el-fill-color-light: var(--kb-color-surface-subtle);
   --el-fill-color-lighter: var(--kb-color-surface-subtle);
