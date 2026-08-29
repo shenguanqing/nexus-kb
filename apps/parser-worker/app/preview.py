@@ -1,4 +1,5 @@
 import gzip
+import math
 import os
 import re
 import shutil
@@ -25,9 +26,21 @@ from app.cad_tiles import (
 from app.schemas import PreviewArtifact
 
 _MAX_COMPRESSIBLE_SVG_BYTES = 1_073_741_824
+_MAX_MONOLITHIC_CAD_SVG_BYTES = 8_388_608
 _COMPLEX_CAD_ENTITY_BUDGET_RATIO = 0.7
 _COMPLEX_CAD_REUSED_BLOCKS = 1_000
-_ZERO_STROKE_WIDTH = re.compile(r"stroke-width:\s*0(?:\.0+)?;")
+_STROKE_WIDTH = re.compile(r"stroke-width:\s*(?P<value>[0-9]+(?:\.[0-9]+)?);")
+_SVG_LENGTH = re.compile(
+    r"^\s*(?P<value>[0-9]+(?:\.[0-9]+)?)\s*(?P<unit>mm|cm|in|pt|px)?\s*$"
+)
+_SVG_CSS_PIXELS_PER_UNIT = {
+    "mm": 96 / 25.4,
+    "cm": 96 / 2.54,
+    "in": 96.0,
+    "pt": 96 / 72,
+    "px": 1.0,
+    "": 1.0,
+}
 
 
 def cad_preview_failure_warning(error: Exception) -> str:
@@ -114,17 +127,36 @@ def generate_cad_svg(
     max_bytes: int,
 ) -> PreviewArtifact:
     resolved_preview_root = _validated_preview_root(preview_root)
+    content = _render_cad_svg(source)
+    return _store_cad_svg(
+        content,
+        document_id,
+        preview_root=resolved_preview_root,
+        max_bytes=max_bytes,
+    )
+
+
+def _render_cad_svg(source: Path) -> bytes:
     try:
         document = readfile(source)
     except (DXFError, UnicodeDecodeError):
         document, _auditor = recover.readfile(source, errors="strict")
     backend = svg.SVGBackend()
     Frontend(cad_render_context(document), backend).draw_layout(document.modelspace())
-    content = _sanitize_svg(backend.get_string(layout.Page(0, 0))).encode("utf-8")
+    return _sanitize_svg(backend.get_string(layout.Page(0, 0))).encode("utf-8")
+
+
+def _store_cad_svg(
+    content: bytes,
+    document_id: UUID,
+    *,
+    preview_root: Path,
+    max_bytes: int,
+) -> PreviewArtifact:
     payload, compressed = _bounded_svg_payload(content, max_bytes)
     storage_key = f"{document_id}.svg"
-    target = resolved_preview_root / storage_key
-    temporary = resolved_preview_root / f".{storage_key}.tmp"
+    target = preview_root / storage_key
+    temporary = preview_root / f".{storage_key}.tmp"
     try:
         with temporary.open("xb") as stream:
             stream.write(payload)
@@ -175,10 +207,23 @@ def generate_cad_preview(
             render_memory_bytes=render_memory_bytes,
             complex_source=complex_source,
         )
-    return generate_cad_svg(
-        source,
+    content = _render_cad_svg(source)
+    if tiled_enabled and len(content) > _MAX_MONOLITHIC_CAD_SVG_BYTES:
+        return generate_cad_tile_preview(
+            source,
+            document_id,
+            preview_root=preview_root,
+            tile_size=tile_size,
+            max_zoom=max_zoom,
+            max_source_bytes=max_bytes,
+            render_timeout_seconds=render_timeout_seconds,
+            render_memory_bytes=render_memory_bytes,
+            complex_source=complex_source,
+        )
+    return _store_cad_svg(
+        content,
         document_id,
-        preview_root=preview_root,
+        preview_root=_validated_preview_root(preview_root),
         max_bytes=max_bytes,
     )
 
@@ -272,13 +317,20 @@ def _sanitize_svg(content: str) -> str:
     root = ElementTree.fromstring(  # noqa: S314 -- parses output from the in-process renderer
         content
     )
+    viewport_scale = _svg_viewport_scale(root)
     blocked_tags = {"script", "foreignobject", "image", "a"}
     for parent in root.iter():
         local_tag = parent.tag.rsplit("}", 1)[-1].lower()
         if local_tag in {"path", "line", "polyline", "polygon", "circle", "ellipse"}:
             parent.set("vector-effect", "non-scaling-stroke")
         if local_tag == "style" and parent.text:
-            parent.text = _ZERO_STROKE_WIDTH.sub("stroke-width: 1;", parent.text)
+            parent.text = _STROKE_WIDTH.sub(
+                lambda match: (
+                    "stroke-width: "
+                    f"{_normalized_svg_stroke_width(match.group('value'), viewport_scale)};"
+                ),
+                parent.text,
+            )
         for child in list(parent):
             if child.tag.rsplit("}", 1)[-1].lower() in blocked_tags:
                 parent.remove(child)
@@ -286,4 +338,45 @@ def _sanitize_svg(content: str) -> str:
             local_name = name.rsplit("}", 1)[-1].lower()
             if local_name == "href" or local_name.startswith("on"):
                 del parent.attrib[name]
+            elif local_name == "stroke-width":
+                parent.set(
+                    name,
+                    _normalized_svg_stroke_width(parent.attrib[name], viewport_scale),
+                )
+    if root.tag.startswith("{http://www.w3.org/2000/svg}"):
+        ElementTree.register_namespace("", "http://www.w3.org/2000/svg")
     return ElementTree.tostring(root, encoding="unicode")
+
+
+def _svg_viewport_scale(root: ElementTree.Element) -> float:
+    view_box = root.attrib.get("viewBox", "").replace(",", " ").split()
+    if len(view_box) != 4:
+        return 1.0
+    try:
+        view_width = float(view_box[2])
+        view_height = float(view_box[3])
+    except ValueError:
+        return 1.0
+    width = _svg_length_in_css_pixels(root.attrib.get("width"))
+    height = _svg_length_in_css_pixels(root.attrib.get("height"))
+    if width is None or height is None or view_width <= 0 or view_height <= 0:
+        return 1.0
+    scale = min(width / view_width, height / view_height)
+    return scale if math.isfinite(scale) and scale > 0 else 1.0
+
+
+def _svg_length_in_css_pixels(value: str | None) -> float | None:
+    if value is None or (match := _SVG_LENGTH.fullmatch(value)) is None:
+        return None
+    length = float(match.group("value"))
+    unit = match.group("unit") or ""
+    return length * _SVG_CSS_PIXELS_PER_UNIT[unit]
+
+
+def _normalized_svg_stroke_width(value: str, viewport_scale: float) -> str:
+    try:
+        width = float(value)
+    except ValueError:
+        return value
+    normalized = min(8.0, max(1.0, width * viewport_scale))
+    return f"{normalized:.3f}".rstrip("0").rstrip(".")

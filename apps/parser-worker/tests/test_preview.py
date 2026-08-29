@@ -52,6 +52,21 @@ def test_generate_cad_svg_writes_sanitized_bounded_artifact(tmp_path: Path) -> N
     assert "stroke-width: 0;" not in content
 
 
+def test_sanitize_svg_normalizes_cad_strokes_to_screen_pixels() -> None:
+    content = """<svg xmlns="http://www.w3.org/2000/svg" width="126.7mm" height="69.7mm"
+      viewBox="0 0 1000000 550118">
+      <defs><style>.C1 {stroke: #fff; stroke-width: 1973; fill: none;}</style></defs>
+      <path class="C1" d="M 0 0 L 1000000 550118" />
+    </svg>"""
+
+    sanitized = preview_module._sanitize_svg(content)
+
+    assert sanitized.startswith('<svg xmlns="http://www.w3.org/2000/svg"')
+    assert "stroke-width: 1973;" not in sanitized
+    assert "stroke-width: 1;" in sanitized
+    assert 'vector-effect="non-scaling-stroke"' in sanitized
+
+
 def test_bounded_svg_payload_compresses_repetitive_oversized_svg() -> None:
     content = ("<svg>" + '<path d="M 0 0 L 1 1"/>' * 1_000 + "</svg>").encode()
 
@@ -149,6 +164,57 @@ def test_generate_cad_preview_uses_weighted_render_cost_for_tile_routing(
 
     assert artifact.kind == "cad_tiles"
     assert tile_arguments["complex_source"] is True
+
+
+def test_generate_cad_preview_promotes_large_rendered_svg_to_tiles(
+    tmp_path: Path,
+    monkeypatch: MonkeyPatch,
+) -> None:
+    source = tmp_path / "drawing.dxf"
+    source.write_bytes(b"small source")
+    preview_root = tmp_path / "previews"
+    preview_root.mkdir()
+    tiled = PreviewArtifact(
+        storageKey=f"{DOCUMENT_ID}.cad",
+        kind="cad_tiles",
+        mimeType="application/vnd.nexuskb.cad-tiles+json",
+        sizeBytes=4096,
+        renderer="ezdxf-cad-tiles",
+        rendererVersion="1",
+    )
+
+    monkeypatch.setattr(
+        preview_module,
+        "estimate_cad_render_cost",
+        lambda _source, _max_depth: (100, 100),
+    )
+    monkeypatch.setattr(
+        preview_module,
+        "_render_cad_svg",
+        lambda _source: b"x" * (preview_module._MAX_MONOLITHIC_CAD_SVG_BYTES + 1),
+    )
+    monkeypatch.setattr(
+        preview_module,
+        "generate_cad_tile_preview",
+        lambda *_args, **_kwargs: tiled,
+    )
+
+    artifact = generate_cad_preview(
+        source,
+        DOCUMENT_ID,
+        preview_root=preview_root,
+        max_bytes=20_000_000,
+        tiled_enabled=True,
+        tile_cost_threshold=100_000,
+        tile_source_bytes_threshold=20_971_520,
+        tile_size=512,
+        max_zoom=8,
+        render_timeout_seconds=60,
+        render_memory_bytes=2_147_483_648,
+    )
+
+    assert artifact.kind == "cad_tiles"
+    assert not (preview_root / f"{DOCUMENT_ID}.svg").exists()
 
 
 def test_cad_preview_failures_report_stable_specific_warning_codes() -> None:

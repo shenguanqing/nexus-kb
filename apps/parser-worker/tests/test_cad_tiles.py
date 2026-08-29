@@ -17,6 +17,7 @@ from app.cad_tiles import (
     _build_manifest,
     _build_spatial_index,
     _default_focus_bounds,
+    _eager_full_geometry_timeout_seconds,
     _effective_max_zoom,
     _initialization_timeout_seconds,
     _initialize_bundle,
@@ -218,6 +219,94 @@ def test_cached_progressive_tile_refreshes_a_stale_overview_before_returning(
     assert child_calls == [90]
 
 
+def test_progressive_ascii_overview_preserves_resolved_colors_before_detail(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "colored-progressive.dxf"
+    preview_root = tmp_path / "previews"
+    preview_root.mkdir()
+    drawing = new("R2010")
+    drawing.layers.new("RED", dxfattribs={"color": 1})
+    drawing.layers.new("BLUE", dxfattribs={"color": 5})
+    drawing.layers.new("HIDDEN", dxfattribs={"color": 3})
+    drawing.layers.get("HIDDEN").off()
+    modelspace = drawing.modelspace()
+    modelspace.add_line((0, 0), (100, 0), dxfattribs={"layer": "RED"})
+    modelspace.add_line((0, 10), (100, 10), dxfattribs={"layer": "BLUE"})
+    modelspace.add_line((0, 20), (100, 20), dxfattribs={"color": 2})
+    modelspace.add_line((0, 30), (100, 30), dxfattribs={"layer": "HIDDEN"})
+    drawing.saveas(source)
+
+    _initialize_simplified_bundle(source, DOCUMENT_ID, preview_root, 256, 2, 1_000_000)
+
+    cad_root = preview_root / f"{DOCUMENT_ID}.cad"
+    bundle_id = json.loads((cad_root / "current.json").read_text(encoding="utf-8"))["bundleId"]
+    bundle = cad_root / "bundles" / bundle_id
+    with sqlite3.connect(bundle / "overview-geometry.sqlite") as database:
+        colors = {
+            cad_tiles_module._unpack_color(row[0])[:3]
+            for row in database.execute("SELECT DISTINCT color FROM primitives")
+        }
+    with Image.open(bundle / "overview.png") as overview:
+        overview_colors = set(overview.convert("RGB").get_flattened_data())
+
+    assert (255, 0, 0) in colors
+    assert (0, 0, 255) in colors
+    assert (255, 255, 0) in colors
+    assert (0, 255, 0) not in colors
+    assert {(255, 0, 0), (0, 0, 255), (255, 255, 0)} <= overview_colors
+    assert not (bundle / "geometry.sqlite").exists()
+    assert not (bundle / "overview-state.json").exists()
+
+
+def test_progressive_overview_expands_bounded_blocks_before_first_detail(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "block-borders.dxf"
+    preview_root = tmp_path / "previews"
+    preview_root.mkdir()
+    drawing = new("R2010")
+    border = drawing.blocks.new(name="BORDER")
+    border.add_lwpolyline(
+        [(0, 0), (100, 0), (100, 60), (0, 60)],
+        close=True,
+        dxfattribs={"color": 1},
+    )
+    drawing.modelspace().add_blockref("BORDER", (1_000, 2_000))
+    drawing.modelspace().add_line((0, 0), (10, 10), dxfattribs={"color": 5})
+    drawing.saveas(source)
+
+    _initialize_simplified_bundle(source, DOCUMENT_ID, preview_root, 256, 2, 1_000_000)
+
+    cad_root = preview_root / f"{DOCUMENT_ID}.cad"
+    bundle_id = json.loads((cad_root / "current.json").read_text(encoding="utf-8"))["bundleId"]
+    bundle = cad_root / "bundles" / bundle_id
+    manifest = read_cad_preview_manifest(preview_root, DOCUMENT_ID)
+    with sqlite3.connect(bundle / "overview-geometry.sqlite") as database:
+        red = cad_tiles_module._pack_color("#ff0000")
+        red_bounds = database.execute(
+            """
+            SELECT MIN(i.min_x), MIN(i.min_y), MAX(i.max_x), MAX(i.max_y), COUNT(*)
+            FROM primitive_index i
+            JOIN primitives p ON p.id = i.id
+            WHERE p.color = ?
+            """,
+            (red,),
+        ).fetchone()
+
+    assert red_bounds[0] <= 1_000
+    assert red_bounds[1] <= 2_000
+    assert red_bounds[2] >= 1_100
+    assert red_bounds[3] >= 2_060
+    assert red_bounds[4] >= 1
+    assert manifest.bounds.min_x < 1_000
+    assert manifest.bounds.max_x > 1_100
+    assert manifest.bounds.min_y < 2_000
+    assert manifest.bounds.max_y > 2_060
+    assert not (bundle / "geometry.sqlite").exists()
+    assert not (bundle / "overview-state.json").exists()
+
+
 def test_progressive_cad_detail_expands_blocks_and_preserves_resolved_colors(
     tmp_path: Path,
 ) -> None:
@@ -316,6 +405,9 @@ def test_cad_bundle_initialization_gets_a_larger_bounded_timeout() -> None:
     assert _initialization_timeout_seconds(600) == 180
     assert _initialization_timeout_seconds(5, complex_source=True) == 15
     assert _initialization_timeout_seconds(60, complex_source=True) == 60
+    assert _eager_full_geometry_timeout_seconds(5) == 15
+    assert _eager_full_geometry_timeout_seconds(60) == 150
+    assert _eager_full_geometry_timeout_seconds(600) == 150
 
 
 def test_cad_bundle_adds_bounded_detail_zoom_for_sparse_outlier_extents(
@@ -551,6 +643,110 @@ def test_public_tile_generation_runs_in_a_bounded_child_and_reuses_the_cache(
         render_memory_bytes=2_147_483_648,
     )
     assert lock_free_hit.cache_hit is True
+
+
+def test_progressive_preview_eagerly_publishes_one_final_overview_when_bounded(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "bounded-progressive.dxf"
+    preview_root = tmp_path / "previews"
+    preview_root.mkdir()
+    drawing = new("R2010")
+    detail = drawing.blocks.new(name="DETAIL")
+    detail.add_lwpolyline(
+        [(0, 0), (100, 0), (100, 60), (0, 60)],
+        close=True,
+        dxfattribs={"color": 1},
+    )
+    drawing.modelspace().add_blockref("DETAIL", (1_000, 2_000))
+    drawing.modelspace().add_line((0, 0), (10, 10), dxfattribs={"color": 5})
+    hatch = drawing.modelspace().add_hatch(color=3)
+    hatch.paths.add_polyline_path(
+        [(0, 0), (50, 0), (50, 50), (0, 50)],
+        is_closed=True,
+    )
+    drawing.saveas(source)
+
+    artifact = generate_cad_tile_preview(
+        source,
+        DOCUMENT_ID,
+        preview_root=preview_root,
+        tile_size=256,
+        max_zoom=2,
+        max_source_bytes=1_000_000,
+        render_timeout_seconds=30,
+        render_memory_bytes=2_147_483_648,
+        complex_source=True,
+    )
+
+    cad_root = preview_root / f"{DOCUMENT_ID}.cad"
+    bundle_id = json.loads((cad_root / "current.json").read_text(encoding="utf-8"))["bundleId"]
+    bundle = cad_root / "bundles" / bundle_id
+    initial_overview = (bundle / "overview.png").read_bytes()
+    initial_z0 = (bundle / "tiles" / "0" / "0" / "0.png").read_bytes()
+
+    assert artifact.renderer == "ezdxf-cad-tiles-progressive"
+    assert (bundle / "geometry.sqlite").is_file()
+    assert json.loads((bundle / "overview-state.json").read_text(encoding="utf-8")) == {
+        "detailMode": "full_geometry",
+        "formatVersion": "1",
+    }
+
+    ensure_cad_preview_tile(
+        DOCUMENT_ID,
+        0,
+        0,
+        0,
+        preview_root=preview_root,
+        metatile_radius=0,
+        max_cache_bytes=16_777_216,
+        render_timeout_seconds=30,
+        render_memory_bytes=2_147_483_648,
+    )
+
+    assert (bundle / "overview.png").read_bytes() == initial_overview
+    assert (bundle / "tiles" / "0" / "0" / "0.png").read_bytes() == initial_z0
+
+
+def test_progressive_preview_keeps_fast_overview_when_eager_full_times_out(
+    tmp_path: Path,
+    monkeypatch: MonkeyPatch,
+) -> None:
+    source = tmp_path / "eager-timeout.dxf"
+    preview_root = tmp_path / "previews"
+    preview_root.mkdir()
+    drawing = new("R2010")
+    drawing.modelspace().add_line((0, 0), (100, 100), dxfattribs={"color": 1})
+    drawing.saveas(source)
+    run_child = cad_tiles_module._run_child
+
+    def reject_eager_render(arguments: list[str], timeout_seconds: int) -> None:
+        if arguments[0] == "render":
+            raise cad_tiles_module.CadPreviewTimeoutError("synthetic timeout")
+        run_child(arguments, timeout_seconds)
+
+    monkeypatch.setattr(cad_tiles_module, "_run_child", reject_eager_render)
+
+    artifact = generate_cad_tile_preview(
+        source,
+        DOCUMENT_ID,
+        preview_root=preview_root,
+        tile_size=256,
+        max_zoom=2,
+        max_source_bytes=1_000_000,
+        render_timeout_seconds=30,
+        render_memory_bytes=2_147_483_648,
+        complex_source=True,
+    )
+
+    cad_root = preview_root / f"{DOCUMENT_ID}.cad"
+    bundle_id = json.loads((cad_root / "current.json").read_text(encoding="utf-8"))["bundleId"]
+    bundle = cad_root / "bundles" / bundle_id
+    assert artifact.renderer == "ezdxf-cad-tiles-progressive"
+    assert (bundle / "overview.png").is_file()
+    assert (bundle / "overview-geometry.sqlite").is_file()
+    assert not (bundle / "geometry.sqlite").exists()
+    assert not (bundle / "overview-state.json").exists()
 
 
 def test_internal_tile_endpoint_requires_auth_and_returns_only_a_storage_reference(

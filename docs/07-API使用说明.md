@@ -261,6 +261,8 @@ unset NEXUSKB_ACCESS_TOKEN
 - `kind=cad_tiles` 时，manifest 的 `cad` 包含 `tileSize`、`minZoom/maxZoom`、总览/基础像素尺寸、完整 `bounds`、可选 `focusBounds`、`worldToPixel`、`entityCount` 和 `renderCostScore`。配置基准 maxZoom 为 12，远距稀释图可动态升到 15。`focusBounds` 从实际渲染可见实体的稳健范围生成并保证位于完整 `bounds` 内；关闭/冻结图层和实体自身隐藏的图元仍可保留在完整 `bounds` 与瓦片坐标中。该字段只建议首次/重置相机和主体鸟瞰范围；瓦片坐标、平移边界与全图归一化必须继续使用 `bounds`。存在该字段时客户端可请求 `/preview/focus-overview`，并继续使用 `/preview/overview` 提供全图切换；两个资源都重新执行当前 ACL，不返回内部路径。
 - `X-Cad-Tile-Cache: hit|miss` 只用于调试和指标，不改变权限语义。`hit` 直接读取已有瓦片；一次 `miss` 可能同时生成相邻 3×3 metatile，并可能为旧 bundle 原子补建几何索引。客户端继续使用既有超时、总览打底和可取消请求，不依赖内部缓存文件。
 - 复杂图可能返回 `CAD_PREVIEW_PROGRESSIVE_GEOMETRY` warning；其 manifest 与瓦片端点不变。快速总览使用有界抽样，但第一次请求细节瓦片时服务端会原子建立完整块展开、颜色化的世界坐标几何索引，并在返回瓦片前从同一索引替换全图、z0 和可选主体鸟瞰；缓存瓦片命中但旧 bundle 缺少完成标记时也会补齐。客户端应保留总览、展示加载状态并使用既有可取消请求，在首批细节成功后用同一 ACL URL 加 cache-buster 刷新一次鸟瞰；刷新失败不应丢弃已加载细节。该 warning 不授予任何转换 DXF、SQLite、内部状态标记或 bundle 访问能力。
+- 新建渐进 bundle 的快速总览已保留可解析的 True Color、ACI 与图层色，并排除关闭、冻结和实体级隐藏图元；源 DXF 不超过 64 MiB 且加权成本不超过 500,000 时，还会在 500,000 图元硬上限内低分辨率展开块引用，使块内图框首次打开即可见。更大的图仍使用直接实体有界降级。旧 bundle 需正常 reindex 才能获得该初始总览，接口与缓存语义不变。
+- 转换 DXF `<=128 MiB` 且 `renderCostScore<=1,000,000` 时，reindex 会在受控 `min(3×单瓦片预算, 150 秒)` 内尝试预建最终几何。成功 bundle 在首次 manifest/overview 请求前已有 `overview-state=full_geometry`，首次总览与后续 100% 使用同一资源；失败不改变公开状态或错误语义，仍保留快速总览并在首次细节请求重试。客户端继续只按 renderer/manifest 使用现有 URL，不读取内部 marker。
 - `fallback` 时，用 `fallbackVersion` 调用 chunks 接口展示解析原文。
 - manifest、总览和瓦片均以当前身份执行 tenant 与文档 ACL；缓存未命中渲染完成后再检查一次，确保撤权立即生效。响应不返回 storage key 或内部路径，也不使用短时预览 token。
 

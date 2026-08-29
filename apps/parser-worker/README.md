@@ -69,9 +69,10 @@ POST /internal/v1/parse
 预览与文本解析独立：
 
 - DOC/DOCX/XLSX 使用镜像内固定 LibreOffice 与 Noto CJK 字体转 PDF；DOC 正文解析要求内网 Tika 就绪，预览失败仍按统一 warning 降级。
-- DXF/DWG 按源字节数和实体类型加权渲染成本分流：小图生成受限 SVG；超大或高成本图生成总览图、z0、实体 R-Tree、非可执行 SQLite/R-Tree 图元索引和 manifest，细节 PNG 由内部端点按需渲染并以磁盘 LRU 清理。复杂图初始化使用最多 100,000 个确定性抽样实体和 500,000 个图元的快速几何索引；它会将 ASCII OCS 转为 WCS、忽略不代表可见几何的裸 `INSERT` 边界，并继续从世界坐标重绘高层级瓦片，而不是裁切放大总览 PNG。
+- DXF/DWG 按源字节数、实体类型加权渲染成本和实际 SVG 负载分流：小图生成受限 SVG；超大、高成本或清洗后单体 SVG 超过 8 MiB 的图生成总览图、z0、实体 R-Tree、非可执行 SQLite/R-Tree 图元索引和 manifest，细节 PNG 由内部端点按需渲染并以磁盘 LRU 清理。复杂图初始化使用最多 100,000 个确定性抽样实体和 500,000 个图元的快速几何索引；它会将 ASCII OCS 转为 WCS、忽略不代表可见几何的裸 `INSERT` 边界，并继续从世界坐标重绘高层级瓦片，而不是裁切放大总览 PNG。
 - 一个 3×3 metatile 只查询、绘制一次，再裁成相邻瓦片。旧 bundle 首次冷请求原子补建图元索引，之后不再重复解析完整 DXF。
 - manifest 包含完整 CAD bounds 和 `worldToPixel`；配置基准 `maxZoom=12`，索引阶段使用最多 4096 个实际渲染可见实体 bbox 的确定性蓄水池样本和两端 1% 稳健范围估计主要几何跨度。关闭/冻结图层和实体自身 `invisible` 标记的几何仍保留在完整 bounds、R-Tree 与瓦片坐标中，但不参与主体样本，避免不可见辅助线把可见主体误判为全图。少量远距辅助实体将完整跨度放大至少 2 倍时，只按倍率为该 bundle 补足最高层级并硬封顶 15，不裁 bounds、不删除图元。瓦片渲染子进程受超时和内存上限保护，新增层级仍按实际视口生成。SVG 保留 CJK 字形替换、非缩放线宽和受控 gzip 兼容逻辑。
+- SVG 的原始 stroke width 属于 CAD/viewBox 用户单位；Worker 使用物理宽高换算 CSS px，并将非缩放线宽限制为 1–8px。否则类似 `stroke-width:1973` 会被 Chromium 当成 1973 屏幕像素而覆盖整图。输出统一使用默认 SVG namespace。
 - 产物只写入 `PREVIEW_ARTIFACTS_PATH`；预览失败不使解析任务失败。
 
 ## 解析器算法
@@ -145,7 +146,13 @@ Model → 块:TITLE_BLOCK → 图层:ANNOTATION
 
 预览是解析结果的可选附件。转换后 DXF 达到 128 MiB、文本遍历已使用至少 75% 实体预算，或同一解析复用至少 1,000 次块定义时，初始预览子进程的单次渲染预算会受控收敛到最多 20 秒（初始化总预算最多 60 秒）；超时返回 `CAD_PREVIEW_INITIALIZATION_TIMEOUT` 并继续交付文本解析结果，避免可选预览超过 API 总请求预算。后续对已经成功生成 bundle 的按需瓦片仍使用正常配置预算。
 
-复杂图渐进 bundle 使用 `simplified.json` 的 `formatVersion=3/detailMode=progressive_geometry` 标记并返回 `CAD_PREVIEW_PROGRESSIVE_GEOMETRY` warning。初始化只生成有界快速总览并保存受控转换 DXF；第一次请求细节瓦片时，ezdxf Frontend 完整展开块引用、解析颜色并原子建立 `geometry.sqlite`，随后所有瓦片从该完整索引绘制。完整几何格式 v2 将连续曲线和文字轮廓保存为单个数值型 polyline 记录，而不是让每个扁平线段分别占用 R-Tree 行；格式 v1 继续只读兼容。单记录 BLOB 仍限制为 64 MiB，完整索引仍限制 4,000,000 条记录、1 GiB bundle、2 GiB 默认子进程内存和 180 秒构建时间，不使用可执行反序列化。完整索引成功后还会从同一彩色几何原子替换 `overview.png`、z0 与可选主体鸟瞰，最后写 `overview-state.json`；已有缓存瓦片但缺少该完成标记时仍会补刷新。异常终止留下的 `.geometry.sqlite.<pid>.tmp` 只在下一次同文档持锁构建前按固定命名清理，不匹配的文件不删除。任一上限触发时保留快速总览并失败关闭，不会用抽样结果冒充完整细节。旧的 `formatVersion=1/detailMode=overview` 只放大总览，`formatVersion=2/detailMode=geometry` 仍缺少完整块与颜色；升级后应通过正常 reindex 或受控原子预览重建替换，不能手改 `current.json`、manifest、SQLite 或完成标记。
+复杂图渐进 bundle 使用 `simplified.json` 的 `formatVersion=3/detailMode=progressive_geometry` 标记并返回 `CAD_PREVIEW_PROGRESSIVE_GEOMETRY` warning。初始化只生成有界快速总览并保存受控转换 DXF；ASCII DXF 快速路径解析 LAYER 表、实体 True Color/ACI 和可见性，binary DXF 复用 RenderContext，使首次总览不再被固定为灰白，同时仍不展开块或建立完整索引。第一次请求细节瓦片时，ezdxf Frontend 完整展开块引用、解析颜色并原子建立 `geometry.sqlite`，随后所有瓦片从该完整索引绘制。完整几何格式 v2 将连续曲线和文字轮廓保存为单个数值型 polyline 记录，而不是让每个扁平线段分别占用 R-Tree 行；格式 v1 继续只读兼容。单记录 BLOB 仍限制为 64 MiB，完整索引仍限制 4,000,000 条记录、1 GiB bundle、2 GiB 默认子进程内存和 180 秒构建时间，不使用可执行反序列化。完整索引成功后还会从同一彩色几何原子替换 `overview.png`、z0 与可选主体鸟瞰，最后写 `overview-state.json`；已有缓存瓦片但缺少该完成标记时仍会补刷新。异常终止留下的 `.geometry.sqlite.<pid>.tmp` 只在下一次同文档持锁构建前按固定命名清理，不匹配的文件不删除。任一上限触发时保留快速总览并失败关闭，不会用抽样结果冒充完整细节。旧的 `formatVersion=1/detailMode=overview` 只放大总览，`formatVersion=2/detailMode=geometry` 仍缺少完整块与颜色；升级后应通过正常 reindex 或受控原子预览重建替换，不能手改 `current.json`、manifest、SQLite 或完成标记。
+
+源 DXF `<=64 MiB` 且加权渲染成本 `<=500,000` 的渐进 bundle 使用低分辨率 Frontend 在 500,000 图元硬上限内展开块引用，使块内图框与颜色首次打开即可见，同时仍不建立 z12–z15 完整 `geometry.sqlite`。超过任一门槛时继续使用直接实体的有界快速降级，完整块等待首次细节请求。
+
+块展开快速总览的 manifest 边界同步使用包含 `INSERT` 内容的模型空间 bbox；不能沿用只含裸插入点的 ASCII 边界，否则已展开的左/下边框仍可能落在瓦片网格外被裁切。边界计算的临时空间索引不会发布到 bundle。
+
+转换 DXF `<=128 MiB` 且 `renderCostScore<=1,000,000` 的渐进 bundle 在快速 bundle 发布后追加一次受控 z0 render，尝试在 `min(3×CAD_PREVIEW_RENDER_TIMEOUT_SECONDS, 150 秒)`、配置内存、4,000,000 图元和 1 GiB bundle 上限内提前建立最终 `geometry.sqlite`。成功时首次 `overview.png`、z0 与后续细节共享同一完整几何；超时或超限时只清理半成品并保留快速总览，首次细节仍可按原路径重试。初始快速 bundle 继续使用最多 60 秒复杂图预算。
 
 完整 `bounds` 至少为确定性稳健主体跨度 2 倍时，manifest 额外返回位于完整范围内、带 5% 留白的 `focusBounds`。它不改变索引和瓦片网格，只为前端首次打开与重置提供主体相机建议；远距对象继续可通过鸟瞰和平移访问。旧 bundle 不会自动补字段，需要正常 reindex。
 

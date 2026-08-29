@@ -24,7 +24,8 @@ from ezdxf.addons.drawing.config import (
     TextPolicy,
 )
 from ezdxf.addons.drawing.frontend import Frontend
-from ezdxf.addons.drawing.properties import BackendProperties
+from ezdxf.addons.drawing.properties import BackendProperties, RenderContext
+from ezdxf.colors import aci2rgb
 from ezdxf.document import Drawing
 from ezdxf.entities.dxfgfx import DXFGraphic
 from ezdxf.entities.insert import Insert
@@ -69,6 +70,12 @@ _BINARY_DXF_SIGNATURE = b"AutoCAD Binary DXF\r\n\x1a\x00"
 _MAX_ASCII_DXF_LINE_BYTES = 1_048_576
 _SIMPLIFIED_ENTITY_LIMIT = 100_000
 _SIMPLIFIED_PRIMITIVE_LIMIT = 500_000
+_BLOCK_EXPANDED_OVERVIEW_RENDER_COST_LIMIT = 500_000
+_BLOCK_EXPANDED_OVERVIEW_SOURCE_BYTES_LIMIT = 67_108_864
+_EAGER_FULL_GEOMETRY_RENDER_COST_LIMIT = 1_000_000
+_EAGER_FULL_GEOMETRY_SOURCE_BYTES_LIMIT = 134_217_728
+_EAGER_FULL_GEOMETRY_CACHE_BYTES = 1_048_576
+_MAX_EAGER_FULL_GEOMETRY_TIMEOUT_SECONDS = 150
 _FULL_GEOMETRY_PRIMITIVE_LIMIT = 4_000_000
 _MAX_CAD_BUNDLE_BYTES = 1_073_741_824
 _SIMPLIFIED_CURVE_SEGMENTS = 32
@@ -568,6 +575,34 @@ def generate_cad_tile_preview(
                         _MAX_COMPLEX_INITIALIZATION_TIMEOUT_SECONDS,
                     )
                     simplified = True
+            if simplified:
+                manifest, bundle = _read_current_bundle(resolved_root, document_id)
+                if _can_eagerly_build_full_geometry(source.stat().st_size, manifest):
+                    try:
+                        _run_child(
+                            [
+                                "render",
+                                "--document-id",
+                                str(document_id),
+                                "--preview-root",
+                                str(resolved_root),
+                                "--zoom",
+                                "0",
+                                "--tile-x",
+                                "0",
+                                "--tile-y",
+                                "0",
+                                "--metatile-radius",
+                                "0",
+                                "--max-cache-bytes",
+                                str(_EAGER_FULL_GEOMETRY_CACHE_BYTES),
+                                "--memory-bytes",
+                                str(render_memory_bytes),
+                            ],
+                            _eager_full_geometry_timeout_seconds(render_timeout_seconds),
+                        )
+                    except (CadPreviewTimeoutError, CadPreviewResourceError):
+                        _cleanup_abandoned_geometry_index_temporaries(bundle)
         finally:
             # A subprocess killed by a timeout or memory limit cannot execute
             # its own Python finally block, so the parent removes abandoned
@@ -817,16 +852,36 @@ def _initialize_simplified_bundle(
     bundle = bundles / bundle_id
     temporary.mkdir(mode=0o750)
     try:
+        block_expanded_document: Drawing | None = None
         if _is_binary_dxf(source):
             document = _load_document(source)
             entities = document.modelspace()
             entity_count = len(entities)
-            render_cost = sum(_COST_WEIGHTS.get(entity.dxftype(), 1) for entity in entities)
+            _expanded_entity_count, render_cost = _estimate_entities(
+                document,
+                entities,
+                depth=0,
+                max_insert_depth=8,
+                active_blocks=frozenset(),
+            )
             bounds, detail_bounds = _simplified_cad_bounds(document, entities)
+            if _can_render_block_expanded_overview(source_size, render_cost):
+                block_expanded_document = document
         else:
             document = None
             entities = None
             bounds, detail_bounds, entity_count, render_cost = _scan_ascii_dxf_overview(source)
+            if _can_render_block_expanded_overview(source_size, render_cost):
+                block_expanded_document = _load_document(source)
+        if block_expanded_document is not None:
+            bounds_index = temporary / ".overview-bounds.sqlite"
+            try:
+                _ignored_count, _ignored_cost, bounds, detail_bounds = _build_spatial_index(
+                    block_expanded_document,
+                    bounds_index,
+                )
+            finally:
+                bounds_index.unlink(missing_ok=True)
         effective_max_zoom = _effective_max_zoom(max_zoom, bounds, detail_bounds)
         manifest = _build_manifest(
             bounds,
@@ -843,7 +898,28 @@ def _initialize_simplified_bundle(
         copied_source = temporary / _SOURCE_FILE
         shutil.copyfile(source, copied_source)
         overview_geometry = temporary / _OVERVIEW_GEOMETRY_INDEX_FILE
-        if document is None or entities is None:
+        if block_expanded_document is not None:
+            overview_scale = min(
+                manifest.overview_width
+                / max(manifest.bounds.max_x - manifest.bounds.min_x, 1e-9),
+                manifest.overview_height
+                / max(manifest.bounds.max_y - manifest.bounds.min_y, 1e-9),
+            )
+            _render_entities(
+                block_expanded_document,
+                block_expanded_document.modelspace(),
+                bounds,
+                manifest.overview_width,
+                manifest.overview_height,
+                temporary / _OVERVIEW_FILE,
+                geometry_index_path=overview_geometry,
+                flattening_scale=overview_scale,
+                text_policy=TextPolicy.REPLACE_RECT,
+                max_primitives=_SIMPLIFIED_PRIMITIVE_LIMIT,
+                fail_on_primitive_limit=True,
+            )
+        elif document is None or entities is None:
+            layer_styles = _ascii_dxf_layer_styles(source)
             _render_ascii_dxf_overview(
                 source,
                 bounds,
@@ -852,8 +928,10 @@ def _initialize_simplified_bundle(
                 temporary / _OVERVIEW_FILE,
                 entity_count,
                 overview_geometry,
+                layer_styles,
             )
         else:
+            render_context = cad_render_context(document)
             _render_simplified_overview(
                 entities,
                 bounds,
@@ -861,6 +939,7 @@ def _initialize_simplified_bundle(
                 manifest.overview_height,
                 temporary / _OVERVIEW_FILE,
                 overview_geometry,
+                render_context,
             )
         if manifest.focus_bounds is not None:
             _render_geometry_overview(
@@ -1186,11 +1265,21 @@ def _render_entities(
     geometry_index_path: Path | None = None,
     flattening_scale: float | None = None,
     text_policy: TextPolicy = TextPolicy.FILLING,
+    max_primitives: int | None = None,
+    fail_on_primitive_limit: bool = False,
 ) -> None:
     if not target.parent.is_dir() or target.parent.is_symlink():
         raise CadPreviewResourceError("CAD 预览 bundle 已不可用")
     temporary = target.parent / f".{target.name}.{os.getpid()}.tmp"
-    writer = GeometryIndexWriter(geometry_index_path) if geometry_index_path is not None else None
+    writer = (
+        GeometryIndexWriter(
+            geometry_index_path,
+            max_primitives=max_primitives,
+            fail_on_limit=fail_on_primitive_limit,
+        )
+        if geometry_index_path is not None
+        else None
+    )
     backend = PillowCadBackend(width, height, world_bounds, writer)
     scale = min(
         width / max(world_bounds[2] - world_bounds[0], 1e-9),
@@ -1268,6 +1357,96 @@ def _iter_ascii_dxf_entities(
         if normalized_value == "ENDSEC":
             return
         entity_type = normalized_value
+
+
+def _ascii_dxf_layer_styles(source: Path) -> dict[str, tuple[str, bool]]:
+    section: str | None = None
+    table: str | None = None
+    expecting_section_name = False
+    expecting_table_name = False
+    record_type: str | None = None
+    tags: list[tuple[int, str]] = []
+    styles: dict[str, tuple[str, bool]] = {}
+
+    def store_layer() -> None:
+        if record_type != "LAYER":
+            return
+        name = _ascii_tag_text(tags, 2)
+        if not name:
+            return
+        flags = _ascii_tag_integer(tags, 70) or 0
+        aci = _ascii_tag_integer(tags, 62)
+        true_color = _ascii_tag_integer(tags, 420)
+        visible = not bool(flags & 1) and (aci is None or aci >= 0)
+        styles[name.casefold()] = (_ascii_color_hex(true_color, aci), visible)
+
+    for code, value in _ascii_dxf_pairs(source):
+        normalized_value = value.strip()
+        if code == 0 and normalized_value == "SECTION":
+            store_layer()
+            section = None
+            table = None
+            record_type = None
+            tags = []
+            expecting_section_name = True
+            continue
+        if expecting_section_name and code == 2:
+            section = normalized_value
+            expecting_section_name = False
+            continue
+        if section != "TABLES":
+            continue
+        if code == 0 and normalized_value == "TABLE":
+            store_layer()
+            table = None
+            record_type = None
+            tags = []
+            expecting_table_name = True
+            continue
+        if expecting_table_name and code == 2:
+            table = normalized_value
+            expecting_table_name = False
+            continue
+        if code != 0:
+            if table == "LAYER" and record_type is not None:
+                tags.append((code, value))
+            continue
+        store_layer()
+        record_type = None
+        tags = []
+        if normalized_value == "ENDTAB":
+            table = None
+            continue
+        if normalized_value == "ENDSEC":
+            break
+        if table == "LAYER":
+            record_type = normalized_value
+    store_layer()
+    return styles
+
+
+def _can_render_block_expanded_overview(source_size: int, render_cost: int) -> bool:
+    return (
+        source_size <= _BLOCK_EXPANDED_OVERVIEW_SOURCE_BYTES_LIMIT
+        and render_cost <= _BLOCK_EXPANDED_OVERVIEW_RENDER_COST_LIMIT
+    )
+
+
+def _can_eagerly_build_full_geometry(
+    source_size: int,
+    manifest: CadPreviewManifest,
+) -> bool:
+    return (
+        source_size <= _EAGER_FULL_GEOMETRY_SOURCE_BYTES_LIMIT
+        and manifest.render_cost_score <= _EAGER_FULL_GEOMETRY_RENDER_COST_LIMIT
+    )
+
+
+def _eager_full_geometry_timeout_seconds(render_timeout_seconds: int) -> int:
+    return min(
+        _initialization_timeout_seconds(render_timeout_seconds),
+        _MAX_EAGER_FULL_GEOMETRY_TIMEOUT_SECONDS,
+    )
 
 
 def _is_modelspace_ascii_entity(tags: list[tuple[int, str]]) -> bool:
@@ -1389,6 +1568,7 @@ def _render_ascii_dxf_overview(
     target: Path,
     entity_count: int,
     geometry_index_path: Path,
+    layer_styles: dict[str, tuple[str, bool]],
 ) -> None:
     if not target.parent.is_dir() or target.parent.is_symlink():
         raise CadPreviewResourceError("CAD 简化预览 bundle 已不可用")
@@ -1400,8 +1580,11 @@ def _render_ascii_dxf_overview(
         for index, (entity_type, tags) in enumerate(_iter_ascii_dxf_entities(source)):
             if index % stride != 0:
                 continue
+            color = _ascii_entity_color(tags, layer_styles)
+            if color is None:
+                continue
             points, closed = _ascii_entity_points(entity_type, tags)
-            _draw_simplified_points(backend, entity_type, points, closed)
+            _draw_simplified_points(backend, entity_type, points, closed, color)
         backend.image.convert("RGB").save(temporary, format="PNG", compress_level=6)
         if temporary.stat().st_size <= 0:
             raise CadPreviewResourceError("CAD 简化总览为空")
@@ -1600,6 +1783,7 @@ def _render_simplified_overview(
     height: int,
     target: Path,
     geometry_index_path: Path,
+    render_context: RenderContext,
 ) -> None:
     if not target.parent.is_dir() or target.parent.is_symlink():
         raise CadPreviewResourceError("CAD 简化预览 bundle 已不可用")
@@ -1612,7 +1796,7 @@ def _render_simplified_overview(
         for index, entity in enumerate(entity_sequence):
             if index % stride != 0:
                 continue
-            _draw_simplified_entity(backend, entity)
+            _draw_simplified_entity(backend, entity, render_context)
         backend.image.convert("RGB").save(temporary, format="PNG", compress_level=6)
         if temporary.stat().st_size <= 0:
             raise CadPreviewResourceError("CAD 简化总览为空")
@@ -1623,13 +1807,25 @@ def _render_simplified_overview(
         temporary.unlink(missing_ok=True)
 
 
-def _draw_simplified_entity(backend: PillowCadBackend, entity: DXFGraphic) -> None:
+def _draw_simplified_entity(
+    backend: PillowCadBackend,
+    entity: DXFGraphic,
+    render_context: RenderContext,
+) -> None:
+    if not render_context.resolve_visible(entity):
+        return
     entity_type = entity.dxftype()
     points = _simplified_entity_points(entity)
     closed = entity_type in {"CIRCLE", "LWPOLYLINE", "POLYLINE"} and bool(
         getattr(entity, "closed", False)
     )
-    _draw_simplified_points(backend, entity_type, points, closed)
+    _draw_simplified_points(
+        backend,
+        entity_type,
+        points,
+        closed,
+        render_context.resolve_color(entity),
+    )
 
 
 def _draw_simplified_points(
@@ -1637,15 +1833,16 @@ def _draw_simplified_points(
     entity_type: str,
     points: list[tuple[float, float]],
     closed: bool,
+    color: str,
 ) -> None:
     finite_points = [(x, y) for x, y in points if math.isfinite(x) and math.isfinite(y)]
     if not finite_points:
         return
     if entity_type in {"INSERT", "POINT", "TEXT", "MTEXT", "ATTRIB", "ATTDEF", "DIMENSION"}:
-        _draw_simplified_primitive(backend, _PRIMITIVE_POINT, finite_points[0])
+        _draw_simplified_primitive(backend, _PRIMITIVE_POINT, finite_points[0], color)
         return
     if len(finite_points) == 1:
-        _draw_simplified_primitive(backend, _PRIMITIVE_POINT, finite_points[0])
+        _draw_simplified_primitive(backend, _PRIMITIVE_POINT, finite_points[0], color)
         return
     line_points = list(finite_points)
     if closed:
@@ -1655,6 +1852,7 @@ def _draw_simplified_points(
             backend,
             _PRIMITIVE_LINE,
             (start[0], start[1], end[0], end[1]),
+            color,
         )
 
 
@@ -1662,10 +1860,56 @@ def _draw_simplified_primitive(
     backend: PillowCadBackend,
     kind: int,
     coordinates: tuple[float, ...],
+    color: str,
 ) -> None:
     if backend.geometry_writer is not None:
-        backend.geometry_writer.add(kind, coordinates, _SIMPLIFIED_COLOR_HEX)
-    backend.draw_cached_primitive(kind, coordinates, _SIMPLIFIED_COLOR_HEX)
+        backend.geometry_writer.add(kind, coordinates, color)
+    backend.draw_cached_primitive(kind, coordinates, color)
+
+
+def _ascii_entity_color(
+    tags: list[tuple[int, str]],
+    layer_styles: dict[str, tuple[str, bool]],
+) -> str | None:
+    if _ascii_tag_integer(tags, 60) == 1:
+        return None
+    layer_name = (_ascii_tag_text(tags, 8) or "0").casefold()
+    layer_color, layer_visible = layer_styles.get(
+        layer_name,
+        (_SIMPLIFIED_COLOR_HEX, True),
+    )
+    if not layer_visible:
+        return None
+    true_color = _ascii_tag_integer(tags, 420)
+    aci = _ascii_tag_integer(tags, 62)
+    if true_color is not None:
+        return _ascii_color_hex(true_color, None)
+    if aci is not None and 1 <= abs(aci) <= 255:
+        return _ascii_color_hex(None, abs(aci))
+    return layer_color
+
+
+def _ascii_color_hex(true_color: int | None, aci: int | None) -> str:
+    if true_color is not None and 0 <= true_color <= 0xFFFFFF:
+        return f"#{true_color:06x}"
+    if aci is not None and 1 <= abs(aci) <= 255:
+        rgb = aci2rgb(abs(aci))
+        return f"#{rgb.r:02x}{rgb.g:02x}{rgb.b:02x}"
+    return _SIMPLIFIED_COLOR_HEX
+
+
+def _ascii_tag_text(tags: list[tuple[int, str]], code: int) -> str | None:
+    return next((value.strip() for tag_code, value in reversed(tags) if tag_code == code), None)
+
+
+def _ascii_tag_integer(tags: list[tuple[int, str]], code: int) -> int | None:
+    value = _ascii_tag_text(tags, code)
+    if value is None:
+        return None
+    try:
+        return int(value)
+    except ValueError:
+        return None
 
 
 def _simplified_entity_points(entity: DXFGraphic) -> list[tuple[float, float]]:
