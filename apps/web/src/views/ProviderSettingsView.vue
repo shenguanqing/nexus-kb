@@ -655,7 +655,7 @@
                 </el-tag>
               </template>
             </el-table-column>
-            <el-table-column label="服务" min-width="100">
+            <el-table-column label="服务" min-width="200">
               <template #default="scope">
                 {{ scope.row.services.join('、') }}
               </template>
@@ -673,7 +673,7 @@
               <template #default="scope">
                 <el-button
                   v-if="deploymentRow(scope.row).rollbackAvailable && !activeDeployment"
-                  text
+                  link
                   type="warning"
                   @click="rollback(deploymentRow(scope.row))"
                 >

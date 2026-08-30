@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { createWriteStream } from 'node:fs';
-import { lstat, readFile, realpath, rename, rm, unlink } from 'node:fs/promises';
+import { lstat, readFile, realpath, rename, unlink } from 'node:fs/promises';
 import { basename, extname, join, relative, resolve } from 'node:path';
 import { Transform } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
@@ -36,6 +36,10 @@ import { ParserClient } from '../parser/parser-client';
 import { ParserError } from '../parser/parser-error';
 import { ChromaVectorStore } from '../vector-store/chroma-vector-store';
 import { validateUploadedFile } from './file-validation';
+import {
+  assertDocumentPreviewStorageKey,
+  removeDocumentPreviewArtifacts,
+} from './document-preview-artifacts';
 
 const MANUALLY_RETRYABLE_CAPACITY_ERROR_CODES = [
   'CAD_ENTITY_LIMIT_EXCEEDED',
@@ -62,7 +66,7 @@ export class DocumentsService {
     this.acl.assertCapability(identity, 'documents:read');
     const where: Prisma.DocumentWhereInput = {
       ...this.acl.documentWhere(identity),
-      status: request.status ?? { notIn: ['deleting', 'deleted'] },
+      status: request.status ?? { not: 'deleted' },
       ...(request.department ? { department: request.department } : {}),
       ...(request.sensitivity ? { sensitivity: request.sensitivity } : {}),
       AND: [
@@ -1279,41 +1283,8 @@ export class DocumentsService {
       },
     );
     if (document.previewStorageKey) {
-      if (document.previewStorageKey !== basename(document.previewStorageKey)) {
-        throw new ApiException('PREVIEW_STORAGE_INVALID', '预览产物引用不合法', 500);
-      }
-      const previewPath = join(
-        this.config.values.PREVIEW_ARTIFACTS_PATH,
-        document.previewStorageKey,
-      );
-      if (document.previewStorageKey === `${document.id}.cad`) {
-        const metadata = await lstat(previewPath).catch((error: unknown) => {
-          if (error instanceof Error && 'code' in error && error.code === 'ENOENT') return null;
-          throw error;
-        });
-        if (metadata && (!metadata.isDirectory() || metadata.isSymbolicLink())) {
-          throw new ApiException('PREVIEW_STORAGE_INVALID', 'CAD 预览产物引用不合法', 500);
-        }
-        await rm(previewPath, { recursive: true, force: true });
-        const lockPath = join(
-          this.config.values.PREVIEW_ARTIFACTS_PATH,
-          `.${document.id}.cad.lock`,
-        );
-        const lockMetadata = await lstat(lockPath).catch((error: unknown) => {
-          if (error instanceof Error && 'code' in error && error.code === 'ENOENT') return null;
-          throw error;
-        });
-        if (lockMetadata && (!lockMetadata.isFile() || lockMetadata.isSymbolicLink())) {
-          throw new ApiException('PREVIEW_STORAGE_INVALID', 'CAD 预览锁文件不合法', 500);
-        }
-        await unlink(lockPath).catch((error: unknown) => {
-          if (!(error instanceof Error && 'code' in error && error.code === 'ENOENT')) throw error;
-        });
-      } else {
-        await unlink(previewPath).catch((error: unknown) => {
-          if (!(error instanceof Error && 'code' in error && error.code === 'ENOENT')) throw error;
-        });
-      }
+      assertDocumentPreviewStorageKey(document.id, document.previewStorageKey);
+      await removeDocumentPreviewArtifacts(this.config.values.PREVIEW_ARTIFACTS_PATH, document.id);
     }
     await this.prisma.$transaction([
       this.prisma.document.update({

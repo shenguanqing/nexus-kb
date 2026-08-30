@@ -745,6 +745,21 @@ def _initialization_timeout_seconds(
     return timeout
 
 
+def _ensure_shared_directory(path: Path, *, exist_ok: bool = False) -> None:
+    path.mkdir(mode=0o770, exist_ok=exist_ok)
+    if not path.is_dir() or path.is_symlink():
+        raise CadPreviewResourceError("CAD 预览目录不安全")
+    path.chmod(0o2770)
+
+
+def _ensure_shared_directory_chain(root: Path, *parts: str) -> Path:
+    current = root
+    for part in parts:
+        current /= part
+        _ensure_shared_directory(current, exist_ok=True)
+    return current
+
+
 def _initialize_bundle(
     source: Path,
     document_id: UUID,
@@ -758,16 +773,14 @@ def _initialize_bundle(
     if source_size <= 0 or source_size > max_source_bytes:
         raise CadPreviewResourceError("CAD 预览几何源超过大小限制")
     root = resolved_root / f"{document_id}.cad"
-    root.mkdir(mode=0o750, exist_ok=True)
-    if root.is_symlink():
-        raise CadPreviewResourceError("CAD 预览目录不安全")
+    _ensure_shared_directory(root, exist_ok=True)
     _cleanup_abandoned_temporary_bundles(root)
     bundles = root / "bundles"
-    bundles.mkdir(mode=0o750, exist_ok=True)
+    _ensure_shared_directory(bundles, exist_ok=True)
     bundle_id = str(uuid4())
     temporary = root / f".{bundle_id}.tmp"
     bundle = bundles / bundle_id
-    temporary.mkdir(mode=0o750)
+    _ensure_shared_directory(temporary)
     try:
         copied_source = temporary / _SOURCE_FILE
         shutil.copyfile(source, copied_source)
@@ -818,8 +831,7 @@ def _initialize_bundle(
                 ),
                 temporary / _FOCUS_OVERVIEW_FILE,
             )
-        z0 = temporary / "tiles" / "0" / "0" / "0.png"
-        z0.parent.mkdir(mode=0o750, parents=True)
+        z0 = _ensure_shared_directory_chain(temporary, "tiles", "0", "0") / "0.png"
         _create_z0_from_overview(temporary / _OVERVIEW_FILE, z0, tile_size)
         temporary.replace(bundle)
         _write_json(root / _CURRENT_FILE, {"bundleId": bundle_id})
@@ -841,16 +853,14 @@ def _initialize_simplified_bundle(
     if source_size <= 0 or source_size > max_source_bytes:
         raise CadPreviewResourceError("CAD 预览几何源超过大小限制")
     root = resolved_root / f"{document_id}.cad"
-    root.mkdir(mode=0o750, exist_ok=True)
-    if root.is_symlink():
-        raise CadPreviewResourceError("CAD 预览目录不安全")
+    _ensure_shared_directory(root, exist_ok=True)
     _cleanup_abandoned_temporary_bundles(root)
     bundles = root / "bundles"
-    bundles.mkdir(mode=0o750, exist_ok=True)
+    _ensure_shared_directory(bundles, exist_ok=True)
     bundle_id = str(uuid4())
     temporary = root / f".{bundle_id}.tmp"
     bundle = bundles / bundle_id
-    temporary.mkdir(mode=0o750)
+    _ensure_shared_directory(temporary)
     try:
         block_expanded_document: Drawing | None = None
         if _is_binary_dxf(source):
@@ -956,8 +966,7 @@ def _initialize_simplified_bundle(
             temporary / _SIMPLIFIED_FILE,
             {"formatVersion": "3", "detailMode": "progressive_geometry"},
         )
-        z0 = temporary / "tiles" / "0" / "0" / "0.png"
-        z0.parent.mkdir(mode=0o750, parents=True)
+        z0 = _ensure_shared_directory_chain(temporary, "tiles", "0", "0") / "0.png"
         _create_z0_from_overview(temporary / _OVERVIEW_FILE, z0, tile_size)
         temporary.replace(bundle)
         _write_json(root / _CURRENT_FILE, {"bundleId": bundle_id})
@@ -2464,10 +2473,12 @@ def _create_live_tile_directory(bundle: Path, zoom: int, tile_x: int) -> None:
     # while a render is in flight, the Worker must fail instead of recreating a
     # recognizable cache directory after deletion has completed.
     try:
-        zoom_directory = bundle / "tiles" / str(zoom)
-        zoom_directory.mkdir(mode=0o750, exist_ok=True)
+        tiles_directory = bundle / "tiles"
+        _ensure_shared_directory(tiles_directory, exist_ok=True)
+        zoom_directory = tiles_directory / str(zoom)
+        _ensure_shared_directory(zoom_directory, exist_ok=True)
         x_directory = zoom_directory / str(tile_x)
-        x_directory.mkdir(mode=0o750, exist_ok=True)
+        _ensure_shared_directory(x_directory, exist_ok=True)
     except OSError as error:
         raise CadPreviewResourceError("CAD 预览 bundle 已不可用") from error
 

@@ -5,6 +5,7 @@ import {
   ingestionErrorMessage,
   ingestionKindLabel,
   ingestionStatusLabel,
+  ingestionWarningPresentation,
   INGESTION_STATUS_OPTIONS,
   isRunningIngestionStatus,
 } from './ingestion-presentation';
@@ -84,5 +85,32 @@ describe('ingestionErrorMessage', () => {
       'CAD 图纸复杂度超过服务器安全上限，请联系管理员调整解析容量或精简图纸',
     );
     expect(ingestionErrorMessage('UNKNOWN_ERROR')).toBe('任务处理失败，请查看技术详情');
+  });
+});
+
+describe('ingestionWarningPresentation', () => {
+  it('renders stable CAD warning codes as Chinese title and description', () => {
+    expect(ingestionWarningPresentation('DXF_REPEATED_BLOCK_DEFINITIONS_REUSED')).toEqual({
+      code: 'DXF_REPEATED_BLOCK_DEFINITIONS_REUSED',
+      title: '重复块优化',
+      message: '检测到重复使用的 CAD 块定义，解析时已安全复用，避免重复遍历相同结构。',
+    });
+    expect(ingestionWarningPresentation('CAD_PREVIEW_PROGRESSIVE_GEOMETRY')).toEqual({
+      code: 'CAD_PREVIEW_PROGRESSIVE_GEOMETRY',
+      title: '渐进式 CAD 预览',
+      message: '图纸较复杂，已先生成快速总览；查看细节时会按需建立完整几何。',
+    });
+  });
+
+  it('formats parameterized warnings and keeps an actionable Chinese fallback', () => {
+    expect(ingestionWarningPresentation('OCR_LOW_CONFIDENCE_ELEMENTS:3')).toMatchObject({
+      title: 'OCR 低置信度提示',
+      message: '有 3 个文字元素的识别置信度较低，建议对照原图复核。',
+    });
+    expect(ingestionWarningPresentation('NEW_WARNING')).toEqual({
+      code: 'NEW_WARNING',
+      title: '处理说明',
+      message: '解析器返回了尚未识别的技术提示：NEW_WARNING',
+    });
   });
 });

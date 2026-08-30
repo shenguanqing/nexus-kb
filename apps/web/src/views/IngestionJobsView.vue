@@ -207,37 +207,49 @@
                 </span>
               </div>
             </div>
-            <div v-if="job.warnings.length" class="task-warning kb-text kb-text--warning">
-              <span class="kb-text kb-text--medium">Warning</span>
-              <div>
+            <div v-if="job.warnings.length" class="task-feedback task-warning">
+              <div class="kb-block__header">
+                <div class="kb-block__title kb-text kb-text--medium">处理说明</div>
+              </div>
+              <div class="kb-data-fields kb-data-fields--borderless">
                 <div
-                  v-for="warning in job.warnings"
-                  :key="warning"
-                  class="kb-text kb-text--warning"
+                  v-for="warning in warningPresentations(job)"
+                  :key="warning.code"
+                  class="kb-data-field"
                 >
-                  {{ warning }}
+                  <span class="kb-data-field__label">{{ warning.title }}</span>
+                  <span class="kb-data-field__value">{{ warning.message }}</span>
                 </div>
               </div>
             </div>
-            <div v-if="job.errorCode" class="task-error kb-text kb-text--danger">
-              <div class="kb-text kb-text--secondary">
-                {{ ingestionErrorMessage(job.errorCode) }}
+            <div v-if="job.errorCode" class="task-feedback task-error">
+              <div class="kb-block__header">
+                <div class="kb-block__title kb-text kb-text--medium">失败说明</div>
               </div>
-              <div class="task-error-details">
-                <span class="kb-text kb-text--md kb-text--danger">
-                  技术详情：{{ job.errorCode }}
-                </span>
-                <span class="kb-text kb-text--md kb-text--danger">
-                  Trace ID：{{ job.traceId }}
-                </span>
+              <div class="kb-data-fields kb-data-fields--borderless">
+                <div class="kb-data-field">
+                  <span class="kb-data-field__label">失败原因</span>
+                  <span class="kb-data-field__value">
+                    {{ ingestionErrorMessage(job.errorCode) }}
+                  </span>
+                </div>
+                <div class="kb-data-field">
+                  <span class="kb-data-field__label">技术详情</span>
+                  <span class="kb-data-field__value">{{ job.errorCode }}</span>
+                </div>
+                <div class="kb-data-field">
+                  <span class="kb-data-field__label">Trace ID</span>
+                  <span class="kb-data-field__value">{{ job.traceId }}</span>
+                </div>
               </div>
-              <el-button
+              <div
                 v-if="canRetry && job.status === 'failed' && job.retryable"
-                :loading="retryingId === job.id"
-                @click="retry(job)"
+                class="task-feedback__actions"
               >
-                重试任务
-              </el-button>
+                <el-button type="danger" plain :loading="retryingId === job.id" @click="retry(job)">
+                  重试任务
+                </el-button>
+              </div>
             </div>
           </div>
         </article>
@@ -279,6 +291,7 @@ import {
   ingestionErrorMessage,
   ingestionKindLabel,
   ingestionStatusLabel,
+  ingestionWarningPresentation,
   INGESTION_STATUS_OPTIONS,
   isRunningIngestionStatus,
 } from './ingestion-presentation';
@@ -387,6 +400,10 @@ async function retry(job: IngestionJob): Promise<void> {
 }
 function elapsed(job: IngestionJob): string {
   return formatIngestionElapsed(job, nowMs.value);
+}
+
+function warningPresentations(job: IngestionJob) {
+  return job.warnings.map(ingestionWarningPresentation);
 }
 
 const stepOrder = [
@@ -566,21 +583,31 @@ onUnmounted(() => {
   border-radius: var(--kb-radius-lg);
   background: transparent;
 }
-.task-warning,
-.task-error {
+.task-feedback {
   display: grid;
-  gap: var(--kb-space-1);
+  gap: var(--kb-space-2);
   padding: var(--kb-block-padding);
   border-radius: var(--kb-radius-lg);
 }
 .task-warning {
+  color: var(--kb-color-warning);
   background: var(--kb-color-warning-soft);
 }
-.task-error {
-  background: var(--kb-color-danger-soft);
+.task-feedback > .kb-block__header {
+  margin-bottom: 0;
 }
-.task-error-details {
-  display: grid;
+.task-feedback .kb-block__title,
+.task-feedback .kb-data-field__label,
+.task-feedback .kb-data-field__value {
+  color: inherit;
+}
+.task-feedback__actions {
+  display: flex;
+  justify-content: flex-end;
+}
+.task-error {
+  color: var(--kb-color-danger);
+  background: var(--kb-color-danger-soft);
 }
 /* 响应式：Pad（768px–1279px） */
 @media (min-width: 768px) and (max-width: 1279px) {

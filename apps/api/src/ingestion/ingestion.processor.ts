@@ -7,6 +7,7 @@ import type { IngestionPayload } from '@nexus-kb/contracts';
 import { OperationalLogger } from '../common/operational-logger';
 import { AppConfig } from '../config/app-config';
 import { PrismaService } from '../database/prisma.service';
+import { removeDocumentPreviewArtifacts } from '../documents/document-preview-artifacts';
 import { ParserClient } from '../parser/parser-client';
 import { EmbeddingProviderFactory } from '../providers/embedding/embedding-provider.factory';
 import { EmbeddingService } from '../providers/embedding/embedding.service';
@@ -164,6 +165,7 @@ export class IngestionProcessor {
       }));
       await this.indexPreparedChunks(record, preparedChunks, vectorStoreInfo);
     } catch (error) {
+      if (await this.discardPreviewAfterConcurrentDeletion(record)) return;
       await this.markFailed(record, error);
       throw error;
     }
@@ -313,6 +315,10 @@ export class IngestionProcessor {
       return true;
     });
     if (!persisted) {
+      await removeDocumentPreviewArtifacts(
+        this.config.values.PREVIEW_ARTIFACTS_PATH,
+        record.documentId,
+      );
       this.logger.info('ingestion_persistence_skipped_deleted_document', {
         traceId: record.traceId,
         tenantId: record.tenantId,
@@ -331,6 +337,31 @@ export class IngestionProcessor {
       provider: policy.providerId ?? undefined,
       status: isBlocked ? 'policy_blocked' : shouldIndex ? 'embedding' : 'prepared',
       checkpoint: isBlocked ? 'policy_blocked' : shouldIndex ? 'local_prepared' : 'prepared',
+    });
+    return true;
+  }
+
+  private async discardPreviewAfterConcurrentDeletion(record: IngestionRecord): Promise<boolean> {
+    const deletedDocument = await this.prisma.document.findFirst({
+      where: {
+        id: record.documentId,
+        tenantId: record.tenantId,
+        status: { in: ['deleting', 'deleted'] },
+      },
+      select: { id: true },
+    });
+    if (!deletedDocument) return false;
+    await removeDocumentPreviewArtifacts(
+      this.config.values.PREVIEW_ARTIFACTS_PATH,
+      record.documentId,
+    );
+    this.logger.info('ingestion_failure_discarded_deleted_document', {
+      traceId: record.traceId,
+      tenantId: record.tenantId,
+      jobId: record.id,
+      documentId: record.documentId,
+      status: 'deleted',
+      checkpoint: record.checkpoint,
     });
     return true;
   }

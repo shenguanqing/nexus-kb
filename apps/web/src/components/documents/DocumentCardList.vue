@@ -8,7 +8,10 @@
     <article v-for="document in data" :key="document.id" class="kb-block">
       <div class="kb-block__header">
         <div class="kb-block__title kb-heading kb-heading--h4">
-          <RouterLink v-slot="{ href, navigate }" :to="`/documents/${document.id}`" custom>
+          <span v-if="document.status === 'deleting'" class="kb-text kb-text--md kb-text--primary">
+            {{ document.sourceName }}
+          </span>
+          <RouterLink v-else v-slot="{ href, navigate }" :to="`/documents/${document.id}`" custom>
             <el-link
               class="kb-link"
               type="primary"
@@ -24,6 +27,15 @@
           {{ statusLabel(document.status) }}
         </el-tag>
       </div>
+      <el-button
+        v-if="document.status === 'deleting' && canDelete"
+        link
+        type="danger"
+        :loading="cleanupDocumentId === document.id"
+        @click="emit('resume-delete', document)"
+      >
+        继续清理
+      </el-button>
       <div class="kb-data-fields">
         <div class="kb-data-field">
           <span class="kb-data-field__label">部门</span>
@@ -54,8 +66,14 @@ import type { DocumentListItem } from '@nexus-kb/contracts';
 defineProps<{
   data: DocumentListItem[];
   loading: boolean;
+  canDelete: boolean;
+  cleanupDocumentId: string | null;
   statusLabel: (status: string) => string;
   statusType: (status: string) => 'success' | 'warning' | 'danger' | 'info';
+}>();
+
+const emit = defineEmits<{
+  'resume-delete': [document: DocumentListItem];
 }>();
 
 function formatDate(value: string): string {

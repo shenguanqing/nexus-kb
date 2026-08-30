@@ -5,35 +5,35 @@
   --kb-breakpoint-pad-max: 1279px;
   --kb-breakpoint-pc-min: 1280px;
 
-  /* 品牌色与语义色。 */
-  --kb-color-primary: #315fc9;
-  --kb-color-primary-dark: #254a9f;
-  --kb-color-primary-soft: #edf3ff;
-  --kb-color-brand-highlight: #547be4;
+  /*
+   * 品牌色与语义色。
+   * accent #0169CC / 背景 #FFFFFF / 前景 #0D0D0D 为三个锚点，
+   */
+  --kb-color-primary: #0169cc;
+  --kb-color-primary-dark: #024f9e;
+  --kb-color-primary-soft: #e4f0fb;
+  --kb-color-brand-highlight: #2b84de;
   --kb-color-on-primary: #ffffff;
-  --kb-color-nav-accent: #c9def8;
-  --kb-color-success: #16805a;
-  --kb-color-warning: #a6640b;
-  --kb-color-danger: #c4333c;
-  --kb-color-danger-highlight: color-mix(
-    in srgb,
-    var(--kb-color-danger) 70%,
-    var(--kb-color-surface)
-  );
-  --kb-color-text-primary: #1d2129;
-  --kb-color-text-secondary: #4e5969;
-  --kb-color-text-tertiary: #86909c;
-  --kb-color-border: #e4e7ed;
-  --kb-color-border-light: #f0f2f5;
+  /* Element Plus 的 dark-2 在浅色主题向黑色收敛，深色主题向白色收敛。 */
+  --kb-color-element-dark-2-target: #000000;
+  --kb-color-nav-accent: #cfe3f7;
+  --kb-color-success: #187b52;
+  --kb-color-warning: #966400;
+  --kb-color-danger: #bd3835;
+  --kb-color-text-primary: #0d0d0d;
+  --kb-color-text-secondary: #4b4b4b;
+  --kb-color-text-tertiary: #6f6f6f;
+  --kb-color-border: #e4e4e4;
+  --kb-color-border-light: #efefef;
   --kb-color-surface: #ffffff;
-  --kb-color-surface-subtle: #fbfcfe;
-  --kb-color-canvas: #f7f8fa;
-  --kb-color-success-soft: #edf8f2;
-  --kb-color-warning-soft: #fff8e8;
-  --kb-color-danger-soft: #fff1f1;
-  --kb-color-info-soft: #f4f7fd;
-  --kb-color-code-surface: #f3f5f9;
-  --kb-color-code-block-surface: #f7f8fa;
+  --kb-color-surface-subtle: #fafafa;
+  --kb-color-canvas: #f5f5f5;
+  --kb-color-success-soft: #e9f5ee;
+  --kb-color-warning-soft: #fbf1de;
+  --kb-color-danger-soft: #fbeae9;
+  --kb-color-info-soft: #f0f4f9;
+  --kb-color-code-surface: #f2f2f2;
+  --kb-color-code-block-surface: #f7f7f7;
   --kb-color-content-original: color-mix(
     in srgb,
     var(--kb-color-text-secondary) 7%,
@@ -44,19 +44,19 @@
     var(--kb-color-primary) 7%,
     var(--kb-color-canvas)
   );
-  --kb-color-brand-surface: #12224b;
+  --kb-color-brand-surface: #121212;
   --kb-color-on-brand: #ffffff;
-  --kb-color-brand-secondary: #b7c3e4;
+  --kb-color-brand-secondary: #b5b5b5;
   --kb-color-overlay: rgb(255 255 255 / 78%);
   --kb-radius-sm: 6px;
   --kb-radius-md: 10px;
   --kb-radius-lg: 12px;
   --kb-radius-sheet: 18px;
   --kb-radius-pill: 999px;
-  --kb-shadow-float: 0 12px 30px rgb(29 33 41 / 14%);
-  --kb-shadow-drawer: 0 18px 48px rgb(19 37 79 / 14%);
-  --kb-shadow-subtle: 0 4px 14px rgb(38 58 106 / 3%);
-  --kb-shadow-input: 0 0px 24px rgb(38 58 106 / 12%);
+  --kb-shadow-float: 0 12px 30px rgb(13 13 13 / 10%);
+  --kb-shadow-drawer: 0 18px 48px rgb(13 13 13 / 12%);
+  --kb-shadow-subtle: 0 4px 14px rgb(13 13 13 / 5%);
+  --kb-shadow-input: 0 0px 24px rgb(13 13 13 / 8%);
   --kb-shadow-card: none;
   --kb-transition-fast: 0.16s ease;
 
@@ -130,84 +130,87 @@
 }
 
 /*
- * 深色主题只重定义语义 token；页面、公共结构和 Element Plus 映射会随变量自动更新。
+ * 深色主题方案：背景 #181818 / 前景 #FFFFFF，
+ * accent 沿用同一蓝色家族但提亮，以便在深色画布上保持可读对比度。
+ * 页面、公共结构和 Element Plus 映射会随变量自动更新。
  * 手动 data-theme 优先于系统偏好；未设置手动偏好时由下方 media query 跟随系统。
+ *
  */
 [data-theme='dark'] {
   color-scheme: dark;
-  --kb-color-primary: #a8c7ff;
-  --kb-color-primary-dark: #c4d7ff;
-  --kb-color-primary-soft: #263244;
-  --kb-color-brand-highlight: #c4d7ff;
-  --kb-color-on-primary: #121416;
-  --kb-color-nav-accent: #2d3a4f;
-  --kb-color-success: #72d2a6;
-  --kb-color-warning: #e9c46a;
-  --kb-color-danger: #f28b82;
-  --kb-color-danger-highlight: #552d2d;
-  --kb-color-text-primary: #f1efeb;
-  --kb-color-text-secondary: #c4c0ba;
-  --kb-color-text-tertiary: #98948e;
-  --kb-color-border: #3a3937;
-  --kb-color-border-light: #2d2c2a;
-  --kb-color-surface: #1d1d1b;
-  --kb-color-surface-subtle: #242421;
-  --kb-color-canvas: #151513;
-  --kb-color-success-soft: #20382d;
-  --kb-color-warning-soft: #423719;
-  --kb-color-danger-soft: #462627;
-  --kb-color-info-soft: #292b2f;
-  --kb-color-code-surface: #252523;
-  --kb-color-code-block-surface: #191918;
-  --kb-color-content-original: #262522;
-  --kb-color-content-redacted: #202833;
-  --kb-color-brand-surface: #1b1c20;
-  --kb-color-on-brand: #f8f7f4;
-  --kb-color-brand-secondary: #cac6c0;
-  --kb-color-overlay: rgb(10 10 9 / 78%);
-  --kb-shadow-float: 0 12px 30px rgb(0 0 0 / 22%);
-  --kb-shadow-drawer: 0 18px 48px rgb(0 0 0 / 28%);
-  --kb-shadow-subtle: 0 3px 10px rgb(0 0 0 / 16%);
-  --kb-shadow-input: 0 0 0 1px rgb(196 215 255 / 12%);
+  --kb-color-primary: #3b9eff;
+  --kb-color-primary-dark: #6bb6ff;
+  --kb-color-primary-soft: #16283d;
+  --kb-color-brand-highlight: #6bb6ff;
+  --kb-color-on-primary: #071019;
+  --kb-color-element-dark-2-target: #ffffff;
+  --kb-color-nav-accent: #1f3350;
+  --kb-color-success: #4ade9b;
+  --kb-color-warning: #e3b341;
+  --kb-color-danger: #ff6b66;
+  --kb-color-text-primary: #ffffff;
+  --kb-color-text-secondary: #b0b0b0;
+  --kb-color-text-tertiary: #878787;
+  --kb-color-border: #2e2e2e;
+  --kb-color-border-light: #242424;
+  --kb-color-surface: #181818;
+  --kb-color-surface-subtle: #1e1e1e;
+  --kb-color-canvas: #121212;
+  --kb-color-success-soft: #16281f;
+  --kb-color-warning-soft: #2c2312;
+  --kb-color-danger-soft: #2c1818;
+  --kb-color-info-soft: #1c1c1c;
+  --kb-color-code-surface: #202020;
+  --kb-color-code-block-surface: #171717;
+  --kb-color-content-original: #1d1d1d;
+  --kb-color-content-redacted: #17233a;
+  --kb-color-brand-surface: #0d0d0d;
+  --kb-color-on-brand: #ffffff;
+  --kb-color-brand-secondary: #a0a0a0;
+  --kb-color-overlay: rgb(12 12 12 / 78%);
+  --kb-shadow-float: 0 12px 30px rgb(0 0 0 / 32%);
+  --kb-shadow-drawer: 0 18px 48px rgb(0 0 0 / 40%);
+  --kb-shadow-subtle: 0 3px 10px rgb(0 0 0 / 24%);
+  --kb-shadow-input: 0 0 0 1px rgb(59 158 255 / 16%);
 }
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light']) {
     color-scheme: dark;
-    --kb-color-primary: #a8c7ff;
-    --kb-color-primary-dark: #c4d7ff;
-    --kb-color-primary-soft: #263244;
-    --kb-color-brand-highlight: #c4d7ff;
-    --kb-color-on-primary: #121416;
-    --kb-color-nav-accent: #2d3a4f;
-    --kb-color-success: #72d2a6;
-    --kb-color-warning: #e9c46a;
-    --kb-color-danger: #f28b82;
-    --kb-color-danger-highlight: #552d2d;
-    --kb-color-text-primary: #f1efeb;
-    --kb-color-text-secondary: #c4c0ba;
-    --kb-color-text-tertiary: #98948e;
-    --kb-color-border: #3a3937;
-    --kb-color-border-light: #2d2c2a;
-    --kb-color-surface: #1d1d1b;
-    --kb-color-surface-subtle: #242421;
-    --kb-color-canvas: #151513;
-    --kb-color-success-soft: #20382d;
-    --kb-color-warning-soft: #423719;
-    --kb-color-danger-soft: #462627;
-    --kb-color-info-soft: #292b2f;
-    --kb-color-code-surface: #252523;
-    --kb-color-code-block-surface: #191918;
-    --kb-color-content-original: #262522;
-    --kb-color-content-redacted: #202833;
-    --kb-color-brand-surface: #1b1c20;
-    --kb-color-on-brand: #f8f7f4;
-    --kb-color-brand-secondary: #cac6c0;
-    --kb-color-overlay: rgb(10 10 9 / 78%);
-    --kb-shadow-float: 0 12px 30px rgb(0 0 0 / 22%);
-    --kb-shadow-drawer: 0 18px 48px rgb(0 0 0 / 28%);
-    --kb-shadow-subtle: 0 3px 10px rgb(0 0 0 / 16%);
-    --kb-shadow-input: 0 0 0 1px rgb(196 215 255 / 12%);
+    --kb-color-primary: #3b9eff;
+    --kb-color-primary-dark: #6bb6ff;
+    --kb-color-primary-soft: #16283d;
+    --kb-color-brand-highlight: #6bb6ff;
+    --kb-color-on-primary: #071019;
+    --kb-color-element-dark-2-target: #ffffff;
+    --kb-color-nav-accent: #1f3350;
+    --kb-color-success: #4ade9b;
+    --kb-color-warning: #e3b341;
+    --kb-color-danger: #ff6b66;
+    --kb-color-text-primary: #ffffff;
+    --kb-color-text-secondary: #b0b0b0;
+    --kb-color-text-tertiary: #878787;
+    --kb-color-border: #2e2e2e;
+    --kb-color-border-light: #242424;
+    --kb-color-surface: #181818;
+    --kb-color-surface-subtle: #1e1e1e;
+    --kb-color-canvas: #121212;
+    --kb-color-success-soft: #16281f;
+    --kb-color-warning-soft: #2c2312;
+    --kb-color-danger-soft: #2c1818;
+    --kb-color-info-soft: #1c1c1c;
+    --kb-color-code-surface: #202020;
+    --kb-color-code-block-surface: #171717;
+    --kb-color-content-original: #1d1d1d;
+    --kb-color-content-redacted: #17233a;
+    --kb-color-brand-surface: #0d0d0d;
+    --kb-color-on-brand: #ffffff;
+    --kb-color-brand-secondary: #a0a0a0;
+    --kb-color-overlay: rgb(12 12 12 / 78%);
+    --kb-shadow-float: 0 12px 30px rgb(0 0 0 / 32%);
+    --kb-shadow-drawer: 0 18px 48px rgb(0 0 0 / 40%);
+    --kb-shadow-subtle: 0 3px 10px rgb(0 0 0 / 24%);
+    --kb-shadow-input: 0 0 0 1px rgb(59 158 255 / 16%);
   }
 }
 

@@ -36,6 +36,17 @@
 
 ## 4. 最近确认
 
+- Parser warning 前端展示已统一：文档详情索引说明和入库任务 `task-warning` 复用同一字典，将重复块复用、渐进式 CAD 预览、DWG 转换、DXF 恢复/审计、OCR 低置信度、Tika fallback 与预览降级等稳定码转换为中文标题和说明；未知新码使用中文兜底并保留技术码。入库 `task-warning` / `task-error` 现共用 `kb-block__header + kb-data-fields/kb-data-field` 布局，分别使用 warning-soft/warning 与 danger-soft/danger，字段文字继承容器语义色；文档详情的 `index-warning-list` 直接组合 `kb-data-fields` 并统一承载 warning 背景与文字色，无独立职责的 `recent-jobs-item` 已删除。
+- 文档删除补偿已补强：授权文档列表默认展示 `deleting` 墓碑并提供输入完整文件名后的“继续清理”，详情、分块和预览仍保持关闭；Parser 请求若在删除后才返回或失败，Consumer 会丢弃结果、回收该 documentId 的 PDF/SVG/CAD 预览并避免把已删除任务重新标记为失败。排查两条历史 DWG 墓碑时进一步确认旧 CAD bundle 目录为 `2750`，API 因缺少共享组写权限返回 `EACCES`；新产物各级目录现固定为 `2770`，两份目标旧产物已按精确 documentId 补齐组写权限。“重庆S04 AGV项目二期Layout20240806-V5.dwg”已通过正式幂等 DELETE 完成补偿：Document/全部版本为 deleted、分块与 Chroma 向量均为 0、预览目录已删除且审计已落库；另一条历史墓碑保留待单独确认。Parser CAD 定向测试 22/22 与 Ruff 定向检查通过。
+- 文档高风险确认 UI 已收敛：删除待清理的“继续清理删除”、永久删除与重新/继续建立索引共用 `DocumentDangerConfirm` 输入完整文档名的确认组件，桌面与移动端仅切换 Dialog/底部 Drawer 容器；`prepared` 状态会明确说明复用既有解析、分块和脱敏结果。组件与文档列表定向测试 9/9、Web Stylelint/Lint、类型检查和生产构建均通过。
+- 全局 Element Dialog 已参考 Drawer 统一为 Header、可滚动 Body 和 Footer 三段式布局：根容器保持零 padding，PC/Pad 各分区均使用 `--kb-block-padding` 四边等宽内距，避免桌面端沿用 24px spacious padding；Header/Footer 分隔线横跨弹层两端，关闭按钮参与 Header Flex 布局。底部 Drawer 继续保留把手、圆角和安全区。
+- 视觉 token 已切换为中性画布与蓝色 accent；浅色成功、警告、危险和次要文字，以及深色次要文字均按其实际 soft 背景调整至至少 4.55:1 对比度。CAD 固定深色画布不跟随主题 token。Web Stylelint/Lint、定向测试 9/9、类型检查和生产构建均通过。
+- Element Button 已补齐跨主题危险 hover、禁用态和 typed plain 状态的语义配色；文档、用户与角色、配置发布表格的操作统一为 Element Plus 默认 `link` Button，不覆盖默认状态色或透明背景。全局 40px 控件高度已排除 `link`/`text`，使它们恢复官方文字高度与内边距。危险 hover 与禁用态文字对比度分别不低于 6.09:1 和 4.64:1；Web Stylelint/Lint、定向测试 10/10、类型检查和生产构建均通过。
+- Element Plus 语义色阶已恢复 `light-3/5/7/8/9` 和 `dark-2` 的分级映射，避免不同 hover、plain、disabled 与 active 状态坍缩为同一 soft 色。Web Stylelint/Lint、定向测试 10/10、类型检查和生产构建均通过。
+- 移动文档操作项与回答来源卡片已改为保留完整键盘语义的 `div`，不再继承通用 Button 基线：前者固定 48px 操作行，后者按内容自适应高度显示完整来源信息。Web Stylelint/Lint、相关组件测试 14/14、类型检查和生产构建均通过。
+- 全局 Drawer 内置关闭按钮已提高选择器优先级，确保各页面均显示为统一的圆形控件。
+- 移动导航的 `el-button is-circle` 关闭按钮已补回 `border-radius: 50%`，避免被通用 Button 圆角覆盖；已删除重复的 `mobile-sidebar-close` class，E2E 改以可访问名称定位。
+- 账号管理 Dialog 已按截图回归收紧：新增账号与管理后台账号在 PC/Pad 改为两列 Grid，FormItem 去除重复底部 margin，由统一 gap 控制字段节奏；账号摘要与表单分组，Mobile 继续使用单列底部 Drawer。
 - CAD 渐进预览近期已完成颜色、块展开、完整边界、主体聚焦、主体/全图切换、动态最大缩放、隐藏图元可见性和原子刷新等修复。对于转换 DXF `<=128 MiB` 且加权成本 `<=1,000,000` 的图，reindex 现按最多 150 秒及既有内存、400 万图元、1 GiB bundle 上限预建最终几何，使首次 100% 与放大后回归 100% 使用同一 overview/z0；失败继续安全保留快速总览，超大图仍走渐进细节。
 - 查询链路近期已完成短中文文档线索、重复候选折叠、连续问答上下文、无权限过滤、引用校验和资料不足时拒答收敛；不因检索不足生成无关通用答案。
 - 最近一次相关验证覆盖 CAD 专项、Parser 定向检查、契约、API、Web、生产构建、Compose 配置和 readiness；具体通过数及未执行项以 Git 历史和对应测试输出为准。

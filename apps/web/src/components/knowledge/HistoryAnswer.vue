@@ -15,11 +15,15 @@
     <section v-if="displaySources.length" class="kb-answer-sources" aria-label="历史回答来源">
       <div class="kb-answer-sources__label">回答来源</div>
       <div class="kb-answer-sources__list">
-        <el-button
+        <div
           v-for="source in displaySources"
           :key="source.index"
           class="kb-answer-sources__card kb-block kb-block--compact kb-block--interactive"
+          role="button"
+          tabindex="0"
           @click="$emit('selectSource', source)"
+          @keydown.enter="$emit('selectSource', source)"
+          @keydown.space.prevent="$emit('selectSource', source)"
         >
           <span class="kb-answer-sources__card-index">来源 {{ source.index }}</span>
           <strong class="kb-answer-sources__card-name" :title="source.sourceName">
@@ -31,7 +35,7 @@
             </template>
             v{{ source.documentVersion }}
           </small>
-        </el-button>
+        </div>
       </div>
     </section>
     <small class="history-answer-meta kb-text kb-text--sm kb-text--secondary">

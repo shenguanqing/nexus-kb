@@ -39,7 +39,7 @@ export const documentListRequestSchema = z
       .optional(),
     department: z.string().trim().min(1).max(128).optional(),
     sensitivity: sensitivitySchema.optional(),
-    status: documentStatusSchema.exclude(['deleting', 'deleted']).optional(),
+    status: documentStatusSchema.exclude(['deleted']).optional(),
     format: documentFormatSchema.optional(),
     page: z.coerce.number().int().min(1).max(100_000).default(1),
     pageSize: z.coerce.number().int().min(1).max(100).default(20),

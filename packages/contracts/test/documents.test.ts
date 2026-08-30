@@ -21,6 +21,8 @@ describe('document contracts', () => {
     });
     expect(documentListRequestSchema.safeParse({ tenantId: 'forged' }).success).toBe(false);
     expect(documentListRequestSchema.safeParse({ pageSize: '101' }).success).toBe(false);
+    expect(documentListRequestSchema.safeParse({ status: 'deleting' }).success).toBe(true);
+    expect(documentListRequestSchema.safeParse({ status: 'deleted' }).success).toBe(false);
   });
 
   it('validates list and server-owned upload option responses', () => {

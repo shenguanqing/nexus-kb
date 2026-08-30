@@ -1,4 +1,7 @@
 import { randomUUID } from 'node:crypto';
+import { mkdir, mkdtemp, readdir, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { AppConfig } from '../src/config/app-config';
@@ -32,6 +35,7 @@ function config(): AppConfig {
   return {
     values: {
       RAW_DOCS_PATH: '/data/raw-docs',
+      PREVIEW_ARTIFACTS_PATH: '/data/previews',
       CHUNK_MAX_TOKENS: 600,
       CHUNK_OVERLAP_TOKENS: 80,
       REDACTION_POLICY_VERSION: 'v1',
@@ -115,6 +119,11 @@ function dependencies(sensitivity: 'internal' | 'confidential' = 'internal') {
     },
   ]);
   const upsertPolicyEvent = vi.fn().mockResolvedValue({ id: randomUUID() });
+  const findDocument = vi
+    .fn()
+    .mockImplementation((input: { where?: { status?: { in?: string[] } } }) =>
+      input.where?.status?.in ? null : { id: documentId },
+    );
   const transactionClient = {
     ingestionJob: {
       findUnique: vi.fn().mockResolvedValue(record),
@@ -122,7 +131,7 @@ function dependencies(sensitivity: 'internal' | 'confidential' = 'internal') {
     },
     document: {
       updateMany: updateDocument,
-      findFirst: vi.fn().mockResolvedValue({ id: documentId }),
+      findFirst: findDocument,
     },
     documentVersion: { updateMany: updateVersion },
     knowledgeChunk: {
@@ -215,6 +224,7 @@ function dependencies(sensitivity: 'internal' | 'confidential' = 'internal') {
     } as unknown as OperationalLogger,
   );
   return {
+    appConfig,
     processor,
     payload: { ingestionJobId: jobId, documentId, storageKey: `${documentId}.md` },
     embedding,
@@ -228,12 +238,36 @@ function dependencies(sensitivity: 'internal' | 'confidential' = 'internal') {
     updateVersion,
     record,
     parse,
+    findDocument,
     findPreparedChunks,
     upsertPolicyEvent,
   };
 }
 
 describe('IngestionProcessor vector indexing', () => {
+  it('removes parser preview artifacts when deletion wins an in-flight parse race', async () => {
+    const deps = dependencies();
+    const directory = await mkdtemp(join(tmpdir(), 'nexuskb-ingestion-delete-race-'));
+    const previewRoot = join(directory, 'previews');
+    const cadRoot = join(previewRoot, `${deps.record.documentId}.cad`);
+    await mkdir(cadRoot, { recursive: true });
+    await writeFile(join(cadRoot, 'overview.png'), 'preview');
+    deps.appConfig.values.PREVIEW_ARTIFACTS_PATH = previewRoot;
+    deps.findDocument.mockResolvedValueOnce({ id: deps.record.documentId });
+    deps.parse.mockRejectedValueOnce(new Error('parser timeout'));
+
+    try {
+      await expect(deps.processor.process(deps.payload)).resolves.toBeUndefined();
+      await expect(readdir(previewRoot)).resolves.toEqual([]);
+      type UpdateInput = { data: Record<string, unknown> };
+      const jobUpdates = deps.updateJob.mock.calls as unknown as Array<[UpdateInput]>;
+      expect(jobUpdates.some(([input]) => input.data.status === 'failed')).toBe(false);
+      expect(deps.updateVersion).not.toHaveBeenCalled();
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
   it('reports the converting stage before parsing DWG input', async () => {
     const deps = dependencies();
     deps.record.document.sourceName = 'drawing.dwg';

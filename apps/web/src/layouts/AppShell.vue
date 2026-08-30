@@ -209,7 +209,6 @@
                 </template>
               </el-dropdown>
               <el-button
-                class="mobile-sidebar-close"
                 :icon="Close"
                 circle
                 aria-label="关闭导航菜单"
@@ -834,36 +833,6 @@ async function signOut(): Promise<void> {
   .mobile-sidebar-identity__context {
     color: var(--kb-color-text-secondary);
     font-size: 11px;
-  }
-  .mobile-sidebar-close {
-    display: grid;
-    flex: 0 0 auto;
-    place-items: center;
-    width: var(--kb-control-height);
-    height: var(--kb-control-height);
-    border: 1px solid var(--kb-color-border);
-    border-radius: var(--kb-radius-pill);
-    color: var(--kb-color-text-secondary);
-    background: var(--kb-color-canvas);
-    line-height: 1;
-    transition:
-      border-color var(--kb-transition-fast),
-      color var(--kb-transition-fast),
-      background var(--kb-transition-fast);
-    cursor: pointer;
-  }
-  .mobile-sidebar-close:hover,
-  .mobile-sidebar-close:focus,
-  .mobile-sidebar-close:focus-visible {
-    border-color: var(--kb-color-border);
-    outline: none;
-    color: var(--kb-color-primary);
-    background: var(--kb-color-primary-soft);
-  }
-  .mobile-sidebar-close:active {
-    border-color: var(--kb-color-border);
-    color: var(--kb-color-primary);
-    background: var(--kb-color-nav-accent);
   }
   .mobile-sidebar-navigation {
     display: grid;

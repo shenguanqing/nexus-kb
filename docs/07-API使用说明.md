@@ -252,6 +252,8 @@ unset NEXUSKB_ACCESS_TOKEN
 - `page`，默认 1
 - `pageSize`，默认 20，最大 100
 
+`status` 可取 `uploaded|processing|prepared|active|policy_blocked|failed|deleting`。默认列表只排除 `deleted`，因此未完成补偿的 `deleting` 墓碑仍对原 ACL 范围可见；该状态不重新开放详情、分块或预览读取，只允许具备 `documents:delete` 的调用方重复 DELETE 继续清理。
+
 `GET /v1/documents/{documentId}/chunks` 支持 `version`、`page` 和 `pageSize`。分块响应包含原始文本，属于权限敏感数据；不得写入浏览器持久化、普通日志、analytics 或错误上报。
 
 预览规则：
@@ -553,6 +555,8 @@ curl --fail-with-body \
 ```
 
 删除接口设计为幂等，但调用方仍应在界面明确展示文档名和影响范围，并要求强确认。不得把自动重试策略无差别应用到上传、重建、metadata 修改、角色修改或删除。
+
+若首次删除因 Chroma、文件系统或并发 Parser 请求中断，记录保持 `deleting`。调用方应保留 documentId，并在用户再次输入完整文件名确认后重复调用同一 DELETE；服务端会继续补偿，成功后状态变为 `deleted`。不得直接修改数据库状态或跳过去重约束。
 
 ### 6.8 创建并发布运行配置
 

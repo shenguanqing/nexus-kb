@@ -791,7 +791,7 @@ test('opens access navigation and displays ACL-authorized document chunks', asyn
   await expect(mobileActionDrawer).toBeVisible();
   await expect(mobileActionDrawer.locator('[role="menu"], [role="menuitem"]')).toHaveCount(0);
   await expect(mobileActionDrawer.locator('.mobile-action-item')).toHaveCount(4);
-  await expect(mobileActionDrawer.locator('.mobile-action-item.el-button')).toHaveCount(3);
+  await expect(mobileActionDrawer.locator('.mobile-action-item[role="button"]')).toHaveCount(3);
   await expect(mobileActionDrawer.getByRole('button', { name: '删除文档' })).toHaveClass(
     /mobile-action-item--danger/,
   );
@@ -2948,7 +2948,7 @@ test('keeps every grouped entry reachable in the collapsible mobile sidebar', as
   );
   await expect(mobileIdentity.locator('.mobile-sidebar-identity__context')).toHaveText('platform');
   await expect(page.getByRole('button', { name: '关闭导航菜单' })).toBeVisible();
-  await expectOverlayCloseHasSharedBorder(page, '.mobile-sidebar-close');
+  await expectOverlayCloseHasSharedBorder(page, 'button[aria-label="关闭导航菜单"]');
   await expect(mobileNavigation.getByRole('link', { name: '知识问答' })).toBeVisible();
   await expect(mobileNavigation.getByRole('link', { name: '问答历史' })).toBeVisible();
   await expect(mobileNavigation.getByRole('link', { name: '文档管理' })).toBeVisible();
@@ -3221,7 +3221,7 @@ test('uses parent gaps for adjacent Element buttons across desktop, pad, and mob
   }
 });
 
-test('keeps desktop dialogs scrollable and uses bottom account drawers on mobile', async ({
+test('keeps desktop dialogs bounded and uses bottom account drawers on mobile', async ({
   page,
 }) => {
   await page.setViewportSize({ width: 900, height: 360 });
@@ -3285,18 +3285,42 @@ test('keeps desktop dialogs scrollable and uses bottom account drawers on mobile
       const body = surface.querySelector<HTMLElement>('.el-dialog__body');
       const header = surface.querySelector<HTMLElement>('.el-dialog__header');
       const footer = surface.querySelector<HTMLElement>('.el-dialog__footer');
+      const padding = (element: HTMLElement | null): number[] => {
+        if (!element) return [];
+        const style = getComputedStyle(element);
+        return [
+          Number.parseFloat(style.paddingTop),
+          Number.parseFloat(style.paddingRight),
+          Number.parseFloat(style.paddingBottom),
+          Number.parseFloat(style.paddingLeft),
+        ];
+      };
       if (body) body.scrollTop = body.scrollHeight;
       const surfaceBounds = surface.getBoundingClientRect();
       return {
+        blockPadding: Number.parseFloat(
+          getComputedStyle(surface).getPropertyValue('--kb-block-padding'),
+        ),
         bodyClientHeight: body?.clientHeight ?? 0,
         bodyOverflowY: body ? getComputedStyle(body).overflowY : '',
         bodyScrollHeight: body?.scrollHeight ?? 0,
         bodyScrollTop: body?.scrollTop ?? 0,
-        dialogBottom: surfaceBounds.bottom,
+        dialogBottom: Math.round(surfaceBounds.bottom),
         dialogDisplay: getComputedStyle(surface).display,
-        dialogTop: surfaceBounds.top,
-        footerBottom: footer?.getBoundingClientRect().bottom ?? Number.POSITIVE_INFINITY,
-        headerTop: header?.getBoundingClientRect().top ?? Number.NEGATIVE_INFINITY,
+        dialogLeft: Math.round(surfaceBounds.left),
+        dialogRight: Math.round(surfaceBounds.right),
+        dialogTop: Math.round(surfaceBounds.top),
+        footerBottom: Math.round(
+          footer?.getBoundingClientRect().bottom ?? Number.POSITIVE_INFINITY,
+        ),
+        footerLeft: Math.round(footer?.getBoundingClientRect().left ?? Number.POSITIVE_INFINITY),
+        footerRight: Math.round(footer?.getBoundingClientRect().right ?? Number.NEGATIVE_INFINITY),
+        footerPadding: padding(footer),
+        headerLeft: Math.round(header?.getBoundingClientRect().left ?? Number.POSITIVE_INFINITY),
+        headerRight: Math.round(header?.getBoundingClientRect().right ?? Number.NEGATIVE_INFINITY),
+        headerPadding: padding(header),
+        headerTop: Math.round(header?.getBoundingClientRect().top ?? Number.NEGATIVE_INFINITY),
+        bodyPadding: padding(body),
         viewportHeight: window.innerHeight,
       };
     });
@@ -3305,9 +3329,23 @@ test('keeps desktop dialogs scrollable and uses bottom account drawers on mobile
     expect(metrics.dialogBottom).toBeLessThanOrEqual(metrics.viewportHeight);
     expect(metrics.headerTop).toBeGreaterThanOrEqual(metrics.dialogTop);
     expect(metrics.footerBottom).toBeLessThanOrEqual(metrics.dialogBottom);
+    expect(metrics.headerLeft).toBe(metrics.dialogLeft);
+    expect(metrics.headerRight).toBe(metrics.dialogRight);
+    expect(metrics.footerLeft).toBe(metrics.dialogLeft);
+    expect(metrics.footerRight).toBe(metrics.dialogRight);
+    expect(new Set(metrics.headerPadding).size).toBe(1);
+    expect(new Set(metrics.bodyPadding).size).toBe(1);
+    expect(new Set(metrics.footerPadding).size).toBe(1);
+    expect(metrics.headerPadding[0]).toBe(metrics.blockPadding);
+    expect(metrics.bodyPadding[0]).toBe(metrics.blockPadding);
+    expect(metrics.footerPadding[0]).toBe(metrics.blockPadding);
     expect(metrics.bodyOverflowY).toBe('auto');
-    expect(metrics.bodyScrollHeight).toBeGreaterThan(metrics.bodyClientHeight);
-    expect(metrics.bodyScrollTop).toBeGreaterThan(0);
+    if (metrics.bodyScrollHeight > metrics.bodyClientHeight) {
+      expect(metrics.bodyScrollTop).toBeGreaterThan(0);
+    } else {
+      expect(metrics.bodyScrollHeight).toBe(metrics.bodyClientHeight);
+      expect(metrics.bodyScrollTop).toBe(0);
+    }
   }
 
   await page.goto('/documents');
@@ -3325,6 +3363,11 @@ test('keeps desktop dialogs scrollable and uses bottom account drawers on mobile
     .getByRole('button', { name: '编辑用户' })
     .evaluate((button) => (button as HTMLButtonElement).click());
   await expectScrollableDialog('管理后台账号');
+  await page.getByRole('dialog').getByRole('button', { name: '取消' }).click();
+
+  await page.setViewportSize({ width: 1440, height: 700 });
+  await page.getByRole('button', { name: '新增账号' }).click();
+  await expectScrollableDialog('新增账号');
   await page.getByRole('dialog').getByRole('button', { name: '取消' }).click();
 
   await page.setViewportSize({ width: 375, height: 812 });

@@ -218,4 +218,5 @@ describe('DocumentsView upload dialog', () => {
     expect(wrapper.find('el-table-stub').exists()).toBe(false);
     expect(wrapper.get('el-empty-stub').attributes('description')).toBe('暂无符合条件的文档');
   });
+
 });

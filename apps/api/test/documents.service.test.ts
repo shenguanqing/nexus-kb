@@ -28,6 +28,27 @@ const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() } as unknown as Op
 const acl = new AclPolicy();
 
 describe('DocumentsService tenant isolation', () => {
+  it('lists deleting tombstones so authorized users can resume cleanup', async () => {
+    const findMany = vi.fn().mockResolvedValue([]);
+    const count = vi.fn().mockResolvedValue(0);
+    const service = new DocumentsService(
+      {} as AppConfig,
+      {
+        document: { findMany, count },
+        $transaction: (operations: Array<Promise<unknown>>) => Promise.all(operations),
+      } as unknown as PrismaService,
+      {} as IngestionQueue,
+      {} as ChromaVectorStore,
+      logger,
+      acl,
+    );
+
+    await service.listDocuments({ page: 1, pageSize: 20 }, identity);
+
+    const [query] = findMany.mock.calls[0] as unknown as [{ where: { status: { not: string } } }];
+    expect(query.where.status).toEqual({ not: 'deleted' });
+  });
+
   it('lists ACL-visible ingestion jobs with server-side pagination', async () => {
     const findMany = vi.fn().mockResolvedValue([]);
     const count = vi.fn().mockResolvedValue(0);

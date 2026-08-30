@@ -120,7 +120,7 @@
                 <div class="table-row-actions">
                   <el-button
                     v-if="!userRow(scopeRow.row).username"
-                    plain
+                    link
                     type="primary"
                     @click="editRoles(userRow(scopeRow.row))"
                   >
@@ -128,7 +128,7 @@
                   </el-button>
                   <el-button
                     v-if="userRow(scopeRow.row).username"
-                    plain
+                    link
                     type="primary"
                     @click="editAccount(userRow(scopeRow.row))"
                   >
@@ -139,7 +139,7 @@
                       userRow(scopeRow.row).username &&
                       userRow(scopeRow.row).userId !== auth.identity?.userId
                     "
-                    plain
+                    link
                     type="danger"
                     @click="removeUser(userRow(scopeRow.row))"
                   >
@@ -190,7 +190,7 @@
               <div class="mobile-user-actions">
                 <el-button
                   v-if="canWrite && !user.username"
-                  plain
+                  link
                   type="primary"
                   @click="editRoles(user)"
                 >
@@ -198,7 +198,7 @@
                 </el-button>
                 <el-button
                   v-if="canWrite && user.username"
-                  plain
+                  link
                   type="primary"
                   @click="editAccount(user)"
                 >
@@ -206,7 +206,7 @@
                 </el-button>
                 <el-button
                   v-if="canWrite && user.username && user.userId !== auth.identity?.userId"
-                  plain
+                  link
                   type="danger"
                   @click="removeUser(user)"
                 >
@@ -283,20 +283,20 @@
       :z-index="4000"
       @closed="newPassword = ''"
     >
-      <el-form label-position="top">
-        <el-form-item label="登录账号">
+      <el-form class="access-editor-form" label-position="top">
+        <el-form-item class="access-editor-field" label="登录账号">
           <el-input v-model="newUsername" maxlength="64" />
         </el-form-item>
-        <el-form-item label="用户 ID">
+        <el-form-item class="access-editor-field" label="用户 ID">
           <el-input v-model="newUserId" maxlength="256" />
         </el-form-item>
-        <el-form-item label="初始密码">
+        <el-form-item class="access-editor-field" label="初始密码">
           <el-input v-model="newPassword" type="password" show-password maxlength="256" />
         </el-form-item>
-        <el-form-item label="部门">
+        <el-form-item class="access-editor-field" label="部门">
           <el-input v-model="newDepartment" maxlength="128" />
         </el-form-item>
-        <el-form-item label="角色">
+        <el-form-item class="access-editor-field access-editor-field--full" label="角色">
           <el-radio-group v-model="newRole">
             <el-radio value="user">普通用户</el-radio>
             <el-radio value="admin">管理员</el-radio></el-radio-group
@@ -321,14 +321,17 @@
       :z-index="4000"
       @closed="replacementPassword = ''"
     >
-      <div v-if="selectedUser" class="kb-text kb-text--secondary">
+      <div v-if="selectedUser" class="access-editor-summary kb-text kb-text--secondary">
         {{ selectedUser.username }} · {{ selectedUser.userId }}
       </div>
-      <el-form label-position="top">
-        <el-form-item label="部门">
+      <el-form class="access-editor-form" label-position="top">
+        <el-form-item class="access-editor-field" label="部门">
           <el-input v-model="accountDepartment" maxlength="128" />
         </el-form-item>
-        <el-form-item label="角色">
+        <el-form-item class="access-editor-field" label="重置密码（留空则不修改）">
+          <el-input v-model="replacementPassword" type="password" show-password maxlength="256" />
+        </el-form-item>
+        <el-form-item class="access-editor-field" label="角色">
           <el-radio-group
             v-model="accountRole"
             :disabled="selectedUser?.userId === auth.identity?.userId"
@@ -337,16 +340,13 @@
             <el-radio value="admin">管理员</el-radio>
           </el-radio-group>
         </el-form-item>
-        <el-form-item label="账号状态">
+        <el-form-item class="access-editor-field" label="账号状态">
           <el-switch
             v-model="accountEnabled"
             active-text="启用"
             inactive-text="禁用"
             :disabled="selectedUser?.userId === auth.identity?.userId"
           />
-        </el-form-item>
-        <el-form-item label="重置密码（留空则不修改）">
-          <el-input v-model="replacementPassword" type="password" show-password maxlength="256" />
         </el-form-item>
       </el-form>
       <template #footer>
@@ -601,6 +601,22 @@ onMounted(() => {
   display: grid;
   gap: var(--kb-space-2);
 }
+.access-editor-form {
+  display: grid;
+  align-items: start;
+  gap: var(--kb-layout-gap);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.access-editor-field {
+  min-width: 0;
+  margin-bottom: 0;
+}
+.access-editor-field--full {
+  grid-column: 1 / -1;
+}
+.access-editor-summary {
+  margin-bottom: var(--kb-layout-gap);
+}
 .access-table-wrap .desktop-data-table {
   min-height: 0;
 }
@@ -618,6 +634,12 @@ onMounted(() => {
 @media (max-width: 767px) {
   .access-toolbar {
     grid-template-columns: minmax(0, 1fr) auto auto;
+  }
+  .access-editor-form {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .access-editor-field--full {
+    grid-column: auto;
   }
 }
 </style>

@@ -152,7 +152,18 @@
         >
           <el-table-column prop="sourceName" label="文件名" min-width="300" fixed="left">
             <template #default="scope">
-              <RouterLink v-slot="{ href, navigate }" :to="`/documents/${scope.row.id}`" custom>
+              <span
+                v-if="scope.row.status === 'deleting'"
+                class="kb-text kb-text--md kb-text--primary"
+              >
+                {{ scope.row.sourceName }}
+              </span>
+              <RouterLink
+                v-else
+                v-slot="{ href, navigate }"
+                :to="`/documents/${scope.row.id}`"
+                custom
+              >
                 <el-link
                   class="kb-link"
                   type="primary"
@@ -184,13 +195,30 @@
               {{ new Date(scope.row.updatedAt).toLocaleString() }}
             </template>
           </el-table-column>
+          <el-table-column label="操作" width="120" fixed="right">
+            <template #default="scope">
+              <el-button
+                v-if="scope.row.status === 'deleting' && canDelete"
+                link
+                type="danger"
+                :loading="cleanupDocumentId === scope.row.id"
+                @click="resumeDeletionById(String(scope.row.id))"
+              >
+                继续清理
+              </el-button>
+              <span v-else class="kb-text kb-text--sm kb-text--tertiary">—</span>
+            </template>
+          </el-table-column>
         </el-table>
         <DocumentCardList
           v-else-if="isMobile"
           :data="items"
           :loading="loading"
+          :can-delete="canDelete"
+          :cleanup-document-id="cleanupDocumentId"
           :status-label="(status) => statusLabels[status] ?? status"
           :status-type="statusType"
+          @resume-delete="resumeDeletion"
         />
         <el-empty v-else-if="!loading" class="kb-empty-state" description="暂无符合条件的文档" />
       </div>
@@ -349,6 +377,21 @@
         </el-button>
       </template>
     </component>
+
+    <DocumentDangerConfirm
+      v-if="cleanupTarget"
+      :model-value="true"
+      :document-name="cleanupTarget.sourceName"
+      action="cleanup"
+      :loading="cleanupDocumentId === cleanupTarget.id"
+      :mobile="isMobile"
+      @update:model-value="
+        (visible: boolean) => {
+          if (!visible) cleanupTarget = null;
+        }
+      "
+      @confirm="confirmResumeDeletion"
+    />
   </section>
 </template>
 
@@ -363,10 +406,16 @@ import { ElDialog, ElDrawer, ElMessage, type UploadFile, type UploadUserFile } f
 import { computed, onMounted, reactive, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { ApiError } from '@/api/client';
-import { fetchDocumentUploadOptions, listDocuments, uploadDocument } from '@/api/documents';
+import {
+  deleteDocument as deleteDocumentRequest,
+  fetchDocumentUploadOptions,
+  listDocuments,
+  uploadDocument,
+} from '@/api/documents';
 import { useAuthStore } from '@/stores/auth';
 import { useBreakpoint } from '@/composables/useBreakpoint';
 import DocumentCardList from '@/components/documents/DocumentCardList.vue';
+import DocumentDangerConfirm from '@/components/documents/DocumentDangerConfirm.vue';
 
 const route = useRoute();
 const router = useRouter();
@@ -390,6 +439,8 @@ interface UploadRow {
 }
 const uploadRows = ref<UploadRow[]>([]);
 const uploading = ref(false);
+const cleanupDocumentId = ref<string | null>(null);
+const cleanupTarget = ref<DocumentListItem | null>(null);
 const filters = reactive({
   search: typeof route.query.search === 'string' ? route.query.search : '',
   status: typeof route.query.status === 'string' ? route.query.status : '',
@@ -400,6 +451,7 @@ const filters = reactive({
 });
 
 const canUpload = computed(() => auth.hasCapability('documents:write'));
+const canDelete = computed(() => auth.hasCapability('documents:delete'));
 const hasSecondaryFilters = computed(
   () => Boolean(filters.status) || Boolean(filters.sensitivity) || Boolean(filters.format),
 );
@@ -410,6 +462,7 @@ const statusLabels: Record<string, string> = {
   active: '已生效',
   policy_blocked: '策略阻止',
   failed: '失败',
+  deleting: '删除待清理',
 };
 
 function queryRequest(): Partial<DocumentListRequest> {
@@ -460,6 +513,33 @@ async function resetFilters(): Promise<void> {
 async function changePage(nextPage: number): Promise<void> {
   filters.page = nextPage;
   await syncQueryAndLoad();
+}
+
+function resumeDeletion(document: DocumentListItem): void {
+  cleanupTarget.value = document;
+}
+
+async function confirmResumeDeletion(): Promise<void> {
+  const document = cleanupTarget.value;
+  if (!document) return;
+  cleanupTarget.value = null;
+  cleanupDocumentId.value = document.id;
+  try {
+    await deleteDocumentRequest(document.id);
+    ElMessage.success('文档残留已清理，可以重新上传');
+    await load();
+  } catch (error) {
+    if (error !== 'cancel' && error !== 'close') {
+      ElMessage.error(error instanceof ApiError ? error.message : '继续清理失败');
+    }
+  } finally {
+    cleanupDocumentId.value = null;
+  }
+}
+
+function resumeDeletionById(documentId: string): void {
+  const document = items.value.find((item) => item.id === documentId);
+  if (document) resumeDeletion(document);
 }
 
 async function openUpload(): Promise<void> {
@@ -555,7 +635,7 @@ function formatFileSize(bytes: number): string {
 function statusType(status: string): 'success' | 'warning' | 'danger' | 'info' {
   if (status === 'active') return 'success';
   if (status === 'failed') return 'danger';
-  if (status === 'policy_blocked') return 'warning';
+  if (status === 'policy_blocked' || status === 'deleting') return 'warning';
   return 'info';
 }
 

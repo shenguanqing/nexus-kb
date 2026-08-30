@@ -1,5 +1,6 @@
 import json
 import sqlite3
+import stat
 from pathlib import Path
 from uuid import UUID
 
@@ -77,6 +78,15 @@ def test_cad_bundle_generates_only_overview_and_z0_then_renders_detail_on_demand
     assert manifest.world_to_pixel[0] > 0
     assert manifest.world_to_pixel[3] < 0
     assert current_overview_storage_key(preview_root, DOCUMENT_ID).endswith("/overview.png")
+    for directory in (
+        cad_root,
+        cad_root / "bundles",
+        bundle,
+        bundle / "tiles",
+        bundle / "tiles" / "0",
+        bundle / "tiles" / "0" / "0",
+    ):
+        assert stat.S_IMODE(directory.stat().st_mode) & stat.S_IWGRP
 
     region_calls = 0
     render_region = cad_tiles_module._render_geometry_region
@@ -97,6 +107,7 @@ def test_cad_bundle_generates_only_overview_and_z0_then_renders_detail_on_demand
     for x in range(2, 5):
         for y in range(1, 4):
             assert (bundle / "tiles" / "3" / str(x) / f"{y}.png").is_file()
+            assert stat.S_IMODE((bundle / "tiles" / "3" / str(x)).stat().st_mode) & stat.S_IWGRP
 
 
 def test_legacy_cad_bundle_builds_geometry_index_once_before_rendering(
