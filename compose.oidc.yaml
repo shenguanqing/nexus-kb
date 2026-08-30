@@ -1,0 +1,49 @@
+# 仅用于本机 OIDC/PKCE 回归；不得用于生产或公网部署。
+services:
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.7.2
+    restart: unless-stopped
+    command: ['start-dev', '--import-realm']
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_TEST_ADMIN_USERNAME:-nexuskb-admin}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_TEST_ADMIN_PASSWORD:?KEYCLOAK_TEST_ADMIN_PASSWORD is required for docker:oidc}
+      KC_HEALTH_ENABLED: 'true'
+    ports:
+      - '127.0.0.1:18080:8080'
+    volumes:
+      - keycloak_data:/opt/keycloak/data
+      - ./config/keycloak/nexuskb-dev-realm.json:/opt/keycloak/data/import/nexuskb-dev-realm.json:ro
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - "exec 3<>/dev/tcp/127.0.0.1/9000 && printf 'GET /health/ready HTTP/1.1\\r\\nHost: localhost\\r\\n\\r\\n' >&3 && grep -q '200' <&3"
+      interval: 10s
+      timeout: 5s
+      retries: 18
+      start_period: 30s
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - edge
+
+  keycloak-bootstrap:
+    image: quay.io/keycloak/keycloak:26.7.2
+    restart: 'no'
+    depends_on:
+      keycloak:
+        condition: service_healthy
+    entrypoint: ['/bin/sh', '/opt/nexuskb/keycloak-bootstrap.sh']
+    environment:
+      KEYCLOAK_TEST_ADMIN_USERNAME: ${KEYCLOAK_TEST_ADMIN_USERNAME:-nexuskb-admin}
+      KEYCLOAK_TEST_ADMIN_PASSWORD: ${KEYCLOAK_TEST_ADMIN_PASSWORD:?KEYCLOAK_TEST_ADMIN_PASSWORD is required for docker:oidc}
+      KEYCLOAK_TEST_USERNAME: ${KEYCLOAK_TEST_USERNAME:-sso-tester}
+      KEYCLOAK_TEST_USER_PASSWORD: ${KEYCLOAK_TEST_USER_PASSWORD:?KEYCLOAK_TEST_USER_PASSWORD is required for docker:oidc}
+    volumes:
+      - ./scripts/keycloak-bootstrap.sh:/opt/nexuskb/keycloak-bootstrap.sh:ro
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - edge
+
+volumes:
+  keycloak_data: {}

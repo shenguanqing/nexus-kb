@@ -1,5 +1,6 @@
 import type { Capability } from '@nexus-kb/contracts';
 import { createRouter, createWebHistory } from 'vue-router';
+import { OIDC_SESSION_EXPIRED_EVENT } from '@/auth/oidc';
 import { useAuthStore } from '@/stores/auth';
 import { decideRouteAccess } from './access';
 import type { NavigationTarget } from './navigation';
@@ -18,6 +19,11 @@ export const router = createRouter({
   history: createWebHistory(),
   routes: [
     { path: '/login', component: () => import('@/views/LoginView.vue'), meta: { title: '登录' } },
+    {
+      path: '/auth/callback',
+      component: () => import('@/views/OidcCallbackView.vue'),
+      meta: { title: '正在登录' },
+    },
     {
       path: '/',
       component: () => import('@/layouts/AppShell.vue'),
@@ -160,7 +166,7 @@ export const router = createRouter({
 
 router.beforeEach(async (to) => {
   const auth = useAuthStore();
-  if (!auth.isLoaded) await auth.loadSession();
+  if (!auth.isLoaded && to.path !== '/auth/callback') await auth.loadSession();
   document.title = `${String(to.meta.title ?? '知枢')} · NexusKB`;
   if (to.path === '/login' && auth.isAuthenticated) return '/ask';
   const decision = decideRouteAccess(
@@ -175,4 +181,12 @@ router.beforeEach(async (to) => {
   }
   if (decision === 'forbidden') return '/403';
   return true;
+});
+
+window.addEventListener(OIDC_SESSION_EXPIRED_EVENT, () => {
+  const auth = useAuthStore();
+  const current = router.currentRoute.value;
+  auth.clear();
+  if (current.path === '/login' || current.path === '/auth/callback') return;
+  void router.replace({ path: '/login', query: { redirect: current.fullPath } });
 });

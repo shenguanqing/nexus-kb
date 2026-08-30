@@ -36,7 +36,40 @@ describe('AuthController', () => {
       {} as never,
       {} as never,
     );
-    expect(controller.loginOptions()).toEqual({ mode: 'password', passwordEnabled: true });
+    expect(controller.loginOptions()).toEqual({
+      mode: 'password',
+      passwordEnabled: true,
+      oidc: null,
+    });
+  });
+
+  it('returns only public OIDC browser configuration when OIDC is enabled', () => {
+    const controller = new AuthController(
+      {
+        values: {
+          AUTH_REQUIRED: true,
+          PASSWORD_AUTH_ENABLED: false,
+          OIDC_AUTHORIZATION_ENDPOINT: 'https://identity.example.test/authorize',
+          OIDC_TOKEN_ENDPOINT: 'https://identity.example.test/token',
+          OIDC_CLIENT_ID: 'nexus-kb-web',
+          OIDC_REDIRECT_URI: 'https://knowledge.example.test/auth/callback',
+          OIDC_SCOPES_JSON: ['openid', 'profile'],
+        },
+      } as AppConfig,
+      {} as never,
+      {} as never,
+    );
+    expect(controller.loginOptions()).toEqual({
+      mode: 'oidc',
+      passwordEnabled: false,
+      oidc: {
+        authorizationEndpoint: 'https://identity.example.test/authorize',
+        tokenEndpoint: 'https://identity.example.test/token',
+        clientId: 'nexus-kb-web',
+        redirectUri: 'https://knowledge.example.test/auth/callback',
+        scopes: ['openid', 'profile'],
+      },
+    });
   });
 
   it('creates a password session cookie only after the server accepts credentials', async () => {

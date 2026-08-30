@@ -994,7 +994,7 @@ test('signs in with an enabled account-password session without storing credenti
     }),
   );
   await page.route('**/v1/auth/login-options', (route) =>
-    route.fulfill({ json: { mode: 'password', passwordEnabled: true } }),
+    route.fulfill({ json: { mode: 'password', passwordEnabled: true, oidc: null } }),
   );
   await page.route('**/v1/auth/password/login', (route) => {
     expect(route.request().postDataJSON()).toEqual({

@@ -266,6 +266,14 @@ const environmentSchema = z
     OIDC_ISSUER: z.string().trim().max(512).default(''),
     OIDC_AUDIENCE: z.string().trim().max(256).default(''),
     OIDC_JWKS_URI: z.string().trim().max(2048).default(''),
+    OIDC_AUTHORIZATION_ENDPOINT: z.string().trim().max(2048).default(''),
+    OIDC_TOKEN_ENDPOINT: z.string().trim().max(2048).default(''),
+    OIDC_CLIENT_ID: z.string().trim().max(256).default(''),
+    OIDC_REDIRECT_URI: z.string().trim().max(2048).default(''),
+    OIDC_SCOPES_JSON: jsonEnvironmentValue(
+      z.array(z.string().trim().min(1).max(128)).min(1).max(16),
+      '["openid","profile"]',
+    ),
     OIDC_ALLOWED_ALGORITHMS_JSON: jsonEnvironmentValue(
       z.array(jwtAlgorithmSchema).min(1).max(6),
       '["RS256"]',
@@ -410,24 +418,47 @@ const environmentSchema = z
         ['OIDC_ISSUER', environment.OIDC_ISSUER],
         ['OIDC_AUDIENCE', environment.OIDC_AUDIENCE],
         ['OIDC_JWKS_URI', environment.OIDC_JWKS_URI],
+        ['OIDC_AUTHORIZATION_ENDPOINT', environment.OIDC_AUTHORIZATION_ENDPOINT],
+        ['OIDC_TOKEN_ENDPOINT', environment.OIDC_TOKEN_ENDPOINT],
+        ['OIDC_CLIENT_ID', environment.OIDC_CLIENT_ID],
+        ['OIDC_REDIRECT_URI', environment.OIDC_REDIRECT_URI],
       ] as const;
       for (const [field, value] of requiredFields) {
         if (!value) context.addIssue({ code: 'custom', path: [field], message: 'is required' });
       }
-      if (environment.OIDC_JWKS_URI) {
+      for (const [field, value] of [
+        ['OIDC_JWKS_URI', environment.OIDC_JWKS_URI],
+        ['OIDC_AUTHORIZATION_ENDPOINT', environment.OIDC_AUTHORIZATION_ENDPOINT],
+        ['OIDC_TOKEN_ENDPOINT', environment.OIDC_TOKEN_ENDPOINT],
+        ['OIDC_REDIRECT_URI', environment.OIDC_REDIRECT_URI],
+      ] as const) {
+        if (!value) continue;
         try {
-          const url = new URL(environment.OIDC_JWKS_URI);
+          const url = new URL(value);
           if (url.username || url.password) throw new Error('credentials in URL');
           if (environment.NODE_ENV === 'production' && url.protocol !== 'https:') {
             throw new Error('not https');
           }
+          if (field === 'OIDC_REDIRECT_URI' && (url.hash || url.search)) {
+            throw new Error('redirect URI must not include a fragment or query');
+          }
         } catch {
           context.addIssue({
             code: 'custom',
-            path: ['OIDC_JWKS_URI'],
-            message: 'must be a valid URL and use HTTPS in production',
+            path: [field],
+            message:
+              field === 'OIDC_REDIRECT_URI'
+                ? 'must be a valid URL without query or fragment and use HTTPS in production'
+                : 'must be a valid URL and use HTTPS in production',
           });
         }
+      }
+      if (!environment.OIDC_SCOPES_JSON.includes('openid')) {
+        context.addIssue({
+          code: 'custom',
+          path: ['OIDC_SCOPES_JSON'],
+          message: 'must include openid',
+        });
       }
     }
     if (environment.EMBEDDING_PROVIDER === 'alibaba') {

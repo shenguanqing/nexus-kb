@@ -877,10 +877,28 @@ components:
     AuthLoginOptions:
       type: object
       additionalProperties: false
-      required: [mode, passwordEnabled]
+      required: [mode, passwordEnabled, oidc]
       properties:
         mode: { type: string, enum: [development, password, oidc] }
         passwordEnabled: { type: boolean }
+        oidc:
+          anyOf:
+            - $ref: '#/components/schemas/OidcBrowserLogin'
+            - type: 'null'
+    OidcBrowserLogin:
+      type: object
+      additionalProperties: false
+      required: [authorizationEndpoint, tokenEndpoint, clientId, redirectUri, scopes]
+      properties:
+        authorizationEndpoint: { type: string, format: uri, maxLength: 2048 }
+        tokenEndpoint: { type: string, format: uri, maxLength: 2048 }
+        clientId: { type: string, minLength: 1, maxLength: 256 }
+        redirectUri: { type: string, format: uri, maxLength: 2048 }
+        scopes:
+          type: array
+          minItems: 1
+          maxItems: 16
+          items: { type: string, minLength: 1, maxLength: 128 }
     PasswordLoginRequest:
       type: object
       additionalProperties: false

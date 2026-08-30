@@ -172,7 +172,7 @@
                 已自动转换为 DXF 后解析入库
               </div>
             </div>
-            <div v-if="visibleIndexWarnings.length" class="kb-data-fields index-warning-list">
+            <div v-if="visibleIndexWarnings.length" class="index-warning-list kb-data-fields">
               <div
                 v-for="warning in visibleIndexWarnings"
                 :key="warning.code"
@@ -351,7 +351,7 @@
           <div class="kb-block__header">
             <div class="kb-block__title kb-heading kb-heading--h4">最近任务</div>
           </div>
-          <div class="recent-jobs kb-data-fields">
+          <div class="kb-data-fields">
             <div v-for="job in jobs.slice(0, 5)" :key="job.id" class="kb-data-field">
               <RouterLink v-slot="{ href, navigate }" :to="allTasksTarget" custom>
                 <el-link
@@ -366,7 +366,7 @@
                   </span>
                 </el-link>
               </RouterLink>
-              <time class="recent-job-time kb-text kb-text--secondary">
+              <time class="kb-data-field__value">
                 {{ new Date(job.updatedAt).toLocaleString() }}
               </time>
             </div>
@@ -685,6 +685,7 @@ onMounted(load);
 }
 .conversion-note {
   gap: var(--kb-block-padding);
+  margin-top: var(--kb-list-row-padding);
   padding: var(--kb-list-row-padding);
   border-radius: var(--kb-radius-md);
   background: var(--kb-color-nav-accent);
@@ -708,15 +709,6 @@ onMounted(load);
 .index-warning-list .kb-data-field__label,
 .index-warning-list .kb-data-field__value {
   color: inherit;
-}
-
-/* 最近任务 */
-.recent-jobs > .kb-data-field {
-  align-items: center;
-}
-.recent-job-time {
-  font-size: 13px;
-  text-align: right;
 }
 
 /* 移动端底部操作面板 */

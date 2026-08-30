@@ -30,6 +30,20 @@ test('keeps first-run compose commands usable before runtime.env exists', () => 
   ]);
 });
 
+test('loads the isolated local Keycloak overlay only in OIDC test mode', () => {
+  assert.deepEqual(composeArguments('oidc', ['ps'], false), [
+    '-f',
+    'compose.yaml',
+    '-f',
+    'compose.oidc.yaml',
+    '--profile',
+    'configuration',
+    '--env-file',
+    '.env',
+    'ps',
+  ]);
+});
+
 test('rejects unknown compose modes', () => {
   assert.equal(composeArguments('unknown', [], true), null);
 });

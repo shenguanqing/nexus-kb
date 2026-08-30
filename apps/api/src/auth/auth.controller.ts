@@ -28,6 +28,7 @@ export class AuthController {
     return authLoginOptionsSchema.parse({
       mode: this.mode(),
       passwordEnabled: this.config.values.PASSWORD_AUTH_ENABLED,
+      oidc: this.oidcLoginOptions(),
     });
   }
 
@@ -88,5 +89,17 @@ export class AuthController {
   private mode(): AuthSession['mode'] {
     if (this.config.values.PASSWORD_AUTH_ENABLED) return 'password';
     return this.config.values.AUTH_REQUIRED ? 'oidc' : 'development';
+  }
+
+  private oidcLoginOptions(): AuthLoginOptions['oidc'] {
+    if (this.mode() !== 'oidc') return null;
+    const environment = this.config.values;
+    return {
+      authorizationEndpoint: environment.OIDC_AUTHORIZATION_ENDPOINT,
+      tokenEndpoint: environment.OIDC_TOKEN_ENDPOINT,
+      clientId: environment.OIDC_CLIENT_ID,
+      redirectUri: environment.OIDC_REDIRECT_URI,
+      scopes: [...environment.OIDC_SCOPES_JSON],
+    };
   }
 }

@@ -39,8 +39,8 @@
         <span class="user-details">
           <strong>{{ auth.identity?.userId }}</strong>
           <small class="user-context">
-            {{ auth.identity?.department }} · {{ auth.identity?.tenantId }}</small
-          >
+            {{ auth.identity?.department }} · {{ auth.identity?.tenantId }}
+          </small>
         </span>
         <div v-if="!isMobile" class="user-summary__actions">
           <el-dropdown placement="bottom-end" trigger="click" @command="setThemeMode">
@@ -208,13 +208,7 @@
                   </el-dropdown-menu>
                 </template>
               </el-dropdown>
-              <el-button
-                :icon="Close"
-                circle
-                aria-label="关闭导航菜单"
-                @click="close"
-              >
-              </el-button>
+              <el-button :icon="Close" circle aria-label="关闭导航菜单" @click="close"> </el-button>
             </div>
           </div>
           <div class="mobile-sidebar-identity">
@@ -266,6 +260,8 @@ import { ArrowLeft, Close, Expand, Moon, Sunny } from '@element-plus/icons-vue';
 import { computed, ref } from 'vue';
 import AppNavIcon, { type NavIconName } from '@/components/common/AppNavIcon.vue';
 import { useRoute, useRouter } from 'vue-router';
+
+import { clearBearerAccessToken } from '@/auth/oidc';
 import { logout } from '@/api/auth';
 import { useAuthStore } from '@/stores/auth';
 import { useKnowledgeConversationStore } from '@/stores/knowledge-conversation';
@@ -435,6 +431,7 @@ async function signOut(): Promise<void> {
   try {
     await logout();
   } finally {
+    clearBearerAccessToken();
     conversation.clear();
     auth.clear();
     await router.replace('/login');

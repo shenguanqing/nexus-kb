@@ -166,6 +166,8 @@ unset NEXUSKB_ACCESS_TOKEN
 
 服务端会验证签名、issuer、audience、算法、有效期和必需 claims。无效 token 不会回退开发身份。
 
+浏览器登录时，先读取公开的 `GET /v1/auth/login-options`。OIDC 模式会返回 `oidc.authorizationEndpoint`、`tokenEndpoint`、`clientId`、`redirectUri` 与 `scopes`；这些仅限 public client 配置，不含任何 client secret。前端以 Authorization Code + PKCE `S256` 跳转身份源，并从 token endpoint 取得短期 access token 后再调用 API。该 token 仅在内存中用于 Bearer header，不会写入 URL、Cookie 或浏览器持久化存储。
+
 ### 3.4 公开端点
 
 以下端点无需业务身份：

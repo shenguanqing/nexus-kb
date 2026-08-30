@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import { bearerAccessToken, expireBearerAccessToken } from '@/auth/oidc';
+
 const apiErrorSchema = z.object({
   error: z.object({ code: z.string(), message: z.string(), traceId: z.string().optional() }),
 });
@@ -28,9 +30,10 @@ export async function apiRequest<T>(
     const response = await fetch(path, {
       ...init,
       credentials: 'include',
-      headers: { Accept: 'application/json', ...init.headers },
+      headers: { Accept: 'application/json', ...authorizationHeader(), ...init.headers },
       signal: controller.signal,
     });
+    if (response.status === 401) expireBearerAccessToken();
     const payload: unknown = await response.json().catch(() => null);
     if (!response.ok) {
       const parsed = apiErrorSchema.safeParse(payload);
@@ -67,9 +70,14 @@ export async function apiTextRequest(
     const response = await fetch(path, {
       ...init,
       credentials: 'include',
-      headers: { Accept: 'text/plain, text/markdown;q=0.9', ...init.headers },
+      headers: {
+        Accept: 'text/plain, text/markdown;q=0.9',
+        ...authorizationHeader(),
+        ...init.headers,
+      },
       signal: controller.signal,
     });
+    if (response.status === 401) expireBearerAccessToken();
     const body = await response.text();
     if (!response.ok) {
       let payload: unknown = null;
@@ -111,6 +119,8 @@ export function apiUploadRequest<T>(
     request.withCredentials = true;
     request.timeout = timeoutMs;
     request.setRequestHeader('Accept', 'application/json');
+    const token = bearerAccessToken();
+    if (token) request.setRequestHeader('Authorization', `Bearer ${token}`);
     request.upload.addEventListener('progress', (event) => {
       if (!event.lengthComputable || event.total <= 0) return;
       onProgress(Math.min(100, Math.round((event.loaded / event.total) * 100)));
@@ -122,6 +132,7 @@ export function apiUploadRequest<T>(
       } catch {
         // Invalid JSON is reduced to the same safe response error used by fetch requests.
       }
+      if (request.status === 401) expireBearerAccessToken();
       if (request.status < 200 || request.status >= 300) {
         const parsedError = apiErrorSchema.safeParse(payload);
         reject(
@@ -149,4 +160,9 @@ export function apiUploadRequest<T>(
     });
     request.send(body);
   });
+}
+
+function authorizationHeader(): HeadersInit {
+  const token = bearerAccessToken();
+  return token ? { Authorization: `Bearer ${token}` } : {};
 }

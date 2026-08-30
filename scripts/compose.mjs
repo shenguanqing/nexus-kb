@@ -8,7 +8,7 @@ const arguments_ = composeArguments(mode, process.argv.slice(3), existsSync('con
 
 if (!arguments_) {
   process.stderr.write(
-    'Usage: node scripts/compose.mjs <base|dev|full|full-db> [docker compose arguments]\n',
+    'Usage: node scripts/compose.mjs <base|dev|oidc|full|full-db> [docker compose arguments]\n',
   );
   process.exitCode = 2;
 } else {

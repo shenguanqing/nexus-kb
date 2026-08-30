@@ -49,7 +49,8 @@ export class AuthenticationGuard implements CanActivate {
     try {
       request.identity = await this.resolve(await this.tokenVerifier.verify(token));
       return true;
-    } catch {
+    } catch (error) {
+      if (error instanceof ApiException) throw error;
       throw new ApiException('TOKEN_INVALID', '身份凭证无效或已过期', 401);
     }
   }

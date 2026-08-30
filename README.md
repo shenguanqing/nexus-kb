@@ -112,10 +112,13 @@ pnpm --version
 | ------------------------ | -------------------------------------- | -------------------------------------- |
 | `pnpm docker:base --`    | 基础服务，不含 DWG、部署代理或 DBeaver | `pnpm docker:base -- up -d --build`    |
 | `pnpm docker:dev --`     | 推荐本地开发，不含 DWG 和 DBeaver      | `pnpm docker:dev -- ps`                |
+| `pnpm docker:oidc --`    | 临时 Keycloak SSO/PKCE 回归，仅本机    | `pnpm docker:oidc -- up -d keycloak`   |
 | `pnpm docker:full --`    | DWG + deployment-agent 的完整常驻服务  | `pnpm docker:full -- ps`               |
 | `pnpm docker:full:db --` | 完整服务，并临时开放本地 DBeaver 端口  | `pnpm docker:full:db -- up -d --build` |
 
 `docker:dev` 启用 `configuration` profile；`docker:full` 额外加载 `compose.dwg.yaml`；`docker:full:db` 再额外加载 `compose.db-gui.yaml`。这些入口会先加载 `.env`，再在存在时加载后台发布生成的 `config/runtime.env`，确保 Compose 插值和容器运行值都以激活版本为准；基础/开发模式仍固定关闭 DWG。不要绕过入口拼接另一套 Compose 命令。同一运行周期请始终使用同一个入口。一次性 Reranker 模型下载不属于常驻服务，仍使用 `--profile model-init run`。
+
+`docker:oidc` 仅加载 `compose.oidc.yaml` 中的临时 Keycloak，不进入生产拓扑，并固定映射为 `127.0.0.1:18080`，避免占用常见的本地 8080 服务。它要求 `.env` 中有 `KEYCLOAK_TEST_ADMIN_PASSWORD` 与 `KEYCLOAK_TEST_USER_PASSWORD`；运行后使用 `sso-tester` 和后者的本地密码在 [登录页](http://127.0.0.1:5173/login) 验证 SSO。清理时只能移除 Keycloak 自己的容器与 volume：`pnpm docker:oidc -- rm -s -f keycloak keycloak-bootstrap` 后执行 `docker volume rm nexus-kb_keycloak_data`。不得使用 `down -v`，它会删除同一 Compose 项目的数据库、Redis 等其他 volumes。
 
 ## 第一次启动（推荐本地开发模式）
 

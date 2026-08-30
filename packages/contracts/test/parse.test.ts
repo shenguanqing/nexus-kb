@@ -39,9 +39,12 @@ describe('auth session contract', () => {
   });
 
   it('accepts the public password-login contract without accepting extra identity fields', () => {
-    expect(authLoginOptionsSchema.parse({ mode: 'password', passwordEnabled: true })).toEqual({
+    expect(
+      authLoginOptionsSchema.parse({ mode: 'password', passwordEnabled: true, oidc: null }),
+    ).toEqual({
       mode: 'password',
       passwordEnabled: true,
+      oidc: null,
     });
     expect(
       passwordLoginRequestSchema.parse({ username: 'admin', password: 'safe-password' }),

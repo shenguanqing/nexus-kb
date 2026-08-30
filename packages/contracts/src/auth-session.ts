@@ -25,10 +25,21 @@ export const passwordLoginRequestSchema = z
   })
   .strict();
 
+export const oidcBrowserLoginSchema = z
+  .object({
+    authorizationEndpoint: z.url().max(2048),
+    tokenEndpoint: z.url().max(2048),
+    clientId: z.string().min(1).max(256),
+    redirectUri: z.url().max(2048),
+    scopes: z.array(z.string().min(1).max(128)).min(1).max(16),
+  })
+  .strict();
+
 export const authLoginOptionsSchema = z
   .object({
     mode: authModeSchema,
     passwordEnabled: z.boolean(),
+    oidc: oidcBrowserLoginSchema.nullable(),
   })
   .strict();
 
@@ -57,5 +68,6 @@ export type Capability = z.infer<typeof capabilitySchema>;
 export type Sensitivity = z.infer<typeof sensitivitySchema>;
 export type AuthMode = z.infer<typeof authModeSchema>;
 export type PasswordLoginRequest = z.infer<typeof passwordLoginRequestSchema>;
+export type OidcBrowserLogin = z.infer<typeof oidcBrowserLoginSchema>;
 export type AuthLoginOptions = z.infer<typeof authLoginOptionsSchema>;
 export type AuthLogoutResponse = z.infer<typeof authLogoutResponseSchema>;

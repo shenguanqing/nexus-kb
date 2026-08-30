@@ -1,6 +1,7 @@
 export const composeModes = {
   base: [],
   dev: ['--profile', 'configuration'],
+  oidc: ['-f', 'compose.yaml', '-f', 'compose.oidc.yaml', '--profile', 'configuration'],
   full: ['-f', 'compose.yaml', '-f', 'compose.dwg.yaml', '--profile', 'configuration'],
   'full-db': [
     '-f',

@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { AuthenticationGuard } from '../src/auth/authentication.guard';
 import type { AuthenticatedRequest, Identity } from '../src/auth/identity';
 import type { TokenVerifier } from '../src/auth/token-verifier';
+import { ApiException } from '../src/common/api-exception';
 import type { AppConfig } from '../src/config/app-config';
 
 const verifiedIdentity: Identity = {
@@ -121,6 +122,27 @@ describe('AuthenticationGuard', () => {
     ).resolves.toBe(true);
     expect(verify).toHaveBeenCalledWith('signed.token.value');
     expect(request.identity).toEqual(verifiedIdentity);
+  });
+
+  it('preserves controlled identity-resolution errors after token verification', async () => {
+    const request = {
+      headers: { authorization: 'Bearer signed.token.value' },
+    } as AuthenticatedRequest;
+    const reflector = { getAllAndOverride: () => false } as unknown as Reflector;
+    const departmentPolicyError = new ApiException(
+      'DEPARTMENT_POLICY_INVALID',
+      '部门权限策略无有效敏感度',
+      503,
+    );
+
+    await expect(
+      new AuthenticationGuard(
+        config({ AUTH_REQUIRED: true }),
+        reflector,
+        { verify: vi.fn().mockResolvedValue(verifiedIdentity) },
+        { resolve: vi.fn().mockRejectedValue(departmentPolicyError) } as never,
+      ).canActivate(executionContext(request)),
+    ).rejects.toBe(departmentPolicyError);
   });
 
   it('allows explicitly public routes without parsing credentials', async () => {

@@ -50,7 +50,16 @@
           <div v-if="errorMessage" class="login-error kb-text kb-text--danger" role="alert">
             {{ errorMessage }}
           </div>
-          <el-button class="login-submit" type="primary" size="large" disabled>SSO 登录</el-button>
+          <el-button
+            class="login-submit"
+            type="primary"
+            size="large"
+            :disabled="!options?.oidc"
+            :loading="loading"
+            @click="startSsoLogin"
+          >
+            SSO 登录
+          </el-button>
           <small
             v-if="options?.mode === 'development'"
             class="kb-text kb-text--sm kb-text--secondary"
@@ -73,6 +82,7 @@ import { useRoute, useRouter } from 'vue-router';
 
 import { fetchLoginOptions, loginWithPassword } from '@/api/auth';
 import { ApiError } from '@/api/client';
+import { beginOidcLogin, OidcLoginError } from '@/auth/oidc';
 import { useAuthStore } from '@/stores/auth';
 
 const auth = useAuthStore();
@@ -115,6 +125,27 @@ async function submit(): Promise<void> {
   } finally {
     loading.value = false;
   }
+}
+
+async function startSsoLogin(): Promise<void> {
+  if (!options.value?.oidc) {
+    errorMessage.value = '身份服务尚未完成配置';
+    return;
+  }
+  loading.value = true;
+  errorMessage.value = '';
+  try {
+    await beginOidcLogin(options.value.oidc, redirectTarget());
+  } catch (error) {
+    errorMessage.value = error instanceof OidcLoginError ? error.message : 'SSO 登录暂时不可用';
+    loading.value = false;
+  }
+}
+
+function redirectTarget(): string {
+  return typeof route.query.redirect === 'string' && route.query.redirect.startsWith('/')
+    ? route.query.redirect
+    : '/ask';
 }
 </script>
 

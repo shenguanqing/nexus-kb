@@ -258,7 +258,7 @@
       :z-index="4000"
       @closed="selectedUser = null"
     >
-      <div v-if="selectedUser" class="kb-text kb-text--secondary">
+      <div v-if="selectedUser" class="access-editor-summary kb-text kb-text--secondary">
         {{ selectedUser.userId }} · {{ selectedUser.department }}
       </div>
       <el-radio-group v-model="selectedRole" class="role-editor">

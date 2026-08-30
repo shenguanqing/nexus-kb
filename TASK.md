@@ -36,6 +36,7 @@
 
 ## 4. 最近确认
 
+- 浏览器 OIDC 登录已补齐 Authorization Code + PKCE `S256`：登录页会从公开 login-options 读取 public client 配置，使用一次性 state/verifier 跳转身份源并在 `/auth/callback` 兑换 access token；token 仅留在内存、统一 API client 才注入 Bearer header。隔离的 `docker:oidc` Keycloak 26.7.2 已完成真实本机回归：CORS 预检、PKCE 回调、JWT 签名/issuer/audience/claims、API session 和 `/ask` 工作台均通过。该 realm 固定回环端口、无 client secret、受控 `admin` role/claims 和忽略 Git 的临时账户密码，只用于开发测试。生产 IdP、HTTPS、实际 CORS、密钥托管、账号映射、过期与退出仍须另行验收，不得描述为生产 SSO 已验证。
 - Parser warning 前端展示已统一：文档详情索引说明和入库任务 `task-warning` 复用同一字典，将重复块复用、渐进式 CAD 预览、DWG 转换、DXF 恢复/审计、OCR 低置信度、Tika fallback 与预览降级等稳定码转换为中文标题和说明；未知新码使用中文兜底并保留技术码。入库 `task-warning` / `task-error` 现共用 `kb-block__header + kb-data-fields/kb-data-field` 布局，分别使用 warning-soft/warning 与 danger-soft/danger，字段文字继承容器语义色；文档详情的 `index-warning-list` 直接组合 `kb-data-fields` 并统一承载 warning 背景与文字色，无独立职责的 `recent-jobs-item` 已删除。
 - 文档删除补偿已补强：授权文档列表默认展示 `deleting` 墓碑并提供输入完整文件名后的“继续清理”，详情、分块和预览仍保持关闭；Parser 请求若在删除后才返回或失败，Consumer 会丢弃结果、回收该 documentId 的 PDF/SVG/CAD 预览并避免把已删除任务重新标记为失败。排查两条历史 DWG 墓碑时进一步确认旧 CAD bundle 目录为 `2750`，API 因缺少共享组写权限返回 `EACCES`；新产物各级目录现固定为 `2770`，两份目标旧产物已按精确 documentId 补齐组写权限。“重庆S04 AGV项目二期Layout20240806-V5.dwg”已通过正式幂等 DELETE 完成补偿：Document/全部版本为 deleted、分块与 Chroma 向量均为 0、预览目录已删除且审计已落库；另一条历史墓碑保留待单独确认。Parser CAD 定向测试 22/22 与 Ruff 定向检查通过。
 - 文档高风险确认 UI 已收敛：删除待清理的“继续清理删除”、永久删除与重新/继续建立索引共用 `DocumentDangerConfirm` 输入完整文档名的确认组件，桌面与移动端仅切换 Dialog/底部 Drawer 容器；`prepared` 状态会明确说明复用既有解析、分块和脱敏结果。组件与文档列表定向测试 9/9、Web Stylelint/Lint、类型检查和生产构建均通过。

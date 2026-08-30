@@ -44,9 +44,9 @@
     var(--kb-color-primary) 7%,
     var(--kb-color-canvas)
   );
-  --kb-color-brand-surface: #121212;
+  --kb-color-brand-surface: #12224b;
   --kb-color-on-brand: #ffffff;
-  --kb-color-brand-secondary: #b5b5b5;
+  --kb-color-brand-secondary: #b7c3e4;
   --kb-color-overlay: rgb(255 255 255 / 78%);
   --kb-radius-sm: 6px;
   --kb-radius-md: 10px;
@@ -164,9 +164,9 @@
   --kb-color-code-block-surface: #171717;
   --kb-color-content-original: #1d1d1d;
   --kb-color-content-redacted: #17233a;
-  --kb-color-brand-surface: #0d0d0d;
+  --kb-color-brand-surface: #0c1730;
   --kb-color-on-brand: #ffffff;
-  --kb-color-brand-secondary: #a0a0a0;
+  --kb-color-brand-secondary: #9fb1da;
   --kb-color-overlay: rgb(12 12 12 / 78%);
   --kb-shadow-float: 0 12px 30px rgb(0 0 0 / 32%);
   --kb-shadow-drawer: 0 18px 48px rgb(0 0 0 / 40%);
@@ -203,9 +203,9 @@
     --kb-color-code-block-surface: #171717;
     --kb-color-content-original: #1d1d1d;
     --kb-color-content-redacted: #17233a;
-    --kb-color-brand-surface: #0d0d0d;
+    --kb-color-brand-surface: #0c1730;
     --kb-color-on-brand: #ffffff;
-    --kb-color-brand-secondary: #a0a0a0;
+    --kb-color-brand-secondary: #9fb1da;
     --kb-color-overlay: rgb(12 12 12 / 78%);
     --kb-shadow-float: 0 12px 30px rgb(0 0 0 / 32%);
     --kb-shadow-drawer: 0 18px 48px rgb(0 0 0 / 40%);

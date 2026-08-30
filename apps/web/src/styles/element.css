@@ -644,7 +644,7 @@
   border: 1px solid var(--kb-color-border);
   border-radius: 50%;
   color: var(--kb-color-text-secondary);
-  background: var(--kb-color-canvas);
+  /* background: var(--kb-color-canvas); */
   /* font-size: var(--kb-font-size-title); */
   transition:
     border-color var(--kb-transition-fast),

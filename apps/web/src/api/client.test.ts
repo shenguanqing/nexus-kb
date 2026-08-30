@@ -1,8 +1,18 @@
 import { z } from 'zod';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+
+import {
+  bearerAccessToken,
+  clearBearerAccessToken,
+  OIDC_SESSION_EXPIRED_EVENT,
+  setBearerAccessToken,
+} from '@/auth/oidc';
 import { apiRequest, apiTextRequest, apiUploadRequest } from './client';
 
-afterEach(() => vi.restoreAllMocks());
+afterEach(() => {
+  clearBearerAccessToken();
+  vi.restoreAllMocks();
+});
 
 describe('apiRequest', () => {
   it('validates successful responses at runtime', async () => {
@@ -40,6 +50,36 @@ describe('apiRequest', () => {
 
     await expect(apiTextRequest('/preview')).resolves.toBe('# 制度');
     expect(fetchMock.mock.calls[0]?.[1]).toMatchObject({ credentials: 'include' });
+  });
+
+  it('adds the in-memory OIDC bearer token to protected requests', async () => {
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(new Response(JSON.stringify({ ok: true }), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+    setBearerAccessToken('access-token');
+
+    await apiRequest('/protected', z.object({ ok: z.literal(true) }));
+
+    expect(fetchMock.mock.calls[0]?.[0]).toBe('/protected');
+    expect(new Headers(fetchMock.mock.calls[0]?.[1]?.headers).get('Authorization')).toBe(
+      'Bearer access-token',
+    );
+  });
+
+  it('clears an expired OIDC token and starts the reauthentication flow on 401', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn<typeof fetch>().mockResolvedValue(new Response(null, { status: 401 })),
+    );
+    const expired = vi.fn();
+    window.addEventListener(OIDC_SESSION_EXPIRED_EVENT, expired, { once: true });
+    setBearerAccessToken('expired-token');
+
+    await expect(apiRequest('/protected', z.object({}))).rejects.toMatchObject({ status: 401 });
+
+    expect(bearerAccessToken()).toBeNull();
+    expect(expired).toHaveBeenCalledOnce();
   });
 
   it('reports real multipart upload progress and validates the response', async () => {

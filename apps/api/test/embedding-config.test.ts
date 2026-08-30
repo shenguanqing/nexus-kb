@@ -33,7 +33,7 @@ describe('embedding configuration', () => {
       DEV_TENANT_ID: 'test-tenant',
     });
     expect(() => parseEnvironment({ ...baseEnvironment, NODE_ENV: 'production' })).toThrow(
-      'Invalid application configuration: OIDC_ISSUER, OIDC_AUDIENCE, OIDC_JWKS_URI',
+      'Invalid application configuration: OIDC_ISSUER, OIDC_AUDIENCE, OIDC_JWKS_URI, OIDC_AUTHORIZATION_ENDPOINT, OIDC_TOKEN_ENDPOINT, OIDC_CLIENT_ID, OIDC_REDIRECT_URI',
     );
     expect(
       parseEnvironment({
@@ -42,6 +42,10 @@ describe('embedding configuration', () => {
         OIDC_ISSUER: 'https://identity.example.test',
         OIDC_AUDIENCE: 'nexus-kb',
         OIDC_JWKS_URI: 'https://identity.example.test/.well-known/jwks.json',
+        OIDC_AUTHORIZATION_ENDPOINT: 'https://identity.example.test/authorize',
+        OIDC_TOKEN_ENDPOINT: 'https://identity.example.test/token',
+        OIDC_CLIENT_ID: 'nexus-kb-web',
+        OIDC_REDIRECT_URI: 'https://knowledge.example.test/auth/callback',
       }),
     ).toMatchObject({
       NODE_ENV: 'production',
@@ -84,6 +88,29 @@ describe('embedding configuration', () => {
           '[{"username":"admin","password":"password-for-test","tenantId":"tenant-a","userId":"admin-a","department":"platform","roles":["admin"],"allowedSensitivities":["public","internal","confidential"],"capabilities":["documents:read","access:read","access:write"],"defaultSensitivity":"internal"}]',
       }),
     ).toMatchObject({ NODE_ENV: 'production', PASSWORD_AUTH_ENABLED: true, AUTH_REQUIRED: true });
+  });
+
+  it('requires a complete public-client PKCE configuration when OIDC is enabled', () => {
+    const oidcEnvironment = {
+      ...baseEnvironment,
+      AUTH_REQUIRED: 'true',
+      OIDC_ISSUER: 'https://identity.example.test',
+      OIDC_AUDIENCE: 'nexus-kb',
+      OIDC_JWKS_URI: 'https://identity.example.test/.well-known/jwks.json',
+      OIDC_AUTHORIZATION_ENDPOINT: 'https://identity.example.test/authorize',
+      OIDC_TOKEN_ENDPOINT: 'https://identity.example.test/token',
+      OIDC_CLIENT_ID: 'nexus-kb-web',
+      OIDC_REDIRECT_URI: 'https://knowledge.example.test/auth/callback',
+    };
+    expect(() => parseEnvironment({ ...oidcEnvironment, OIDC_SCOPES_JSON: '["profile"]' })).toThrow(
+      'Invalid application configuration: OIDC_SCOPES_JSON',
+    );
+    expect(() =>
+      parseEnvironment({
+        ...oidcEnvironment,
+        OIDC_REDIRECT_URI: 'https://knowledge.example.test/auth/callback?next=/ask',
+      }),
+    ).toThrow('Invalid application configuration: OIDC_REDIRECT_URI');
   });
 
   it('requires provider credentials, region, model and HTTPS base URL when enabled', () => {

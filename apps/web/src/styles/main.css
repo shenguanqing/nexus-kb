@@ -321,6 +321,9 @@ a {
 .kb-data-field + .kb-data-field {
   border-top: 1px solid var(--kb-color-border);
 }
+.kb-data-field:last-child{
+  padding-bottom: 0;
+}
 .kb-data-fields--borderless > .kb-data-field + .kb-data-field {
   border-top: 0;
 }

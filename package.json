@@ -13,6 +13,7 @@
     "format:css": "stylelint \"apps/web/src/**/*.{css,scss,vue}\" --fix",
     "docker:base": "node scripts/compose.mjs base",
     "docker:dev": "node scripts/compose.mjs dev",
+    "docker:oidc": "node scripts/compose.mjs oidc",
     "docker:full": "node scripts/compose.mjs full",
     "docker:full:db": "node scripts/compose.mjs full-db",
     "docker:up:dev": "node scripts/compose.mjs dev up -d --build",
