@@ -15,7 +15,11 @@
         <span class="source-index kb-text kb-text--sm kb-text--strong">
           来源 {{ source.index }}
         </span>
-        <div class="source-detail__title kb-heading kb-heading--h1" role="heading" aria-level="2">
+        <div
+          class="source-detail__title kb-heading kb-heading--h2"
+          role="heading"
+          aria-level="2"
+        >
           {{ source.sourceName }}
         </div>
       </header>

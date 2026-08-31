@@ -7,7 +7,7 @@
       @submit.prevent="applyFilters"
     >
       <el-input
-        class="document-filter-search"
+        class="documents-filter-search"
         v-model="filters.search"
         clearable
         placeholder="搜索文件名"
@@ -210,7 +210,7 @@
             </template>
           </el-table-column>
         </el-table>
-        <DocumentCardList
+        <DocumentsCardList
           v-else-if="isMobile"
           :data="items"
           :loading="loading"
@@ -236,7 +236,7 @@
     <component
       :is="isMobile ? ElDrawer : ElDialog"
       v-model="uploadVisible"
-      :class="isMobile ? 'upload-drawer' : 'upload-dialog'"
+      :class="isMobile ? 'documents-upload-drawer' : 'documents-upload-dialog'"
       title="上传文档"
       :width="
         isMobile
@@ -255,7 +255,7 @@
       <div
         v-if="uploadOptionsLoading"
         v-loading="true"
-        class="upload-options-state kb-text kb-text--secondary"
+        class="documents-upload-options-state kb-text kb-text--secondary"
       >
         正在读取服务器上传限制…
       </div>
@@ -264,9 +264,9 @@
         <span>{{ uploadOptionsError }}</span>
         <el-button @click="loadUploadOptions">重试</el-button>
       </div>
-      <div v-if="uploadOptions" class="upload-form">
+      <div v-if="uploadOptions" class="documents-upload-form">
         <el-upload
-          class="upload-picker"
+          class="documents-upload-picker"
           v-model:file-list="selectedUploadFiles"
           :drag="!isMobile"
           multiple
@@ -275,7 +275,7 @@
           :accept="uploadOptions.acceptedExtensions.map((item) => `.${item}`).join(',')"
           :on-change="chooseFiles"
         >
-          <span class="upload-picker-content kb-text kb-text--secondary">
+          <span class="documents-upload-picker-content kb-text kb-text--secondary">
             <el-icon><UploadFilled /></el-icon>
             <span>{{ isMobile ? '选择文件' : '选择或拖入文件' }}</span>
           </span>
@@ -291,16 +291,16 @@
             uploadOptions.acceptedExtensions.map((item) => item.toUpperCase()).join(' / ')
           }}，单文件最大 {{ Math.ceil(uploadOptions.maxUploadBytes / 1024 / 1024) }} MB。
         </small>
-        <div class="upload-metadata" aria-label="上传权限信息">
-          <div class="upload-metadata-row">
-            <span class="upload-metadata-label kb-text kb-text--secondary">部门</span>
-            <strong class="upload-metadata-value kb-text kb-text--medium">
+        <div class="documents-upload-metadata" aria-label="上传权限信息">
+          <div class="documents-upload-metadata-row">
+            <span class="documents-upload-metadata-label kb-text kb-text--secondary">部门</span>
+            <strong class="documents-upload-metadata-value kb-text kb-text--medium">
               {{ uploadOptions.department }}
             </strong>
           </div>
-          <div class="upload-metadata-row">
-            <span class="upload-metadata-label kb-text kb-text--secondary">敏感度</span>
-            <strong class="upload-metadata-value kb-text kb-text--medium">
+          <div class="documents-upload-metadata-row">
+            <span class="documents-upload-metadata-label kb-text kb-text--secondary">敏感度</span>
+            <strong class="documents-upload-metadata-value kb-text kb-text--medium">
               {{ uploadOptions.defaultSensitivity }}
               <template v-if="!isMobile">（由服务端身份确定）</template>
             </strong>
@@ -308,20 +308,25 @@
         </div>
         <div
           v-if="uploadOptions.defaultSensitivity === 'confidential'"
-          class="upload-warning kb-text kb-text--warning"
+          class="documents-upload-warning kb-text kb-text--warning"
         >
           机密内容默认不会发送到云端 Embedding 服务。
         </div>
-        <div v-if="uploadRows.length" class="upload-file-list" aria-label="待上传文件" tabindex="0">
+        <div
+          v-if="uploadRows.length"
+          class="documents-upload-file-list"
+          aria-label="待上传文件"
+          tabindex="0"
+        >
           <div
             v-for="row in uploadRows"
             :key="`${row.file.name}-${row.file.lastModified}`"
-            class="upload-file-item"
+            class="documents-upload-file-item"
             :class="`is-${row.status}`"
           >
-            <div class="upload-file-heading">
-              <strong class="upload-file-name">{{ row.file.name }}</strong>
-              <small v-if="row.status === 'uploading'" class="upload-file-size">
+            <div class="documents-upload-file-heading">
+              <strong class="documents-upload-file-name">{{ row.file.name }}</strong>
+              <small v-if="row.status === 'uploading'" class="documents-upload-file-size">
                 {{ formatFileSize(row.file.size) }}
               </small>
               <el-tag v-else-if="row.status === 'failed'" type="danger" size="small">
@@ -334,25 +339,33 @@
             </div>
             <template v-if="row.status === 'uploading'">
               <el-progress
-                class="upload-file-progress"
+                class="documents-upload-file-progress"
                 :percentage="row.progress ?? 0"
                 :show-text="false"
                 :stroke-width="5"
               />
-              <small class="upload-progress-label kb-text kb-text--sm kb-text--secondary">
+              <small class="documents-upload-progress-label kb-text kb-text--sm kb-text--secondary">
                 上传中 {{ row.progress ?? 0 }}%
               </small>
             </template>
-            <div v-else-if="row.status === 'failed'" class="upload-file-failure">
-              <small class="upload-file-error kb-text kb-text--sm kb-text--secondary" role="alert">
+            <div v-else-if="row.status === 'failed'" class="documents-upload-file-failure">
+              <small
+                class="documents-upload-file-error kb-text kb-text--sm kb-text--secondary"
+                role="alert"
+              >
                 {{ row.error }}
               </small>
-              <div class="upload-file-actions">
-                <el-button class="upload-file-retry" link type="primary" @click="retryUpload(row)">
+              <div class="documents-upload-file-actions">
+                <el-button
+                  class="documents-upload-file-retry"
+                  link
+                  type="primary"
+                  @click="retryUpload(row)"
+                >
                   重试
                 </el-button>
                 <el-button
-                  class="upload-file-remove"
+                  class="documents-upload-file-remove"
                   link
                   type="danger"
                   :aria-label="`删除失败文件：${row.file.name}`"
@@ -378,7 +391,7 @@
       </template>
     </component>
 
-    <DocumentDangerConfirm
+    <DocumentsDangerConfirm
       v-if="cleanupTarget"
       :model-value="true"
       :document-name="cleanupTarget.sourceName"
@@ -414,8 +427,8 @@ import {
 } from '@/api/documents';
 import { useAuthStore } from '@/stores/auth';
 import { useBreakpoint } from '@/composables/useBreakpoint';
-import DocumentCardList from '@/components/documents/DocumentCardList.vue';
-import DocumentDangerConfirm from '@/components/documents/DocumentDangerConfirm.vue';
+import DocumentsCardList from './documents/DocumentsCardList.vue';
+import DocumentsDangerConfirm from './documents/DocumentsDangerConfirm.vue';
 
 const route = useRoute();
 const router = useRouter();
@@ -651,28 +664,28 @@ onMounted(load);
     minmax(190px, 1fr) repeat(3, minmax(92px, 0.7fr))
     auto auto;
 }
-.upload-dialog {
+.documents-upload-dialog {
   width: 460px;
 }
-.upload-form {
+.documents-upload-form {
   display: flex;
   flex-direction: column;
   gap: var(--kb-space-2);
   min-height: 0;
 }
-.upload-picker-content {
+.documents-upload-picker-content {
   display: flex;
   justify-content: center;
   align-items: center;
   gap: var(--kb-space-2);
   height: 44px;
 }
-.upload-metadata {
+.documents-upload-metadata {
   overflow: hidden;
   border: 1px solid var(--kb-color-border);
   border-radius: var(--kb-radius-md);
 }
-.upload-metadata-row {
+.documents-upload-metadata-row {
   display: grid;
   align-items: center;
   gap: var(--kb-layout-gap);
@@ -680,23 +693,23 @@ onMounted(load);
   min-height: var(--kb-space-10);
   padding: var(--kb-space-2) var(--kb-space-4);
 }
-.upload-metadata-row + .upload-metadata-row {
+.documents-upload-metadata-row + .documents-upload-metadata-row {
   border-top: 1px solid var(--kb-color-border);
 }
-.upload-metadata-value {
+.documents-upload-metadata-value {
   overflow-wrap: anywhere;
 }
-.upload-warning {
+.documents-upload-warning {
   padding: var(--kb-space-2) var(--kb-block-padding);
   border-radius: var(--kb-radius-sm);
   background: var(--kb-color-warning-soft);
 }
-.upload-options-state {
+.documents-upload-options-state {
   display: grid;
   place-items: center;
   min-height: 180px;
 }
-.upload-file-list {
+.documents-upload-file-list {
   display: grid;
   gap: var(--kb-space-2);
   overflow-y: auto;
@@ -707,7 +720,7 @@ onMounted(load);
   list-style: none;
   scrollbar-gutter: stable both-edges;
 }
-.upload-file-item {
+.documents-upload-file-item {
   display: flex;
   flex-direction: column;
   gap: var(--kb-space-2);
@@ -716,37 +729,37 @@ onMounted(load);
   border-radius: var(--kb-radius-md);
   background: var(--kb-color-surface);
 }
-.upload-file-heading {
+.documents-upload-file-heading {
   display: flex;
   align-items: center;
 }
-.upload-file-name {
+.documents-upload-file-name {
   flex: 1 1 auto;
   overflow: hidden;
   min-width: 0;
   text-overflow: ellipsis;
 }
-.upload-file-size {
+.documents-upload-file-size {
   flex: 0 0 auto;
 }
-.upload-file-progress {
+.documents-upload-file-progress {
   width: 100%;
 }
-.upload-progress-label,
-.upload-file-error {
+.documents-upload-progress-label,
+.documents-upload-file-error {
   overflow-wrap: anywhere;
 }
-.upload-file-error {
+.documents-upload-file-error {
   flex: 1 1 auto;
   min-width: 0;
 }
-.upload-file-failure {
+.documents-upload-file-failure {
   display: flex;
   justify-content: space-between;
   align-items: center;
   gap: var(--kb-space-2);
 }
-.upload-file-actions {
+.documents-upload-file-actions {
   display: flex;
   flex: 0 0 auto;
   align-items: center;
@@ -754,13 +767,13 @@ onMounted(load);
 }
 /* 响应式：Pad（768px–1279px） */
 @media (min-width: 768px) and (max-width: 1279px) {
-  .upload-dialog {
+  .documents-upload-dialog {
     width: 400px;
   }
   .documents-toolbar {
     grid-template-columns: repeat(3, minmax(0, 1fr)) auto;
   }
-  .document-filters .document-filter-search {
+  .document-filters .documents-filter-search {
     grid-column: 1 / 4;
   }
   .documents-upload-action {
@@ -770,22 +783,22 @@ onMounted(load);
 }
 /* 响应式：Mobile（<768px） */
 @media (max-width: 767px) {
-  .upload-drawer .upload-picker {
+  .documents-upload-drawer .documents-upload-picker {
     margin: 0 auto;
   }
-  .upload-drawer .upload-picker-content {
+  .documents-upload-drawer .documents-upload-picker-content {
     color: inherit;
   }
-  .upload-drawer .upload-metadata-row {
+  .documents-upload-drawer .documents-upload-metadata-row {
     display: flex;
     justify-content: space-between;
   }
-  .upload-drawer .upload-file-list {
+  .documents-upload-drawer .documents-upload-file-list {
     overflow: visible;
     max-height: none;
     scrollbar-gutter: auto;
   }
-  .upload-drawer .upload-file-name {
+  .documents-upload-drawer .documents-upload-file-name {
     white-space: normal;
   }
   .documents-toolbar--mobile {

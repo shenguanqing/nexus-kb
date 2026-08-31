@@ -1,17 +1,21 @@
 <template>
-  <section v-loading="loading" class="document-chunks-page">
-    <header class="chunks-toolbar kb-block">
+  <section v-loading="loading" class="documents-chunks-page">
+    <header class="documents-chunks-toolbar kb-block">
       <div>
-        <div class="kb-block__title kb-heading kb-heading--h4" role="heading" aria-level="2">
+        <div
+          class="kb-block__title kb-heading kb-heading--h4"
+          role="heading"
+          aria-level="2"
+        >
           {{ chunks?.sourceName ?? detail?.sourceName ?? '文档分块' }}
         </div>
         <div class="kb-text kb-text--secondary">
           不展示向量值。每次读取都会按当前文档权限重新鉴权。
         </div>
       </div>
-      <div v-if="detail && chunks" class="chunks-summary kb-text kb-text--secondary">
+      <div v-if="detail && chunks" class="documents-chunks-summary kb-text kb-text--secondary">
         <el-select
-          class="chunks-version-select"
+          class="documents-chunks-version-select"
           v-model="selectedVersion"
           aria-label="选择文档版本"
           :disabled="loading"
@@ -27,7 +31,7 @@
         <span>v{{ chunks.documentVersion }} · 共 {{ chunks.total }} 个分块</span>
         <span
           v-if="selectedDocumentVersion?.vectorCollection"
-          class="chunk-fingerprint kb-text kb-text--sm"
+          class="documents-chunk-fingerprint kb-text kb-text--sm"
         >
           {{ selectedDocumentVersion.vectorCollection }}
         </span>
@@ -42,10 +46,14 @@
           <el-button @click="load">重试</el-button>
         </div>
         <template v-else-if="chunks">
-          <div v-if="chunks.items.length" class="chunk-list">
-            <article v-for="chunk in chunks.items" :key="chunk.id" class="chunk-card kb-block">
-              <header class="chunk-card__header">
-                <div class="chunk-card__identity">
+          <div v-if="chunks.items.length" class="documents-chunk-list">
+            <article
+              v-for="chunk in chunks.items"
+              :key="chunk.id"
+              class="documents-chunk-card kb-block"
+            >
+              <header class="documents-chunk-card__header">
+                <div class="documents-chunk-card__identity">
                   <div class="kb-heading kb-heading--h3" role="heading" aria-level="3">
                     分块 {{ chunk.ordinal + 1 }}
                   </div>
@@ -53,11 +61,13 @@
                     {{ chunkLocation(chunk) }} · {{ chunk.tokenCount }} tokens
                   </div>
                 </div>
-                <span class="chunk-card__id chunk-fingerprint kb-text kb-text--sm">
+                <span
+                  class="documents-chunk-card__id documents-chunk-fingerprint kb-text kb-text--sm"
+                >
                   {{ chunk.id }}
                 </span>
               </header>
-              <div class="chunk-data-list kb-data-fields kb-data-fields--borderless">
+              <div class="documents-chunk-data-list kb-data-fields kb-data-fields--borderless">
                 <div class="kb-data-field">
                   <span class="kb-data-field__label">章节路径</span>
                   <span class="kb-data-field__value">
@@ -72,20 +82,28 @@
                 </div>
                 <div class="kb-data-field">
                   <span class="kb-data-field__label">相邻分块</span>
-                  <span class="kb-data-field__value chunk-neighbor-list">
-                    <span class="chunk-neighbor-item">
-                      <span class="chunk-neighbor-label kb-text kb-text--sm kb-text--secondary">
+                  <span class="documents-chunk-neighbor-list kb-data-field__value">
+                    <span class="documents-chunk-neighbor-item">
+                      <span
+                        class="documents-chunk-neighbor-label kb-text kb-text--sm kb-text--secondary"
+                      >
                         上一个
                       </span>
-                      <span class="chunk-neighbor-id chunk-fingerprint kb-text kb-text--sm">
+                      <span
+                        class="documents-chunk-neighbor-id documents-chunk-fingerprint kb-text kb-text--sm"
+                      >
                         {{ chunk.previousChunkId ?? '无' }}
                       </span>
                     </span>
-                    <span class="chunk-neighbor-item">
-                      <span class="chunk-neighbor-label kb-text kb-text--sm kb-text--secondary">
+                    <span class="documents-chunk-neighbor-item">
+                      <span
+                        class="documents-chunk-neighbor-label kb-text kb-text--sm kb-text--secondary"
+                      >
                         下一个
                       </span>
-                      <span class="chunk-neighbor-id chunk-fingerprint kb-text kb-text--sm">
+                      <span
+                        class="documents-chunk-neighbor-id documents-chunk-fingerprint kb-text kb-text--sm"
+                      >
                         {{ chunk.nextChunkId ?? '无' }}
                       </span>
                     </span>
@@ -99,7 +117,7 @@
                     <el-tag
                       v-for="[kind, count] in redactionEntries(chunk)"
                       :key="kind"
-                      class="chunk-redaction-tag"
+                      class="documents-chunk-redaction-tag"
                       size="small"
                       effect="plain"
                     >
@@ -108,10 +126,10 @@
                   </span>
                 </div>
               </div>
-              <div class="chunk-text-grid">
+              <div class="documents-chunk-text-grid">
                 <template v-if="isMobile">
                   <el-tabs
-                    class="chunk-text-tabs"
+                    class="documents-chunk-text-tabs"
                     :model-value="mobileChunkTextMode(chunk.id)"
                     stretch
                     @update:model-value="updateMobileChunkTextMode(chunk.id, $event)"
@@ -119,9 +137,11 @@
                     <el-tab-pane label="原始内容" name="original" lazy>
                       <section
                         v-if="mobileChunkTextMode(chunk.id) === 'original'"
-                        class="chunk-text-section chunk-text-section--mobile"
+                        class="documents-chunk-text-section documents-chunk-text-section--mobile"
                       >
-                        <pre class="chunk-text-content chunk-text-content--original">
+                        <pre
+                          class="documents-chunk-text-content documents-chunk-text-content--original"
+                        >
                           {{ chunk.originalText }}
                         </pre>
                       </section>
@@ -129,9 +149,11 @@
                     <el-tab-pane label="脱敏后内容" name="redacted" lazy>
                       <section
                         v-if="mobileChunkTextMode(chunk.id) === 'redacted'"
-                        class="chunk-text-section chunk-text-section--mobile"
+                        class="documents-chunk-text-section documents-chunk-text-section--mobile"
                       >
-                        <pre class="chunk-text-content chunk-text-content--redacted">
+                        <pre
+                          class="documents-chunk-text-content documents-chunk-text-content--redacted"
+                        >
                           {{ chunk.redactedText }}
                         </pre>
                       </section>
@@ -139,23 +161,27 @@
                   </el-tabs>
                 </template>
                 <template v-else>
-                  <section class="chunk-text-section">
+                  <section class="documents-chunk-text-section">
                     <div
-                      class="chunk-text-section__title kb-heading kb-heading--h6 kb-text--secondary"
+                      class="documents-chunk-text-section__title kb-heading kb-heading--h6 kb-text--secondary"
                     >
                       原始内容
                     </div>
-                    <pre class="chunk-text-content chunk-text-content--original">
+                    <pre
+                      class="documents-chunk-text-content documents-chunk-text-content--original"
+                    >
                       {{ chunk.originalText }}
                     </pre>
                   </section>
-                  <section class="chunk-text-section">
+                  <section class="documents-chunk-text-section">
                     <div
-                      class="chunk-text-section__title kb-heading kb-heading--h6 kb-text--secondary"
+                      class="documents-chunk-text-section__title kb-heading kb-heading--h6 kb-text--secondary"
                     >
                       写入向量库的内容（脱敏后）
                     </div>
-                    <pre class="chunk-text-content chunk-text-content--redacted">
+                    <pre
+                      class="documents-chunk-text-content documents-chunk-text-content--redacted"
+                    >
                       {{ chunk.redactedText }}
                     </pre>
                   </section>
@@ -275,46 +301,46 @@ onMounted(load);
 </script>
 
 <style scoped>
-.chunks-toolbar {
+.documents-chunks-toolbar {
   display: flex;
   justify-content: space-between;
   align-items: start;
   gap: var(--kb-layout-gap);
 }
-.chunks-summary {
+.documents-chunks-summary {
   display: grid;
   justify-items: end;
   gap: var(--kb-space-2);
   font-size: 13px;
 }
-.chunks-version-select {
+.documents-chunks-version-select {
   width: 220px;
 }
-.chunk-redaction-tag + .chunk-redaction-tag {
+.documents-chunk-redaction-tag + .documents-chunk-redaction-tag {
   margin-left: var(--kb-space-2);
 }
-.chunk-list {
+.documents-chunk-list {
   display: grid;
   gap: var(--kb-layout-gap);
 }
-.chunk-card {
+.documents-chunk-card {
   display: grid;
   gap: var(--kb-layout-gap);
   overflow: hidden;
 }
-.chunk-card__header {
+.documents-chunk-card__header {
   display: grid;
   justify-content: space-between;
   align-items: flex-start;
   gap: var(--kb-layout-gap);
   grid-template-columns: minmax(0, 1fr) minmax(180px, 0.55fr);
 }
-.chunk-card__identity {
+.documents-chunk-card__identity {
   display: grid;
   gap: var(--kb-space-1);
   min-width: 0;
 }
-.chunk-card__id {
+.documents-chunk-card__id {
   justify-self: end;
   max-width: 100%;
   padding: var(--kb-space-1) var(--kb-space-2);
@@ -323,7 +349,7 @@ onMounted(load);
   color: var(--kb-color-text-secondary);
   background: var(--kb-color-surface-subtle);
 }
-.chunk-data-list {
+.documents-chunk-data-list {
   column-gap: var(--kb-space-6);
   grid-template-columns: repeat(2, minmax(0, 1fr));
   padding: var(--kb-block-padding);
@@ -331,67 +357,67 @@ onMounted(load);
   border-radius: var(--kb-radius-md);
   background: var(--kb-color-surface-subtle);
 }
-.chunk-neighbor-list {
+.documents-chunk-neighbor-list {
   display: grid;
   gap: var(--kb-space-1);
   text-align: left;
 }
-.chunk-neighbor-item {
+.documents-chunk-neighbor-item {
   display: grid;
   align-items: start;
   gap: var(--kb-space-2);
   grid-template-columns: 48px minmax(0, 1fr);
   min-width: 0;
 }
-.chunk-neighbor-label {
+.documents-chunk-neighbor-label {
   white-space: nowrap;
 }
-.chunk-neighbor-id {
+.documents-chunk-neighbor-id {
   min-width: 0;
 }
-.chunk-text-grid {
+.documents-chunk-text-grid {
   display: grid;
   gap: var(--kb-space-4);
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
-.chunk-text-tabs :deep(.el-tabs__header) {
+.documents-chunk-text-tabs :deep(.el-tabs__header) {
   overflow: hidden;
   margin: 0 0 var(--kb-space-element);
   border: 1px solid var(--kb-color-border);
   border-radius: var(--kb-radius-md);
   background: var(--kb-color-surface);
 }
-.chunk-text-tabs :deep(.el-tabs__nav-wrap::after),
-.chunk-text-tabs :deep(.el-tabs__active-bar) {
+.documents-chunk-text-tabs :deep(.el-tabs__nav-wrap::after),
+.documents-chunk-text-tabs :deep(.el-tabs__active-bar) {
   display: none;
 }
-.chunk-text-tabs :deep(.el-tabs__item) {
+.documents-chunk-text-tabs :deep(.el-tabs__item) {
   padding: 0;
   color: var(--kb-color-text-secondary);
   transition:
     color var(--kb-transition-fast),
     background-color var(--kb-transition-fast);
 }
-.chunk-text-tabs :deep(.el-tabs__item + .el-tabs__item) {
+.documents-chunk-text-tabs :deep(.el-tabs__item + .el-tabs__item) {
   border-left: 1px solid var(--kb-color-border);
 }
-.chunk-text-tabs :deep(.el-tabs__item.is-active) {
+.documents-chunk-text-tabs :deep(.el-tabs__item.is-active) {
   color: var(--kb-color-primary-dark);
   background: var(--kb-color-primary-soft);
 }
-.chunk-text-section {
+.documents-chunk-text-section {
   display: grid;
   align-content: start;
   grid-template-rows: auto minmax(120px, 1fr);
   min-width: 0;
 }
-.chunk-text-section--mobile {
+.documents-chunk-text-section--mobile {
   grid-template-rows: minmax(120px, 1fr);
 }
-.chunk-text-section__title {
+.documents-chunk-text-section__title {
   margin-bottom: var(--kb-space-2);
 }
-.chunk-text-content {
+.documents-chunk-text-content {
   overflow: auto;
   overflow-wrap: anywhere;
   min-height: 120px;
@@ -406,69 +432,69 @@ onMounted(load);
   line-height: 1.65;
   white-space: pre-wrap;
 }
-.chunk-text-content--original {
+.documents-chunk-text-content--original {
   background: var(--kb-color-content-original);
 }
-.chunk-text-content--redacted {
+.documents-chunk-text-content--redacted {
   background: var(--kb-color-content-redacted);
 }
-.document-chunks-page {
+.documents-chunks-page {
   display: grid;
   gap: var(--kb-space-4);
   grid-template-rows: auto minmax(0, 1fr);
   height: 100%;
   min-height: 0;
 }
-.chunk-fingerprint {
+.documents-chunk-fingerprint {
   overflow-wrap: anywhere;
   font-family: ui-monospace, monospace;
   text-align: right;
 }
 /* 响应式：紧凑布局（<1280px） */
 @media (max-width: 1279px) {
-  .chunks-toolbar {
+  .documents-chunks-toolbar {
     grid-template-columns: minmax(0, 1fr);
   }
-  .chunk-card__header {
+  .documents-chunk-card__header {
     grid-template-columns: minmax(0, 1fr);
   }
-  .chunk-card__id {
+  .documents-chunk-card__id {
     justify-self: start;
   }
-  .chunk-data-list {
+  .documents-chunk-data-list {
     grid-template-columns: 1fr;
   }
 }
 /* 响应式：Mobile（<768px） */
 @media (max-width: 767px) {
-  .document-chunks-page {
+  .documents-chunks-page {
     grid-template-rows: auto auto;
     overflow-y: auto;
   }
-  .document-chunks-page > .kb-block-content {
+  .documents-chunks-page > .kb-block-content {
     flex: none;
     overflow: visible;
     min-height: auto;
   }
-  .document-chunks-page > .kb-block-content > .kb-block-scroll {
+  .documents-chunks-page > .kb-block-content > .kb-block-scroll {
     flex: none;
     overflow: visible;
     min-height: auto;
   }
-  .chunks-toolbar {
+  .documents-chunks-toolbar {
     display: grid;
   }
-  .chunks-summary {
+  .documents-chunks-summary {
     justify-items: stretch;
     text-align: left;
   }
-  .chunks-version-select {
+  .documents-chunks-version-select {
     width: 100%;
   }
-  .chunk-fingerprint {
+  .documents-chunk-fingerprint {
     text-align: left;
   }
-  .chunk-text-grid {
+  .documents-chunk-text-grid {
     grid-template-columns: 1fr;
   }
 }

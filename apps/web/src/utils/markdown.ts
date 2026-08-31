@@ -62,7 +62,11 @@ const mathBlockRule: RuleBlock = (state, startLine, endLine, silent) => {
   const start = state.bMarks[startLine]! + state.tShift[startLine]!;
   const openDelimiter = state.src.slice(start, start + 2);
   const closeDelimiter =
-    openDelimiter === '\\[' || openDelimiter === '[\\' ? '\\]' : openDelimiter === '$$' ? '$$' : undefined;
+    openDelimiter === '\\[' || openDelimiter === '[\\'
+      ? '\\]'
+      : openDelimiter === '$$'
+        ? '$$'
+        : undefined;
   if (!closeDelimiter) return false;
 
   const contentStart = start + openDelimiter.length;
@@ -260,67 +264,70 @@ markdown.renderer.rules.math_inline = (tokens, index): string =>
   renderMath(tokens[index]?.content ?? '', false);
 
 export function renderSafeMarkdown(source: string, options: SafeMarkdownOptions = {}): string {
-  const sanitized = DOMPurify.sanitize(markdown.render(normalizeMalformedMathFence(source), options), {
-    ALLOWED_TAGS: [
-      'a',
-      'blockquote',
-      'br',
-      'button',
-      'code',
-      'del',
-      'div',
-      'em',
-      'hr',
-      'pre',
-      's',
-      'small',
-      'span',
-      'strong',
-      'table',
-      'tbody',
-      'td',
-      'th',
-      'thead',
-      'tr',
-      'annotation',
-      'math',
-      'mfrac',
-      'mi',
-      'mn',
-      'mo',
-      'mover',
-      'mrow',
-      'msqrt',
-      'msub',
-      'msubsup',
-      'msup',
-      'mtext',
-      'munder',
-      'munderover',
-      'semantics',
-    ],
-    ALLOWED_ATTR: [
-      'aria-label',
-      'aria-level',
-      'class',
-      'data-list-marker',
-      'data-source-index',
-      'encoding',
-      'href',
-      'rel',
-      'role',
-      'target',
-      'tabindex',
-      'title',
-      'type',
-      'style',
-      'xmlns',
-    ],
-    ALLOWED_URI_REGEXP: SAFE_LINK_PATTERN,
-    ALLOW_UNKNOWN_PROTOCOLS: false,
-    FORBID_TAGS: ['embed', 'form', 'iframe', 'img', 'object', 'script', 'style', 'svg'],
-    FORBID_ATTR: ['id'],
-  });
+  const sanitized = DOMPurify.sanitize(
+    markdown.render(normalizeMalformedMathFence(source), options),
+    {
+      ALLOWED_TAGS: [
+        'a',
+        'blockquote',
+        'br',
+        'button',
+        'code',
+        'del',
+        'div',
+        'em',
+        'hr',
+        'pre',
+        's',
+        'small',
+        'span',
+        'strong',
+        'table',
+        'tbody',
+        'td',
+        'th',
+        'thead',
+        'tr',
+        'annotation',
+        'math',
+        'mfrac',
+        'mi',
+        'mn',
+        'mo',
+        'mover',
+        'mrow',
+        'msqrt',
+        'msub',
+        'msubsup',
+        'msup',
+        'mtext',
+        'munder',
+        'munderover',
+        'semantics',
+      ],
+      ALLOWED_ATTR: [
+        'aria-label',
+        'aria-level',
+        'class',
+        'data-list-marker',
+        'data-source-index',
+        'encoding',
+        'href',
+        'rel',
+        'role',
+        'target',
+        'tabindex',
+        'title',
+        'type',
+        'style',
+        'xmlns',
+      ],
+      ALLOWED_URI_REGEXP: SAFE_LINK_PATTERN,
+      ALLOW_UNKNOWN_PROTOCOLS: false,
+      FORBID_TAGS: ['embed', 'form', 'iframe', 'img', 'object', 'script', 'style', 'svg'],
+      FORBID_ATTR: ['id'],
+    },
+  );
   const template = document.createElement('template');
   template.innerHTML = sanitized;
   template.content.querySelectorAll('.kb-answer-citation--interactive').forEach((citation) => {

@@ -2,7 +2,7 @@
   <component
     :is="mobile ? ElDrawer : ElDialog"
     :model-value="modelValue"
-    class="document-danger-confirm"
+    class="documents-danger-confirm"
     :title="copy.title"
     :width="mobile ? undefined : 'min(520px, calc(100vw - 28px))'"
     align-center
@@ -12,17 +12,17 @@
     @update:model-value="emit('update:modelValue', $event)"
     @closed="confirmationName = ''"
   >
-    <div class="document-danger-confirm__body">
+    <div class="documents-danger-confirm__body">
       <div
-        class="document-danger-confirm__notice kb-text"
+        class="documents-danger-confirm__notice kb-text"
         :class="{ 'kb-text--danger': action === 'delete' || action === 'cleanup' }"
       >
         {{ copy.notice }}
       </div>
-      <div class="document-danger-confirm__instruction kb-text kb-text--md kb-text--secondary">
+      <div class="documents-danger-confirm__instruction kb-text kb-text--md kb-text--secondary">
         请输入完整文档名以确认
       </div>
-      <div class="document-danger-confirm__filename kb-text kb-text--strong">
+      <div class="documents-danger-confirm__filename kb-text kb-text--strong">
         {{ documentName }}
       </div>
       <el-input
@@ -110,28 +110,28 @@ function confirm(): void {
 </script>
 
 <style scoped>
-.document-danger-confirm__body {
+.documents-danger-confirm__body {
   display: grid;
   gap: var(--kb-layout-gap);
 }
 
-.document-danger-confirm__notice {
+.documents-danger-confirm__notice {
   padding: var(--kb-list-row-padding);
   border: 1px solid var(--kb-color-border-light);
   border-radius: var(--kb-radius-md);
   background: var(--kb-color-canvas);
 }
 
-.document-danger-confirm__notice.kb-text--danger {
+.documents-danger-confirm__notice.kb-text--danger {
   border-color: color-mix(in srgb, var(--kb-color-danger) 28%, var(--kb-color-border));
   background: var(--kb-color-danger-soft);
 }
 
-.document-danger-confirm__instruction {
+.documents-danger-confirm__instruction {
   margin-top: var(--kb-space-1);
 }
 
-.document-danger-confirm__filename {
+.documents-danger-confirm__filename {
   overflow-wrap: anywhere;
 }
 </style>

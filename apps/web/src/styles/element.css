@@ -331,6 +331,21 @@
   margin-left: var(--kb-space-0);
 }
 
+/* 快速页面请求不闪现遮罩；超过短延迟后才显示真实加载状态。 */
+@keyframes kb-page-loading-reveal {
+  from {
+    visibility: hidden;
+    opacity: var(--kb-opacity-hidden);
+  }
+  to {
+    visibility: visible;
+    opacity: var(--kb-opacity-visible);
+  }
+}
+.kb-page .el-loading-mask {
+  animation: kb-page-loading-reveal 0s linear var(--kb-loading-reveal-delay) both;
+}
+
 /* Link：文字链接需要允许 Flex 收缩，并覆盖组件默认的居中对齐。 */
 .el-link.kb-link {
   justify-content: flex-start;
@@ -404,7 +419,7 @@
   --el-table-tr-bg-color: var(--kb-color-surface);
   --el-table-text-color: var(--kb-color-text-primary);
   --el-table-header-text-color: var(--kb-color-text-secondary);
-  --el-table-header-bg-color: var(--kb-color-surface-subtle);
+  --el-table-header-bg-color: transparent;
   --el-table-border-color: var(--kb-color-border);
   --el-table-row-hover-bg-color: var(--kb-color-primary-soft);
   --el-table-current-row-bg-color: var(--kb-color-primary-soft);
@@ -904,6 +919,12 @@
     min-height: var(--kb-control-height);
     padding: var(--kb-space-0) var(--kb-list-row-padding);
     /* font-size: var(--kb-font-size-body); */
+  }
+  .el-collapse-item__title {
+    min-width: 0;
+  }
+  .el-collapse-item__arrow {
+    flex: 0 0 auto;
   }
   .el-collapse-item__content {
     padding: var(--kb-space-0) var(--kb-list-row-padding) var(--kb-list-row-padding);

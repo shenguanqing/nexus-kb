@@ -1,8 +1,8 @@
 <template>
-  <div class="cad-tile-viewer" :class="{ 'is-loading': loading }">
+  <div class="documents-tile-viewer" :class="{ 'is-loading': loading }">
     <canvas
       ref="canvas"
-      class="cad-tile-canvas"
+      class="documents-tile-canvas"
       tabindex="0"
       role="img"
       :aria-label="`${sourceName} CAD 瓦片预览`"
@@ -15,7 +15,7 @@
       @keydown="handleKeydown"
     >
     </canvas>
-    <CadOverviewMap
+    <DocumentsPreviewOverviewMap
       :source="overviewUrl"
       :focus-source="focusOverviewUrl"
       :source-name="sourceName"
@@ -25,7 +25,9 @@
       :focus-aspect-ratio="defaultCameraWidth / defaultCameraHeight"
       @navigate="navigateFromOverview"
     />
-    <span v-if="statusMessage" class="cad-tile-status" role="status">{{ statusMessage }}</span>
+    <span v-if="statusMessage" class="documents-tile-status" role="status">{{
+      statusMessage
+    }}</span>
   </div>
 </template>
 
@@ -38,8 +40,8 @@ import {
   documentPreviewOverviewUrl,
   documentPreviewTileUrl,
 } from '@/api/documents';
-import type { CadOverviewViewport } from './cad-overview';
-import CadOverviewMap from './CadOverviewMap.vue';
+import type { CadOverviewViewport } from '@/utils/cad-overview';
+import DocumentsPreviewOverviewMap from './DocumentsPreviewOverviewMap.vue';
 
 const props = defineProps<{
   documentId: string;
@@ -556,7 +558,7 @@ defineExpose({ reset, zoomIn, zoomOut });
 </script>
 
 <style scoped>
-.cad-tile-viewer {
+.documents-tile-viewer {
   position: relative;
   overflow: hidden;
   width: 100%;
@@ -565,7 +567,7 @@ defineExpose({ reset, zoomIn, zoomOut });
   min-height: 0;
   background: #212830;
 }
-.cad-tile-canvas {
+.documents-tile-canvas {
   display: block;
   width: 100%;
   height: 100%;
@@ -574,10 +576,10 @@ defineExpose({ reset, zoomIn, zoomOut });
   cursor: grab;
   touch-action: none;
 }
-.cad-tile-canvas:active {
+.documents-tile-canvas:active {
   cursor: grabbing;
 }
-.cad-tile-status {
+.documents-tile-status {
   position: absolute;
   bottom: var(--kb-space-element);
   left: 50%;

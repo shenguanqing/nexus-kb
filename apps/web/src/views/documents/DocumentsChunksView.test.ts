@@ -3,7 +3,7 @@ import { flushPromises, mount } from '@vue/test-utils';
 import { ElTabPane, ElTabs } from 'element-plus';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import DocumentChunksView from './DocumentChunksView.vue';
+import DocumentsChunksView from './DocumentsChunksView.vue';
 
 const api = vi.hoisted(() => ({ fetchDocument: vi.fn(), listDocumentChunks: vi.fn() }));
 const breakpoint = vi.hoisted(() => ({ isMobile: { __v_isRef: true, value: false } }));
@@ -18,7 +18,7 @@ vi.mock('vue-router', () => ({
 }));
 
 function mountView() {
-  return mount(DocumentChunksView, {
+  return mount(DocumentsChunksView, {
     global: {
       components: { ElTabPane, ElTabs },
       stubs: {
@@ -34,7 +34,7 @@ function mountView() {
   });
 }
 
-describe('DocumentChunksView responsive content comparison', () => {
+describe('DocumentsChunksView responsive content comparison', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     breakpoint.isMobile.value = false;
@@ -82,14 +82,14 @@ describe('DocumentChunksView responsive content comparison', () => {
     const wrapper = mountView();
     await flushPromises();
 
-    expect(wrapper.get('.chunk-data-list').classes()).toEqual(
+    expect(wrapper.get('.documents-chunk-data-list').classes()).toEqual(
       expect.arrayContaining(['kb-data-fields', 'kb-data-fields--borderless']),
     );
-    expect(wrapper.get('.chunks-toolbar .kb-block__title').attributes()).toMatchObject({
+    expect(wrapper.get('.documents-chunks-toolbar .kb-block__title').attributes()).toMatchObject({
       role: 'heading',
       'aria-level': '2',
     });
-    expect(wrapper.findAll('.chunk-data-list > .kb-data-field')).toHaveLength(4);
+    expect(wrapper.findAll('.documents-chunk-data-list > .kb-data-field')).toHaveLength(4);
     expect(wrapper.findAll('[role="tab"]')).toHaveLength(0);
     expect(wrapper.text()).toContain('原始正文');
     expect(wrapper.text()).toContain('脱敏正文');
@@ -111,7 +111,7 @@ describe('DocumentChunksView responsive content comparison', () => {
     expect(tabs[1]?.attributes('aria-selected')).toBe('true');
     expect(wrapper.text()).toContain('脱敏正文');
     expect(wrapper.text()).not.toContain('原始正文');
-    expect(wrapper.findAll('.chunk-text-content')).toHaveLength(1);
+    expect(wrapper.findAll('.documents-chunk-text-content')).toHaveLength(1);
   });
 
   it('keeps pagination inside the shared content shell without a redundant business class', async () => {
@@ -121,9 +121,9 @@ describe('DocumentChunksView responsive content comparison', () => {
     const wrapper = mountView();
     await flushPromises();
 
-    expect(wrapper.find('.chunks-content').exists()).toBe(false);
+    expect(wrapper.find('.documents-chunks-content').exists()).toBe(false);
     expect(
-      wrapper.get('.document-chunks-page > .kb-block-content > .kb-block-scroll'),
+      wrapper.get('.documents-chunks-page > .kb-block-content > .kb-block-scroll'),
     ).toBeTruthy();
     const paginationParent = wrapper.get('.kb-pagination').element.parentElement?.classList;
     expect(paginationParent).toContain('kb-block-content');

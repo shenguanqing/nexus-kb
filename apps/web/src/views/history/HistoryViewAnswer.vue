@@ -71,12 +71,12 @@ function selectCitation(sourceIndex: number): void {
 </script>
 
 <style scoped>
-.history-answer-meta {
-  grid-column: 2;
-}
 .history-answer-content {
   grid-column: 2;
   min-width: 0;
   line-height: 1.6;
+}
+.history-answer-meta {
+  grid-column: 2;
 }
 </style>

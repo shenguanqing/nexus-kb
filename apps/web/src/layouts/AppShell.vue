@@ -97,7 +97,7 @@
             :aria-current="activeNavigation === item.to ? 'page' : undefined"
           >
             <span class="sidebar-navigation-icon" aria-hidden="true">
-              <AppNavIcon :name="item.icon" />
+              <AppShellNavIcon :name="item.icon" />
             </span>
             <span class="sidebar-navigation-label">{{ item.label }}</span>
           </RouterLink>
@@ -129,7 +129,7 @@
               :aria-label="item.label"
               :aria-current="activeNavigation === item.to ? 'page' : undefined"
             >
-              <AppNavIcon :name="item.icon" />
+              <AppShellNavIcon :name="item.icon" />
             </RouterLink>
           </el-tooltip>
         </section>
@@ -242,7 +242,7 @@
             @click="closeMobileSidebar"
           >
             <span class="sidebar-navigation-icon" aria-hidden="true">
-              <AppNavIcon :name="item.icon" />
+              <AppShellNavIcon :name="item.icon" />
             </span>
             <span class="sidebar-navigation-label">{{ item.label }}</span>
           </RouterLink>
@@ -258,7 +258,7 @@
 <script setup lang="ts">
 import { ArrowLeft, Close, Expand, Moon, Sunny } from '@element-plus/icons-vue';
 import { computed, ref } from 'vue';
-import AppNavIcon, { type NavIconName } from '@/components/common/AppNavIcon.vue';
+import AppShellNavIcon, { type NavIconName } from './AppShellNavIcon.vue';
 import { useRoute, useRouter } from 'vue-router';
 
 import { clearBearerAccessToken } from '@/auth/oidc';
@@ -411,6 +411,7 @@ const visibleNavigationGroups = computed(() =>
     .map((group) => ({ ...group, items: group.items.filter(canShow) }))
     .filter((group) => group.items.length > 0),
 );
+
 function closeMobileSidebar(): void {
   mobileSidebarOpen.value = false;
 }
@@ -704,7 +705,7 @@ async function signOut(): Promise<void> {
     background: transparent;
     cursor: pointer;
   }
-  .app-sidebar .tablet-navigation-link :deep(.nav-icon) {
+  .app-sidebar .tablet-navigation-link :deep(.app-shell-nav-icon) {
     width: 22px;
     height: 22px;
   }
@@ -791,6 +792,18 @@ async function signOut(): Promise<void> {
     flex: 0 0 auto;
     align-items: center;
     gap: var(--kb-space-1);
+  }
+  .mobile-sidebar-header__actions > .el-button.is-circle:not(.is-text):hover,
+  .mobile-sidebar-header__actions > .el-button.is-circle:not(.is-text):focus,
+  .mobile-sidebar-header__actions > .el-button.is-circle:not(.is-text):focus-visible {
+    border-color: var(--kb-color-border);
+    color: var(--kb-color-primary);
+    background: var(--kb-color-primary-soft);
+  }
+  .mobile-sidebar-header__actions > .el-button.is-circle:not(.is-text):active {
+    border-color: var(--kb-color-border);
+    color: var(--kb-color-primary);
+    background: var(--kb-color-nav-accent);
   }
   .mobile-sidebar-brand {
     display: flex;

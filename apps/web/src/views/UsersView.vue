@@ -86,7 +86,7 @@
             <el-table-column label="部门" prop="department" min-width="160" />
             <el-table-column label="角色" min-width="160">
               <template #default="scopeRow">
-                <div class="role-tags">
+                <div class="access-role-tags">
                   <el-tag
                     v-for="role in accessRoleSummary(userRow(scopeRow.row).roles)"
                     :key="role"
@@ -117,7 +117,7 @@
             </el-table-column>
             <el-table-column v-if="canWrite" label="操作" width="230">
               <template #default="scopeRow">
-                <div class="table-row-actions">
+                <div class="access-table-row-actions">
                   <el-button
                     v-if="!userRow(scopeRow.row).username"
                     link
@@ -156,7 +156,10 @@
                   <span class="kb-collapse-list__label kb-text kb-text--md kb-text--secondary">
                     {{ user.username ?? user.userId }}
                   </span>
-                  <el-tag :type="user.status === 'disabled' ? 'info' : 'success'">
+                  <el-tag
+                    class="access-user-status"
+                    :type="user.status === 'disabled' ? 'info' : 'success'"
+                  >
                     {{
                       user.status === 'active'
                         ? '可登录'
@@ -187,7 +190,7 @@
                   </span>
                 </div>
               </div>
-              <div class="mobile-user-actions">
+              <div class="access-mobile-user-actions">
                 <el-button
                   v-if="canWrite && !user.username"
                   link
@@ -261,7 +264,7 @@
       <div v-if="selectedUser" class="access-editor-summary kb-text kb-text--secondary">
         {{ selectedUser.userId }} · {{ selectedUser.department }}
       </div>
-      <el-radio-group v-model="selectedRole" class="role-editor">
+      <el-radio-group v-model="selectedRole" class="access-role-editor">
         <el-radio value="user">普通用户</el-radio>
         <el-radio value="admin">管理员</el-radio>
       </el-radio-group>
@@ -597,7 +600,7 @@ onMounted(() => {
   gap: var(--kb-space-2);
   grid-template-columns: minmax(180px, 1fr) minmax(160px, 0.8fr) auto auto;
 }
-.role-editor {
+.access-role-editor {
   display: grid;
   gap: var(--kb-space-2);
 }
@@ -623,12 +626,15 @@ onMounted(() => {
 .access-table-wrap > .kb-collapse-list {
   border: 0;
 }
-.table-row-actions,
-.mobile-user-actions,
-.role-tags {
+.access-table-row-actions,
+.access-mobile-user-actions,
+.access-role-tags {
   display: flex;
   flex-wrap: wrap;
   gap: var(--kb-space-2);
+}
+.access-user-status {
+  flex: 0 0 auto;
 }
 /* 响应式：Mobile（<768px） */
 @media (max-width: 767px) {

@@ -152,10 +152,10 @@ describe('DocumentsView upload dialog', () => {
     await wrapper.get('[data-test="select-file"]').trigger('click');
     await wrapper.get('[data-test="select-file"]').trigger('click');
 
-    const fileList = wrapper.get('.upload-file-list');
+    const fileList = wrapper.get('.documents-upload-file-list');
     expect(fileList.attributes('aria-label')).toBe('待上传文件');
     expect(fileList.attributes('tabindex')).toBe('0');
-    expect(fileList.findAll('.upload-file-item')).toHaveLength(3);
+    expect(fileList.findAll('.documents-upload-file-item')).toHaveLength(3);
   });
 
   it('renders queued, uploading, and failed files as distinct queue cards', async () => {
@@ -218,5 +218,4 @@ describe('DocumentsView upload dialog', () => {
     expect(wrapper.find('el-table-stub').exists()).toBe(false);
     expect(wrapper.get('el-empty-stub').attributes('description')).toBe('暂无符合条件的文档');
   });
-
 });

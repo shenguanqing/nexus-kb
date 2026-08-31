@@ -1,6 +1,6 @@
 import { mount } from '@vue/test-utils';
 import { describe, expect, it } from 'vitest';
-import AskComposer from './AskComposer.vue';
+import KnowledgeAskComposer from './KnowledgeAskComposer.vue';
 
 const composerStubs = {
   ElButton: {
@@ -15,9 +15,9 @@ const composerStubs = {
   },
 };
 
-describe('AskComposer', () => {
+describe('KnowledgeAskComposer', () => {
   it('submits with Enter or the send button but keeps Shift+Enter for a newline', async () => {
-    const wrapper = mount(AskComposer, {
+    const wrapper = mount(KnowledgeAskComposer, {
       props: { modelValue: '付款周期？', isSubmitting: false },
       global: { stubs: composerStubs },
     });
@@ -29,7 +29,7 @@ describe('AskComposer', () => {
   });
 
   it('does not submit empty or one-character questions', async () => {
-    const wrapper = mount(AskComposer, {
+    const wrapper = mount(KnowledgeAskComposer, {
       props: { modelValue: '问', isSubmitting: false },
       global: { stubs: composerStubs },
     });
@@ -39,18 +39,18 @@ describe('AskComposer', () => {
   });
 
   it('shows the counter near the limit and disables all controls while submitting', async () => {
-    const wrapper = mount(AskComposer, {
+    const wrapper = mount(KnowledgeAskComposer, {
       props: { modelValue: '问'.repeat(1801), isSubmitting: false },
       global: { stubs: composerStubs },
     });
 
-    expect(wrapper.get('.character-count').text()).toContain('1801');
+    expect(wrapper.get('.knowledge-composer-character-count').text()).toContain('1801');
     expect(wrapper.get('textarea').attributes('disabled')).toBeUndefined();
 
     await wrapper.setProps({ isSubmitting: true });
 
-    expect(wrapper.get('.ask-composer').classes()).toContain('is-disabled');
-    expect(wrapper.get('.ask-composer').attributes('aria-busy')).toBe('true');
+    expect(wrapper.get('.knowledge-composer').classes()).toContain('is-disabled');
+    expect(wrapper.get('.knowledge-composer').attributes('aria-busy')).toBe('true');
     expect(wrapper.get('textarea').attributes('disabled')).toBeDefined();
     expect(wrapper.get('button').attributes('disabled')).toBeDefined();
   });

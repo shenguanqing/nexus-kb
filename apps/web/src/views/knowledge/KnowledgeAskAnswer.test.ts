@@ -1,7 +1,7 @@
 import type { KnowledgeQueryResponse } from '@nexus-kb/contracts';
 import { mount } from '@vue/test-utils';
 import { describe, expect, it } from 'vitest';
-import AssistantAnswer from './AssistantAnswer.vue';
+import KnowledgeAskAnswer from './KnowledgeAskAnswer.vue';
 
 const response: KnowledgeQueryResponse = {
   conversationId: '5b9fd225-a565-42cd-8d63-1fc3f19b745d',
@@ -28,10 +28,11 @@ const response: KnowledgeQueryResponse = {
   rerankDegraded: false,
 };
 
-describe('AssistantAnswer', () => {
+describe('KnowledgeAskAnswer', () => {
   it('renders compact inline citations and matching source details', async () => {
-    const wrapper = mount(AssistantAnswer, { props: { response } });
+    const wrapper = mount(KnowledgeAskAnswer, { props: { response } });
 
+    expect(wrapper.get('.knowledge-answer-label').text()).toBe('知识助手');
     expect(wrapper.findAll('.kb-answer-citation').map((citation) => citation.text())).toEqual([
       '[来源1]',
       '[来源2]',
@@ -56,7 +57,7 @@ describe('AssistantAnswer', () => {
   });
 
   it('labels a source-free general-knowledge answer', () => {
-    const wrapper = mount(AssistantAnswer, {
+    const wrapper = mount(KnowledgeAskAnswer, {
       props: {
         response: {
           ...response,

@@ -1,7 +1,7 @@
 import { flushPromises, mount } from '@vue/test-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import DocumentPreviewView from './DocumentPreviewView.vue';
+import DocumentsPreviewView from './DocumentsPreviewView.vue';
 
 const api = vi.hoisted(() => ({
   documentPreviewContentUrl: vi.fn(() => '/v1/documents/document-id/preview/content'),
@@ -23,10 +23,15 @@ vi.mock('vue-router', () => ({
 }));
 
 function mountView() {
-  return mount(DocumentPreviewView, {
+  return mount(DocumentsPreviewView, {
     global: {
       directives: { loading: () => undefined },
-      stubs: { CadTileViewer: true, ElButton: true, ElEmpty: true, ElPagination: true },
+      stubs: {
+        DocumentsPreviewTileViewer: true,
+        ElButton: true,
+        ElEmpty: true,
+        ElPagination: true,
+      },
     },
   });
 }
@@ -71,7 +76,7 @@ function dispatchCadWheelEvent(
   element.dispatchEvent(event);
 }
 
-describe('DocumentPreviewView', () => {
+describe('DocumentsPreviewView', () => {
   beforeEach(() => {
     api.fetchDocumentPreview.mockReset();
     api.fetchDocumentPreviewText.mockReset();
@@ -97,7 +102,7 @@ describe('DocumentPreviewView', () => {
     const wrapper = mountView();
     await flushPromises();
 
-    expect(wrapper.get('.preview-pdf').attributes('src')).toBe(
+    expect(wrapper.get('.documents-preview-pdf').attributes('src')).toBe(
       '/v1/documents/document-id/preview/content#page=7',
     );
     expect(api.listDocumentChunks).not.toHaveBeenCalled();
@@ -154,11 +159,13 @@ describe('DocumentPreviewView', () => {
       pageSize: 20,
     });
     expect(wrapper.text()).toContain('付款周期为 30 天');
-    expect(wrapper.get('.preview-toolbar').classes()).toContain('kb-status-toolbar');
-    expect(wrapper.get('.document-preview-page > .kb-block-content').classes()).toEqual(
+    expect(wrapper.get('.documents-preview-toolbar').classes()).toContain('kb-status-toolbar');
+    expect(wrapper.get('.documents-preview-page > .kb-block-content').classes()).toEqual(
       expect.arrayContaining(['kb-block-content', 'kb-block-content--gap']),
     );
-    expect(wrapper.get('.document-preview-page > .kb-block-content > .kb-block').classes()).toEqual(
+    expect(
+      wrapper.get('.documents-preview-page > .kb-block-content > .kb-block').classes(),
+    ).toEqual(
       expect.arrayContaining(['kb-block-content', 'kb-block-content--gap', 'kb-block-scroll']),
     );
     const paginationParent = wrapper.get('.kb-pagination').element.parentElement?.classList;
@@ -184,27 +191,25 @@ describe('DocumentPreviewView', () => {
     const wrapper = mountView();
     await flushPromises();
 
-    expect(wrapper.get('.preview-image').attributes('style')).toContain('width: 100%');
-    dispatchCadWheelEvent(wrapper.get('.preview-image-viewport').element, -1);
+    expect(wrapper.get('.documents-preview-image').attributes('style')).toContain('width: 100%');
+    dispatchCadWheelEvent(wrapper.get('.documents-preview-image-viewport').element, -1);
     await wrapper.vm.$nextTick();
-    expect(wrapper.get('.preview-image').attributes('style')).toContain('width: 125%');
+    expect(wrapper.get('.documents-preview-image').attributes('style')).toContain('width: 125%');
     await wrapper.get('[aria-label="重置 CAD 预览缩放"]').trigger('click');
     const zoomInButton = wrapper.get('[aria-label="放大 CAD 预览"]');
     await zoomInButton.trigger('click');
-    expect(wrapper.get('.preview-image').attributes('style')).toContain('width: 150%');
+    expect(wrapper.get('.documents-preview-image').attributes('style')).toContain('width: 150%');
     for (let step = 0; step < 21; step += 1) {
       await zoomInButton.trigger('click');
     }
-    expect(wrapper.get('.preview-image').attributes('style')).toContain('width: 409600%');
+    expect(wrapper.get('.documents-preview-image').attributes('style')).toContain('width: 409600%');
     expect(zoomInButton.attributes()).toHaveProperty('disabled');
     expect(wrapper.get('[aria-label="园区平面图.dxf CAD 鸟瞰图"]').text()).toContain('拖动定位');
-    expect(wrapper.get('[aria-label="园区平面图.dxf CAD 鸟瞰图"]').text()).not.toContain(
-      '鸟瞰图',
-    );
-    expect(wrapper.get('.preview-security-badge').attributes('title')).toBe(
+    expect(wrapper.get('[aria-label="园区平面图.dxf CAD 鸟瞰图"]').text()).not.toContain('鸟瞰图');
+    expect(wrapper.get('.documents-preview-security-badge').attributes('title')).toBe(
       '每次读取都会重新校验租户、部门与敏感度权限。',
     );
-    expect(wrapper.get('.preview-toolbar').text()).not.toContain(
+    expect(wrapper.get('.documents-preview-toolbar').text()).not.toContain(
       '每次读取都会重新校验租户、部门与敏感度权限。',
     );
   });
@@ -227,7 +232,7 @@ describe('DocumentPreviewView', () => {
     const wrapper = mountView();
     await flushPromises();
     await wrapper.get('[aria-label="放大 CAD 预览"]').trigger('click');
-    const viewport = wrapper.get('.preview-image-viewport');
+    const viewport = wrapper.get('.documents-preview-image-viewport');
     const setPointerCapture = vi.fn();
     const releasePointerCapture = vi.fn();
     Object.assign(viewport.element, {
@@ -284,8 +289,8 @@ describe('DocumentPreviewView', () => {
 
     const wrapper = mountView();
     await flushPromises();
-    const viewport = wrapper.get('.preview-image-viewport');
-    const image = wrapper.get<HTMLImageElement>('.preview-image');
+    const viewport = wrapper.get('.documents-preview-image-viewport');
+    const image = wrapper.get<HTMLImageElement>('.documents-preview-image');
     Object.defineProperties(viewport.element, {
       clientWidth: { configurable: true, get: () => 800 },
       clientHeight: { configurable: true, get: () => 600 },
@@ -331,8 +336,8 @@ describe('DocumentPreviewView', () => {
 
     const wrapper = mountView();
     await flushPromises();
-    const viewport = wrapper.get('.preview-image-viewport');
-    const image = wrapper.get<HTMLImageElement>('.preview-image');
+    const viewport = wrapper.get('.documents-preview-image-viewport');
+    const image = wrapper.get<HTMLImageElement>('.documents-preview-image');
     Object.defineProperties(viewport.element, {
       clientWidth: { configurable: true, get: () => 800 },
       clientHeight: { configurable: true, get: () => 600 },
@@ -390,7 +395,7 @@ describe('DocumentPreviewView', () => {
 
     const wrapper = mountView();
     await flushPromises();
-    const viewer = wrapper.getComponent({ name: 'CadTileViewer' });
+    const viewer = wrapper.getComponent({ name: 'DocumentsPreviewTileViewer' });
     expect(viewer.props('documentId')).toBe('document-id');
     expect(viewer.props('refreshOverviewOnDetail')).toBe(true);
     const zoomInButton = wrapper.get('[aria-label="放大 CAD 预览"]');

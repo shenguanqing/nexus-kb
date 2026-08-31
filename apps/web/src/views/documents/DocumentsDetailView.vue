@@ -1,21 +1,25 @@
 <template>
-  <section v-loading="loading" class="document-detail-page kb-page">
+  <section v-loading="loading" class="documents-detail-page kb-page">
     <div v-if="errorMessage" class="kb-error-state" role="alert">
       <strong class="kb-text kb-text--danger">无法加载文档详情</strong>
       <span>{{ errorMessage }}</span>
       <el-button @click="load">重试</el-button>
     </div>
     <template v-else-if="document">
-      <header class="detail-actions kb-block kb-status-toolbar">
-        <div class="detail-title kb-title-group">
-          <div class="kb-heading kb-heading--h4 kb-block__title" role="heading" aria-level="2">
+      <header class="documents-detail-actions kb-block kb-status-toolbar">
+        <div class="documents-detail-title kb-title-group">
+          <div
+            class="kb-block__title kb-heading kb-heading--h4"
+            role="heading"
+            aria-level="2"
+          >
             {{ document.sourceName }}
           </div>
           <span class="kb-text kb-text--secondary">{{ document.mimeType }}</span>
         </div>
         <el-button
           v-if="isMobile"
-          class="mobile-actions-trigger"
+          class="documents-detail-mobile-actions-trigger"
           text
           circle
           aria-label="打开文档操作面板"
@@ -23,7 +27,7 @@
         >
           <el-icon><MoreFilled /></el-icon>
         </el-button>
-        <div v-else class="detail-action-buttons kb-action-group">
+        <div v-else class="documents-detail-action-buttons kb-action-group">
           <RouterLink
             :to="{ path: `/documents/${document.id}/preview`, query: { from: route.fullPath } }"
           >
@@ -42,7 +46,7 @@
           </el-button>
           <el-button
             v-if="canDelete"
-            class="delete-document-button"
+            class="documents-detail-delete-document-button"
             type="danger"
             :loading="mutating"
             @click="requestRemoval"
@@ -52,8 +56,8 @@
         </div>
       </header>
 
-      <div class="detail-content kb-page__content">
-        <div class="kb-block-list detail-grid">
+      <div class="documents-detail-content kb-page__content">
+        <div class="documents-detail-grid kb-block-list">
           <article class="kb-block">
             <div class="kb-block__header">
               <div class="kb-block__title kb-heading kb-heading--h4">基本信息</div>
@@ -165,14 +169,19 @@
                 </span>
               </div>
             </div>
-            <div v-if="hasDwgConversion" class="conversion-note kb-data-field">
-              <div class="conversion-text kb-data-field__label kb-text--medium">格式转换说明</div>
-              <div class="conversion-text kb-data-field__value">
+            <div v-if="hasDwgConversion" class="documents-detail-conversion-note kb-data-field">
+              <div class="documents-detail-conversion-text kb-data-field__label kb-text--medium">
+                格式转换说明
+              </div>
+              <div class="documents-detail-conversion-text kb-data-field__value">
                 原始 DWG<span v-if="dwgSourceVersion">（版本 {{ dwgSourceVersion }}）</span>
                 已自动转换为 DXF 后解析入库
               </div>
             </div>
-            <div v-if="visibleIndexWarnings.length" class="index-warning-list kb-data-fields">
+            <div
+              v-if="visibleIndexWarnings.length"
+              class="documents-detail-index-warning-list kb-data-fields"
+            >
               <div
                 v-for="warning in visibleIndexWarnings"
                 :key="warning.code"
@@ -269,7 +278,7 @@
         <el-dialog
           v-if="!isMobile"
           v-model="metadataVisible"
-          class="metadata-dialog"
+          class="documents-detail-metadata-dialog"
           title="修改权限"
           width="min(480px, calc(100vw - 28px))"
           align-center
@@ -287,7 +296,7 @@
               </el-select>
             </el-form-item>
           </el-form>
-          <div class="upload-warning kb-text">
+          <div class="documents-detail-upload-warning kb-text">
             修改后会创建新版本并重建索引；旧向量在激活前仍受 PostgreSQL 最新 ACL 二次鉴权。
           </div>
           <template #footer>
@@ -301,7 +310,7 @@
         <el-drawer
           v-else
           v-model="metadataVisible"
-          class="metadata-drawer"
+          class="documents-detail-metadata-drawer"
           direction="btt"
           size="auto"
           title="修改权限"
@@ -319,7 +328,7 @@
               </el-select>
             </el-form-item>
           </el-form>
-          <div class="upload-warning kb-text">
+          <div class="documents-detail-upload-warning kb-text">
             修改后会创建新版本并重建索引；旧向量在激活前仍受 PostgreSQL 最新 ACL 二次鉴权。
           </div>
           <template #footer>
@@ -330,7 +339,7 @@
           </template>
         </el-drawer>
 
-        <DocumentDangerConfirm
+        <DocumentsDangerConfirm
           v-if="document && dangerAction"
           :model-value="true"
           :document-name="document.sourceName"
@@ -345,7 +354,7 @@
           "
           @confirm="confirmDangerAction"
         >
-        </DocumentDangerConfirm>
+        </DocumentsDangerConfirm>
 
         <article v-if="jobs.length" class="kb-block">
           <div class="kb-block__header">
@@ -376,25 +385,25 @@
         <el-drawer
           v-if="isMobile"
           v-model="mobileActionsVisible"
-          class="mobile-action-drawer"
+          class="documents-detail-mobile-action-drawer"
           direction="btt"
           size="auto"
           title="文档操作"
           append-to-body
         >
-          <div class="mobile-action-list">
+          <div class="documents-detail-mobile-action-list">
             <RouterLink
-              class="mobile-action-item"
+              class="documents-detail-mobile-action-item"
               :to="{ path: `/documents/${document.id}/preview`, query: { from: route.fullPath } }"
               @click="closeMobileActions"
             >
-              <el-icon class="mobile-action-icon"><View /></el-icon>
+              <el-icon class="documents-detail-mobile-action-icon"><View /></el-icon>
               <span>预览文档</span>
-              <span class="mobile-action-chevron" aria-hidden="true">›</span>
+              <span class="documents-detail-mobile-action-chevron" aria-hidden="true">›</span>
             </RouterLink>
             <div
               v-if="canWrite"
-              class="mobile-action-item"
+              class="documents-detail-mobile-action-item"
               :class="{ 'is-disabled': document.status !== 'active' }"
               role="button"
               :tabindex="document.status === 'active' ? 0 : -1"
@@ -403,13 +412,13 @@
               @keydown.enter="openMetadataFromMobile"
               @keydown.space.prevent="openMetadataFromMobile"
             >
-              <el-icon class="mobile-action-icon"><Lock /></el-icon>
+              <el-icon class="documents-detail-mobile-action-icon"><Lock /></el-icon>
               <span>修改权限</span>
-              <span class="mobile-action-chevron" aria-hidden="true">›</span>
+              <span class="documents-detail-mobile-action-chevron" aria-hidden="true">›</span>
             </div>
             <div
               v-if="canWrite"
-              class="mobile-action-item"
+              class="documents-detail-mobile-action-item"
               :class="{
                 'is-disabled': document.status !== 'active' && document.status !== 'prepared',
               }"
@@ -420,22 +429,22 @@
               @keydown.enter="requestReindexFromMobile"
               @keydown.space.prevent="requestReindexFromMobile"
             >
-              <el-icon class="mobile-action-icon"><Refresh /></el-icon>
+              <el-icon class="documents-detail-mobile-action-icon"><Refresh /></el-icon>
               <span>{{ document.status === 'prepared' ? '继续建立索引' : '重新索引' }}</span>
-              <span class="mobile-action-chevron" aria-hidden="true">›</span>
+              <span class="documents-detail-mobile-action-chevron" aria-hidden="true">›</span>
             </div>
             <div
               v-if="canDelete"
-              class="mobile-action-item mobile-action-item--danger"
+              class="documents-detail-mobile-action-item documents-detail-mobile-action-item--danger"
               role="button"
               tabindex="0"
               @click="requestRemovalFromMobile"
               @keydown.enter="requestRemovalFromMobile"
               @keydown.space.prevent="requestRemovalFromMobile"
             >
-              <el-icon class="mobile-action-icon"><Delete /></el-icon>
+              <el-icon class="documents-detail-mobile-action-icon"><Delete /></el-icon>
               <span>删除文档</span>
-              <span class="mobile-action-chevron" aria-hidden="true">›</span>
+              <span class="documents-detail-mobile-action-chevron" aria-hidden="true">›</span>
             </div>
           </div>
         </el-drawer>
@@ -460,8 +469,8 @@ import {
 import { listIngestionJobs } from '@/api/ingestion';
 import { useAuthStore } from '@/stores/auth';
 import { useBreakpoint } from '@/composables/useBreakpoint';
-import DocumentDangerConfirm from '@/components/documents/DocumentDangerConfirm.vue';
-import { ingestionWarningPresentation } from './ingestion-presentation';
+import DocumentsDangerConfirm from './DocumentsDangerConfirm.vue';
+import { ingestionWarningPresentation } from '@/views/ingestion-presentation';
 
 const route = useRoute();
 const router = useRouter();
@@ -658,65 +667,59 @@ onMounted(load);
 
 <style scoped>
 /* 顶部操作栏（标题 + 桌面按钮 / 移动端触发器） */
-.detail-actions {
+.documents-detail-actions {
   flex: 0 0 auto;
 }
-.detail-title {
+.documents-detail-title {
   overflow: hidden;
 }
-.mobile-actions-trigger {
+.documents-detail-mobile-actions-trigger {
   width: var(--kb-space-12);
   height: var(--kb-space-12);
   min-width: var(--kb-space-12);
   color: var(--kb-color-text-primary);
 }
-.detail-action-buttons {
+.documents-detail-action-buttons {
   justify-content: flex-end;
   gap: var(--kb-space-2);
   width: fit-content;
 }
-.delete-document-button {
+.documents-detail-delete-document-button {
   min-width: 96px;
 }
 
 /* 基本信息 / 索引信息 */
-.detail-grid {
+.documents-detail-grid {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
-.conversion-note {
+.documents-detail-conversion-note {
   gap: var(--kb-block-padding);
   margin-top: var(--kb-list-row-padding);
   padding: var(--kb-list-row-padding);
   border-radius: var(--kb-radius-md);
   background: var(--kb-color-nav-accent);
 }
-.conversion-text {
+.documents-detail-conversion-text {
   color: var(--kb-color-primary);
 }
-.conversion-label {
-  font-weight: bold;
-}
-.conversion-value {
-  text-align: right;
-}
-.index-warning-list {
+.documents-detail-index-warning-list {
   margin-top: var(--kb-list-row-padding);
   padding: var(--kb-list-row-padding);
   border-radius: var(--kb-radius-md);
   color: var(--kb-color-warning);
   background: var(--kb-color-warning-soft);
 }
-.index-warning-list .kb-data-field__label,
-.index-warning-list .kb-data-field__value {
+.documents-detail-index-warning-list .kb-data-field__label,
+.documents-detail-index-warning-list .kb-data-field__value {
   color: inherit;
 }
 
 /* 移动端底部操作面板 */
-.mobile-action-list {
+.documents-detail-mobile-action-list {
   display: grid;
   gap: var(--kb-layout-gap);
 }
-.mobile-action-item {
+.documents-detail-mobile-action-item {
   display: grid;
   align-items: center;
   gap: var(--kb-layout-gap);
@@ -737,27 +740,27 @@ onMounted(load);
     background-color 0.12s ease,
     transform 0.06s ease;
 }
-.mobile-action-item:active {
+.documents-detail-mobile-action-item:active {
   background: var(--kb-color-primary-soft);
   transform: scale(0.98);
 }
-.mobile-action-item.is-disabled {
+.documents-detail-mobile-action-item.is-disabled {
   opacity: var(--kb-opacity-disabled);
   cursor: not-allowed;
 }
-.mobile-action-item--danger {
+.documents-detail-mobile-action-item--danger {
   border-color: color-mix(in srgb, var(--kb-color-danger) 28%, var(--kb-color-border));
   color: var(--kb-color-danger);
   background: var(--kb-color-danger-soft);
 }
-.mobile-action-item--danger:active {
+.documents-detail-mobile-action-item--danger:active {
   background: color-mix(in srgb, var(--kb-color-danger) 14%, var(--kb-color-surface));
 }
-.mobile-action-icon {
+.documents-detail-mobile-action-icon {
   flex: 0 0 auto;
   font-size: 18px;
 }
-.mobile-action-chevron {
+.documents-detail-mobile-action-chevron {
   color: var(--kb-color-text-secondary);
   font-size: 21px;
   font-style: normal;
@@ -765,18 +768,18 @@ onMounted(load);
 
 /* 响应式：Mobile（<768px） */
 @media (max-width: 767px) {
-  .document-detail-page {
+  .documents-detail-page {
     overflow-y: auto;
   }
-  .detail-content {
+  .documents-detail-content {
     flex: none;
     overflow: visible;
     min-height: auto;
   }
-  .detail-actions {
+  .documents-detail-actions {
     align-items: flex-start;
   }
-  .detail-grid {
+  .documents-detail-grid {
     grid-template-columns: minmax(0, 1fr);
   }
 }

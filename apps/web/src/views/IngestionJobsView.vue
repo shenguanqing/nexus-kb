@@ -2,11 +2,11 @@
   <section class="kb-page">
     <form
       v-if="!isMobile"
-      class="task-toolbar"
+      class="ingestion-toolbar"
       aria-label="入库任务筛选"
       @submit.prevent="applyFilters"
     >
-      <label class="task-document-filter">
+      <label class="ingestion-document-filter">
         <span class="kb-visually-hidden">文档 ID</span>
         <el-input
           v-model="filters.documentId"
@@ -35,11 +35,11 @@
     </form>
     <form
       v-else
-      class="task-toolbar task-toolbar--mobile"
+      class="ingestion-toolbar ingestion-toolbar--mobile"
       aria-label="搜索入库任务"
       @submit.prevent="applyFilters"
     >
-      <label class="task-document-filter">
+      <label class="ingestion-document-filter">
         <span class="kb-visually-hidden">文档 ID</span>
         <el-input
           v-model="filters.documentId"
@@ -95,20 +95,20 @@
         <article
           v-for="job in items"
           :key="job.id"
-          class="task-card"
+          class="ingestion-card"
           :class="{ 'is-expanded': isExpanded(job) }"
         >
           <header
-            class="task-summary"
+            class="ingestion-summary"
             role="button"
             tabindex="0"
             :aria-expanded="isExpanded(job)"
-            :aria-controls="`task-details-${job.id}`"
+            :aria-controls="`ingestion-details-${job.id}`"
             @click="toggleExpanded(job)"
             @keydown.enter.prevent="toggleExpanded(job)"
             @keydown.space.prevent="toggleExpanded(job)"
           >
-            <div class="task-summary-title">
+            <div class="ingestion-summary-title">
               <RouterLink
                 v-slot="{ href, navigate }"
                 :to="{
@@ -133,16 +133,16 @@
                 v{{ job.version }} · {{ ingestionKindLabel(job.kind) }}
               </span>
             </div>
-            <div class="task-summary-meta">
+            <div class="ingestion-summary-meta">
               <div
-                class="task-progress-dots"
+                class="ingestion-progress-dots"
                 role="img"
                 :aria-label="`任务进度：${Math.min(activeStep(job) + 1, stepOrder.length)} / ${stepOrder.length}`"
               >
                 <span
                   v-for="index in progressDots"
                   :key="index"
-                  class="task-progress-dot"
+                  class="ingestion-progress-dot"
                   :class="`is-${progressDotState(job, index)}`"
                 >
                 </span>
@@ -151,7 +151,7 @@
                 {{ summaryStatusLabel(job) }}
               </el-tag>
               <el-icon
-                class="task-chevron"
+                class="ingestion-chevron"
                 :class="{ 'is-expanded': isExpanded(job) }"
                 aria-hidden="true"
               >
@@ -159,17 +159,17 @@
               </el-icon>
             </div>
           </header>
-          <div v-if="isExpanded(job)" :id="`task-details-${job.id}`" class="task-details">
+          <div v-if="isExpanded(job)" :id="`ingestion-details-${job.id}`" class="ingestion-details">
             <el-progress
               v-if="job.status === 'converting'"
-              class="task-progress"
+              class="ingestion-progress"
               :percentage="50"
               :indeterminate="true"
               :show-text="false"
             />
-            <div v-else class="task-steps-scroll" tabindex="0" aria-label="入库步骤">
+            <div v-else class="ingestion-steps-scroll" tabindex="0" aria-label="入库步骤">
               <el-steps
-                class="task-steps"
+                class="ingestion-steps"
                 :simple="!isMobile"
                 :direction="isMobile ? 'vertical' : 'horizontal'"
                 :active="activeStep(job)"
@@ -207,7 +207,7 @@
                 </span>
               </div>
             </div>
-            <div v-if="job.warnings.length" class="task-feedback task-warning">
+            <div v-if="job.warnings.length" class="ingestion-feedback ingestion-warning">
               <div class="kb-block__header">
                 <div class="kb-block__title kb-text kb-text--medium">处理说明</div>
               </div>
@@ -222,7 +222,7 @@
                 </div>
               </div>
             </div>
-            <div v-if="job.errorCode" class="task-feedback task-error">
+            <div v-if="job.errorCode" class="ingestion-feedback ingestion-error">
               <div class="kb-block__header">
                 <div class="kb-block__title kb-text kb-text--medium">失败说明</div>
               </div>
@@ -244,7 +244,7 @@
               </div>
               <div
                 v-if="canRetry && job.status === 'failed' && job.retryable"
-                class="task-feedback__actions"
+                class="ingestion-feedback__actions"
               >
                 <el-button type="danger" plain :loading="retryingId === job.id" @click="retry(job)">
                   重试任务
@@ -484,30 +484,30 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
-.task-toolbar {
+.ingestion-toolbar {
   display: grid;
   align-items: start;
   gap: var(--kb-space-2);
   grid-template-columns: minmax(0, 1fr) minmax(160px, 0.6fr) auto;
 }
-.task-document-filter {
+.ingestion-document-filter {
   display: grid;
   gap: var(--kb-space-1);
   min-width: 0;
 }
-.task-progress {
+.ingestion-progress {
   margin: var(--kb-space-4) 0 0;
   padding: var(--kb-block-padding);
 }
-.task-card,
-.task-summary,
-.task-details {
+.ingestion-card,
+.ingestion-summary,
+.ingestion-details {
   min-width: 0;
 }
-.task-card + .task-card {
+.ingestion-card + .ingestion-card {
   border-top: 1px solid var(--kb-color-border);
 }
-.task-summary {
+.ingestion-summary {
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -516,14 +516,14 @@ onUnmounted(() => {
   padding: var(--kb-block-padding);
   cursor: pointer;
 }
-.task-summary:hover {
+.ingestion-summary:hover {
   background: var(--kb-color-primary-soft);
 }
-.task-summary:focus-visible {
+.ingestion-summary:focus-visible {
   outline: 2px solid var(--kb-color-primary);
   outline-offset: -2px;
 }
-.task-summary-title {
+.ingestion-summary-title {
   display: flex;
   flex: 1 1 auto;
   flex-direction: column;
@@ -531,45 +531,45 @@ onUnmounted(() => {
   overflow: hidden;
   min-width: 0;
 }
-.task-summary-meta {
+.ingestion-summary-meta {
   display: flex;
   flex: 0 0 auto;
   align-items: center;
   gap: var(--kb-layout-gap);
 }
-.task-progress-dots {
+.ingestion-progress-dots {
   display: flex;
   align-items: center;
   gap: var(--kb-space-1);
 }
-.task-progress-dot {
+.ingestion-progress-dot {
   width: var(--kb-space-2);
   height: var(--kb-space-2);
   border-radius: 50%;
   background: var(--kb-color-border);
 }
-.task-progress-dot.is-complete {
+.ingestion-progress-dot.is-complete {
   background: var(--kb-color-success);
 }
-.task-progress-dot.is-current {
+.ingestion-progress-dot.is-current {
   background: var(--kb-color-primary);
 }
-.task-progress-dot.is-error {
+.ingestion-progress-dot.is-error {
   background: var(--kb-color-danger);
 }
-.task-chevron {
+.ingestion-chevron {
   color: var(--kb-color-text-secondary);
   transition: transform 0.18s ease;
 }
-.task-chevron.is-expanded {
+.ingestion-chevron.is-expanded {
   transform: rotate(180deg);
 }
-.task-details {
+.ingestion-details {
   display: grid;
   gap: var(--kb-layout-gap);
   padding: var(--kb-block-padding);
 }
-.task-steps-scroll {
+.ingestion-steps-scroll {
   overflow-x: auto;
   min-width: 0;
   border-radius: var(--kb-radius-sm);
@@ -577,63 +577,63 @@ onUnmounted(() => {
   overscroll-behavior-x: contain;
   scrollbar-gutter: stable;
 }
-.task-steps {
+.ingestion-steps {
   margin: 0;
   padding: var(--kb-block-padding);
   border-radius: var(--kb-radius-lg);
   background: transparent;
 }
-.task-feedback {
+.ingestion-feedback {
   display: grid;
   gap: var(--kb-space-2);
   padding: var(--kb-block-padding);
   border-radius: var(--kb-radius-lg);
 }
-.task-warning {
+.ingestion-warning {
   color: var(--kb-color-warning);
   background: var(--kb-color-warning-soft);
 }
-.task-feedback > .kb-block__header {
+.ingestion-feedback > .kb-block__header {
   margin-bottom: 0;
 }
-.task-feedback .kb-block__title,
-.task-feedback .kb-data-field__label,
-.task-feedback .kb-data-field__value {
+.ingestion-feedback .kb-block__title,
+.ingestion-feedback .kb-data-field__label,
+.ingestion-feedback .kb-data-field__value {
   color: inherit;
 }
-.task-feedback__actions {
+.ingestion-feedback__actions {
   display: flex;
   justify-content: flex-end;
 }
-.task-error {
+.ingestion-error {
   color: var(--kb-color-danger);
   background: var(--kb-color-danger-soft);
 }
 /* 响应式：Pad（768px–1279px） */
 @media (min-width: 768px) and (max-width: 1279px) {
-  .task-card .task-steps {
+  .ingestion-card .ingestion-steps {
     width: max-content;
     min-width: 100%;
   }
 }
 /* 响应式：Mobile（<768px） */
 @media (max-width: 767px) {
-  .task-toolbar--mobile {
+  .ingestion-toolbar--mobile {
     grid-template-columns: minmax(0, 1fr) auto;
   }
-  .task-summary-meta {
+  .ingestion-summary-meta {
     gap: var(--kb-space-2);
   }
-  .task-progress-dots {
+  .ingestion-progress-dots {
     display: none;
   }
-  .task-steps-scroll {
+  .ingestion-steps-scroll {
     overflow: visible;
     margin: 0;
     background: transparent;
     scrollbar-gutter: auto;
   }
-  .task-steps {
+  .ingestion-steps {
     min-width: 0;
     padding: var(--kb-space-2) 0;
   }

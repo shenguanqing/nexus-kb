@@ -46,12 +46,16 @@
           <article
             v-for="component in result.components"
             :key="component.id"
-            class="component-card kb-block"
+            class="system-component-card kb-block"
           >
-            <span class="component-status" :class="`is-${component.status}`" aria-hidden="true">
+            <span
+              class="system-component-status"
+              :class="`is-${component.status}`"
+              aria-hidden="true"
+            >
             </span>
             <div class="kb-data-grid__item">
-              <div class="kb-heading kb-heading--h5" role="heading" aria-level="2">
+              <div class="kb-heading kb-heading--h2" role="heading" aria-level="2">
                 {{ systemComponentLabels[component.id] }}
               </div>
               <span class="kb-text kb-text--secondary">
@@ -137,13 +141,13 @@ onMounted(load);
 </script>
 
 <style scoped>
-.component-card {
+.system-component-card {
   display: grid;
   align-items: center;
   gap: var(--kb-layout-gap);
   grid-template-columns: auto minmax(0, 1fr);
 }
-.component-status {
+.system-component-status {
   flex: 0 0 auto;
   width: 10px;
   height: 10px;
@@ -151,7 +155,7 @@ onMounted(load);
   background: var(--kb-color-danger);
   box-shadow: 0 0 0 var(--kb-space-1) color-mix(in srgb, var(--kb-color-danger) 10%, transparent);
 }
-.component-status.is-up {
+.system-component-status.is-up {
   background: var(--kb-color-success);
   box-shadow: 0 0 0 var(--kb-space-1) color-mix(in srgb, var(--kb-color-success) 10%, transparent);
 }

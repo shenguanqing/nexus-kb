@@ -7,7 +7,14 @@ import { defineConfig } from 'vitest/config';
 export default defineConfig(({ mode }) => ({
   plugins: [
     vue(),
-    ...(mode === 'test' ? [] : [Components({ resolvers: [ElementPlusResolver()], dts: false })]),
+    ...(mode === 'test'
+      ? []
+      : [
+          Components({
+            resolvers: [ElementPlusResolver({ importStyle: false })],
+            dts: false,
+          }),
+        ]),
   ],
   resolve: {
     alias: {
@@ -16,6 +23,9 @@ export default defineConfig(({ mode }) => ({
         new URL('../../packages/contracts/src/index.ts', import.meta.url),
       ),
     },
+  },
+  optimizeDeps: {
+    include: ['@element-plus/icons-vue', 'element-plus/es'],
   },
   server: {
     host: '127.0.0.1',

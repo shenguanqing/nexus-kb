@@ -1,14 +1,14 @@
 <template>
-  <aside class="cad-overview-map" :aria-label="`${sourceName} CAD 鸟瞰图`">
-    <div class="cad-overview-map__title">
-      <span class="cad-overview-map__identity">
-        <span class="cad-overview-map__hint">拖动定位</span>
+  <aside class="documents-overview-map" :aria-label="`${sourceName} CAD 鸟瞰图`">
+    <div class="documents-overview-map__title">
+      <span class="documents-overview-map__identity">
+        <span class="documents-overview-map__hint">拖动定位</span>
       </span>
-      <span v-if="hasFocusOverview" class="cad-overview-map__modes" aria-label="鸟瞰图范围">
+      <span v-if="hasFocusOverview" class="documents-overview-map__modes" aria-label="鸟瞰图范围">
         <el-button
           text
           size="small"
-          class="cad-overview-map__mode"
+          class="documents-overview-map__mode"
           :class="{ 'is-active': mode === 'focus' }"
           :aria-pressed="mode === 'focus'"
           @click="setMode('focus')"
@@ -18,7 +18,7 @@
         <el-button
           text
           size="small"
-          class="cad-overview-map__mode"
+          class="documents-overview-map__mode"
           :class="{ 'is-active': mode === 'full' }"
           :aria-pressed="mode === 'full'"
           @click="setMode('full')"
@@ -30,7 +30,7 @@
     <button
       ref="surface"
       type="button"
-      class="cad-overview-map__surface"
+      class="documents-overview-map__surface"
       :style="surfaceStyle"
       aria-label="在鸟瞰图中点击或拖动以定位当前视图"
       @click="handleClick"
@@ -51,13 +51,13 @@
       />
       <span
         v-if="mode === 'full' && focusMarkerStyle"
-        class="cad-overview-map__focus"
+        class="documents-overview-map__focus"
         :style="focusMarkerStyle"
         aria-hidden="true"
       >
       </span>
-      <span class="cad-overview-map__viewport" :style="viewportStyle" aria-hidden="true">
-        <span class="cad-overview-map__center"></span>
+      <span class="documents-overview-map__viewport" :style="viewportStyle" aria-hidden="true">
+        <span class="documents-overview-map__center"></span>
       </span>
     </button>
   </aside>
@@ -66,7 +66,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
 
-import type { CadOverviewViewport } from './cad-overview';
+import type { CadOverviewViewport } from '@/utils/cad-overview';
 
 const props = withDefaults(
   defineProps<{
@@ -242,7 +242,7 @@ function handleKeydown(event: KeyboardEvent): void {
 </script>
 
 <style scoped>
-.cad-overview-map {
+.documents-overview-map {
   position: absolute;
   top: var(--kb-space-element);
   right: var(--kb-space-element);
@@ -254,7 +254,7 @@ function handleKeydown(event: KeyboardEvent): void {
   background: rgb(20 25 31 / 92%);
   box-shadow: var(--kb-shadow-sm);
 }
-.cad-overview-map__title {
+.documents-overview-map__title {
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -264,24 +264,24 @@ function handleKeydown(event: KeyboardEvent): void {
   font-size: 12px;
   line-height: 20px;
 }
-.cad-overview-map__identity {
+.documents-overview-map__identity {
   display: flex;
   flex: 0 0 auto;
   flex-direction: column;
   line-height: 16px;
 }
-.cad-overview-map__hint {
+.documents-overview-map__hint {
   color: rgb(255 255 255 / 68%);
   font-size: 11px;
   white-space: nowrap;
 }
-.cad-overview-map__modes {
+.documents-overview-map__modes {
   display: flex;
   flex: 0 0 auto;
   align-items: center;
   gap: var(--kb-space-1);
 }
-.cad-overview-map__mode {
+.documents-overview-map__mode {
   --el-button-bg-color: transparent;
   --el-button-text-color: rgb(255 255 255 / 68%);
   --el-button-hover-bg-color: rgb(255 255 255 / 10%);
@@ -291,22 +291,25 @@ function handleKeydown(event: KeyboardEvent): void {
   --el-button-size: fit-content;
   padding-inline: var(--kb-space-2);
 }
-.cad-overview-map__mode.is-active {
+.documents-overview-map__mode.is-active {
   --el-button-bg-color: rgb(255 255 255 / 16%);
   --el-button-text-color: #fff;
   --el-button-hover-bg-color: rgb(255 255 255 / 16%);
 }
-.cad-overview-map__modes .cad-overview-map__mode.el-button.is-text:not(.is-disabled) {
+.documents-overview-map__modes .documents-overview-map__mode.el-button.is-text:not(.is-disabled) {
   color: rgb(255 255 255 / 68%);
   background-color: transparent;
 }
-.cad-overview-map__modes .cad-overview-map__mode.el-button.is-text:not(.is-disabled):hover,
-.cad-overview-map__modes .cad-overview-map__mode.el-button.is-text:not(.is-disabled):focus,
-.cad-overview-map__modes .cad-overview-map__mode.el-button.is-text:not(.is-disabled).is-active {
+.documents-overview-map__modes
+  .documents-overview-map__mode.el-button.is-text:not(.is-disabled):hover,
+.documents-overview-map__modes
+  .documents-overview-map__mode.el-button.is-text:not(.is-disabled):focus,
+.documents-overview-map__modes
+  .documents-overview-map__mode.el-button.is-text:not(.is-disabled).is-active {
   color: #fff;
   background-color: rgb(255 255 255 / 16%);
 }
-.cad-overview-map__surface {
+.documents-overview-map__surface {
   position: relative;
   display: block;
   overflow: hidden;
@@ -319,13 +322,13 @@ function handleKeydown(event: KeyboardEvent): void {
   cursor: crosshair;
   touch-action: none;
 }
-.cad-overview-map__surface img {
+.documents-overview-map__surface img {
   display: block;
   width: 100%;
   height: 100%;
   pointer-events: none;
 }
-.cad-overview-map__viewport {
+.documents-overview-map__viewport {
   position: absolute;
   top: 0;
   left: 0;
@@ -335,7 +338,7 @@ function handleKeydown(event: KeyboardEvent): void {
   box-shadow: 0 0 0 1px rgb(0 0 0 / 55%);
   pointer-events: none;
 }
-.cad-overview-map__focus {
+.documents-overview-map__focus {
   position: absolute;
   top: 0;
   left: 0;
@@ -345,7 +348,7 @@ function handleKeydown(event: KeyboardEvent): void {
   box-shadow: 0 0 0 1px rgb(0 0 0 / 55%);
   pointer-events: none;
 }
-.cad-overview-map__center {
+.documents-overview-map__center {
   position: absolute;
   top: 50%;
   left: 50%;
@@ -359,10 +362,10 @@ function handleKeydown(event: KeyboardEvent): void {
 }
 
 @media (max-width: 767px) {
-  .cad-overview-map {
+  .documents-overview-map {
     width: 180px;
   }
-  .cad-overview-map__surface {
+  .documents-overview-map__surface {
     min-height: 64px;
   }
 }

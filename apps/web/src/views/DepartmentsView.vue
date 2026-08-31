@@ -15,7 +15,7 @@
         aria-label="部门列表"
       >
         <div class="department-panel__header">
-          <span class="kb-heading kb-heading--h5" role="heading" aria-level="2">部门列表 </span>
+          <span class="kb-heading kb-heading--h2" role="heading" aria-level="2">部门列表 </span>
           <span
             class="department-panel__count kb-text kb-text--sm kb-text--secondary kb-text--medium"
           >
@@ -44,7 +44,7 @@
       </nav>
       <article v-if="selected && !isMobile" class="department-policy kb-block kb-block--flush">
         <div class="department-panel__header">
-          <span class="kb-heading kb-heading--h5" role="heading" aria-level="2">
+          <span class="kb-heading kb-heading--h4" role="heading" aria-level="2">
             {{ selected.department }} 权限
           </span>
         </div>
@@ -54,7 +54,7 @@
           </div>
           <el-checkbox-group
             v-model="sensitivities"
-            class="policy-sensitivity-group"
+            class="department-policy-sensitivity-group"
             :disabled="!canWrite"
           >
             <el-checkbox value="public">公开</el-checkbox>
@@ -94,10 +94,10 @@
           <div class="kb-text kb-text--secondary">
             该策略只能收紧身份源声明的敏感度，不能扩大用户权限。
           </div>
-          <div class="mobile-inline-editor">
+          <div class="department-mobile-inline-editor">
             <el-checkbox-group
               v-model="sensitivities"
-              class="policy-sensitivity-group"
+              class="department-policy-sensitivity-group"
               :disabled="!canWrite || saving"
             >
               <el-checkbox value="public">公开</el-checkbox>
@@ -251,7 +251,7 @@ onMounted(load);
 }
 
 /* 敏感度选择：普通 checkbox，横向排列 */
-.policy-sensitivity-group {
+.department-policy-sensitivity-group {
   display: flex;
   flex-wrap: wrap;
   gap: var(--kb-space-2) var(--kb-space-4);
@@ -262,7 +262,7 @@ onMounted(load);
   padding-top: var(--kb-block-padding);
 }
 
-.mobile-inline-editor {
+.department-mobile-inline-editor {
   display: grid;
   gap: var(--kb-layout-gap);
   margin-top: var(--kb-space-element);

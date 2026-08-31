@@ -1,5 +1,5 @@
 <template>
-  <section ref="previewPage" v-loading="loading" class="document-preview-page kb-page">
+  <section ref="previewPage" v-loading="loading" class="documents-preview-page kb-page">
     <div v-if="errorMessage" class="kb-error-state" role="alert">
       <strong class="kb-text kb-text--danger">无法加载文档预览</strong>
       <span>{{ errorMessage }}</span>
@@ -7,11 +7,11 @@
     </div>
 
     <template v-else-if="preview">
-      <header class="preview-toolbar kb-block kb-status-toolbar">
-        <div class="preview-toolbar__identity kb-title-group">
+      <header class="documents-preview-toolbar kb-block kb-status-toolbar">
+        <div class="documents-preview-toolbar__identity kb-title-group">
           <div class="kb-block__title kb-heading kb-heading--h4">{{ preview.sourceName }}</div>
           <span
-            class="preview-security-badge kb-text kb-text--xs kb-text--success"
+            class="documents-preview-security-badge kb-text kb-text--xs kb-text--success"
             title="每次读取都会重新校验租户、部门与敏感度权限。"
             aria-label="实时权限校验：每次读取都会重新校验租户、部门与敏感度权限。"
           >
@@ -19,19 +19,23 @@
           </span>
         </div>
         <div
-          class="preview-toolbar__actions kb-action-group"
+          class="documents-preview-toolbar__actions kb-action-group"
           :class="{ 'is-cad': isCadPreview, 'has-location': sourcePage || sourceSheet }"
         >
           <div
             v-if="sourcePage || sourceSheet"
-            class="preview-location kb-text"
+            class="documents-preview-location kb-text"
             aria-label="引用位置"
           >
             <span class="kb-text kb-text--xs kb-text--secondary">引用位置 </span>
             <strong v-if="sourcePage">第 {{ sourcePage }} 页 </strong>
             <strong v-if="sourceSheet">工作表 {{ sourceSheet }} </strong>
           </div>
-          <div v-if="isCadPreview" class="preview-zoom-controls" aria-label="CAD 预览缩放">
+          <div
+            v-if="isCadPreview"
+            class="documents-preview-zoom-controls"
+            aria-label="CAD 预览缩放"
+          >
             <el-button
               size="small"
               aria-label="缩小 CAD 预览"
@@ -53,7 +57,7 @@
             </el-button>
           </div>
           <el-button
-            class="preview-fullscreen-action"
+            class="documents-preview-fullscreen-action"
             size="small"
             :disabled="!canFullscreen"
             :aria-label="isFullscreen ? '退出全屏预览' : '全屏预览'"
@@ -64,7 +68,7 @@
         </div>
         <span
           v-if="interactionMessage"
-          class="preview-control-error kb-text kb-text--sm kb-text--danger"
+          class="documents-preview-control-error kb-text kb-text--sm kb-text--danger"
           role="status"
         >
           {{ interactionMessage }}
@@ -74,12 +78,12 @@
       <div v-if="preview.status === 'ready'" class="kb-page__content kb-block kb-block--flush">
         <iframe
           v-if="preview.kind === 'pdf'"
-          class="preview-pdf"
+          class="documents-preview-pdf"
           :src="pdfUrl"
           :title="`${preview.sourceName} PDF 预览`"
         >
         </iframe>
-        <CadTileViewer
+        <DocumentsPreviewTileViewer
           v-if="preview.kind === 'cad_tiles' && preview.cad"
           ref="cadTileViewer"
           :document-id="documentId"
@@ -91,11 +95,11 @@
         />
         <div
           v-else-if="preview.kind === 'image' || preview.kind === 'svg'"
-          class="preview-image-stage"
+          class="documents-preview-image-stage"
         >
           <div
             ref="cadViewport"
-            class="preview-image-viewport"
+            class="documents-preview-image-viewport"
             :class="{
               'is-zoomable': preview.kind === 'svg',
               'is-pannable': canPanCad,
@@ -112,7 +116,7 @@
           >
             <img
               ref="cadImage"
-              class="preview-image"
+              class="documents-preview-image"
               draggable="false"
               :style="preview.kind === 'svg' ? cadImageStyle : undefined"
               :src="contentUrl"
@@ -120,7 +124,7 @@
               @load="syncSvgOverviewViewport"
             />
           </div>
-          <CadOverviewMap
+          <DocumentsPreviewOverviewMap
             v-if="preview.kind === 'svg'"
             :source="contentUrl"
             :source-name="preview.sourceName"
@@ -131,15 +135,17 @@
         </div>
         <SafeMarkdown
           v-else-if="preview.kind === 'markdown'"
-          class="preview-text preview-markdown"
+          class="documents-preview-text documents-preview-markdown"
           :content="textContent"
         />
-        <pre v-else-if="preview.kind === 'text'" class="preview-text">{{ textContent }}</pre>
+        <pre v-else-if="preview.kind === 'text'" class="documents-preview-text">{{
+          textContent
+        }}</pre>
       </div>
 
       <div v-else-if="preview.status === 'fallback'" class="kb-block-content kb-block-content--gap">
         <div class="kb-block kb-block-content kb-block-content--gap kb-block-scroll">
-          <div class="preview-fallback__notice kb-block kb-text kb-text--warning">
+          <div class="documents-preview-fallback__notice kb-block kb-text kb-text--warning">
             <strong>原格式预览暂不可用</strong>
             <div class="kb-text kb-text--secondary">
               已降级显示经解析的原始文本，版式可能与源文件不同。
@@ -151,11 +157,13 @@
                 <strong>
                   {{ chunk.sectionPath.join(' / ') || `分块 ${chunk.ordinal + 1}` }}
                 </strong>
-                <span class="preview-chunk__location kb-text kb-text--sm kb-text--secondary">
+                <span
+                  class="documents-preview-chunk__location kb-text kb-text--sm kb-text--secondary"
+                >
                   {{ chunkLocation(chunk) }}
                 </span>
               </header>
-              <pre class="preview-chunk__content">{{ chunk.originalText }}</pre>
+              <pre class="documents-preview-chunk__content">{{ chunk.originalText }}</pre>
             </article>
           </div>
           <el-empty v-else description="当前版本没有可显示的解析文本" />
@@ -189,9 +197,9 @@ import {
   listDocumentChunks,
 } from '@/api/documents';
 import SafeMarkdown from '@/components/common/SafeMarkdown.vue';
-import type { CadOverviewViewport } from '@/components/documents/cad-overview';
-import CadOverviewMap from '@/components/documents/CadOverviewMap.vue';
-import CadTileViewer from '@/components/documents/CadTileViewer.vue';
+import type { CadOverviewViewport } from '@/utils/cad-overview';
+import DocumentsPreviewOverviewMap from './DocumentsPreviewOverviewMap.vue';
+import DocumentsPreviewTileViewer from './DocumentsPreviewTileViewer.vue';
 import { useBreakpoint } from '@/composables/useBreakpoint';
 
 const fallbackPageSize = 20;
@@ -202,7 +210,7 @@ const preview = ref<DocumentPreview | null>(null);
 const previewPage = ref<HTMLElement | null>(null);
 const cadViewport = ref<HTMLElement | null>(null);
 const cadImage = ref<HTMLImageElement | null>(null);
-const cadTileViewer = ref<InstanceType<typeof CadTileViewer> | null>(null);
+const cadTileViewer = ref<InstanceType<typeof DocumentsPreviewTileViewer> | null>(null);
 const textContent = ref('');
 const chunks = ref<DocumentChunkListResponse | null>(null);
 const loading = ref(false);
@@ -471,42 +479,42 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
-.document-preview-page:fullscreen {
+.documents-preview-page:fullscreen {
   max-width: none;
   padding: var(--kb-block-padding);
   background: var(--kb-color-surface);
 }
-.preview-toolbar {
+.documents-preview-toolbar {
   position: relative;
 }
-.preview-toolbar__identity {
+.documents-preview-toolbar__identity {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
   gap: var(--kb-space-2);
 }
-.preview-security-badge {
+.documents-preview-security-badge {
   flex: 0 0 auto;
   padding: var(--kb-space-1) var(--kb-space-2);
   border-radius: var(--kb-radius-pill);
   background: var(--kb-color-success-soft);
   white-space: nowrap;
 }
-.preview-toolbar__actions {
+.documents-preview-toolbar__actions {
   gap: var(--kb-space-2);
 }
-.preview-zoom-controls {
+.documents-preview-zoom-controls {
   display: flex;
   align-items: center;
   gap: var(--kb-space-2);
 }
-.preview-control-error {
+.documents-preview-control-error {
   position: absolute;
   right: var(--kb-block-padding);
   bottom: -18px;
   z-index: 1;
 }
-.preview-location {
+.documents-preview-location {
   display: flex;
   flex: 0 0 auto;
   align-items: center;
@@ -517,21 +525,21 @@ onBeforeUnmount(() => {
   background: var(--kb-color-primary-soft);
   font-size: 13px;
 }
-.preview-pdf {
+.documents-preview-pdf {
   width: 100%;
   height: 100%;
   min-height: 640px;
   border: 0;
   background: var(--kb-color-canvas);
 }
-.preview-image-stage {
+.documents-preview-image-stage {
   position: relative;
   width: 100%;
   height: 100%;
   min-width: 0;
   min-height: 0;
 }
-.preview-image-viewport {
+.documents-preview-image-viewport {
   display: grid;
   place-items: center;
   overflow: auto;
@@ -540,30 +548,30 @@ onBeforeUnmount(() => {
   min-width: 0;
   min-height: 0;
 }
-.preview-image-viewport.is-zoomable {
+.documents-preview-image-viewport.is-zoomable {
   display: block;
 }
-.preview-image-viewport.is-pannable {
+.documents-preview-image-viewport.is-pannable {
   cursor: grab;
 }
-.preview-image-viewport.is-dragging {
+.documents-preview-image-viewport.is-dragging {
   cursor: grabbing;
   user-select: none;
 }
-.preview-image {
+.documents-preview-image {
   display: block;
   max-width: 100%;
   max-height: 100%;
   margin: auto;
   object-fit: contain;
 }
-.preview-image-viewport.is-zoomable .preview-image {
+.documents-preview-image-viewport.is-zoomable .documents-preview-image {
   max-width: none;
   max-height: none;
   margin: 0 auto;
   object-fit: initial;
 }
-.preview-text {
+.documents-preview-text {
   overflow: auto;
   overflow-wrap: anywhere;
   min-height: 100%;
@@ -578,19 +586,19 @@ onBeforeUnmount(() => {
     monospace;
   white-space: pre-wrap;
 }
-.preview-markdown {
+.documents-preview-markdown {
   font-family: inherit;
   white-space: normal;
 }
-.preview-fallback__notice {
+.documents-preview-fallback__notice {
   display: grid;
   gap: var(--kb-space-1);
   background: var(--kb-color-warning-soft);
 }
-.preview-chunk__location {
+.documents-preview-chunk__location {
   flex: 0 0 auto;
 }
-.preview-chunk__content {
+.documents-preview-chunk__content {
   overflow-wrap: anywhere;
   margin: 0;
   color: var(--kb-color-text-primary);
@@ -603,55 +611,55 @@ onBeforeUnmount(() => {
 }
 /* 响应式：Mobile（<768px） */
 @media (max-width: 767px) {
-  .preview-toolbar {
+  .documents-preview-toolbar {
     display: block;
   }
-  .preview-toolbar__identity {
+  .documents-preview-toolbar__identity {
     width: 100%;
     padding-right: calc(var(--kb-control-height) + var(--kb-space-8));
   }
-  .preview-toolbar__identity .kb-block__title {
+  .documents-preview-toolbar__identity .kb-block__title {
     width: 100%;
     line-height: var(--kb-line-height-body);
   }
-  .preview-toolbar__actions {
+  .documents-preview-toolbar__actions {
     display: grid;
     gap: var(--kb-space-2);
     grid-template-columns: minmax(0, 1fr);
     width: 100%;
   }
-  .preview-toolbar__actions.is-cad,
-  .preview-toolbar__actions.has-location {
+  .documents-preview-toolbar__actions.is-cad,
+  .documents-preview-toolbar__actions.has-location {
     margin-top: var(--kb-block-padding);
   }
-  .preview-toolbar__actions .preview-location {
+  .documents-preview-toolbar__actions .documents-preview-location {
     width: 100%;
   }
-  .preview-toolbar__actions.is-cad .preview-zoom-controls {
+  .documents-preview-toolbar__actions.is-cad .documents-preview-zoom-controls {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
     width: 100%;
   }
-  .preview-toolbar__actions.is-cad .preview-zoom-controls .el-button {
+  .documents-preview-toolbar__actions.is-cad .documents-preview-zoom-controls .el-button {
     overflow: hidden;
     width: 100%;
     min-width: 0;
     padding-inline: var(--kb-space-2);
   }
-  .preview-fullscreen-action {
+  .documents-preview-fullscreen-action {
     position: absolute;
     top: var(--kb-block-padding);
     right: var(--kb-block-padding);
     width: auto;
   }
-  .preview-control-error {
+  .documents-preview-control-error {
     position: static;
     grid-column: 1 / -1;
   }
-  .preview-location {
+  .documents-preview-location {
     flex-wrap: wrap;
   }
-  .preview-pdf {
+  .documents-preview-pdf {
     min-height: 65vh;
   }
 }

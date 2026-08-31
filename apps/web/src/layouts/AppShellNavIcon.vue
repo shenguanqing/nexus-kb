@@ -1,6 +1,6 @@
 <template>
   <svg
-    class="nav-icon"
+    class="app-shell-nav-icon"
     viewBox="0 0 24 24"
     fill="none"
     stroke="currentColor"
@@ -84,7 +84,7 @@ defineProps<{ name: NavIconName }>();
 </script>
 
 <style scoped>
-.nav-icon {
+.app-shell-nav-icon {
   display: block;
   width: 1em;
   height: 1em;

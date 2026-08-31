@@ -28,9 +28,7 @@ apps/web/
 ├── src/
 │   ├── api/                 # 按业务域封装 API 调用和运行时校验
 │   ├── components/
-│   │   ├── common/          # 通用、安全渲染组件
-│   │   ├── documents/       # 文档列表、预览和 CAD 查看器
-│   │   └── knowledge/       # 提问、回答、历史回答和来源抽屉
+│   │   └── common/          # 跨功能复用的通用、安全渲染组件
 │   ├── composables/         # useBreakpoint 等复用逻辑
 │   ├── layouts/             # 应用壳层与全局导航
 │   ├── router/              # 路由、权限体验和安全返回导航
@@ -38,7 +36,7 @@ apps/web/
 │   ├── styles/              # 设计 token、全局样式和唯一断点
 │   ├── test/                # Vitest 公共测试环境
 │   ├── utils/               # Markdown 等纯工具函数
-│   ├── views/               # 路由页面与展示层数据整理
+│   ├── views/               # 路由页面、功能私有子组件与展示层数据整理
 │   ├── App.vue
 │   └── main.ts
 ├── e2e/                     # Playwright 完整流程和响应式回归
@@ -51,13 +49,17 @@ apps/web/
 
 同目录的 `*.test.ts` 是对应模块的单元或组件测试；展示层数据整理通常放在 `*-presentation.ts`，避免把复杂转换散落在 Vue 模板中。
 
+`src/components/` 只放跨功能复用的 Vue 公共组件；当前公共组件置于 `common/`，文件名使用与导出组件一致的 PascalCase。一级导航页面直接放在 `views/` 根目录；文档详情、预览和分块等功能二级路由页面，以及只服务于某个页面的子 Vue，可以放入 `views/<feature>/`。页面私有子组件以所属页面名开头，例如 `DocumentsPreviewTileViewer.vue`，其测试文件同样使用完整组件名。由同一功能域的多个页面共享、但不跨功能复用的子组件使用功能域前缀。类型、纯函数和其他实现细节放入 `utils/`、`composables/` 或所属功能目录。
+
+页面 scoped 样式中的页面独有 class 使用文件名语义前缀：`AuditView.vue` 使用 `audit-*`，`ProviderSettingsView.vue` 使用 `provider-*`。`kb-*`、`el-*` 和子组件自身封装的 class 保持各自命名空间，不用页面前缀重写。
+
 ## 页面范围
 
 主要页面位于 `src/views`：
 
 - `KnowledgeAskView`：知识问答、严格/通用回答模式和来源。
 - `HistoryView`：当前登录用户的问答历史。
-- `DocumentsView`、`DocumentDetailView`、`DocumentChunksView`、`DocumentPreviewView`：文档、版本、授权分块和全格式预览；CAD SVG 与按视口加载的 Canvas 瓦片查看器提供有界缩放和鸟瞰图。所有 CAD 鸟瞰都只显示统一的“拖动定位”提示；manifest 有 `focusBounds` 时额外显示“主体 / 全图”范围切换。瓦片配置基准为 z12，远距实体稀释主体时 manifest 可动态补足到 z15；查看器按设备像素比和实际层级限制继续放大，避免把最高瓦片再次模糊拉伸。渐进瓦片在完整索引前使用单请求初始化并在失败后停止自动预取，首批细节成功后恢复双并发且只刷新一次鸟瞰，使快速总览切换到完整彩色几何；有 `focusBounds` 时首次打开与重置聚焦主体，鸟瞰默认显示 ACL 保护的“主体”缩略图并可切换“全图”，全图、平移和瓦片仍覆盖完整 `bounds`。旧 manifest 保持原行为。全部预览支持全屏。
+- `DocumentsView`、`DocumentsDetailView`、`DocumentsChunksView`、`DocumentsPreviewView`：文档、版本、授权分块和全格式预览；CAD SVG 与按视口加载的 Canvas 瓦片查看器提供有界缩放和鸟瞰图。所有 CAD 鸟瞰都只显示统一的“拖动定位”提示；manifest 有 `focusBounds` 时额外显示“主体 / 全图”范围切换。瓦片配置基准为 z12，远距实体稀释主体时 manifest 可动态补足到 z15；查看器按设备像素比和实际层级限制继续放大，避免把最高瓦片再次模糊拉伸。渐进瓦片在完整索引前使用单请求初始化并在失败后停止自动预取，首批细节成功后恢复双并发且只刷新一次鸟瞰，使快速总览切换到完整彩色几何；有 `focusBounds` 时首次打开与重置聚焦主体，鸟瞰默认显示 ACL 保护的“主体”缩略图并可切换“全图”，全图、平移和瓦片仍覆盖完整 `bounds`。旧 manifest 保持原行为。全部预览支持全屏。
 - `IngestionJobsView`：入库状态、步骤、失败详情和安全重试。
 - `UsersView`、`DepartmentsView`：角色与部门权限。
 - `AuditView`：无正文结构化审计。

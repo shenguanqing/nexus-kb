@@ -120,10 +120,12 @@ describe('IngestionJobsView Mobile filters', () => {
 
     const documentId = wrapper.get('input[placeholder="文档 ID"]');
     await documentId.setValue('213123');
-    await wrapper.get('.task-toolbar--mobile').trigger('submit');
+    await wrapper.get('.ingestion-toolbar--mobile').trigger('submit');
     await flushPromises();
 
-    expect(wrapper.get('.task-document-filter [role="alert"]').text()).toContain('完整的文档 ID');
+    expect(wrapper.get('.ingestion-document-filter [role="alert"]').text()).toContain(
+      '完整的文档 ID',
+    );
     expect(wrapper.find('.kb-error-state').exists()).toBe(false);
     expect(wrapper.find('.kb-pagination').exists()).toBe(false);
     expect(api.listIngestionJobs).toHaveBeenCalledOnce();
@@ -136,7 +138,7 @@ describe('IngestionJobsView Mobile filters', () => {
 
     expect((documentId.element as HTMLInputElement).value).toBe('');
     expect((wrapper.get('select').element as HTMLSelectElement).value).toBe('');
-    expect(wrapper.find('.task-document-filter [role="alert"]').exists()).toBe(false);
+    expect(wrapper.find('.ingestion-document-filter [role="alert"]').exists()).toBe(false);
     expect(api.listIngestionJobs).toHaveBeenCalledTimes(2);
   });
 
@@ -150,10 +152,10 @@ describe('IngestionJobsView Mobile filters', () => {
     const wrapper = mountView();
     await flushPromises();
 
-    const warning = wrapper.get('.task-warning');
-    const error = wrapper.get('.task-error');
-    expect(warning.classes()).toContain('task-feedback');
-    expect(error.classes()).toContain('task-feedback');
+    const warning = wrapper.get('.ingestion-warning');
+    const error = wrapper.get('.ingestion-error');
+    expect(warning.classes()).toContain('ingestion-feedback');
+    expect(error.classes()).toContain('ingestion-feedback');
     expect(warning.get('.kb-block__header').text()).toBe('处理说明');
     expect(error.get('.kb-block__header').text()).toBe('失败说明');
     expect(warning.get('.kb-data-fields').classes()).toContain('kb-data-fields--borderless');

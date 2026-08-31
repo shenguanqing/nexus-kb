@@ -1,7 +1,7 @@
 import type { ConversationTurn } from '@nexus-kb/contracts';
 import { mount } from '@vue/test-utils';
 import { describe, expect, it } from 'vitest';
-import HistoryAnswer from './HistoryAnswer.vue';
+import HistoryViewAnswer from './HistoryViewAnswer.vue';
 
 const turn: ConversationTurn = {
   id: 'a7305592-1682-478e-920f-23c4c3ec7d3e',
@@ -27,9 +27,9 @@ const turn: ConversationTurn = {
   createdAt: '2026-07-26T04:00:00.000Z',
 };
 
-describe('HistoryAnswer', () => {
+describe('HistoryViewAnswer', () => {
   it('renders interactive citations and matching historical source cards', async () => {
-    const wrapper = mount(HistoryAnswer, { props: { turn } });
+    const wrapper = mount(HistoryViewAnswer, { props: { turn } });
 
     expect(wrapper.get('.history-answer .markdown-heading--h3').text()).toBe('主要特性');
     expect(wrapper.get('.markdown-content strong').text()).toBe('Composition API');
@@ -43,7 +43,7 @@ describe('HistoryAnswer', () => {
   });
 
   it('labels a historical general-knowledge answer', () => {
-    const wrapper = mount(HistoryAnswer, {
+    const wrapper = mount(HistoryViewAnswer, {
       props: {
         turn: {
           ...turn,

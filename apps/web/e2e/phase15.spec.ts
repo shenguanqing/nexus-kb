@@ -1,5 +1,24 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
+import {
+  managedConfigurationFieldSchema,
+  managedConfigurationSecretSchema,
+} from '@nexus-kb/contracts';
+
+const configurationGuideSwitchFields = new Set([
+  'CAD_TILED_PREVIEW_ENABLED',
+  'DWG_CONVERSION_ENABLED',
+  'TIKA_ENABLED',
+]);
+const configurationGuideValues = Object.fromEntries(
+  managedConfigurationFieldSchema.options.map((field) => [
+    field,
+    configurationGuideSwitchFields.has(field) ? 'false' : '',
+  ]),
+);
+const configurationGuideSecrets = Object.fromEntries(
+  managedConfigurationSecretSchema.options.map((secret) => [secret, false]),
+);
 
 const session = (
   capabilities = [
@@ -153,16 +172,17 @@ async function expectDangerButtonHoverUsesHighlightToken(page: Page): Promise<vo
     button.textContent = '危险操作';
     document.body.append(button);
 
-    const highlightProbe = document.createElement('span');
-    highlightProbe.style.backgroundColor = 'var(--kb-color-danger-highlight)';
-    document.body.append(highlightProbe);
+    const expectedHoverProbe = document.createElement('span');
+    expectedHoverProbe.style.backgroundColor =
+      'color-mix(in srgb, var(--kb-color-danger) 94%, var(--kb-color-text-primary))';
+    document.body.append(expectedHoverProbe);
 
     const hoverProbe = document.createElement('span');
     hoverProbe.style.backgroundColor = 'var(--el-button-hover-bg-color)';
     button.append(hoverProbe);
 
     const result = {
-      highlight: getComputedStyle(highlightProbe).backgroundColor,
+      expectedHover: getComputedStyle(expectedHoverProbe).backgroundColor,
       hover: getComputedStyle(hoverProbe).backgroundColor,
       hoverText: getComputedStyle(button).getPropertyValue('--el-button-hover-text-color').trim(),
       onPrimary: getComputedStyle(document.documentElement)
@@ -170,11 +190,11 @@ async function expectDangerButtonHoverUsesHighlightToken(page: Page): Promise<vo
         .trim(),
     };
     button.remove();
-    highlightProbe.remove();
+    expectedHoverProbe.remove();
     return result;
   });
 
-  expect(colors.hover).toBe(colors.highlight);
+  expect(colors.hover).toBe(colors.expectedHover);
   expect(colors.hoverText).toBe(colors.onPrimary);
 }
 
@@ -287,9 +307,17 @@ test('asks a grounded question and renders an authorized source', async ({ page 
   });
   await page.goto('/ask');
   await expect(page.getByRole('button', { name: '发送问题' })).toBeDisabled();
-  await expect(page.locator('.ask-composer')).not.toHaveCSS('box-shadow', 'none');
+  await expect(page.locator('.knowledge-composer')).not.toHaveCSS('box-shadow', 'none');
   await page.getByLabel('输入问题').focus();
-  await expect(page.locator('.ask-composer')).toHaveCSS('border-color', 'rgb(49, 95, 201)');
+  const primaryColor = await page.evaluate(() => {
+    const probe = document.createElement('span');
+    probe.style.color = 'var(--kb-color-primary)';
+    document.body.append(probe);
+    const color = getComputedStyle(probe).color;
+    probe.remove();
+    return color;
+  });
+  await expect(page.locator('.knowledge-composer')).toHaveCSS('border-color', primaryColor);
   await page.getByLabel('输入问题').fill('付款周期是多久？');
   await page.getByRole('button', { name: '发送问题' }).click();
   await expect(page.getByText('付款周期为 30 天。')).toBeVisible();
@@ -356,23 +384,25 @@ test('renders the complete safe Markdown set with applied component styles', asy
   await expect(page.getByRole('heading', { name: '格式检查', level: 4 })).toBeVisible();
   await expect(page.getByRole('region', { name: 'Markdown 表格' })).toBeVisible();
 
-  const styles = await page.locator('.answer-content .markdown-content').evaluate((root) => {
-    const style = (selector: string) => getComputedStyle(root.querySelector(selector)!);
-    const orderedItem = root.querySelector('.markdown-list-item--ordered')!;
-    const tableScroll = root.querySelector<HTMLElement>('.markdown-table-scroll')!;
-    return {
-      codeBackground: style('.markdown-code--inline').backgroundColor,
-      headingWeight: style('.markdown-heading--h4').fontWeight,
-      marker: getComputedStyle(orderedItem, '::before').content,
-      quoteBorder: style('.markdown-quote').borderLeftStyle,
-      tableDisplay: style('.markdown-table').display,
-      tableHeadingBackground: style('.markdown-table-heading').backgroundColor,
-      tableScrollOverflow: getComputedStyle(tableScroll).overflowX,
-      tableTabIndex: tableScroll.tabIndex,
-      textAlignCenter: style('.markdown-table-align--center').textAlign,
-      textAlignRight: style('.markdown-table-align--right').textAlign,
-    };
-  });
+  const styles = await page
+    .locator('.knowledge-answer-content .markdown-content')
+    .evaluate((root) => {
+      const style = (selector: string) => getComputedStyle(root.querySelector(selector)!);
+      const orderedItem = root.querySelector('.markdown-list-item--ordered')!;
+      const tableScroll = root.querySelector<HTMLElement>('.markdown-table-scroll')!;
+      return {
+        codeBackground: style('.markdown-code--inline').backgroundColor,
+        headingWeight: style('.markdown-heading--h4').fontWeight,
+        marker: getComputedStyle(orderedItem, '::before').content,
+        quoteBorder: style('.markdown-quote').borderLeftStyle,
+        tableDisplay: style('.markdown-table').display,
+        tableHeadingBackground: style('.markdown-table-heading').backgroundColor,
+        tableScrollOverflow: getComputedStyle(tableScroll).overflowX,
+        tableTabIndex: tableScroll.tabIndex,
+        textAlignCenter: style('.markdown-table-align--center').textAlign,
+        textAlignRight: style('.markdown-table-align--right').textAlign,
+      };
+    });
 
   expect(styles).toMatchObject({
     headingWeight: '700',
@@ -655,9 +685,11 @@ test('opens access navigation and displays ACL-authorized document chunks', asyn
   await expect(page.getByText('原始 DWG（版本 AC1021） 已自动转换为 DXF 后解析入库')).toBeVisible();
   await expect(page.getByText('已被替代')).toBeVisible();
   const desktopDetailLayout = await page.evaluate(() => {
-    const summary = document.querySelector<HTMLElement>('.detail-actions > div:first-child');
-    const actionButtons = document.querySelector<HTMLElement>('.detail-action-buttons');
-    const cards = document.querySelectorAll<HTMLElement>('.detail-grid > .kb-block');
+    const summary = document.querySelector<HTMLElement>(
+      '.documents-detail-actions > div:first-child',
+    );
+    const actionButtons = document.querySelector<HTMLElement>('.documents-detail-action-buttons');
+    const cards = document.querySelectorAll<HTMLElement>('.documents-detail-grid > .kb-block');
     return {
       actionsWrapped:
         (actionButtons?.getBoundingClientRect().top ?? 0) >=
@@ -671,9 +703,9 @@ test('opens access navigation and displays ACL-authorized document chunks', asyn
   await page.setViewportSize({ width: 1102, height: 900 });
   const resizedMetrics = await page.evaluate(() => {
     const appMain = document.querySelector<HTMLElement>('.app-main');
-    const detailPage = document.querySelector<HTMLElement>('.document-detail-page');
-    const detailGrid = document.querySelector<HTMLElement>('.detail-grid');
-    const actionButtons = document.querySelector<HTMLElement>('.detail-action-buttons');
+    const detailPage = document.querySelector<HTMLElement>('.documents-detail-page');
+    const detailGrid = document.querySelector<HTMLElement>('.documents-detail-grid');
+    const actionButtons = document.querySelector<HTMLElement>('.documents-detail-action-buttons');
     return {
       viewport: document.documentElement.clientWidth,
       appMain: appMain?.getBoundingClientRect().width ?? 0,
@@ -687,9 +719,13 @@ test('opens access navigation and displays ACL-authorized document chunks', asyn
   await expect
     .poll(() =>
       page.evaluate(() => {
-        const summary = document.querySelector<HTMLElement>('.detail-actions > div:first-child');
-        const actionButtons = document.querySelector<HTMLElement>('.detail-action-buttons');
-        const cards = document.querySelectorAll<HTMLElement>('.detail-grid > .kb-block');
+        const summary = document.querySelector<HTMLElement>(
+          '.documents-detail-actions > div:first-child',
+        );
+        const actionButtons = document.querySelector<HTMLElement>(
+          '.documents-detail-action-buttons',
+        );
+        const cards = document.querySelectorAll<HTMLElement>('.documents-detail-grid > .kb-block');
         return {
           actionsWrapped:
             (actionButtons?.getBoundingClientRect().top ?? 0) >=
@@ -703,13 +739,13 @@ test('opens access navigation and displays ACL-authorized document chunks', asyn
     .toEqual({ actionsWrapped: false, cardsStacked: false });
   const detailLayout = await page.evaluate(() => {
     const pageContent = document.querySelector<HTMLElement>(
-      '.document-detail-page > .kb-page__content',
+      '.documents-detail-page > .kb-page__content',
     );
-    const actions = document.querySelector<HTMLElement>('.detail-actions');
-    const actionButtons = document.querySelector<HTMLElement>('.detail-action-buttons');
-    const detailGrid = document.querySelector<HTMLElement>('.detail-grid');
+    const actions = document.querySelector<HTMLElement>('.documents-detail-actions');
+    const actionButtons = document.querySelector<HTMLElement>('.documents-detail-action-buttons');
+    const detailGrid = document.querySelector<HTMLElement>('.documents-detail-grid');
     const history = document.querySelector<HTMLElement>(
-      '.document-detail-page > .kb-page__content > .detail-grid + .kb-block',
+      '.documents-detail-page > .kb-page__content > .documents-detail-grid + .kb-block',
     );
     const actionsBounds = actions?.getBoundingClientRect();
     const gridBounds = detailGrid?.getBoundingClientRect();
@@ -728,7 +764,7 @@ test('opens access navigation and displays ACL-authorized document chunks', asyn
     detailLayout.actionButtonsClientWidth,
   );
   const detailFieldLabels = await page
-    .locator('.detail-grid .kb-data-field__label')
+    .locator('.documents-detail-grid .kb-data-field__label')
     .evaluateAll((labels) =>
       labels.map((label) => {
         const style = getComputedStyle(label);
@@ -747,7 +783,7 @@ test('opens access navigation and displays ACL-authorized document chunks', asyn
   expect(Math.round(detailLayout.actionsToGridGap)).toBe(Math.round(detailLayout.pageGap));
   expect(Math.round(detailLayout.gridToHistoryGap)).toBe(Math.round(detailLayout.pageGap));
   await page.getByRole('button', { name: '修改权限', exact: true }).click();
-  const metadataDialog = page.locator('.metadata-dialog');
+  const metadataDialog = page.locator('.documents-detail-metadata-dialog');
   await expect(metadataDialog).toBeVisible();
   await expect(metadataDialog).not.toHaveClass(/el-drawer/);
   const metadataBounds = await metadataDialog.evaluate((element) => {
@@ -770,7 +806,7 @@ test('opens access navigation and displays ACL-authorized document chunks', asyn
 
   await page.setViewportSize({ width: 375, height: 812 });
   const mobileDetailFieldLabels = await page
-    .locator('.detail-grid .kb-data-field__label')
+    .locator('.documents-detail-grid .kb-data-field__label')
     .evaluateAll((labels) =>
       labels.map((label) => {
         const style = getComputedStyle(label);
@@ -785,24 +821,26 @@ test('opens access navigation and displays ACL-authorized document chunks', asyn
     expect(label.whiteSpace).toBe('nowrap');
     expect(label.height).toBeLessThanOrEqual(label.lineHeight + 1);
   }
-  await expect(page.locator('.detail-action-buttons')).toHaveCount(0);
+  await expect(page.locator('.documents-detail-action-buttons')).toHaveCount(0);
   await page.getByRole('button', { name: '打开文档操作面板' }).click();
-  const mobileActionDrawer = page.locator('.mobile-action-drawer');
+  const mobileActionDrawer = page.locator('.documents-detail-mobile-action-drawer');
   await expect(mobileActionDrawer).toBeVisible();
   await expect(mobileActionDrawer.locator('[role="menu"], [role="menuitem"]')).toHaveCount(0);
-  await expect(mobileActionDrawer.locator('.mobile-action-item')).toHaveCount(4);
-  await expect(mobileActionDrawer.locator('.mobile-action-item[role="button"]')).toHaveCount(3);
+  await expect(mobileActionDrawer.locator('.documents-detail-mobile-action-item')).toHaveCount(4);
+  await expect(
+    mobileActionDrawer.locator('.documents-detail-mobile-action-item[role="button"]'),
+  ).toHaveCount(3);
   await expect(mobileActionDrawer.getByRole('button', { name: '删除文档' })).toHaveClass(
     /mobile-action-item--danger/,
   );
   const mobileActionChevronRights = await mobileActionDrawer
-    .locator('.mobile-action-chevron')
+    .locator('.documents-detail-mobile-action-chevron')
     .evaluateAll((chevrons) =>
       chevrons.map((item) => Math.round(item.getBoundingClientRect().right)),
     );
   expect(new Set(mobileActionChevronRights).size).toBe(1);
   await mobileActionDrawer.getByRole('button', { name: '修改权限' }).click();
-  const metadataDrawer = page.locator('.metadata-drawer.el-drawer');
+  const metadataDrawer = page.locator('.documents-detail-metadata-drawer.el-drawer');
   await expect(metadataDrawer).toBeVisible();
   await expect(metadataDrawer).toHaveClass(/btt/);
   await expect
@@ -825,17 +863,19 @@ test('opens access navigation and displays ACL-authorized document chunks', asyn
   await mobileActionDrawer.getByRole('button', { name: '删除文档' }).click();
   const dangerDrawer = page.locator('.el-drawer').filter({ hasText: '确认高风险操作' });
   await expect(dangerDrawer).toBeVisible();
-  const dialogBodyGap = await dangerDrawer.locator('.document-dialog-body').evaluate((element) => {
-    const style = getComputedStyle(element);
-    return {
-      actual: style.rowGap,
-      expected: style.getPropertyValue('--kb-layout-gap').trim(),
-    };
-  });
+  const dialogBodyGap = await dangerDrawer
+    .locator('.documents-danger-confirm__body')
+    .evaluate((element) => {
+      const style = getComputedStyle(element);
+      return {
+        actual: style.rowGap,
+        expected: style.getPropertyValue('--kb-layout-gap').trim(),
+      };
+    });
   expect(dialogBodyGap.actual).toBe(dialogBodyGap.expected);
   await dangerDrawer.getByRole('button', { name: '取消' }).click();
   const mobileCardsStacked = await page.evaluate(() => {
-    const cards = document.querySelectorAll<HTMLElement>('.detail-grid > .kb-block');
+    const cards = document.querySelectorAll<HTMLElement>('.documents-detail-grid > .kb-block');
     return (
       (cards[1]?.getBoundingClientRect().top ?? 0) > (cards[0]?.getBoundingClientRect().top ?? 0)
     );
@@ -937,14 +977,14 @@ test('uses one compact Mobile toolbar across CAD, PDF, image, Office, and text p
       fallbackVersion: null,
     };
     await page.goto(`/documents/${documentId}/preview?case=${index}`);
-    const toolbar = page.locator('.preview-toolbar');
+    const toolbar = page.locator('.documents-preview-toolbar');
     await expect(toolbar).toBeVisible();
     await expect(toolbar.locator('.kb-block__title')).toHaveText(previewCase.sourceName);
     const layout = await toolbar.evaluate((element) => {
-      const identity = element.querySelector<HTMLElement>('.preview-toolbar__identity');
+      const identity = element.querySelector<HTMLElement>('.documents-preview-toolbar__identity');
       const title = identity?.querySelector<HTMLElement>('.kb-block__title');
-      const fullscreen = element.querySelector<HTMLElement>('.preview-fullscreen-action');
-      const zoom = element.querySelector<HTMLElement>('.preview-zoom-controls');
+      const fullscreen = element.querySelector<HTMLElement>('.documents-preview-fullscreen-action');
+      const zoom = element.querySelector<HTMLElement>('.documents-preview-zoom-controls');
       const zoomControls = Array.from(zoom?.querySelectorAll<HTMLElement>('.el-button') ?? []).map(
         (control) => control.getBoundingClientRect(),
       );
@@ -1266,6 +1306,91 @@ test('keeps the Provider long form scrollable inside the application shell', asy
   expect(providerScroll.scrollTop).toBeGreaterThan(0);
 });
 
+test('keeps the desktop and Pad configuration guide header, search, and tabs fixed', async ({
+  page,
+}) => {
+  await mockSession(page, ['system:read']);
+  await page.route('**/v1/system/**', (route) => {
+    const path = new URL(route.request().url()).pathname;
+    if (path === '/v1/system/providers') {
+      return route.fulfill({
+        json: {
+          providers: [],
+          syntheticCheck: { status: 'not_configured', checkedAt: null },
+        },
+      });
+    }
+    if (path === '/v1/system/configuration') {
+      return route.fulfill({
+        json: {
+          deploymentAgentAvailable: true,
+          embeddingManagedSeparately: true,
+          effectiveValues: configurationGuideValues,
+          secretConfigured: configurationGuideSecrets,
+          current: null,
+          versions: [],
+        },
+      });
+    }
+    if (path === '/v1/system/deployments') return route.fulfill({ json: { deployments: [] } });
+    return route.fulfill({
+      status: 404,
+      json: { error: { code: 'NOT_FOUND', message: '未找到' } },
+    });
+  });
+
+  for (const viewport of [
+    { width: 1440, height: 900 },
+    { width: 1024, height: 900 },
+  ]) {
+    await page.setViewportSize(viewport);
+    await page.goto('/settings/providers');
+    await page.getByRole('button', { name: '查看运行配置字段说明' }).click();
+
+    const dialog = page.locator('.configuration-guide-dialog');
+    await expect(dialog).toBeVisible();
+    await expect(dialog).toHaveCSS('height', '640px');
+
+    const layout = await dialog.evaluate((element) => {
+      const body = element.querySelector<HTMLElement>('.el-dialog__body');
+      const search = body?.querySelector<HTMLElement>('.configuration-guide__search');
+      const tabs = body?.querySelector<HTMLElement>('.configuration-guide-tabs');
+      const content = body?.querySelector<HTMLElement>('.configuration-guide__content');
+      if (!body || !search || !tabs || !content) {
+        throw new Error('字段说明弹窗缺少固定头部或内容区');
+      }
+      const before = {
+        searchTop: search.getBoundingClientRect().top,
+        tabsTop: tabs.getBoundingClientRect().top,
+      };
+      content.scrollTop = 320;
+      return {
+        ...before,
+        searchTopAfterScroll: search.getBoundingClientRect().top,
+        tabsTopAfterScroll: tabs.getBoundingClientRect().top,
+        contentOverflowY: getComputedStyle(content).overflowY,
+        contentScrollable: content.scrollHeight > content.clientHeight,
+        scrollTop: content.scrollTop,
+      };
+    });
+
+    expect(layout.contentOverflowY).toBe('auto');
+    expect(layout.contentScrollable).toBe(true);
+    expect(layout.scrollTop).toBeGreaterThan(0);
+    expect(layout.searchTopAfterScroll).toBe(layout.searchTop);
+    expect(layout.tabsTopAfterScroll).toBe(layout.tabsTop);
+
+    await dialog.getByRole('tab', { name: 'Parser', exact: true }).click();
+    await expect
+      .poll(() =>
+        dialog.locator('.configuration-guide__content').evaluate((content) => content.scrollTop),
+      )
+      .toBe(0);
+
+    await page.keyboard.press('Escape');
+  }
+});
+
 test('uses one error-state surface and title weight across page containers', async ({ page }) => {
   await page.setViewportSize({ width: 768, height: 887 });
   await mockSession(page, ['documents:read', 'system:read']);
@@ -1325,6 +1450,7 @@ test('uses one error-state surface and title weight across page containers', asy
 
 test('keeps every authorized page within a 375px mobile viewport', async ({ page }) => {
   const documentId = '6769af9a-a4d0-4dc2-a97d-942584a9c826';
+  await page.clock.setFixedTime(new Date('2026-07-22T12:00:00+08:00'));
   await page.setViewportSize({ width: 375, height: 900 });
   await mockSession(page, [
     'documents:read',
@@ -1457,11 +1583,14 @@ test('keeps every authorized page within a 375px mobile viewport', async ({ page
   }
 
   await page.goto('/ask');
-  await expect(page.locator('.ask-composer .el-textarea__inner')).toHaveCSS('font-size', '16px');
+  await expect(page.locator('.knowledge-composer .el-textarea__inner')).toHaveCSS(
+    'font-size',
+    '16px',
+  );
 
   for (const [path, toolbar] of [
     ['/documents', '.documents-toolbar'],
-    ['/ingestion-jobs', '.task-toolbar'],
+    ['/ingestion-jobs', '.ingestion-toolbar'],
     ['/access/users', '.access-toolbar'],
   ] as const) {
     await page.goto(path);
@@ -1507,7 +1636,7 @@ test('keeps every authorized page within a 375px mobile viewport', async ({ page
   await expect(page.locator('.el-drawer:visible')).toHaveCount(0);
 
   for (const [path, toolbar] of [
-    ['/ingestion-jobs', '.task-toolbar'],
+    ['/ingestion-jobs', '.ingestion-toolbar'],
     ['/settings/providers', '.kb-status-toolbar'],
     ['/system/status', '.kb-status-toolbar'],
     ['/system/usage', 'form[aria-label="用量日期范围筛选"]'],
@@ -1518,14 +1647,14 @@ test('keeps every authorized page within a 375px mobile viewport', async ({ page
 
   await page.goto(`/documents/${documentId}/chunks`);
   await expect(
-    page.locator('.document-chunks-page .kb-pagination .el-pagination__total'),
+    page.locator('.documents-chunks-page .kb-pagination .el-pagination__total'),
   ).toHaveCount(0);
-  await expect(page.locator('.document-chunks-page .kb-pagination .el-pager')).toBeVisible();
+  await expect(page.locator('.documents-chunks-page .kb-pagination .el-pager')).toBeVisible();
   const chunksPagination = await page.evaluate(() => {
     const content = document.querySelector<HTMLElement>(
-      '.document-chunks-page > .kb-block-content',
+      '.documents-chunks-page > .kb-block-content',
     );
-    const pagination = document.querySelector<HTMLElement>('.document-chunks-page .kb-pagination');
+    const pagination = document.querySelector<HTMLElement>('.documents-chunks-page .kb-pagination');
     return {
       contentBottom: content?.getBoundingClientRect().bottom ?? Number.NEGATIVE_INFINITY,
       paginationBottom: pagination?.getBoundingClientRect().bottom ?? Number.POSITIVE_INFINITY,
@@ -1586,7 +1715,7 @@ test('keeps every authorized page within a 375px mobile viewport', async ({ page
   expect(usageDatePresentation.background).not.toBe('rgba(0, 0, 0, 0)');
   expect(usageDatePresentation.boxShadow).not.toBe('none');
   await expect(usageDatePopper).toContainText('2026 年');
-  await expect(usageDatePopper).toContainText('7 月');
+  await expect(usageDatePopper).toContainText('6 月');
   await expect(usageDatePopper.getByText('日', { exact: true })).toBeVisible();
   await expect(usageDatePopper.getByRole('button', { name: '此刻' })).toHaveCount(0);
   await expect(usageDatePopper.getByRole('button', { name: '确定' })).toHaveCount(0);
@@ -1722,12 +1851,12 @@ test('lets the Mobile chunks toolbar scroll away and gives the list natural heig
   );
 
   await page.goto(`/documents/${documentId}/chunks?version=1`);
-  await expect(page.locator('.chunk-card')).toHaveCount(2);
+  await expect(page.locator('.documents-chunk-card')).toHaveCount(2);
   const mobileChunksScroll = await page.evaluate(() => {
-    const chunksPage = document.querySelector<HTMLElement>('.document-chunks-page');
-    const toolbar = chunksPage?.querySelector<HTMLElement>('.chunks-toolbar');
-    const summary = toolbar?.querySelector<HTMLElement>('.chunks-summary');
-    const versionSelect = toolbar?.querySelector<HTMLElement>('.chunks-version-select');
+    const chunksPage = document.querySelector<HTMLElement>('.documents-chunks-page');
+    const toolbar = chunksPage?.querySelector<HTMLElement>('.documents-chunks-toolbar');
+    const summary = toolbar?.querySelector<HTMLElement>('.documents-chunks-summary');
+    const versionSelect = toolbar?.querySelector<HTMLElement>('.documents-chunks-version-select');
     const content = chunksPage?.querySelector<HTMLElement>(':scope > .kb-block-content');
     const list = content?.querySelector<HTMLElement>(':scope > .kb-block-scroll');
     const toolbarTopBefore = toolbar?.getBoundingClientRect().top ?? 0;
@@ -1800,11 +1929,11 @@ test('keeps document detail actions fixed above the PC and Pad content scroller'
   for (const width of [1440, 900]) {
     await page.setViewportSize({ width, height: 520 });
     await page.goto(`/documents/${documentId}`);
-    await expect(page.locator('.detail-actions')).toBeVisible();
+    await expect(page.locator('.documents-detail-actions')).toBeVisible();
     const fixedLayout = await page.evaluate(() => {
-      const detailPage = document.querySelector<HTMLElement>('.document-detail-page');
-      const actions = detailPage?.querySelector<HTMLElement>(':scope > .detail-actions');
-      const content = detailPage?.querySelector<HTMLElement>(':scope > .detail-content');
+      const detailPage = document.querySelector<HTMLElement>('.documents-detail-page');
+      const actions = detailPage?.querySelector<HTMLElement>(':scope > .documents-detail-actions');
+      const content = detailPage?.querySelector<HTMLElement>(':scope > .documents-detail-content');
       if (content) content.scrollTop = 0;
       const actionsTopBefore = actions?.getBoundingClientRect().top ?? 0;
       if (content) content.scrollTop = 240;
@@ -1939,9 +2068,9 @@ test('uses one shared data grid for audit, ingestion, and system details', async
     });
 
   await page.goto('/ingestion-jobs');
-  const taskGrid = page.locator('.task-details .kb-data-grid--four');
+  const taskGrid = page.locator('.ingestion-details .kb-data-grid--four');
   await expect(taskGrid).toHaveClass(/kb-data-grid--four/);
-  const taskStyle = await readGridStyle('.task-details .kb-data-grid--four');
+  const taskStyle = await readGridStyle('.ingestion-details .kb-data-grid--four');
   expect(taskStyle).toMatchObject({
     background: 'rgba(0, 0, 0, 0)',
     borderTopWidth: '0px',
@@ -1972,7 +2101,7 @@ test('uses one shared data grid for audit, ingestion, and system details', async
 
   await page.goto('/system/status');
   const systemOverview = page.locator(
-    '.kb-page__content > .kb-data-grid--three.kb-data-grid--flush',
+    '.kb-page__content > .kb-data-grid--three.kb-data-grid--flush[aria-live="polite"]',
   );
   await expect(systemOverview).toHaveClass(/kb-data-grid--three/);
   await expect(systemOverview).not.toHaveClass(/kb-block/);
@@ -1980,7 +2109,7 @@ test('uses one shared data grid for audit, ingestion, and system details', async
   await expect(systemOverviewItems).toHaveCount(3);
   await expect(systemOverviewItems.first()).toHaveClass(/kb-block/);
   const systemOverviewStyle = await readGridStyle(
-    '.kb-page__content > .kb-data-grid--three.kb-data-grid--flush',
+    '.kb-page__content > .kb-data-grid--three.kb-data-grid--flush[aria-live="polite"]',
   );
   expect(systemOverviewStyle).toMatchObject({
     background: 'rgba(0, 0, 0, 0)',
@@ -2006,58 +2135,52 @@ test('uses one shared data grid for audit, ingestion, and system details', async
     columns: 5,
     padding: '0px',
   });
-  const componentCards = page.locator('.component-card');
+  const componentCards = page.locator('.system-component-card');
   await expect(componentCards).toHaveCount(2);
   const componentLayout = await componentCards.first().evaluate((card) => {
+    const copy = card.querySelector<HTMLElement>('.kb-data-grid__item');
     return {
       display: getComputedStyle(card).display,
       columns: getComputedStyle(card).gridTemplateColumns.split(' ').length,
-      minHeight: Number.parseFloat(getComputedStyle(card).minHeight),
-      copyDisplay: getComputedStyle(card).display,
-      titleLineHeight: getComputedStyle(card).lineHeight,
-      descriptionLineHeight: getComputedStyle(card).lineHeight,
+      height: card.getBoundingClientRect().height,
+      copyDisplay: copy ? getComputedStyle(copy).display : '',
     };
   });
   expect(componentLayout).toMatchObject({
     display: 'grid',
     columns: 2,
     copyDisplay: 'grid',
-    titleLineHeight: componentLayout.descriptionLineHeight,
   });
-  expect(componentLayout.minHeight).toBeGreaterThanOrEqual(72);
+  expect(componentLayout.height).toBeGreaterThanOrEqual(72);
 
   await page.goto('/system/usage');
-  const usageSummary = page.locator('.kb-page__content > .kb-data-grid--three.kb-data-grid--flush');
+  const usageSummary = page.locator('.kb-page__content > .kb-data-grid--four.kb-data-grid--flush');
   await expect(usageSummary).not.toHaveClass(/kb-block/);
-  await expect(usageSummary).toHaveClass(/kb-data-grid--three/);
+  await expect(usageSummary).toHaveClass(/kb-data-grid--four/);
   const usageSummaryItems = usageSummary.locator(':scope > .kb-data-grid__item');
-  await expect(usageSummaryItems).toHaveCount(3);
+  await expect(usageSummaryItems).toHaveCount(4);
   await expect(usageSummaryItems.first()).toHaveClass(/kb-block/);
   const usageSummaryStyle = await readGridStyle(
-    '.kb-page__content > .kb-data-grid--three.kb-data-grid--flush',
+    '.kb-page__content > .kb-data-grid--four.kb-data-grid--flush',
   );
   expect(usageSummaryStyle).toMatchObject({
     background: 'rgba(0, 0, 0, 0)',
     borderTopWidth: '0px',
     borderRadius: '0px',
-    columns: 3,
+    columns: 4,
     padding: '0px',
     labelColor: systemOverviewStyle.labelColor,
     labelFontSize: systemOverviewStyle.labelFontSize,
+    valueFontSize: systemOverviewStyle.valueFontSize,
     valueFontWeight: systemOverviewStyle.valueFontWeight,
   });
   await expect(usageSummaryItems.first()).toHaveCSS('border-top-width', '1px');
   await expect(usageSummaryItems.first()).toHaveCSS('border-radius', '12px');
   await expect(usageSummaryItems.first()).toHaveCSS('background-color', 'rgb(255, 255, 255)');
-  await expect(usageSummary.locator('.usage-summary__value').first()).toHaveCSS(
-    'font-size',
-    '20px',
-  );
-
   await page.setViewportSize({ width: 430, height: 900 });
   await page.goto('/system/usage');
   expect(
-    (await readGridStyle('.kb-page__content > .kb-data-grid--three.kb-data-grid--flush')).columns,
+    (await readGridStyle('.kb-page__content > .kb-data-grid--four.kb-data-grid--flush')).columns,
   ).toBe(2);
 });
 
@@ -2213,9 +2336,9 @@ test('keeps phone task steps compact and department cards grouped', async ({ pag
   );
 
   await page.goto('/ingestion-jobs');
-  const completedCard = page.locator('.task-card').filter({ hasText: '移动端超长文档名称' });
-  const runningCard = page.locator('.task-card').filter({ hasText: '进行中任务.docx' });
-  const failedCard = page.locator('.task-card').filter({ hasText: '失败任务.pdf' });
+  const completedCard = page.locator('.ingestion-card').filter({ hasText: '移动端超长文档名称' });
+  const runningCard = page.locator('.ingestion-card').filter({ hasText: '进行中任务.docx' });
+  const failedCard = page.locator('.ingestion-card').filter({ hasText: '失败任务.pdf' });
   const completedSourceLink = completedCard.locator('.kb-link');
   await expect(completedSourceLink).toHaveCSS('justify-content', 'flex-start');
   await expect(completedSourceLink).toHaveCSS('text-align', 'left');
@@ -2224,45 +2347,52 @@ test('keeps phone task steps compact and department cards grouped', async ({ pag
     'flex-start',
   );
   await expect(completedSourceLink.locator('.kb-link__text')).toHaveCSS('text-align', 'left');
-  await expect(completedCard.locator('.task-summary')).toHaveAttribute('aria-expanded', 'false');
-  await expect(completedCard.locator('.task-progress-dot')).toHaveCount(7);
-  await expect(completedCard.locator('.task-details')).toHaveCount(0);
-  await expect(runningCard.locator('.task-summary')).toHaveAttribute('aria-expanded', 'true');
-  await expect(runningCard.locator('.task-steps')).toBeVisible();
-  await expect(failedCard.locator('.task-summary')).toHaveAttribute('aria-expanded', 'true');
-  await expect(failedCard.locator('.task-error')).toBeVisible();
+  await expect(completedCard.locator('.ingestion-summary')).toHaveAttribute(
+    'aria-expanded',
+    'false',
+  );
+  await expect(completedCard.locator('.ingestion-progress-dot')).toHaveCount(7);
+  await expect(completedCard.locator('.ingestion-details')).toHaveCount(0);
+  await expect(runningCard.locator('.ingestion-summary')).toHaveAttribute('aria-expanded', 'true');
+  await expect(runningCard.locator('.ingestion-steps')).toBeVisible();
+  await expect(failedCard.locator('.ingestion-summary')).toHaveAttribute('aria-expanded', 'true');
+  await expect(failedCard.locator('.ingestion-error')).toBeVisible();
   const mobileWidths = await page.evaluate(() => {
-    return ['.kb-page > .kb-block-content', '.kb-block-scroll', '.task-summary'].map((selector) => {
-      const element = document.querySelector<HTMLElement>(selector);
-      return {
-        selector,
-        clientWidth: element?.clientWidth ?? 0,
-        scrollWidth: element?.scrollWidth ?? Number.POSITIVE_INFINITY,
-      };
-    });
+    return ['.kb-page > .kb-block-content', '.kb-block-scroll', '.ingestion-summary'].map(
+      (selector) => {
+        const element = document.querySelector<HTMLElement>(selector);
+        return {
+          selector,
+          clientWidth: element?.clientWidth ?? 0,
+          scrollWidth: element?.scrollWidth ?? Number.POSITIVE_INFINITY,
+        };
+      },
+    );
   });
   expect(mobileWidths.every(({ clientWidth, scrollWidth }) => scrollWidth <= clientWidth)).toBe(
     true,
   );
 
-  await completedCard.locator('.task-summary').press('Space');
-  await expect(completedCard.locator('.task-steps')).toBeVisible();
+  await completedCard.locator('.ingestion-summary').press('Space');
+  await expect(completedCard.locator('.ingestion-steps')).toBeVisible();
   const taskStepsHeight = await completedCard
-    .locator('.task-steps')
+    .locator('.ingestion-steps')
     .evaluate((element) => Math.round(element.getBoundingClientRect().height));
   expect(taskStepsHeight).toBeLessThan(360);
 
   await page.setViewportSize({ width: 768, height: 887 });
-  const padStepScroll = await runningCard.locator('.task-steps-scroll').evaluate((element) => ({
-    background: getComputedStyle(element).backgroundColor,
-    clientWidth: element.clientWidth,
-    firstStepLeft:
-      element.querySelector<HTMLElement>('.el-step')?.getBoundingClientRect().left ??
-      Number.NEGATIVE_INFINITY,
-    left: element.getBoundingClientRect().left,
-    scrollLeft: element.scrollLeft,
-    scrollWidth: element.scrollWidth,
-  }));
+  const padStepScroll = await runningCard
+    .locator('.ingestion-steps-scroll')
+    .evaluate((element) => ({
+      background: getComputedStyle(element).backgroundColor,
+      clientWidth: element.clientWidth,
+      firstStepLeft:
+        element.querySelector<HTMLElement>('.el-step')?.getBoundingClientRect().left ??
+        Number.NEGATIVE_INFINITY,
+      left: element.getBoundingClientRect().left,
+      scrollLeft: element.scrollLeft,
+      scrollWidth: element.scrollWidth,
+    }));
   expect(padStepScroll.scrollWidth).toBeGreaterThanOrEqual(padStepScroll.clientWidth);
   expect(padStepScroll.scrollLeft).toBe(0);
   expect(padStepScroll.firstStepLeft).toBeGreaterThanOrEqual(padStepScroll.left);
@@ -2582,12 +2712,13 @@ test('uses a department select and shared collapse list in user management', asy
     route.fulfill({
       json: {
         users: Array.from({ length: 24 }, (_, index) => ({
-          userId: `user-finance-${index + 1}`,
-          username: `finance.user.${index + 1}`,
+          userId:
+            index === 0 ? '9019b782-3cb5-4887-8b40-3f0dcdcb9f40' : `user-finance-${index + 1}`,
+          username: index === 0 ? null : `finance.user.${index + 1}`,
           department: 'finance',
           roles: ['user'],
           roleSource: 'managed',
-          status: 'active',
+          status: index === 0 ? 'observed' : 'active',
           lastAuthenticatedAt: '2026-07-22T09:00:00.000Z',
         })),
         total: 24,
@@ -2619,6 +2750,27 @@ test('uses a department select and shared collapse list in user management', asy
     'border-top-width',
     '0px',
   );
+  const longUserSummary = await page
+    .locator('.kb-collapse-list__summary')
+    .filter({ hasText: '9019b782-3cb5-4887-8b40-3f0dcdcb9f40' })
+    .evaluate((summary) => {
+      const label = summary.querySelector<HTMLElement>('.kb-collapse-list__label');
+      const tag = summary.querySelector<HTMLElement>('.access-user-status');
+      const labelBounds = label?.getBoundingClientRect();
+      const tagBounds = tag?.getBoundingClientRect();
+      return {
+        labelClientWidth: label?.clientWidth ?? 0,
+        labelScrollWidth: label?.scrollWidth ?? 0,
+        labelRight: labelBounds?.right ?? Number.POSITIVE_INFINITY,
+        overflow: label ? getComputedStyle(label).overflow : '',
+        tagLeft: tagBounds?.left ?? Number.NEGATIVE_INFINITY,
+        textOverflow: label ? getComputedStyle(label).textOverflow : '',
+      };
+    });
+  expect(longUserSummary.labelScrollWidth).toBeGreaterThan(longUserSummary.labelClientWidth);
+  expect(longUserSummary.labelRight).toBeLessThanOrEqual(longUserSummary.tagLeft);
+  expect(longUserSummary.overflow).toBe('hidden');
+  expect(longUserSummary.textOverflow).toBe('ellipsis');
   const mobileListMetrics = await page.locator('.access-table-wrap').evaluate((element) => {
     element.scrollTop = 160;
     return {
@@ -2711,14 +2863,14 @@ test('renders document rows as touch-friendly cards at 375px', async ({ page }) 
   expect(await filterButton.count()).toBe(1);
   await page.setViewportSize({ width: 425, height: 877 });
   await page.getByRole('button', { name: '上传文档' }).click();
-  const uploadDrawer = page.locator('.upload-drawer.el-drawer');
+  const uploadDrawer = page.locator('.documents-upload-drawer.el-drawer');
   await expect(uploadDrawer).toBeVisible();
   const filePicker = uploadDrawer.getByRole('button', { name: '选择文件', exact: true });
   await expect(filePicker).toBeVisible();
   await expect(uploadDrawer.getByText('选择或拖入文件', { exact: true })).toHaveCount(0);
   const pickerLayout = await uploadDrawer.evaluate((drawer) => {
-    const picker = drawer.querySelector<HTMLElement>('.upload-picker .el-upload');
-    const tip = drawer.querySelector<HTMLElement>('.upload-picker .el-upload__tip');
+    const picker = drawer.querySelector<HTMLElement>('.documents-upload-picker .el-upload');
+    const tip = drawer.querySelector<HTMLElement>('.documents-upload-picker .el-upload__tip');
     const pickerBounds = picker?.getBoundingClientRect();
     const body = drawer.querySelector<HTMLElement>('.el-drawer__body');
     const footer = drawer.querySelector<HTMLElement>('.el-drawer__footer');
@@ -2749,16 +2901,18 @@ test('renders document rows as touch-friendly cards at 375px', async ({ page }) 
   });
   expect(uploadBounds.width).toBe(425);
   expect(uploadBounds.height).toBe(789);
-  await expectAdjacentButtonsUseParentGap(page, '.upload-drawer .el-drawer__footer');
+  await expectAdjacentButtonsUseParentGap(page, '.documents-upload-drawer .el-drawer__footer');
   await uploadDrawer.locator('input[type="file"]').setInputFiles({
     name: '项目排期表.xlsx',
     mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
     buffer: Buffer.from('safe mobile fixture'),
   });
-  await expect(uploadDrawer.locator('.upload-file-list .is-pending')).toContainText(
+  await expect(uploadDrawer.locator('.documents-upload-file-list .is-pending')).toContainText(
     '项目排期表.xlsx',
   );
-  await expect(uploadDrawer.locator('.upload-file-list .is-pending')).toContainText('待上传');
+  await expect(uploadDrawer.locator('.documents-upload-file-list .is-pending')).toContainText(
+    '待上传',
+  );
   await expect(uploadDrawer.getByRole('button', { name: '开始上传' })).toBeVisible();
   await uploadDrawer.getByRole('button', { name: '取消' }).click();
   await page.setViewportSize({ width: 375, height: 900 });
@@ -2907,8 +3061,8 @@ test('uses explicit page and inner-panel scroll models across management pages',
     ['/ingestion-jobs', '.kb-page > .kb-block-content', '.kb-block-scroll', 'auto'],
     [
       `/documents/${documentId}/chunks`,
-      '.document-chunks-page > .kb-block-content',
-      '.document-chunks-page > .kb-block-content > .kb-block-scroll',
+      '.documents-chunks-page > .kb-block-content',
+      '.documents-chunks-page > .kb-block-content > .kb-block-scroll',
       'visible',
     ],
     ['/access/users', '.kb-page > .kb-block-content--gap', '.access-table-wrap', 'auto'],
@@ -3101,7 +3255,7 @@ test('uses the history-style three-tier document toolbar', async ({ page }) => {
   await page.goto('/documents');
   await expect(page.locator('.kb-empty-state .el-empty__image')).toBeVisible();
   const pad = await page.locator('.documents-toolbar').evaluate((toolbar) => {
-    const search = toolbar.querySelector<HTMLElement>('.document-filter-search');
+    const search = toolbar.querySelector<HTMLElement>('.documents-filter-search');
     const status = toolbar.querySelector<HTMLElement>('.el-select');
     const actions = toolbar.querySelector<HTMLElement>('.kb-filter-actions');
     const upload = toolbar.querySelector<HTMLElement>('.documents-upload-action');
@@ -3202,19 +3356,21 @@ test('uses parent gaps for adjacent Element buttons across desktop, pad, and mob
     await expectDangerButtonHoverUsesHighlightToken(page);
 
     await page.getByRole('button', { name: '上传文档' }).click();
-    const surface = page.locator(viewport.width < 768 ? '.upload-drawer' : '.upload-dialog');
+    const surface = page.locator(
+      viewport.width < 768 ? '.documents-upload-drawer' : '.documents-upload-dialog',
+    );
     await expect(surface).toBeVisible();
     await expectOverlayCloseHasSharedBorder(
       page,
       viewport.width < 768
-        ? '.upload-drawer .el-drawer__close-btn'
-        : '.upload-dialog .el-dialog__headerbtn',
+        ? '.documents-upload-drawer .el-drawer__close-btn'
+        : '.documents-upload-dialog .el-dialog__headerbtn',
     );
     await expectAdjacentButtonsUseParentGap(
       page,
       viewport.width < 768
-        ? '.upload-drawer .el-drawer__footer'
-        : '.upload-dialog .el-dialog__footer',
+        ? '.documents-upload-drawer .el-drawer__footer'
+        : '.documents-upload-dialog .el-dialog__footer',
     );
     await surface.getByRole('button', { name: '取消' }).click();
     await expect(surface).toBeHidden();
@@ -3351,7 +3507,7 @@ test('keeps desktop dialogs bounded and uses bottom account drawers on mobile', 
   await page.goto('/documents');
   await page.getByRole('button', { name: '上传文档' }).click();
   await expectScrollableDialog('上传文档');
-  await page.locator('.upload-dialog').getByRole('button', { name: '取消' }).click();
+  await page.locator('.documents-upload-dialog').getByRole('button', { name: '取消' }).click();
 
   await page.goto('/access/users');
   await page.getByRole('button', { name: '新增账号' }).click();
@@ -3614,10 +3770,10 @@ test('keeps ingestion task controls on one row for desktop and Pad', async ({ pa
 
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto('/ingestion-jobs');
-  const desktop = await page.locator('.task-toolbar').evaluate((toolbar) => {
+  const desktop = await page.locator('.ingestion-toolbar').evaluate((toolbar) => {
     const controls = Array.from(
       toolbar.querySelectorAll<HTMLElement>(
-        '.task-document-filter, .el-select, .kb-filter-actions',
+        '.ingestion-document-filter, .el-select, .kb-filter-actions',
       ),
     ).map((control) => control.getBoundingClientRect());
     const inputWrapper = toolbar.querySelector<HTMLElement>('.el-input__wrapper');
@@ -3630,19 +3786,19 @@ test('keeps ingestion task controls on one row for desktop and Pad', async ({ pa
   expect(new Set(desktop.tops).size).toBe(1);
   expect(desktop.controlHeight).toBe(40);
   expect(desktop.toolbarHeight).toBe(40);
-  await expect(page.locator('.task-toolbar + .kb-block-content > .kb-block-scroll')).toHaveCSS(
+  await expect(page.locator('.ingestion-toolbar + .kb-block-content > .kb-block-scroll')).toHaveCSS(
     'border-radius',
     '12px',
   );
-  await expect(page.locator('.task-toolbar + .kb-block-content > .kb-block-scroll')).toHaveCSS(
+  await expect(page.locator('.ingestion-toolbar + .kb-block-content > .kb-block-scroll')).toHaveCSS(
     'overflow-y',
     'auto',
   );
 
   await page.setViewportSize({ width: 768, height: 887 });
   await page.goto('/ingestion-jobs');
-  const pad = await page.locator('.task-toolbar').evaluate((toolbar) => {
-    const documentId = toolbar.querySelector<HTMLElement>('.task-document-filter');
+  const pad = await page.locator('.ingestion-toolbar').evaluate((toolbar) => {
+    const documentId = toolbar.querySelector<HTMLElement>('.ingestion-document-filter');
     const status = toolbar.querySelector<HTMLElement>('.el-select');
     const actions = toolbar.querySelector<HTMLElement>('.kb-filter-actions');
     const documentBounds = documentId?.getBoundingClientRect();
@@ -3661,11 +3817,11 @@ test('keeps ingestion task controls on one row for desktop and Pad', async ({ pa
 
   await page.setViewportSize({ width: 375, height: 900 });
   await page.goto('/ingestion-jobs');
-  const mobileToolbar = page.locator('.task-toolbar--mobile');
+  const mobileToolbar = page.locator('.ingestion-toolbar--mobile');
   await expect(mobileToolbar.getByPlaceholder('文档 ID')).toBeVisible();
   await mobileToolbar.getByPlaceholder('文档 ID').fill('6769af9a-a4d0-4dc2-a97d-942584a9c826');
   await expect(mobileToolbar.getByRole('button', { name: '筛选', exact: true })).toBeVisible();
-  await expect(page.locator('.task-toolbar .el-select')).toHaveCount(0);
+  await expect(page.locator('.ingestion-toolbar .el-select')).toHaveCount(0);
   const mobile = await mobileToolbar.evaluate((toolbar) => ({
     tops: Array.from(toolbar.children).map((control) =>
       Math.round(control.getBoundingClientRect().top),
@@ -3736,28 +3892,28 @@ test('keeps failed upload rows aligned in the pad dialog', async ({ page }) => {
 
   await page.goto('/documents');
   await page.getByRole('button', { name: '上传文档' }).click();
-  const dialog = page.locator('.upload-dialog.el-dialog');
-  await expectAdjacentButtonsUseParentGap(page, '.upload-dialog .el-dialog__footer');
+  const dialog = page.locator('.documents-upload-dialog.el-dialog');
+  await expectAdjacentButtonsUseParentGap(page, '.documents-upload-dialog .el-dialog__footer');
   await dialog.locator('input[type="file"]').setInputFiles({
     name: '动态表单 API.docx',
     mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
     buffer: Buffer.from('safe upload fixture'),
   });
   await dialog.getByRole('button', { name: '开始上传' }).click();
-  await expect(dialog.locator('.upload-file-error')).toContainText('相同权限范围');
+  await expect(dialog.locator('.documents-upload-file-error')).toContainText('相同权限范围');
   await expect(dialog.getByRole('button', { name: '重试' })).toBeVisible();
   await expect(
     dialog.getByRole('button', { name: '删除失败文件：动态表单 API.docx' }),
   ).toBeVisible();
 
-  const rowLayout = await dialog.locator('.upload-file-item').evaluate((row) => {
+  const rowLayout = await dialog.locator('.documents-upload-file-item').evaluate((row) => {
     const bounds = (selector: string) =>
       row.querySelector<HTMLElement>(selector)?.getBoundingClientRect();
-    const name = bounds('.upload-file-heading strong');
-    const status = bounds('.upload-file-heading .el-tag');
-    const error = bounds('.upload-file-error');
-    const retry = bounds('.upload-file-retry');
-    const remove = bounds('.upload-file-remove');
+    const name = bounds('.documents-upload-file-heading strong');
+    const status = bounds('.documents-upload-file-heading .el-tag');
+    const error = bounds('.documents-upload-file-error');
+    const retry = bounds('.documents-upload-file-retry');
+    const remove = bounds('.documents-upload-file-remove');
     const center = (rect: DOMRect | undefined) =>
       rect ? rect.top + rect.height / 2 : Number.POSITIVE_INFINITY;
     return {
@@ -3801,14 +3957,16 @@ test('matches the structured desktop upload dialog', async ({ page }) => {
 
   await page.goto('/documents');
   await page.getByRole('button', { name: '上传文档' }).click();
-  const dialog = page.locator('.upload-dialog.el-dialog');
+  const dialog = page.locator('.documents-upload-dialog.el-dialog');
   await expect(dialog.getByText('选择或拖入文件', { exact: true })).toBeVisible();
   await expect(dialog.getByText('文件只会在确认“开始上传”后发送到服务端。')).toBeVisible();
-  await expect(dialog.locator('.upload-metadata')).toContainText('platform');
-  await expect(dialog.locator('.upload-metadata')).toContainText('internal （由服务端身份确定）');
+  await expect(dialog.locator('.documents-upload-metadata')).toContainText('platform');
+  await expect(dialog.locator('.documents-upload-metadata')).toContainText(
+    'internal （由服务端身份确定）',
+  );
   const layout = await dialog.evaluate((surface) => {
     const dragger = surface.querySelector<HTMLElement>('.el-upload-dragger');
-    const metadata = surface.querySelector<HTMLElement>('.upload-metadata');
+    const metadata = surface.querySelector<HTMLElement>('.documents-upload-metadata');
     const footer = surface.querySelector<HTMLElement>('.el-dialog__footer');
     return {
       width: surface.getBoundingClientRect().width,
@@ -3820,8 +3978,8 @@ test('matches the structured desktop upload dialog', async ({ page }) => {
   expect(layout.width).toBe(460);
   expect(layout.draggerHeight).toBeGreaterThanOrEqual(120);
   expect(layout.metadataRadius).toBeGreaterThanOrEqual(10);
-  expect(layout.footerBorderTop).toBe(0);
-  await expectAdjacentButtonsUseParentGap(page, '.upload-dialog .el-dialog__footer');
+  expect(layout.footerBorderTop).toBe(1);
+  await expectAdjacentButtonsUseParentGap(page, '.documents-upload-dialog .el-dialog__footer');
 });
 
 test('meets automated WCAG AA checks on the core ask page', async ({ page }) => {
@@ -3939,7 +4097,7 @@ test('keeps shell chrome fixed and confines management-page scrolling below cont
     const sidebar = document.querySelector<HTMLElement>('.app-sidebar');
     const heading = document.querySelector<HTMLElement>('.kb-page-header');
     const section = document.querySelector<HTMLElement>('.app-main > section');
-    const toolbar = document.querySelector<HTMLElement>('.task-toolbar');
+    const toolbar = document.querySelector<HTMLElement>('.ingestion-toolbar');
     return {
       headerPosition: header ? getComputedStyle(header).position : '',
       sidebarPosition: sidebar ? getComputedStyle(sidebar).position : '',

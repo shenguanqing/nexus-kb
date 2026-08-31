@@ -1,9 +1,9 @@
 <template>
-  <article class="answer-card" aria-live="polite">
+  <article class="knowledge-answer-card" aria-live="polite">
     <div class="kb-brand-mark">N</div>
-    <div class="answer-content">
-      <div class="answer-label kb-text kb-text--strong">知枢助手</div>
-      <div v-if="response.noAnswer" class="no-answer">
+    <div class="knowledge-answer-content">
+      <div class="knowledge-answer-label kb-text kb-text--strong">知识助手</div>
+      <div v-if="response.noAnswer" class="knowledge-no-answer">
         <strong>暂时没有找到足够依据</strong>
         <div class="kb-text kb-text--warning">
           {{
@@ -90,20 +90,20 @@ function selectCitation(sourceIndex: number): void {
 </script>
 
 <style scoped>
-.answer-card {
+.knowledge-answer-card {
   display: flex;
   gap: var(--kb-layout-gap);
   margin: var(--kb-block-padding) 0;
 }
-.answer-content {
+.knowledge-answer-content {
   flex: 1;
   min-width: 0;
 }
-.answer-label {
+.knowledge-answer-label {
   margin-bottom: var(--kb-space-2);
   font-size: 13px;
 }
-.no-answer {
+.knowledge-no-answer {
   padding: var(--kb-block-padding);
   border: 1px solid color-mix(in srgb, var(--kb-color-warning) 30%, var(--kb-color-border));
   border-radius: var(--kb-radius-md);

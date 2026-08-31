@@ -2,7 +2,7 @@
   <main class="login-page">
     <section class="login-brand">
       <span class="kb-brand-mark">N</span>
-      <div class="brand-text">知枢 NexusKB</div>
+      <div class="login-brand-text">知枢 NexusKB</div>
       <div class="login-text1">让知识<br />可信、可查、可追溯</div>
       <div class="login-text2">每个回答都有依据，每次访问都经过权限验证。</div>
     </section>
@@ -161,7 +161,7 @@ function redirectTarget(): string {
   color: var(--kb-color-on-brand);
   background: var(--kb-color-brand-surface);
 }
-.brand-text {
+.login-brand-text {
   margin-top: var(--kb-space-1);
   color: var(--kb-color-on-brand);
   font-weight: 700;

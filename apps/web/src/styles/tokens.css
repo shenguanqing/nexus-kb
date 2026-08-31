@@ -59,6 +59,7 @@
   --kb-shadow-input: 0 0px 24px rgb(13 13 13 / 8%);
   --kb-shadow-card: none;
   --kb-transition-fast: 0.16s ease;
+  --kb-loading-reveal-delay: 400ms;
 
   /* 透明度语义档位；业务样式不得直接写裸 opacity 数字。 */
   --kb-opacity-hidden: 0;

@@ -1,15 +1,15 @@
 <template>
   <section class="kb-page">
     <article v-if="isMobile && selected" class="history-detail history-detail--mobile kb-block">
-      <header class="mobile-detail-header">
-        <div class="mobile-detail-title" :title="selected.title">{{ selected.title }}</div>
+      <header class="history-mobile-detail-header">
+        <div class="history-mobile-detail-title" :title="selected.title">{{ selected.title }}</div>
       </header>
       <div class="history-detail-body">
         <div v-for="turn in selected.turns" :key="turn.id" class="history-turn">
           <div class="history-question">
             <span class="kb-text kb-text--strong">用户</span>{{ turn.question }}
           </div>
-          <HistoryAnswer :turn="turn" @select-source="openSource" />
+          <HistoryViewAnswer :turn="turn" @select-source="openSource" />
         </div>
       </div>
     </article>
@@ -103,7 +103,7 @@
                 <div class="history-question">
                   <span class="kb-text kb-text--strong">用户</span>{{ turn.question }}
                 </div>
-                <HistoryAnswer :turn="turn" @select-source="openSource" />
+                <HistoryViewAnswer :turn="turn" @select-source="openSource" />
               </div>
             </div>
           </template>
@@ -123,10 +123,10 @@ import { computed, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { deleteConversation, fetchConversation, listConversations } from '@/api/history';
 import { ApiError } from '@/api/client';
-import HistoryAnswer from '@/components/knowledge/HistoryAnswer.vue';
-import SourceDrawer from '@/components/knowledge/SourceDrawer.vue';
+import SourceDrawer from '@/components/common/SourceDrawer.vue';
+import HistoryViewAnswer from './history/HistoryViewAnswer.vue';
 import { useBreakpoint } from '@/composables/useBreakpoint';
-import { buildHistoryRouteQuery, readHistoryRouteState } from './history-route-state';
+import { buildHistoryRouteQuery, readHistoryRouteState } from './history/history-route-state';
 
 const route = useRoute();
 const router = useRouter();
@@ -455,7 +455,7 @@ function handleListScroll(event: Event): void {
   .history-detail--mobile {
     height: 100%;
   }
-  .mobile-detail-header {
+  .history-mobile-detail-header {
     display: flex;
     flex: 0 0 auto;
     justify-content: center;
@@ -464,7 +464,7 @@ function handleListScroll(event: Event): void {
     padding: 0 var(--kb-list-row-padding);
     border-bottom: 1px solid var(--kb-color-border);
   }
-  .mobile-detail-title {
+  .history-mobile-detail-title {
     overflow: hidden;
     min-width: 0;
     font-size: 15px;

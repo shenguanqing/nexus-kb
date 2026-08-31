@@ -1,7 +1,7 @@
 import { flushPromises, mount } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import CadTileViewer from './CadTileViewer.vue';
+import DocumentsPreviewTileViewer from './DocumentsPreviewTileViewer.vue';
 
 const manifest = {
   strategy: 'tiles' as const,
@@ -29,7 +29,7 @@ function requestUrl(input: RequestInfo | URL): string {
   return input.url;
 }
 
-describe('CadTileViewer', () => {
+describe('DocumentsPreviewTileViewer', () => {
   beforeEach(() => {
     vi.useFakeTimers();
     vi.stubGlobal('ResizeObserver', TestResizeObserver);
@@ -79,15 +79,13 @@ describe('CadTileViewer', () => {
       }),
     );
 
-    const wrapper = mount(CadTileViewer, {
+    const wrapper = mount(DocumentsPreviewTileViewer, {
       props: { documentId: 'document-id', manifest, sourceName: '厂区平面图.dxf' },
     });
     await flushPromises();
 
     expect(wrapper.get('[aria-label="厂区平面图.dxf CAD 鸟瞰图"]').text()).toContain('拖动定位');
-    expect(wrapper.get('[aria-label="厂区平面图.dxf CAD 鸟瞰图"]').text()).not.toContain(
-      '鸟瞰图',
-    );
+    expect(wrapper.get('[aria-label="厂区平面图.dxf CAD 鸟瞰图"]').text()).not.toContain('鸟瞰图');
     expect(tileRequests).toHaveLength(0);
     (wrapper.vm as unknown as { zoomIn: () => void }).zoomIn();
     (wrapper.vm as unknown as { zoomIn: () => void }).zoomIn();
@@ -125,13 +123,13 @@ describe('CadTileViewer', () => {
       }),
     );
 
-    const wrapper = mount(CadTileViewer, {
+    const wrapper = mount(DocumentsPreviewTileViewer, {
       props: { documentId: 'document-id', manifest, sourceName: '厂区平面图.dxf' },
     });
     await flushPromises();
 
     expect(wrapper.classes()).not.toContain('is-loading');
-    expect(wrapper.get('.cad-tile-status').text()).toContain('CAD 总览加载失败');
+    expect(wrapper.get('.documents-tile-status').text()).toContain('CAD 总览加载失败');
     expect(wrapper.emitted('error')?.[0]?.[0]).toContain('该图纸可能过于复杂');
     wrapper.unmount();
   });
@@ -156,7 +154,7 @@ describe('CadTileViewer', () => {
       }),
     );
 
-    const wrapper = mount(CadTileViewer, {
+    const wrapper = mount(DocumentsPreviewTileViewer, {
       props: {
         documentId: 'document-id',
         manifest,
@@ -203,7 +201,7 @@ describe('CadTileViewer', () => {
       }),
     );
 
-    const wrapper = mount(CadTileViewer, {
+    const wrapper = mount(DocumentsPreviewTileViewer, {
       props: {
         documentId: 'document-id',
         manifest,
@@ -218,7 +216,7 @@ describe('CadTileViewer', () => {
     await flushPromises();
 
     expect(tileRequests).toHaveLength(1);
-    expect(wrapper.get('.cad-tile-status').text()).toContain('仍可继续平移或缩放重试');
+    expect(wrapper.get('.documents-tile-status').text()).toContain('仍可继续平移或缩放重试');
     await flushPromises();
     expect(tileRequests).toHaveLength(1);
     wrapper.unmount();
@@ -245,7 +243,7 @@ describe('CadTileViewer', () => {
       }),
     );
 
-    const wrapper = mount(CadTileViewer, {
+    const wrapper = mount(DocumentsPreviewTileViewer, {
       props: {
         documentId: 'document-id',
         manifest: {
@@ -293,7 +291,7 @@ describe('CadTileViewer', () => {
         return new Promise<Response>(() => undefined);
       }),
     );
-    const wrapper = mount(CadTileViewer, {
+    const wrapper = mount(DocumentsPreviewTileViewer, {
       props: {
         documentId: 'document-id',
         manifest: {

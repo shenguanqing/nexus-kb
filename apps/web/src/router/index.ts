@@ -52,7 +52,7 @@ export const router = createRouter({
         },
         {
           path: 'documents/:id/preview',
-          component: () => import('@/views/DocumentPreviewView.vue'),
+          component: () => import('@/views/documents/DocumentsPreviewView.vue'),
           meta: {
             title: '文档预览',
             capabilities: ['documents:read'],
@@ -61,7 +61,7 @@ export const router = createRouter({
         },
         {
           path: 'documents/:id',
-          component: () => import('@/views/DocumentDetailView.vue'),
+          component: () => import('@/views/documents/DocumentsDetailView.vue'),
           meta: {
             title: '文档详情',
             capabilities: ['documents:read'],
@@ -71,7 +71,7 @@ export const router = createRouter({
         },
         {
           path: 'documents/:id/chunks',
-          component: () => import('@/views/DocumentChunksView.vue'),
+          component: () => import('@/views/documents/DocumentsChunksView.vue'),
           meta: {
             title: '文档分块',
             capabilities: ['documents:read'],

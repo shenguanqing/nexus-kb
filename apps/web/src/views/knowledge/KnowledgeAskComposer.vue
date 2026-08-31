@@ -1,11 +1,15 @@
 <template>
-  <div class="ask-composer" :class="{ 'is-disabled': isSubmitting }" :aria-busy="isSubmitting">
+  <div
+    class="knowledge-composer"
+    :class="{ 'is-disabled': isSubmitting }"
+    :aria-busy="isSubmitting"
+  >
     <label class="kb-visually-hidden" for="knowledge-question">输入问题</label>
     <el-input
       id="knowledge-question"
       ref="textarea"
       type="textarea"
-      class="composer-input"
+      class="knowledge-composer-input"
       :model-value="modelValue"
       :autosize="{ minRows: 1, maxRows: 8 }"
       :disabled="isSubmitting"
@@ -14,16 +18,19 @@
       @update:model-value="emit('update:modelValue', $event)"
       @keydown="onKeydown"
     />
-    <div class="composer-footer">
-      <span class="scope-pill kb-text kb-text--xs kb-text--secondary">
-        <el-icon class="scope-pill__icon"><Collection /></el-icon>
+    <div class="knowledge-composer-footer">
+      <span class="knowledge-composer-scope-pill kb-text kb-text--xs kb-text--secondary">
+        <el-icon class="knowledge-composer-scope-pill__icon"><Collection /></el-icon>
         全部可访问知识
       </span>
-      <span class="composer-footer__meta">
-        <span class="composer-hint kb-text kb-text--xs kb-text--tertiary">
+      <span class="knowledge-composer-footer__meta">
+        <span class="knowledge-composer-hint kb-text kb-text--xs kb-text--tertiary">
           Enter 发送 · Shift + Enter 换行
         </span>
-        <span v-if="isNearLimit" class="character-count kb-text kb-text--xs kb-text--tertiary">
+        <span
+          v-if="isNearLimit"
+          class="knowledge-composer-character-count kb-text kb-text--xs kb-text--tertiary"
+        >
           <span
             :class="modelValue.length >= 2000 ? ['kb-text--danger', 'kb-text--medium'] : undefined"
           >
@@ -32,14 +39,14 @@
           /2000
         </span>
         <el-button
-          class="composer-send"
+          class="knowledge-composer-send"
           type="primary"
           circle
           :disabled="isInvalid || isSubmitting"
           aria-label="发送问题"
           @click="submit"
         >
-          <el-icon class="composer-send__icon" :class="{ 'is-spinning': isSubmitting }">
+          <el-icon class="knowledge-composer-send__icon" :class="{ 'is-spinning': isSubmitting }">
             <component :is="isSubmitting ? Loading : Top" />
           </el-icon>
         </el-button>
@@ -86,7 +93,7 @@ watch(
 </script>
 
 <style scoped>
-.ask-composer {
+.knowledge-composer {
   display: flex;
   flex-direction: column;
   gap: var(--kb-space-1);
@@ -99,14 +106,14 @@ watch(
     border-color var(--kb-transition-fast),
     box-shadow var(--kb-transition-fast);
 }
-.ask-composer.is-disabled {
+.knowledge-composer.is-disabled {
   opacity: var(--kb-opacity-muted);
 }
-.ask-composer:focus-within {
+.knowledge-composer:focus-within {
   border-color: var(--kb-color-primary);
 }
 
-.composer-input :deep(.el-textarea__inner) {
+.knowledge-composer-input :deep(.el-textarea__inner) {
   width: 100%;
   min-height: var(--kb-control-height-textarea);
   resize: none;
@@ -119,20 +126,20 @@ watch(
 }
 
 /* 底部信息行：作用域 + 提示 / 字数 + 发送按钮 */
-.composer-footer {
+.knowledge-composer-footer {
   display: flex;
   justify-content: space-between;
   align-items: center;
   gap: var(--kb-space-2);
 }
-.composer-footer__meta {
+.knowledge-composer-footer__meta {
   display: flex;
   flex: 0 0 auto;
   align-items: center;
   gap: var(--kb-space-2);
   min-width: 0;
 }
-.scope-pill {
+.knowledge-composer-scope-pill {
   display: inline-flex;
   align-items: center;
   gap: var(--kb-space-1);
@@ -141,14 +148,14 @@ watch(
   background: var(--kb-color-canvas);
   line-height: 1;
 }
-.scope-pill__icon {
+.knowledge-composer-scope-pill__icon {
   font-size: 12px;
 }
-.composer-hint {
+.knowledge-composer-hint {
   line-height: 1;
   white-space: nowrap;
 }
-.character-count {
+.knowledge-composer-character-count {
   min-width: 64px;
   line-height: 1;
   text-align: right;
@@ -161,7 +168,7 @@ watch(
  * 也会附加），导致图标视觉不居中。这里改为自行渲染唯一子元素（箭头或加载图标），
  * 并用 grid 强制居中，从根本上避免这个问题。
  */
-.composer-send {
+.knowledge-composer-send {
   display: inline-grid;
   flex: 0 0 auto;
   place-items: center;
@@ -171,15 +178,15 @@ watch(
   min-height: 30px;
   padding: var(--kb-space-0);
 }
-.composer-send__icon {
+.knowledge-composer-send__icon {
   display: block;
   font-size: 16px;
   line-height: 1;
 }
-.composer-send__icon.is-spinning {
-  animation: composer-spin 0.9s linear infinite;
+.knowledge-composer-send__icon.is-spinning {
+  animation: knowledge-composer-spin 0.9s linear infinite;
 }
-@keyframes composer-spin {
+@keyframes knowledge-composer-spin {
   from {
     transform: rotate(0deg);
   }
@@ -190,11 +197,11 @@ watch(
 
 /* 响应式：Mobile（<768px） */
 @media (max-width: 767px) {
-  .ask-composer {
+  .knowledge-composer {
     padding: var(--kb-space-2) var(--kb-space-2)
       calc(var(--kb-space-2) + env(safe-area-inset-bottom));
   }
-  .composer-hint {
+  .knowledge-composer-hint {
     display: none;
   }
 }
