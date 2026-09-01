@@ -151,6 +151,17 @@ pnpm --filter @nexus-kb/api quality:evaluate -- \
 输出文件必须不存在，CLI 不覆盖输入或旧报告。报告只包含数据集 ID/名称、聚合指标、策略差值和 Rerank
 建议，不复制问题、标准答案或回答正文。
 
+上线基线复跑优先使用统一入口。它强制 `QUERY_ANSWER_MODE=strict`，串行执行两种 variant，将输入/输出权限限制为 `0600/0700`，生成报告后按数据集批准的绝对门槛验证 Vector Top 5，同时要求 baseline 与 Rerank 候选的越权率都为 0、成本覆盖完整且 Rerank 结论不是 `inconclusive`。候选 Rerank 即使建议保持关闭，只要出现越权来源也会让命令失败：
+
+```bash
+RUN_PAID_PROVIDER_TESTS=true pnpm quality:baseline -- \
+  --dataset evaluation/private/dataset.json \
+  --identities evaluation/private/identities.json \
+  --output evaluation/results/baseline-<release>
+```
+
+输出目录必须不存在。任何门槛失败都会返回非零，并保留 `0600` 的原始 run 与报告供批准人员复核；不得通过修改脚本、删除 case 或放宽数据集策略绕过上线门禁。
+
 ## 4. 指标定义
 
 - `vectorRecallAtK`：可回答问题中，向量 Top K 至少命中一个标注来源的比例。

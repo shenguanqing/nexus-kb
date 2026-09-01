@@ -44,6 +44,24 @@ test('loads the isolated local Keycloak overlay only in OIDC test mode', () => {
   ]);
 });
 
+test('uses the hardened production overlay and separate environment file', () => {
+  assert.deepEqual(composeArguments('production', ['config'], true, '.env.production'), [
+    '-f',
+    'compose.yaml',
+    '-f',
+    'compose.dwg.yaml',
+    '-f',
+    'compose.production.yaml',
+    '--profile',
+    'configuration',
+    '--env-file',
+    '.env.production',
+    '--env-file',
+    'config/runtime.env',
+    'config',
+  ]);
+});
+
 test('rejects unknown compose modes', () => {
   assert.equal(composeArguments('unknown', [], true), null);
 });

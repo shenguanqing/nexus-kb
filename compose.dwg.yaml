@@ -16,10 +16,9 @@ services:
       context: .
       dockerfile: apps/parser-worker/Dockerfile.dwg
     restart: unless-stopped
-    env_file:
-      - path: .env
-      - path: ./config/runtime.env
-        required: false
+    depends_on:
+      tika:
+        condition: service_healthy
     environment:
       PARSER_INTERNAL_TOKEN: ${PARSER_INTERNAL_TOKEN}
       RAW_DOCS_PATH: /data/raw-docs
@@ -38,6 +37,7 @@ services:
       DWG_CONVERTER_EXECUTABLE: ${DWG_CONVERTER_EXECUTABLE:-/usr/local/bin/nexus-oda-file-converter}
       DWG_CONVERTER_RELEASE: ${DWG_CONVERTER_RELEASE:-not-installed}
       DWG_OUTPUT_VERSION: ${DWG_OUTPUT_VERSION:-ACAD2018}
+      DWG_CONVERSION_TIMEOUT_SECONDS: ${DWG_CONVERSION_TIMEOUT_SECONDS:-180}
       PARSER_TEMP_PATH: ${PARSER_TEMP_PATH:-/tmp/parser}
       XDG_CACHE_HOME: /tmp/parser/.cache
       MPLCONFIGDIR: /tmp/parser/.cache/matplotlib
@@ -47,6 +47,17 @@ services:
       TIKA_BASE_URL: http://tika:9998
       TIKA_VERSION: '3.2.3.0'
       MAX_DWG_CONVERTED_BYTES: ${MAX_DWG_CONVERTED_BYTES:-209715200}
+      MAX_PARSE_BYTES: ${MAX_PARSE_BYTES:-52428800}
+      MAX_ELEMENTS: ${MAX_ELEMENTS:-100000}
+      MAX_SPREADSHEET_ROWS: ${MAX_SPREADSHEET_ROWS:-100000}
+      MAX_PDF_PAGES: ${MAX_PDF_PAGES:-500}
+      MAX_IMAGE_PIXELS: ${MAX_IMAGE_PIXELS:-40000000}
+      OCR_LANGUAGES: ${OCR_LANGUAGES:-ch_sim,en}
+      OCR_CONFIDENCE_WARNING_THRESHOLD: ${OCR_CONFIDENCE_WARNING_THRESHOLD:-0.5}
+      TIKA_REQUEST_TIMEOUT_SECONDS: ${TIKA_REQUEST_TIMEOUT_SECONDS:-120}
+      MAX_TIKA_RESPONSE_BYTES: ${MAX_TIKA_RESPONSE_BYTES:-52428800}
+      MAX_CAD_ENTITIES: ${MAX_CAD_ENTITIES:-1000000}
+      MAX_CAD_INSERT_DEPTH: ${MAX_CAD_INSERT_DEPTH:-8}
       MAX_ARCHIVE_ENTRIES: ${MAX_ARCHIVE_ENTRIES:-10000}
       MAX_ARCHIVE_UNCOMPRESSED_BYTES: ${MAX_ARCHIVE_UNCOMPRESSED_BYTES:-524288000}
     expose:

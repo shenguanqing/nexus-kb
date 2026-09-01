@@ -12,6 +12,9 @@ RUN pip install --no-cache-dir -r requirements.lock \
     && mkdir -p /models /tmp/reranker \
     && chown -R worker:worker /app /models /tmp/reranker
 COPY --chown=worker:worker apps/reranker-worker/app ./app
+COPY --chmod=0755 scripts/nexus-load-secrets /usr/local/bin/nexus-load-secrets
 USER worker
 EXPOSE 8100
+ENV NEXUS_FILE_ENV_NAMES="RERANK_INTERNAL_TOKEN PARSER_INTERNAL_TOKEN"
+ENTRYPOINT ["/usr/local/bin/nexus-load-secrets"]
 CMD ["uvicorn", "app.main:create_app", "--factory", "--host", "0.0.0.0", "--port", "8100", "--workers", "1"]

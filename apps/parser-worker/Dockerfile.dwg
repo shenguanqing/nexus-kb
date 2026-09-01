@@ -87,8 +87,10 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
 
 COPY --chmod=0755 apps/parser-worker/bin/nexus-oda-file-converter /usr/local/bin/nexus-oda-file-converter
 COPY --chmod=0755 apps/parser-worker/bin/nexus-parser-worker-entrypoint /usr/local/bin/nexus-parser-worker-entrypoint
+COPY --chmod=0755 scripts/nexus-load-secrets /usr/local/bin/nexus-load-secrets
 COPY --chown=worker:worker apps/parser-worker/app ./app
 USER worker
 EXPOSE 8000
+ENV NEXUS_FILE_ENV_NAMES="PARSER_INTERNAL_TOKEN"
 ENTRYPOINT ["/usr/local/bin/nexus-parser-worker-entrypoint"]
 CMD ["uvicorn", "app.main:create_app", "--factory", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]

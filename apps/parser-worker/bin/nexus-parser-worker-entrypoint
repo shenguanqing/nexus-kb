@@ -1,6 +1,10 @@
 #!/bin/sh
 set -eu
 
+if [ -n "${PARSER_INTERNAL_TOKEN_FILE:-}" ]; then
+  exec /usr/local/bin/nexus-load-secrets "$0" "$@"
+fi
+
 parser_temp_path="${PARSER_TEMP_PATH:-/tmp/parser}"
 mkdir -p "$parser_temp_path"
 chmod 700 "$parser_temp_path"

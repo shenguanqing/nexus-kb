@@ -1,0 +1,54 @@
+{
+	admin off
+	auto_https off
+	servers {
+		protocols h1 h2
+		trusted_proxies static private_ranges
+	}
+}
+
+http://:8080 {
+	route {
+		@health path /gateway-health
+		respond @health 200
+		redir https://{$NEXUS_KB_PUBLIC_HOST}{uri} permanent
+	}
+}
+
+https://:8443 {
+	tls /run/secrets/tls_certificate /run/secrets/tls_key
+
+	@wrong_host not host {$NEXUS_KB_PUBLIC_HOST}
+	respond @wrong_host 421
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options nosniff
+		X-Frame-Options SAMEORIGIN
+		Referrer-Policy strict-origin-when-cross-origin
+		Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=(), usb=()"
+		Content-Security-Policy "default-src 'self'; base-uri 'self'; connect-src 'self'; font-src 'self' data:; form-action 'self'; frame-ancestors 'self'; frame-src 'self'; img-src 'self' data: blob:; object-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'"
+	}
+
+	@api path /v1 /v1/*
+	handle @api {
+		header Cache-Control "no-store"
+		reverse_proxy api:3000
+	}
+
+	@health path /health /health/*
+	handle @health {
+		header Cache-Control "no-store"
+		reverse_proxy api:3000
+	}
+
+	@assets path /assets/*
+	header @assets Cache-Control "public, max-age=31536000, immutable"
+
+	handle {
+		root * /srv
+		encode zstd gzip
+		try_files {path} /index.html
+		file_server
+	}
+}

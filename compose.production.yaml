@@ -1,0 +1,310 @@
+services:
+  web:
+    image: ${NEXUS_KB_WEB_IMAGE:?NEXUS_KB_WEB_IMAGE must be an immutable digest reference}
+    pull_policy: always
+    restart: unless-stopped
+    user: '10004:10004'
+    environment:
+      NEXUS_KB_PUBLIC_HOST: ${NEXUS_KB_PUBLIC_HOST:?NEXUS_KB_PUBLIC_HOST is required}
+    ports:
+      - '${NEXUS_KB_HTTP_BIND:-0.0.0.0}:80:8080'
+      - '${NEXUS_KB_HTTPS_BIND:-0.0.0.0}:443:8443'
+    secrets:
+      - tls_certificate
+      - tls_key
+    depends_on:
+      api:
+        condition: service_healthy
+    read_only: true
+    tmpfs:
+      - /tmp:size=32m,mode=1777,uid=10004,gid=10004
+      - /config:size=16m,mode=0700,uid=10004,gid=10004
+      - /data:size=16m,mode=0700,uid=10004,gid=10004
+    cap_drop:
+      - ALL
+    pids_limit: 128
+    mem_limit: ${NEXUS_KB_WEB_MEMORY_LIMIT:-256m}
+    cpus: ${NEXUS_KB_WEB_CPU_LIMIT:-1.0}
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ['CMD', 'wget', '-qO-', 'http://127.0.0.1:8080/gateway-health']
+      interval: 10s
+      timeout: 3s
+      retries: 6
+    networks:
+      - edge
+
+  api-migrate:
+    image: ${NEXUS_KB_API_IMAGE:?NEXUSKB_API_IMAGE must be an immutable digest reference}
+    pull_policy: always
+    restart: 'no'
+    user: '10001:10001'
+    environment:
+      DATABASE_URL: null
+      DATABASE_URL_FILE: /run/secrets/database_url
+      HOME: /tmp
+    secrets:
+      - database_url
+    command:
+      - apps/api/node_modules/.bin/prisma
+      - migrate
+      - deploy
+      - --schema
+      - apps/api/prisma/schema.prisma
+    depends_on:
+      postgres:
+        condition: service_healthy
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777,uid=10001,gid=10001
+    cap_drop:
+      - ALL
+    pids_limit: 128
+    mem_limit: ${NEXUS_KB_MIGRATION_MEMORY_LIMIT:-512m}
+    cpus: ${NEXUS_KB_MIGRATION_CPU_LIMIT:-1.0}
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - backend
+
+  api:
+    image: ${NEXUS_KB_API_IMAGE:?NEXUSKB_API_IMAGE must be an immutable digest reference}
+    pull_policy: always
+    user: '10001:10001'
+    group_add:
+      - '10010'
+    env_file: !override
+      - path: .env.production
+      - path: ./config/runtime.env
+        required: false
+    command: ['node', 'apps/api/dist/main.js']
+    ports: !reset []
+    expose:
+      - '3000'
+    environment:
+      NODE_ENV: production
+      HOME: /tmp
+      AUTH_REQUIRED: 'true'
+      PASSWORD_AUTH_ENABLED: 'false'
+      PASSWORD_AUTH_USERS_JSON: '[]'
+      ALLOW_CONFIDENTIAL_TO_CLOUD: 'false'
+      OIDC_ISSUER: ${OIDC_ISSUER:?OIDC_ISSUER is required}
+      OIDC_AUDIENCE: ${OIDC_AUDIENCE:?OIDC_AUDIENCE is required}
+      OIDC_JWKS_URI: ${OIDC_JWKS_URI:?OIDC_JWKS_URI is required}
+      OIDC_AUTHORIZATION_ENDPOINT: ${OIDC_AUTHORIZATION_ENDPOINT:?OIDC_AUTHORIZATION_ENDPOINT is required}
+      OIDC_TOKEN_ENDPOINT: ${OIDC_TOKEN_ENDPOINT:?OIDC_TOKEN_ENDPOINT is required}
+      OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:?OIDC_CLIENT_ID is required}
+      OIDC_REDIRECT_URI: ${OIDC_REDIRECT_URI:?OIDC_REDIRECT_URI is required}
+      OIDC_SCOPES_JSON: ${OIDC_SCOPES_JSON:-["openid","profile"]}
+      OIDC_ALLOWED_ALGORITHMS_JSON: ${OIDC_ALLOWED_ALGORITHMS_JSON:-["RS256"]}
+      DEPLOYMENT_AGENT_URL: http://deployment-agent:8200
+      DATABASE_URL: null
+      DATABASE_URL_FILE: /run/secrets/database_url
+      REDIS_URL: null
+      REDIS_URL_FILE: /run/secrets/redis_url
+      PARSER_INTERNAL_TOKEN: null
+      PARSER_INTERNAL_TOKEN_FILE: /run/secrets/parser_internal_token
+      SYSTEM_CONFIG_ENCRYPTION_KEY: null
+      SYSTEM_CONFIG_ENCRYPTION_KEY_FILE: /run/secrets/system_config_encryption_key
+      DEPLOYMENT_AGENT_TOKEN: null
+      DEPLOYMENT_AGENT_TOKEN_FILE: /run/secrets/deployment_agent_token
+    secrets:
+      - database_url
+      - redis_url
+      - parser_internal_token
+      - system_config_encryption_key
+      - deployment_agent_token
+    depends_on:
+      api-migrate:
+        condition: service_completed_successfully
+    read_only: true
+    tmpfs:
+      - /tmp:size=256m,mode=1777,uid=10001,gid=10001
+    cap_drop:
+      - ALL
+    pids_limit: 512
+    mem_limit: ${NEXUS_KB_API_MEMORY_LIMIT:-2g}
+    cpus: ${NEXUS_KB_API_CPU_LIMIT:-2.0}
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - fetch('http://127.0.0.1:3000/health/ready').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))
+
+  parser-worker:
+    image: ${NEXUS_KB_PARSER_IMAGE:?NEXUSKB_PARSER_IMAGE must be an immutable digest reference}
+    pull_policy: always
+    user: '10002:10002'
+    group_add:
+      - '10010'
+    environment:
+      PARSER_INTERNAL_TOKEN: null
+      PARSER_INTERNAL_TOKEN_FILE: /run/secrets/parser_internal_token
+    secrets:
+      - parser_internal_token
+    cap_drop:
+      - ALL
+    pids_limit: 512
+    mem_limit: ${NEXUS_KB_PARSER_MEMORY_LIMIT:-4g}
+    cpus: ${NEXUS_KB_PARSER_CPU_LIMIT:-4.0}
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/ready', timeout=3)
+
+  parser-worker-dwg:
+    image: ${NEXUS_KB_PARSER_DWG_IMAGE:?NEXUSKB_PARSER_DWG_IMAGE must be an immutable digest reference}
+    pull_policy: always
+    user: '10002:10002'
+    group_add:
+      - '10010'
+    environment:
+      PARSER_INTERNAL_TOKEN: null
+      PARSER_INTERNAL_TOKEN_FILE: /run/secrets/parser_internal_token
+    secrets:
+      - parser_internal_token
+    cap_drop:
+      - ALL
+    pids_limit: 512
+    mem_limit: ${NEXUS_KB_PARSER_DWG_MEMORY_LIMIT:-4g}
+    cpus: ${NEXUS_KB_PARSER_DWG_CPU_LIMIT:-4.0}
+
+  tika:
+    image: ${NEXUS_KB_TIKA_IMAGE:?NEXUSKB_TIKA_IMAGE must be an immutable digest reference}
+    pull_policy: always
+    user: '35002:35002'
+    cap_drop:
+      - ALL
+    pids_limit: 256
+    mem_limit: ${NEXUS_KB_TIKA_MEMORY_LIMIT:-2g}
+    cpus: ${NEXUS_KB_TIKA_CPU_LIMIT:-2.0}
+
+  reranker-worker:
+    image: ${NEXUS_KB_RERANKER_IMAGE:?NEXUSKB_RERANKER_IMAGE must be an immutable digest reference}
+    pull_policy: always
+    user: '10003:10003'
+    environment:
+      PARSER_INTERNAL_TOKEN: null
+      PARSER_INTERNAL_TOKEN_FILE: /run/secrets/parser_internal_token
+      RERANK_INTERNAL_TOKEN: null
+    secrets:
+      - parser_internal_token
+    cap_drop:
+      - ALL
+    pids_limit: 512
+    mem_limit: ${NEXUS_KB_RERANKER_MEMORY_LIMIT:-4g}
+    cpus: ${NEXUS_KB_RERANKER_CPU_LIMIT:-4.0}
+
+  deployment-agent:
+    image: ${NEXUS_KB_DEPLOYMENT_AGENT_IMAGE:?NEXUSKB_DEPLOYMENT_AGENT_IMAGE must be an immutable digest reference}
+    pull_policy: always
+    user: ${NEXUS_KB_DEPLOYMENT_UID:?NEXUS_KB_DEPLOYMENT_UID is required}:${NEXUS_KB_DOCKER_GID:?NEXUS_KB_DOCKER_GID is required}
+    group_add:
+      - ${NEXUS_KB_DOCKER_GID}
+    environment:
+      HOME: /tmp
+      DEPLOYMENT_AGENT_TOKEN: null
+      DEPLOYMENT_AGENT_TOKEN_FILE: /run/secrets/deployment_agent_token
+      DEPLOYMENT_ENV_FILE: ${PWD}/.env.production
+      DEPLOYMENT_COMPOSE_FILES: ${PWD}/compose.yaml:${PWD}/compose.dwg.yaml:${PWD}/compose.production.yaml
+    secrets:
+      - deployment_agent_token
+    cap_drop:
+      - ALL
+    pids_limit: 128
+    mem_limit: ${NEXUS_KB_DEPLOYMENT_AGENT_MEMORY_LIMIT:-256m}
+    cpus: ${NEXUS_KB_DEPLOYMENT_AGENT_CPU_LIMIT:-1.0}
+
+  reranker-model-init:
+    image: ${NEXUS_KB_RERANKER_IMAGE:?NEXUSKB_RERANKER_IMAGE must be an immutable digest reference}
+    pull_policy: always
+    user: '10003:10003'
+    read_only: true
+    tmpfs:
+      - /tmp:size=256m,mode=1777,uid=10003,gid=10003
+    cap_drop:
+      - ALL
+    pids_limit: 512
+    mem_limit: ${NEXUS_KB_RERANKER_MEMORY_LIMIT:-4g}
+    cpus: ${NEXUS_KB_RERANKER_CPU_LIMIT:-4.0}
+
+  postgres:
+    image: ${NEXUS_KB_POSTGRES_IMAGE:?NEXUSKB_POSTGRES_IMAGE must be an immutable digest reference}
+    pull_policy: always
+    user: '999:999'
+    environment:
+      POSTGRES_PASSWORD: null
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+    secrets:
+      - postgres_password
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+      - /var/run/postgresql:size=16m,mode=3775,uid=999,gid=999
+    cap_drop:
+      - ALL
+    pids_limit: 256
+    mem_limit: ${NEXUS_KB_POSTGRES_MEMORY_LIMIT:-4g}
+    cpus: ${NEXUS_KB_POSTGRES_CPU_LIMIT:-2.0}
+
+  redis:
+    image: ${NEXUS_KB_REDIS_IMAGE:?NEXUSKB_REDIS_IMAGE must be an immutable digest reference}
+    pull_policy: always
+    user: '999:999'
+    command:
+      - sh
+      - -ec
+      - exec redis-server --appendonly yes --appendfsync everysec --requirepass "$$(cat /run/secrets/redis_password)"
+    secrets:
+      - redis_password
+    read_only: true
+    tmpfs:
+      - /tmp:size=32m,mode=1777
+    cap_drop:
+      - ALL
+    pids_limit: 256
+    mem_limit: ${NEXUS_KB_REDIS_MEMORY_LIMIT:-2g}
+    cpus: ${NEXUS_KB_REDIS_CPU_LIMIT:-1.0}
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - REDISCLI_AUTH="$$(cat /run/secrets/redis_password)" redis-cli ping | grep -qx PONG
+
+  chroma:
+    image: ${NEXUS_KB_CHROMA_IMAGE:?NEXUSKB_CHROMA_IMAGE must be an immutable digest reference}
+    pull_policy: always
+    user: '10006:10006'
+    environment:
+      HOME: /tmp
+    read_only: true
+    tmpfs:
+      - /tmp:size=256m,mode=1777
+    cap_drop:
+      - ALL
+    pids_limit: 512
+    mem_limit: ${NEXUS_KB_CHROMA_MEMORY_LIMIT:-4g}
+    cpus: ${NEXUS_KB_CHROMA_CPU_LIMIT:-2.0}
+
+secrets:
+  database_url:
+    file: ${NEXUS_KB_SECRETS_DIR:-./config/production-secrets}/database_url
+  deployment_agent_token:
+    file: ${NEXUS_KB_SECRETS_DIR:-./config/production-secrets}/deployment_agent_token
+  parser_internal_token:
+    file: ${NEXUS_KB_SECRETS_DIR:-./config/production-secrets}/parser_internal_token
+  postgres_password:
+    file: ${NEXUS_KB_SECRETS_DIR:-./config/production-secrets}/postgres_password
+  redis_password:
+    file: ${NEXUS_KB_SECRETS_DIR:-./config/production-secrets}/redis_password
+  redis_url:
+    file: ${NEXUS_KB_SECRETS_DIR:-./config/production-secrets}/redis_url
+  system_config_encryption_key:
+    file: ${NEXUS_KB_SECRETS_DIR:-./config/production-secrets}/system_config_encryption_key
+  tls_certificate:
+    file: ${NEXUS_KB_SECRETS_DIR:-./config/production-secrets}/tls_certificate.pem
+  tls_key:
+    file: ${NEXUS_KB_SECRETS_DIR:-./config/production-secrets}/tls_key.pem

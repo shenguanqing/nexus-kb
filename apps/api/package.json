@@ -10,6 +10,7 @@
     "index:migrate": "tsx src/index-migration.cli.ts",
     "quality:capture": "tsx src/evaluation/quality-capture.cli.ts",
     "quality:evaluate": "tsx src/evaluation/quality-evaluation.cli.ts",
+    "runtime:recover": "tsx src/runtime-config-recovery.cli.ts",
     "lint": "eslint src test",
     "start": "node dist/main.js",
     "test": "pnpm --filter @nexus-kb/contracts build && vitest run --exclude 'test/integration/**'",

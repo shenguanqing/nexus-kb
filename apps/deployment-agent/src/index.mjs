@@ -2,14 +2,24 @@ import { execFile } from 'node:child_process';
 import { createServer } from 'node:http';
 import { mkdir, rename, writeFile } from 'node:fs/promises';
 import { promisify } from 'node:util';
-import { validatePayload } from './policy.mjs';
+import {
+  deploymentCommandConfiguration,
+  deploymentComposeRecreateArguments,
+  validatePayload,
+} from './policy.mjs';
 
 const executeFile = promisify(execFile);
 const port = Number(process.env.DEPLOYMENT_AGENT_PORT ?? '8200');
 const token = process.env.DEPLOYMENT_AGENT_TOKEN ?? '';
-const workspace = process.env.DEPLOYMENT_WORKSPACE ?? '';
-const workspaceReady = workspace.startsWith('/') && !workspace.includes('\0');
-const runtimeEnvironmentPath = `${workspace}/config/runtime.env`;
+let commandConfiguration;
+try {
+  commandConfiguration = deploymentCommandConfiguration(process.env);
+} catch {
+  commandConfiguration = null;
+}
+const workspace = commandConfiguration?.workspace ?? '';
+const workspaceReady = commandConfiguration !== null;
+const runtimeEnvironmentPath = commandConfiguration?.runtimeEnvironmentFile ?? '';
 const readinessUrls = {
   api: 'http://api:3000/health/ready',
   'parser-worker': 'http://parser-worker:8000/health/ready',
@@ -50,28 +60,11 @@ async function writeEnvironment(environment) {
 }
 
 async function recreate(services) {
-  await executeFile(
-    'docker',
-    [
-      'compose',
-      '--project-directory',
-      workspace,
-      '-f',
-      `${workspace}/compose.yaml`,
-      '-f',
-      `${workspace}/compose.dwg.yaml`,
-      '--env-file',
-      `${workspace}/.env`,
-      '--env-file',
-      runtimeEnvironmentPath,
-      'up',
-      '-d',
-      '--force-recreate',
-      '--no-deps',
-      ...services,
-    ],
-    { timeout: 180_000, maxBuffer: 1024 * 1024 },
-  );
+  if (!commandConfiguration) throw new Error('WORKSPACE_UNAVAILABLE');
+  await executeFile('docker', deploymentComposeRecreateArguments(commandConfiguration, services), {
+    timeout: 180_000,
+    maxBuffer: 1024 * 1024,
+  });
 }
 
 async function waitForReadiness(services) {

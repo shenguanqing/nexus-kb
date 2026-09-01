@@ -27,6 +27,22 @@ for (const file of files) {
   if (patterns.some((pattern) => pattern.test(content))) findings.push(file);
 }
 
+const exampleEnvironment = readFileSync('.env.example', 'utf8');
+for (const name of [
+  'OPENAI_API_KEY',
+  'GEMINI_API_KEY',
+  'DEEPSEEK_API_KEY',
+  'DASHSCOPE_API_KEY',
+  'CUSTOM_API_KEY',
+  'SYSTEM_CONFIG_ENCRYPTION_KEY',
+  'DEPLOYMENT_AGENT_TOKEN',
+  'KEYCLOAK_TEST_ADMIN_PASSWORD',
+  'KEYCLOAK_TEST_USER_PASSWORD',
+]) {
+  const value = exampleEnvironment.match(new RegExp(`^${name}=(.*)$`, 'm'))?.[1]?.trim();
+  if (value) findings.push(`.env.example:${name}`);
+}
+
 if (findings.length > 0) {
   console.error(`疑似密钥出现在：${findings.join(', ')}`);
   process.exit(1);

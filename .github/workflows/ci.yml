@@ -57,6 +57,7 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm lint
+      - run: pnpm lint:css
       - run: pnpm typecheck
       - run: pnpm test
       - run: pnpm --filter @nexus-kb/api db:migrate:deploy
@@ -89,3 +90,140 @@ jobs:
       - run: ruff check app tests
       - run: mypy app
       - run: pytest
+
+  reranker-worker:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/reranker-worker
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m pip install -r requirements.lock
+      - run: ruff check app tests
+      - run: mypy app
+      - run: pytest
+
+  web-e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.27.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @nexus-kb/web exec playwright install --with-deps chromium
+      - run: pnpm --filter @nexus-kb/web test:e2e
+
+  production-configuration:
+    runs-on: ubuntu-latest
+    env:
+      NEXUS_KB_PUBLIC_HOST: kb.example.test
+      NEXUS_KB_DEPLOYMENT_UID: '10005'
+      NEXUS_KB_DOCKER_GID: '998'
+      OIDC_ISSUER: https://id.example.test/realms/kb
+      OIDC_JWKS_URI: https://id.example.test/realms/kb/certs
+      OIDC_AUTHORIZATION_ENDPOINT: https://id.example.test/authorize
+      OIDC_TOKEN_ENDPOINT: https://id.example.test/token
+      OIDC_REDIRECT_URI: https://kb.example.test/auth/callback
+      OIDC_AUDIENCE: nexus-kb
+      OIDC_CLIENT_ID: nexus-kb-web
+      NEXUS_KB_API_IMAGE: registry.example/api@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+      NEXUS_KB_WEB_IMAGE: registry.example/web@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+      NEXUS_KB_PARSER_IMAGE: registry.example/parser@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+      NEXUS_KB_PARSER_DWG_IMAGE: registry.example/parser-dwg@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+      NEXUS_KB_RERANKER_IMAGE: registry.example/reranker@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+      NEXUS_KB_DEPLOYMENT_AGENT_IMAGE: registry.example/deployment@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+      NEXUS_KB_TIKA_IMAGE: registry.example/tika@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+      NEXUS_KB_POSTGRES_IMAGE: registry.example/postgres@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+      NEXUS_KB_REDIS_IMAGE: registry.example/redis@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+      NEXUS_KB_CHROMA_IMAGE: registry.example/chroma@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.27.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm production:init
+      - run: |
+          install -d -m 0700 config/production-secrets
+          openssl req -x509 -newkey rsa:2048 -nodes -days 30 \
+            -subj '/CN=kb.example.test' \
+            -addext 'subjectAltName=DNS:kb.example.test' \
+            -keyout config/production-secrets/tls_key.pem \
+            -out config/production-secrets/tls_certificate.pem
+          printf '%s' 'postgresql://kb:ci-password@postgres:5432/kb' > config/production-secrets/database_url
+          printf '%s' 'ci-deployment-token-0000000000000000' > config/production-secrets/deployment_agent_token
+          printf '%s' 'ci-parser-token-000000000000000000' > config/production-secrets/parser_internal_token
+          printf '%s' 'ci-postgres-password' > config/production-secrets/postgres_password
+          printf '%s' 'ci-redis-password' > config/production-secrets/redis_password
+          printf '%s' 'redis://:ci-redis-password@redis:6379' > config/production-secrets/redis_url
+          openssl rand -base64 32 | tr -d '\n' > config/production-secrets/system_config_encryption_key
+          chmod 0600 config/production-secrets/*
+      - run: pnpm production:check
+      - run: pnpm production:compose:check
+
+  production-images:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: api
+            dockerfile: apps/api/Dockerfile
+          - name: web
+            dockerfile: apps/web/Dockerfile
+          - name: parser-worker
+            dockerfile: apps/parser-worker/Dockerfile
+          - name: reranker-worker
+            dockerfile: apps/reranker-worker/Dockerfile
+          - name: deployment-agent
+            dockerfile: apps/deployment-agent/Dockerfile
+          - name: postgres
+            dockerfile: docker/postgres.Dockerfile
+          - name: redis
+            dockerfile: docker/redis.Dockerfile
+          - name: chroma
+            dockerfile: docker/chroma.Dockerfile
+          - name: tika
+            dockerfile: docker/tika.Dockerfile
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          load: true
+          tags: nexus-kb-ci:${{ matrix.name }}
+          cache-from: type=gha,scope=${{ matrix.name }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.name }}
+      - uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: nexus-kb-ci:${{ matrix.name }}
+          format: table
+          exit-code: '1'
+          ignore-unfixed: true
+          severity: CRITICAL,HIGH
+      - uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: nexus-kb-ci:${{ matrix.name }}
+          format: cyclonedx
+          output: sbom-${{ matrix.name }}.cdx.json
+          scan-type: image
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sbom-${{ matrix.name }}
+          path: sbom-${{ matrix.name }}.cdx.json
+          if-no-files-found: error
+          retention-days: 30

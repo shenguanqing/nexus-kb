@@ -8,6 +8,11 @@
 !.env.example
 config/runtime.env
 config/runtime.env.tmp
+config/runtime.env.pre-restore
+config/runtime.env.recovery.tmp
+config/runtime.env.recovery.metadata.tmp
+config/production-secrets/*
+!config/production-secrets/README.md
 
 # JavaScript dependencies and build artifacts
 node_modules/

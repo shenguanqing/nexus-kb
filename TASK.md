@@ -24,6 +24,11 @@
 - 按要求停止 5173、使用原始 `pnpm --filter @nexus-kb/web dev` 并清空旧优化缓存冷启动后，Vite 日志确认首次访问懒加载页面会逐批发现 Element Plus 组件样式并输出 `optimized dependencies changed. reloading`，这才是实际整页刷新根因。扫描全部 Vue SFC 与 `optimizeDeps.include` CSS trailing glob 均已冷启动验证无效；关闭 resolver 的逐组件样式注入、改为入口一次加载官方完整 CSS并只预优化 Element Plus 本体与图标后，再次清空缓存、停止 5173、按原命令冷启动并逐项点击全部 10 个一级入口，`AppShell` 始终保持挂载，Vite 全程没有新的依赖优化、reload 或动态模块加载失败日志。用于早期排查的运行时菜单模块预加载已删除，避免管理员登录后后台下载全部页面 JavaScript；删除后又完成一轮相同的清缓存、原命令冷启动和 10 个菜单实测，结论保持不变。
 - 运行配置页已补齐由可键盘操作的 Info 图标直接打开的全屏遮罩字段说明，不再套用 Button 外框；PC/Pad 为 640px 固定高度 Dialog、移动端底部 Drawer，标题、搜索和顶部 Tab 固定，字段内容块内滚动，覆盖所有可编辑控件的用途、范围与发布限制；OCR 语言明确提示当前镜像只支持 `ch_sim,en`，不能仅靠改运行配置扩展语言。Element Table 表头背景同时调整为透明，不再绘制独立浅色填充。运行配置分区已从长表单 Anchor 改为 PC/Pad/Mobile 统一的真正 Tabs，一次只渲染当前 LLM、Rerank 与问答、上传与入库、Parser、CAD/DWG 或 Tika 分区。切换 Tab 不再定位长表单的深层 section，而是将真实外层 `kb-block` 对齐回页面内容顶部；页面仍由 `.kb-page__content` 统一滚动，没有表单嵌套滚动区。Provider 定向组件测试 7/7、Web Lint/Stylelint、类型检查和生产构建通过；未重跑 Playwright 全量。
 - 阶段 4/7 的 PPTX、HTML、RTF/EML 解析预览，以及 OpenAI Embedding 运行时接入仍延期；不得描述为已交付，也不默认阻塞阶段 16。
+- 阶段 16 P0 的仓库实现已补齐：新增 Web/Caddy HTTPS 生产镜像与 `compose.production.yaml`，生产服务使用不可变镜像 digest、只读根文件系统、`cap_drop: ALL`、PID/CPU/内存上限，API 迁移与运行分离且 healthcheck 改为 readiness；deployment-agent 使用非 root UID + Docker socket GID，并固定生产 Compose/env 文件。Parser/Reranker 已移除整份 `env_file` 注入，只接收显式解析/重排白名单与文件型内部 token，Provider Key、数据库和部署密钥不再进入 Worker 环境。
+- 生产配置与恢复入口已补齐：`production:init` 从唯一 `.env.example` 生成无内联 Secret 的 `.env.production`；`production:check` 校验 OIDC/HTTPS、证书/私钥、Secret 权限、非 root UID/GID 与镜像 digest；`production:compose:check` 不输出展开环境并验证合并拓扑的端口、权限、资源和 Worker Secret 边界。`production:backup`/`production:restore` 对 PostgreSQL、原文/预览、Chroma、Redis 执行停写一致性归档、SHA-256 manifest、空目标强确认恢复、readiness 与 active version 完整性检查。
+- 上线质量入口已补齐：`quality:baseline` 强制 strict，串行采集 Vector Top 5 与 Top 20 + 本地 BGE Top 5，生成报告后按私有数据集批准门槛失败关闭；CI 新增 Stylelint、Playwright、Reranker Ruff/Mypy/pytest、生产 API/Web/Parser/Reranker/deployment-agent/PostgreSQL/Redis/Chroma/Tika 镜像构建、Trivy 高危漏洞门禁和 CycloneDX SBOM。含授权 ODA 的 DWG 镜像继续只允许在批准的私有发布环境构建和扫描。
+- P0 容器级验证已在 Docker Desktop 的独立 Compose 项目完成：API、Web、Parser、Reranker、deployment-agent、PostgreSQL、Redis、Chroma、Tika 和本机授权 DWG 镜像均成功构建；Parser 62/62、Reranker 4/4、API PostgreSQL/Redis/Chroma 集成 11/11 通过。隔离拓扑的 `api-migrate` 退出码为 0，API/Parser/PostgreSQL/Redis/Chroma/Tika 全部在显式非 root UID/GID、只读根文件系统、`cap_drop: ALL` 与 PID/CPU/内存边界下达到 healthy；HTTPS Web 同样以非 root/只读/无 capabilities 运行，验证 80→443、证书装载、Host 限制、HSTS/CSP/安全头、SPA fallback 和 `/health/ready` 同源 JSON 代理。验证期间发现并修复官方数据镜像 root entrypoint、Caddy file capability、health 路由顺序、Tika readiness 依赖、Parser Secret loader 缺少 `exec`、Worker 整份 env 注入和 Parser 测试复用旧镜像问题；临时容器、网络、volumes、证书和 registry 已清理。
+- 提交前复核进一步收紧三项失败关闭边界：质量门禁现在要求 baseline 与 Rerank 候选越权率都为 0；deployment-agent 的纯配置发布固定 `--pull never`，不依赖 registry 凭据或意外更新镜像；备份增加 active 配置/Embedding 安全元数据与实际 runtime 哈希一致性检查，恢复从 PostgreSQL 密文和 Secret Manager 主密钥重新生成、校验并原子替换 `runtime.env`，不在备份中保存 Provider Key 正文。
 
 ## 3. 质量结论与上线边界
 
@@ -68,6 +73,7 @@
 ## 5. 阻塞与风险
 
 - 生产上线清单尚未完成：镜像与权限、TLS/认证、密钥托管、持久化、备份恢复、监控告警、压测、安全测试和合规确认仍需逐项验收。
+- P0 仓库实现和 Mac 隔离容器验证仍不等于生产验收：尚未在目标 Linux 主机验证真实 registry digest、deployment-agent 的宿主机 socket/config 权限、正式证书续期、实际 IdP/Vault、备份存储和完整清空后恢复；私有 registry 推送因当前工具额度限制未执行。私有 44 题数据和付费 Provider 授权也未提供，因此质量复测未运行，这些高层任务继续保持未勾选。
 - 评测报告与当前实现存在边界差异，不能把历史指标或“评测完成”表述为当前版本已通过全部质量门槛。
 - 若阶段 16 的压测、恢复演练或已批准业务需求证明延期解析器或 Embedding 接入是上线前置条件，应重新提高其优先级并同步代码、测试和文档。
 

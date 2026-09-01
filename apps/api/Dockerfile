@@ -12,7 +12,13 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.base.json eslint.c
 COPY apps/api/package.json apps/api/package.json
 COPY apps/api/prisma apps/api/prisma
 COPY packages/contracts/package.json packages/contracts/package.json
-RUN pnpm install --frozen-lockfile
+RUN --mount=type=cache,id=nexuskb-pnpm-store,target=/pnpm/store \
+    pnpm config set store-dir /pnpm/store \
+    && pnpm config set fetch-retries 10 \
+    && pnpm config set fetch-retry-mintimeout 10000 \
+    && pnpm config set fetch-retry-maxtimeout 60000 \
+    && pnpm config set network-concurrency 4 \
+    && pnpm install --frozen-lockfile
 COPY apps/api apps/api
 COPY packages/contracts packages/contracts
 RUN pnpm --filter @nexus-kb/contracts build && pnpm --filter @nexus-kb/api build
@@ -30,6 +36,9 @@ RUN groupadd --gid 10001 app \
     && chmod 0755 /data/raw-docs \
     && chmod 2770 /data/previews
 COPY --from=build --chown=app:app /app /app
+COPY --chmod=0755 scripts/nexus-load-secrets /usr/local/bin/nexus-load-secrets
 USER app
 EXPOSE 3000
+ENV NEXUS_FILE_ENV_NAMES="DATABASE_URL REDIS_URL PARSER_INTERNAL_TOKEN RERANK_INTERNAL_TOKEN SYSTEM_CONFIG_ENCRYPTION_KEY DEPLOYMENT_AGENT_TOKEN PASSWORD_AUTH_USERS_JSON OPENAI_API_KEY GEMINI_API_KEY DEEPSEEK_API_KEY DASHSCOPE_API_KEY CUSTOM_API_KEY"
+ENTRYPOINT ["/usr/local/bin/nexus-load-secrets"]
 CMD ["sh", "-c", "apps/api/node_modules/.bin/prisma migrate deploy --schema apps/api/prisma/schema.prisma && node apps/api/dist/main.js"]

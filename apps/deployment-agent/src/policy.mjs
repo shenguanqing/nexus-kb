@@ -1,4 +1,11 @@
+import path from 'node:path';
+
 const allowedServices = new Set(['api', 'parser-worker', 'parser-worker-dwg', 'reranker-worker']);
+const allowedComposeFiles = new Set([
+  'compose.yaml',
+  'compose.dwg.yaml',
+  'compose.production.yaml',
+]);
 const allowedKeys = new Set([
   'LLM_PROVIDER',
   'LLM_MODEL',
@@ -117,4 +124,72 @@ export function validatePayload(value) {
 
 export function managedEnvironmentFixture(overrides = {}) {
   return Object.fromEntries([...allowedKeys].map((key) => [key, overrides[key] ?? '']));
+}
+
+export function deploymentCommandConfiguration(environment) {
+  const workspace = environment.DEPLOYMENT_WORKSPACE ?? '';
+  if (!path.isAbsolute(workspace) || workspace.includes('\0')) throw new Error('INVALID_WORKSPACE');
+
+  const rawComposeFiles =
+    environment.DEPLOYMENT_COMPOSE_FILES ??
+    `${workspace}/compose.yaml:${workspace}/compose.dwg.yaml`;
+  const composeFiles = [...new Set(rawComposeFiles.split(':').filter(Boolean))];
+  if (composeFiles.length < 1 || composeFiles.length > allowedComposeFiles.size) {
+    throw new Error('INVALID_COMPOSE_FILES');
+  }
+  for (const composeFile of composeFiles) {
+    if (
+      !path.isAbsolute(composeFile) ||
+      path.dirname(composeFile) !== workspace ||
+      !allowedComposeFiles.has(path.basename(composeFile))
+    ) {
+      throw new Error('INVALID_COMPOSE_FILES');
+    }
+  }
+
+  const environmentFile = environment.DEPLOYMENT_ENV_FILE ?? `${workspace}/.env`;
+  if (
+    !path.isAbsolute(environmentFile) ||
+    path.dirname(environmentFile) !== workspace ||
+    !new Set(['.env', '.env.production']).has(path.basename(environmentFile))
+  ) {
+    throw new Error('INVALID_ENV_FILE');
+  }
+
+  return {
+    workspace,
+    composeFiles,
+    environmentFile,
+    runtimeEnvironmentFile: `${workspace}/config/runtime.env`,
+  };
+}
+
+export function deploymentComposeRecreateArguments(configuration, services) {
+  if (
+    !configuration ||
+    !Array.isArray(configuration.composeFiles) ||
+    !Array.isArray(services) ||
+    services.length < 1 ||
+    services.some((service) => !allowedServices.has(service))
+  ) {
+    throw new Error('INVALID_RECREATE_ARGUMENTS');
+  }
+  const composeFiles = configuration.composeFiles.flatMap((composeFile) => ['-f', composeFile]);
+  return [
+    'compose',
+    '--project-directory',
+    configuration.workspace,
+    ...composeFiles,
+    '--env-file',
+    configuration.environmentFile,
+    '--env-file',
+    configuration.runtimeEnvironmentFile,
+    'up',
+    '-d',
+    '--pull',
+    'never',
+    '--force-recreate',
+    '--no-deps',
+    ...services,
+  ];
 }

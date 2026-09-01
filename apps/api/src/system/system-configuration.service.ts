@@ -25,6 +25,7 @@ import { ApiException } from '../common/api-exception';
 import { OperationalLogger } from '../common/operational-logger';
 import { AppConfig, parseEnvironment } from '../config/app-config';
 import { PrismaService } from '../database/prisma.service';
+import { runtimeEnvironmentSha256, type RuntimeEnvironment } from './runtime-environment';
 
 const VALUE_FIELDS = [
   'LLM_PROVIDER',
@@ -174,6 +175,56 @@ export class SystemConfigurationService {
       secretConfigured: this.secretSummary(effective),
       current: active ? this.versionResponse(active) : null,
       versions: versions.map((version) => this.versionResponse(version)),
+    };
+  }
+
+  async recoveryRuntimeConfiguration(): Promise<{
+    environment: RuntimeEnvironment;
+    metadata: {
+      schemaVersion: 1;
+      active: boolean;
+      tenantId: string | null;
+      configVersionId: string | null;
+      version: number | null;
+      activatedAt: string | null;
+      runtimeEnvSha256: string;
+      valuesSha256: string;
+      valueKeys: ManagedConfigurationField[];
+      secretConfigured: Record<ManagedConfigurationSecret, boolean>;
+    };
+  }> {
+    const activeVersions = await this.prisma.systemConfigVersion.findMany({
+      where: { status: 'active' },
+      orderBy: [{ activatedAt: 'desc' }, { createdAt: 'desc' }],
+      take: 2,
+    });
+    if (activeVersions.length > 1) {
+      throw new ApiException(
+        'SYSTEM_CONFIG_RECOVERY_AMBIGUOUS',
+        '存在多个生效运行配置，无法安全恢复全局 runtime env',
+        409,
+      );
+    }
+    const active = activeVersions[0] ?? null;
+    const environment = active ? this.hydratedEnvironment(active.encryptedConfig) : {};
+    if (active) this.validateApplicationEnvironment(environment);
+    const publicValues = active ? this.publicValues(environment) : null;
+    return {
+      environment,
+      metadata: {
+        schemaVersion: 1,
+        active: active !== null,
+        tenantId: active?.tenantId ?? null,
+        configVersionId: active?.id ?? null,
+        version: active?.version ?? null,
+        activatedAt: active?.activatedAt?.toISOString() ?? null,
+        runtimeEnvSha256: runtimeEnvironmentSha256(environment),
+        valuesSha256: runtimeEnvironmentSha256(publicValues ?? {}),
+        valueKeys: publicValues ? (Object.keys(publicValues) as ManagedConfigurationField[]) : [],
+        secretConfigured: active
+          ? this.secretSummary(environment)
+          : ({} as Record<ManagedConfigurationSecret, boolean>),
+      },
     };
   }
 

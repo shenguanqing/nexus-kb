@@ -83,6 +83,60 @@ afterEach(() => {
 });
 
 describe('SystemConfigurationService', () => {
+  it('recovers one active runtime configuration without exposing secret values in metadata', async () => {
+    const active = version({
+      status: 'active',
+      encryptedConfig: encryptLegacyConfiguration({
+        LLM_PROVIDER: 'openai',
+        LLM_MODEL: 'model-a',
+        OPENAI_API_KEY: 'recovered-secret-key',
+      }),
+      activatedAt: new Date('2026-08-04T08:05:00.000Z'),
+    });
+    const prisma = {
+      systemConfigVersion: { findMany: vi.fn().mockResolvedValue([active]) },
+    } as unknown as PrismaService;
+    const recovered = await fixture(prisma).recoveryRuntimeConfiguration();
+
+    expect(recovered.environment).toMatchObject({
+      LLM_PROVIDER: 'openai',
+      LLM_MODEL: 'model-a',
+      OPENAI_API_KEY: 'recovered-secret-key',
+    });
+    expect(recovered.metadata).toMatchObject({
+      active: true,
+      tenantId: 'tenant-a',
+      configVersionId: active.id,
+      version: 1,
+      secretConfigured: { OPENAI_API_KEY: true },
+    });
+    expect(recovered.metadata.runtimeEnvSha256).toMatch(/^[0-9a-f]{64}$/);
+    expect(recovered.metadata.valuesSha256).toMatch(/^[0-9a-f]{64}$/);
+    expect(recovered.metadata.valueKeys).toContain('LLM_PROVIDER');
+    expect(recovered.metadata.valueKeys).toContain('LLM_MODEL');
+    expect(JSON.stringify(recovered.metadata)).not.toContain('recovered-secret-key');
+  });
+
+  it('fails closed when multiple tenants have active global runtime configurations', async () => {
+    const prisma = {
+      systemConfigVersion: {
+        findMany: vi.fn().mockResolvedValue([
+          version({ status: 'active' }),
+          version({
+            id: '00000000-0000-4000-8000-000000000011',
+            tenantId: 'tenant-b',
+            status: 'active',
+          }),
+        ]),
+      },
+    } as unknown as PrismaService;
+
+    await expect(fixture(prisma).recoveryRuntimeConfiguration()).rejects.toMatchObject({
+      code: 'SYSTEM_CONFIG_RECOVERY_AMBIGUOUS',
+      status: 409,
+    });
+  });
+
   it('hydrates newly managed fields in legacy active configuration responses', async () => {
     const active = version({
       status: 'active',
