@@ -14,10 +14,10 @@ vulnerabilities:
     statement: Starlette fixed version is not published; internal JSON-only workers do not call request.form().
     expired_at: 2026-10-01
 
-  # sentence-transformers 5.1.2 requires transformers <5, so the published
-  # patched Transformers 5.x line is not yet compatible. The reranker loads one
-  # operator-approved local model revision; requests cannot supply repositories,
-  # paths, or code.
+  # sentence-transformers 5.1.2 requires transformers <5, while the patched
+  # Transformers 5.x versions named by these findings are not published on PyPI.
+  # The reranker loads one operator-approved local model revision; requests cannot
+  # supply repositories, paths, code, output paths, or chat template names.
   - id: CVE-2026-4372
     paths:
       - usr/local/lib/python3.11/site-packages/transformers-4.57.6.dist-info/METADATA
@@ -28,11 +28,16 @@ vulnerabilities:
       - usr/local/lib/python3.11/site-packages/transformers-4.57.6.dist-info/METADATA
     statement: Patched Transformers 5.x is not yet compatible with sentence-transformers; requests cannot select model code or repositories.
     expired_at: 2026-10-01
+  - id: CVE-2026-9856
+    paths:
+      - usr/local/lib/python3.11/site-packages/transformers-4.57.6.dist-info/METADATA
+    statement: Patched Transformers 5.10.0 is not published on PyPI; the worker never saves models or accepts output paths or chat template names.
+    expired_at: 2026-10-01
 
-  # Docker 29.7.2 is the newest published CLI image, but its binaries were
-  # built just before Go 1.26.6 and the patched Compose module releases. The
-  # agent is internal-only and accepts neither commands nor user-selected
-  # Compose inputs. Keep these exceptions scoped to the two required binaries.
+  # Docker 29.7.2 is the newest published CLI image, but its CLI binary was
+  # built just before Go 1.26.6. The agent is internal-only and accepts neither
+  # commands nor user-selected Docker hosts. Keep these exceptions scoped to
+  # the required Docker CLI binary.
   - id: CVE-2026-33818
     paths: &docker_cli_paths
       - usr/local/bin/docker
@@ -66,20 +71,6 @@ vulnerabilities:
     paths: *docker_cli_paths
     statement: Awaiting the next upstream Docker CLI rebuild with Go 1.26.6; the agent connects only to the local Docker socket.
     expired_at: 2026-10-01
-  - id: CVE-2026-56854
-    paths: &docker_compose_paths
-      - usr/local/libexec/docker/cli-plugins/docker-compose
-    statement: Awaiting the next upstream Compose rebuild with patched x/crypto; the agent runs only fixed local Compose arguments.
-    expired_at: 2026-10-01
-  - id: CVE-2026-56864
-    paths: *docker_compose_paths
-    statement: Awaiting the next upstream Compose rebuild with patched x/mod; the agent never resolves request-supplied modules.
-    expired_at: 2026-10-01
-  - id: CVE-2026-56865
-    paths: *docker_compose_paths
-    statement: Awaiting the next upstream Compose rebuild with patched x/mod; the agent never resolves request-supplied modules.
-    expired_at: 2026-10-01
-
   # Apache Tika 3.2.3.0 is the latest published server image and its executable
   # uber-JAR cannot safely replace individual dependency classes. Tika remains
   # non-root, read-only, resource-limited, and reachable only from the parser on

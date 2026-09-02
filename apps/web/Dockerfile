@@ -11,7 +11,7 @@ RUN apk add --no-cache ca-certificates curl \
 WORKDIR /src
 RUN go get \
         golang.org/x/crypto@v0.55.0 \
-        google.golang.org/grpc@v1.82.1 \
+        google.golang.org/grpc@v1.83.1 \
     && CGO_ENABLED=0 go build -trimpath \
         -ldflags='-s -w -X github.com/caddyserver/caddy/v2.CustomVersion=v2.11.4' \
         -o /out/caddy ./cmd/caddy

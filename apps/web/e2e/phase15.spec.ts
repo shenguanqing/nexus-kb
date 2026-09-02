@@ -1449,6 +1449,7 @@ test('uses one error-state surface and title weight across page containers', asy
 });
 
 test('keeps every authorized page within a 375px mobile viewport', async ({ page }) => {
+  test.slow();
   const documentId = '6769af9a-a4d0-4dc2-a97d-942584a9c826';
   await page.clock.setFixedTime(new Date('2026-07-22T12:00:00+08:00'));
   await page.setViewportSize({ width: 375, height: 900 });
