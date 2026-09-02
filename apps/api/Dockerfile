@@ -1,6 +1,7 @@
-FROM node:22.22.0-bookworm-slim AS base
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends openssl \
+FROM node:22.23.2-bookworm-slim AS base
+RUN apt-get -o Acquire::Retries=5 update \
+    && apt-get -o Acquire::Retries=5 upgrade -y \
+    && apt-get -o Acquire::Retries=5 install -y --no-install-recommends openssl \
     && rm -rf /var/lib/apt/lists/*
 
 FROM base AS build
@@ -21,7 +22,9 @@ RUN --mount=type=cache,id=nexuskb-pnpm-store,target=/pnpm/store \
     && pnpm install --frozen-lockfile
 COPY apps/api apps/api
 COPY packages/contracts packages/contracts
-RUN pnpm --filter @nexus-kb/contracts build && pnpm --filter @nexus-kb/api build
+RUN pnpm --filter @nexus-kb/contracts build \
+    && pnpm --filter @nexus-kb/api build \
+    && pnpm --filter @nexus-kb/api deploy --prod --legacy /prod/api
 
 FROM base AS runtime
 ENV NODE_ENV=production
@@ -34,8 +37,14 @@ RUN groupadd --gid 10001 app \
     && chown app:app /data/raw-docs \
     && chown app:previews /data/previews \
     && chmod 0755 /data/raw-docs \
-    && chmod 2770 /data/previews
-COPY --from=build --chown=app:app /app /app
+    && chmod 2770 /data/previews \
+    && rm -rf /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack /opt/yarn-v* \
+    && rm -f /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack \
+        /usr/local/bin/yarn /usr/local/bin/yarnpkg
+COPY --from=build --chown=app:app /prod/api/package.json /app/apps/api/package.json
+COPY --from=build --chown=app:app /prod/api/node_modules /app/apps/api/node_modules
+COPY --from=build --chown=app:app /app/apps/api/dist /app/apps/api/dist
+COPY --from=build --chown=app:app /app/apps/api/prisma /app/apps/api/prisma
 COPY --chmod=0755 scripts/nexus-load-secrets /usr/local/bin/nexus-load-secrets
 USER app
 EXPOSE 3000

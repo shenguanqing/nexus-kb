@@ -1,4 +1,4 @@
-FROM python:3.11.13-slim-bookworm
+FROM python:3.11.16-slim-bookworm
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
@@ -6,8 +6,9 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     DO_NOT_TRACK=true
 
 WORKDIR /app
-RUN apt-get update \
-    && apt-get install --yes --no-install-recommends \
+RUN apt-get -o Acquire::Retries=5 update \
+    && apt-get -o Acquire::Retries=5 upgrade --yes \
+    && apt-get -o Acquire::Retries=5 install --yes --no-install-recommends \
       libglib2.0-0 \
       libgl1 \
       libxcb1 \
@@ -18,7 +19,11 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 COPY apps/parser-worker/requirements.lock ./requirements.lock
 RUN --mount=type=cache,target=/root/.cache/pip \
-    pip install \
+    pip install --upgrade \
+        pip==26.2.1 \
+        setuptools==82.0.1 \
+        wheel==0.48.0 \
+    && pip install \
         --index-url https://download.pytorch.org/whl/cpu \
         torch==2.8.0 \
         torchvision==0.23.0 \
@@ -26,7 +31,8 @@ RUN --mount=type=cache,target=/root/.cache/pip \
         --index-url https://pypi.org/simple \
         --retries 10 \
         --timeout 60 \
-        -r requirements.lock
+        -r requirements.lock \
+    && pip uninstall --yes pip setuptools wheel
 # Keep Office conversion in a separate layer so changing the renderer does not
 # invalidate the much larger Python parsing dependency layer.
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \

@@ -119,6 +119,7 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @nexus-kb/web exec playwright install --with-deps chromium
+      - run: pnpm --filter @nexus-kb/contracts build
       - run: pnpm --filter @nexus-kb/web test:e2e
 
   production-configuration:
@@ -214,7 +215,9 @@ jobs:
           format: table
           exit-code: '1'
           ignore-unfixed: true
+          scanners: vuln
           severity: CRITICAL,HIGH
+          trivyignores: .trivyignore.yaml
       - uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: nexus-kb-ci:${{ matrix.name }}

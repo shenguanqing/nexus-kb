@@ -1,4 +1,4 @@
-FROM python:3.11.13-slim-bookworm
+FROM python:3.11.16-slim-bookworm
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
@@ -7,7 +7,15 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 COPY apps/reranker-worker/requirements.lock ./requirements.lock
-RUN pip install --no-cache-dir -r requirements.lock \
+RUN apt-get -o Acquire::Retries=5 update \
+    && apt-get -o Acquire::Retries=5 upgrade --yes \
+    && rm -rf /var/lib/apt/lists/* \
+    && pip install --no-cache-dir --upgrade \
+        pip==26.2.1 \
+        setuptools==82.0.1 \
+        wheel==0.48.0 \
+    && pip install --no-cache-dir -r requirements.lock \
+    && pip uninstall --yes pip setuptools wheel \
     && useradd --uid 10003 --create-home worker \
     && mkdir -p /models /tmp/reranker \
     && chown -R worker:worker /app /models /tmp/reranker

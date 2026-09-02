@@ -1,0 +1,117 @@
+vulnerabilities:
+  # FastAPI 0.128.8 currently resolves Starlette 0.49.3, the newest release
+  # available from PyPI. These findings name unpublished Starlette 1.x fixes.
+  # Both workers expose JSON-only, token-protected internal routes and never call
+  # request.form(), accept UNC paths, or serve public traffic.
+  - id: CVE-2026-48818
+    paths:
+      - usr/local/lib/python3.11/site-packages/starlette-0.49.3.dist-info/METADATA
+    statement: Starlette fixed version is not published; internal JSON-only workers do not expose the affected UNC/form paths.
+    expired_at: 2026-10-01
+  - id: CVE-2026-54283
+    paths:
+      - usr/local/lib/python3.11/site-packages/starlette-0.49.3.dist-info/METADATA
+    statement: Starlette fixed version is not published; internal JSON-only workers do not call request.form().
+    expired_at: 2026-10-01
+
+  # sentence-transformers 5.1.2 requires transformers <5, so the published
+  # patched Transformers 5.x line is not yet compatible. The reranker loads one
+  # operator-approved local model revision; requests cannot supply repositories,
+  # paths, or code.
+  - id: CVE-2026-4372
+    paths:
+      - usr/local/lib/python3.11/site-packages/transformers-4.57.6.dist-info/METADATA
+    statement: Patched Transformers 5.x is not yet compatible with sentence-transformers; the worker loads only an approved local model revision.
+    expired_at: 2026-10-01
+  - id: CVE-2026-5241
+    paths:
+      - usr/local/lib/python3.11/site-packages/transformers-4.57.6.dist-info/METADATA
+    statement: Patched Transformers 5.x is not yet compatible with sentence-transformers; requests cannot select model code or repositories.
+    expired_at: 2026-10-01
+
+  # Docker 29.7.2 is the newest published CLI image, but its binaries were
+  # built just before Go 1.26.6 and the patched Compose module releases. The
+  # agent is internal-only and accepts neither commands nor user-selected
+  # Compose inputs. Keep these exceptions scoped to the two required binaries.
+  - id: CVE-2026-33818
+    paths: &docker_cli_paths
+      - usr/local/bin/docker
+    statement: Awaiting the next upstream Docker CLI rebuild with Go 1.26.6; the binary is available only to the allowlisted internal deployment agent.
+    expired_at: 2026-10-01
+  - id: CVE-2026-39821
+    paths: *docker_cli_paths
+    statement: Awaiting the next upstream Docker CLI rebuild with Go 1.26.6; the agent accepts no user-selected hosts or commands.
+    expired_at: 2026-10-01
+  - id: CVE-2026-46600
+    paths: *docker_cli_paths
+    statement: Awaiting the next upstream Docker CLI rebuild with Go 1.26.6; the agent uses fixed local Docker endpoints.
+    expired_at: 2026-10-01
+  - id: CVE-2026-56853
+    paths: *docker_cli_paths
+    statement: Awaiting the next upstream Docker CLI rebuild with Go 1.26.6; the agent does not expose an HTTP server.
+    expired_at: 2026-10-01
+  - id: CVE-2026-56858
+    paths: *docker_cli_paths
+    statement: Awaiting the next upstream Docker CLI rebuild with Go 1.26.6; the agent does not render templates from requests.
+    expired_at: 2026-10-01
+  - id: CVE-2026-56859
+    paths: *docker_cli_paths
+    statement: Awaiting the next upstream Docker CLI rebuild with Go 1.26.6; the agent does not decode request-supplied XML.
+    expired_at: 2026-10-01
+  - id: CVE-2026-56860
+    paths: *docker_cli_paths
+    statement: Awaiting the next upstream Docker CLI rebuild with Go 1.26.6; the agent accepts no request-supplied URLs.
+    expired_at: 2026-10-01
+  - id: CVE-2026-56862
+    paths: *docker_cli_paths
+    statement: Awaiting the next upstream Docker CLI rebuild with Go 1.26.6; the agent connects only to the local Docker socket.
+    expired_at: 2026-10-01
+  - id: CVE-2026-56854
+    paths: &docker_compose_paths
+      - usr/local/libexec/docker/cli-plugins/docker-compose
+    statement: Awaiting the next upstream Compose rebuild with patched x/crypto; the agent runs only fixed local Compose arguments.
+    expired_at: 2026-10-01
+  - id: CVE-2026-56864
+    paths: *docker_compose_paths
+    statement: Awaiting the next upstream Compose rebuild with patched x/mod; the agent never resolves request-supplied modules.
+    expired_at: 2026-10-01
+  - id: CVE-2026-56865
+    paths: *docker_compose_paths
+    statement: Awaiting the next upstream Compose rebuild with patched x/mod; the agent never resolves request-supplied modules.
+    expired_at: 2026-10-01
+
+  # Apache Tika 3.2.3.0 is the latest published server image and its executable
+  # uber-JAR cannot safely replace individual dependency classes. Tika remains
+  # non-root, read-only, resource-limited, and reachable only from the parser on
+  # the internal network. Re-evaluate as soon as the next upstream Tika release
+  # is available; the short expiry intentionally fails CI if this is forgotten.
+  - id: GHSA-r7wm-3cxj-wff9
+    paths:
+      - tika-server-standard-3.2.3.jar
+    statement: Awaiting an upstream Tika release with patched embedded Jackson; Tika is isolated and not publicly reachable.
+    expired_at: 2026-10-01
+  - id: CVE-2026-54512
+    paths:
+      - tika-server-standard-3.2.3.jar
+    statement: Awaiting an upstream Tika release with patched embedded Jackson; Tika is isolated and not publicly reachable.
+    expired_at: 2026-10-01
+  - id: CVE-2026-54513
+    paths:
+      - tika-server-standard-3.2.3.jar
+    statement: Awaiting an upstream Tika release with patched embedded Jackson; Tika is isolated and not publicly reachable.
+    expired_at: 2026-10-01
+  - id: CVE-2026-50645
+    paths:
+      - tika-server-standard-3.2.3.jar
+    statement: Awaiting an upstream Tika release with patched embedded CXF; Tika is isolated and not publicly reachable.
+    expired_at: 2026-10-01
+  - id: CVE-2026-2332
+    paths:
+      - tika-server-standard-3.2.3.jar
+    statement: Awaiting an upstream Tika release with patched embedded Jetty; Tika is isolated and not publicly reachable.
+    expired_at: 2026-10-01
+  - id: CVE-2026-10050
+    paths:
+      - tika-server-standard-3.2.3.jar
+    statement: Awaiting an upstream Tika release with patched embedded Jetty; Tika does not enable public authentication endpoints.
+    expired_at: 2026-10-01

@@ -27,6 +27,7 @@
 - 阶段 16 P0 的仓库实现已补齐：新增 Web/Caddy HTTPS 生产镜像与 `compose.production.yaml`，生产服务使用不可变镜像 digest、只读根文件系统、`cap_drop: ALL`、PID/CPU/内存上限，API 迁移与运行分离且 healthcheck 改为 readiness；deployment-agent 使用非 root UID + Docker socket GID，并固定生产 Compose/env 文件。Parser/Reranker 已移除整份 `env_file` 注入，只接收显式解析/重排白名单与文件型内部 token，Provider Key、数据库和部署密钥不再进入 Worker 环境。
 - 生产配置与恢复入口已补齐：`production:init` 从唯一 `.env.example` 生成无内联 Secret 的 `.env.production`；`production:check` 校验 OIDC/HTTPS、证书/私钥、Secret 权限、非 root UID/GID 与镜像 digest；`production:compose:check` 不输出展开环境并验证合并拓扑的端口、权限、资源和 Worker Secret 边界。`production:backup`/`production:restore` 对 PostgreSQL、原文/预览、Chroma、Redis 执行停写一致性归档、SHA-256 manifest、空目标强确认恢复、readiness 与 active version 完整性检查。
 - 上线质量入口已补齐：`quality:baseline` 强制 strict，串行采集 Vector Top 5 与 Top 20 + 本地 BGE Top 5，生成报告后按私有数据集批准门槛失败关闭；CI 新增 Stylelint、Playwright、Reranker Ruff/Mypy/pytest、生产 API/Web/Parser/Reranker/deployment-agent/PostgreSQL/Redis/Chroma/Tika 镜像构建、Trivy 高危漏洞门禁和 CycloneDX SBOM。含授权 ODA 的 DWG 镜像继续只允许在批准的私有发布环境构建和扫描。
+- 2026-09-02 已修复新增 CI 门禁的两类失败：Web E2E 在 Playwright 前显式构建共享 contracts，完整回归 41/41 通过；9 个普通生产镜像更新 OS/应用依赖并收敛运行层，API 改为 production-only 依赖，Caddy 使用 Go 1.26.6 与已修复模块重建，Tika 重基到 Temurin 21.0.12 / Ubuntu 24.04，PostgreSQL 最终层移除非 root 路径不会执行的 `gosu`。本机以 CI 同版 Trivy 0.70.0 逐镜像验证 HIGH/CRITICAL 门禁全部通过；上游尚无发布版本的 Docker CLI/Compose、Starlette、Transformers 与 Tika 内嵌依赖仅保留精确路径、理由和 2026-10-01 到期的临时例外。
 - P0 容器级验证已在 Docker Desktop 的独立 Compose 项目完成：API、Web、Parser、Reranker、deployment-agent、PostgreSQL、Redis、Chroma、Tika 和本机授权 DWG 镜像均成功构建；Parser 62/62、Reranker 4/4、API PostgreSQL/Redis/Chroma 集成 11/11 通过。隔离拓扑的 `api-migrate` 退出码为 0，API/Parser/PostgreSQL/Redis/Chroma/Tika 全部在显式非 root UID/GID、只读根文件系统、`cap_drop: ALL` 与 PID/CPU/内存边界下达到 healthy；HTTPS Web 同样以非 root/只读/无 capabilities 运行，验证 80→443、证书装载、Host 限制、HSTS/CSP/安全头、SPA fallback 和 `/health/ready` 同源 JSON 代理。验证期间发现并修复官方数据镜像 root entrypoint、Caddy file capability、health 路由顺序、Tika readiness 依赖、Parser Secret loader 缺少 `exec`、Worker 整份 env 注入和 Parser 测试复用旧镜像问题；临时容器、网络、volumes、证书和 registry 已清理。
 - 提交前复核进一步收紧三项失败关闭边界：质量门禁现在要求 baseline 与 Rerank 候选越权率都为 0；deployment-agent 的纯配置发布固定 `--pull never`，不依赖 registry 凭据或意外更新镜像；备份增加 active 配置/Embedding 安全元数据与实际 runtime 哈希一致性检查，恢复从 PostgreSQL 密文和 Secret Manager 主密钥重新生成、校验并原子替换 `runtime.env`，不在备份中保存 Provider Key 正文。
 
@@ -74,6 +75,7 @@
 
 - 生产上线清单尚未完成：镜像与权限、TLS/认证、密钥托管、持久化、备份恢复、监控告警、压测、安全测试和合规确认仍需逐项验收。
 - P0 仓库实现和 Mac 隔离容器验证仍不等于生产验收：尚未在目标 Linux 主机验证真实 registry digest、deployment-agent 的宿主机 socket/config 权限、正式证书续期、实际 IdP/Vault、备份存储和完整清空后恢复；私有 registry 推送因当前工具额度限制未执行。私有 44 题数据和付费 Provider 授权也未提供，因此质量复测未运行，这些高层任务继续保持未勾选。
+- 上述 CI 修复已在本机完成构建、测试与同版扫描，但 GitHub Actions 只有在本次变更提交并 push 后才会重新运行；远端 run 结果不得在此之前描述为已通过。临时漏洞例外最迟须在 2026-10-01 前按上游新版本重新评估。
 - 评测报告与当前实现存在边界差异，不能把历史指标或“评测完成”表述为当前版本已通过全部质量门槛。
 - 若阶段 16 的压测、恢复演练或已批准业务需求证明延期解析器或 Embedding 接入是上线前置条件，应重新提高其优先级并同步代码、测试和文档。
 
